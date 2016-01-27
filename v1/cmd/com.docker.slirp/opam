@@ -1,0 +1,25 @@
+opam-version: "1.2"
+name: "slirp"
+version: "0.0.0"
+maintainer: "David Scott <dave.scott@docker.com>"
+authors: [ "David Scott <dave.scott@docker.com>" ]
+
+depends: [
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "oasis" {build}
+  "result"
+  "ipaddr"
+  "lwt"
+  "tcpip" { >= "3.0.0" }
+  "dns"
+  "pcap-format" { >= "0.4.0" }
+  "cmdliner"
+  "charrua-core" { >= "0.3" }
+  "logs"
+  "fmt"
+  "mirage-flow" { >= "1.1.0" }
+  "mirage-types-lwt" { >= "3.0.0" }
+  "ounit" {test}
+  "alcotest" {test}
+]
