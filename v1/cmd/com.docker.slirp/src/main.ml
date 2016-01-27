@@ -145,7 +145,7 @@ let pcap_file =
   Arg.(value & opt (some string) None & info [ "pcap" ] ~docv:"PCAP")
 
 let socket =
-  Arg.(value & opt string "/tmp/foo.sock" & info [ "socket" ] ~docv:"SOCKET")
+  Arg.(value & opt string "/var/tmp/com.docker.slirp.socket" & info [ "socket" ] ~docv:"SOCKET")
 
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
