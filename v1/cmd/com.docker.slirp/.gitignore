@@ -19,7 +19,6 @@ _build/
 setup.data
 setup.log
 
-Makefile
 _tags
 configure
 lib/META
