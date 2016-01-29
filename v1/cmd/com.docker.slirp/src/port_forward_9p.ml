@@ -239,7 +239,15 @@ the failure.
 
   let write connection ~cancel { Request.Write.fid; offset; data } = Error.eperm
 
-  let remove connection ~cancel { Request.Remove.fid } = Error.eperm
+  let remove connection ~cancel { Request.Remove.fid } =
+    try
+      let resource = Types.Fid.Map.find fid !(connection.fids) in
+      match resource with
+      | Forward f ->
+        active := Port.Map.remove f.Forward.local_port !active;
+        clunk connection ~cancel { Request.Clunk.fid }
+      | _ -> Error.eperm
+    with Not_found -> Error.badfid
 
   let wstat _info ~cancel _ = Error.eperm
 end
