@@ -29,6 +29,23 @@ module Forward = struct
     remote_port: Port.t;
   }
   let to_string t = Printf.sprintf "%d:%s:%d" t.local_port (Ipaddr.V4.to_string t.remote_ip) t.remote_port
+  let of_string x = match Stringext.split ~on:':' x with
+    | [ local_port; remote_ip; remote_port ] ->
+      let local_port = Port.of_string local_port in
+      let remote_ip = Ipaddr.V4.of_string remote_ip in
+      let remote_port = Port.of_string remote_port in
+      begin match local_port, remote_ip, remote_port with
+      | Result.Ok local_port, Some remote_ip, Result.Ok remote_port ->
+        Result.Ok { local_port; remote_ip; remote_port }
+      | Result.Error (`Msg m), _, _ ->
+        Result.Error (`Msg ("Failed to parse local port: " ^ m))
+      | _, None, _ ->
+        Result.Error (`Msg "Failed to parse remote IPv4 address")
+      | _, _, Result.Error (`Msg m) ->
+        Result.Error (`Msg ("Failed to parse remote port: " ^ m))
+      end
+    | _ ->
+      Result.Error (`Msg ("Failed to parse request, expected local_port:remote_ip:remote_port"))
 end
 
 let active : Forward.t Port.Map.t ref = ref Port.Map.empty
@@ -48,10 +65,12 @@ module Fs = struct
 
   type connection = {
     fids: resource Types.Fid.Map.t ref;
+    mutable result: string option;
   }
 
   let connect t info = {
     fids = ref (Types.Fid.Map.empty);
+    result = None;
   }
 
   module Error = struct
@@ -85,16 +104,16 @@ is removed, the listening socket is closed (but active connection forwards
 remain active).
 
 To request an additional forward of a specific local port, open the
-special file `/new` and write `local_port:destination_ip:destination_port`.
+special file `/ctl` and write `local_port:destination_ip:destination_port`.
 Immediately read the file contents and check whether it says:
 
-- `OK /local_port`: this means the forwarding has been setup on
-  `127.0.0.1:local_port`.
+- `OK local_port:destination_ip:destination_port`: this means the forwarding
+  has been setup on `127.0.0.1:local_port`.
 - `ERROR some error message`: this means the forwarding has failed, perhaps
   the port is still in use.
 
 To request an additional forward of any free local port, open the special
-file `/new` and write `0:destination_ip:destination_port` then read the file
+file `/ctl` and write `0:destination_ip:destination_port` then read the file
 contents to discover the identity of the allocated local port, or details of
 the failure.
 "
@@ -180,7 +199,14 @@ the failure.
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with
       | ControlFile ->
-        let data = Cstruct.create 0 in
+        let message = match connection.result with
+          | None -> "ERROR no request received. Please read the README.\n"
+          | Some x -> x in
+        let data = Cstruct.create (String.length message) in
+        Cstruct.blit_from_string message 0 data 0 (String.length message);
+        let len = min count Cstruct.(len data - offset) in
+        let data = Cstruct.sub data offset len in
+        if Cstruct.len data = 0 then connection.result <- None;
         return { Response.Read.data }
       | README ->
         let len = min count Cstruct.(len readme - offset) in
@@ -237,7 +263,25 @@ the failure.
 
   let create connection ~cancel _ = Error.eperm
 
-  let write connection ~cancel { Request.Write.fid; offset; data } = Error.eperm
+  let write connection ~cancel { Request.Write.fid; offset; data } =
+    let ok = { Response.Write.count = Int32.of_int @@ Cstruct.len data } in
+    try
+      let resource = Types.Fid.Map.find fid !(connection.fids) in
+      match resource with
+      | ControlFile ->
+        if connection.result <> None
+        then Error.eperm
+        else begin match Forward.of_string @@ Cstruct.to_string data with
+          | Result.Ok f ->
+            active := Port.Map.add f.Forward.local_port f !active;
+            connection.result <- Some ("OK " ^ (Forward.to_string f) ^ "\n");
+            return ok
+          | Result.Error (`Msg m) ->
+            connection.result <- Some ("ERROR " ^ m ^ "\n");
+            return ok
+        end
+      | _ -> Error.eperm
+    with Not_found -> Error.badfid
 
   let remove connection ~cancel { Request.Remove.fid } =
     try
