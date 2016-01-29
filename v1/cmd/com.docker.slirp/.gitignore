@@ -25,7 +25,6 @@ lib/META
 lib/usernet.mldylib
 lib/usernet.mllib
 myocamlbuild.ml
-setup.ml
 unix/unix.mldylib
 unix/unix.mllib
 
