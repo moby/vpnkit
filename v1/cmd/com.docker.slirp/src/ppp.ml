@@ -184,7 +184,7 @@ let negotiate t =
   let open Infix in
   Lwt.return (Init.unmarshal buf)
   >>= fun (init, _) ->
-  Log.info (fun f -> f "received %s" (Init.to_string init));
+  Log.info (fun f -> f "PPP.negotiate: received %s" (Init.to_string init));
   let (_: Cstruct.t) = Init.marshal Init.default buf in
   let open Lwt.Infix in
   Lwt_cstruct.(complete (write t.fd) buf)
@@ -195,12 +195,12 @@ let negotiate t =
   let open Infix in
   Lwt.return (Command.unmarshal buf)
   >>= fun (command, _) ->
-  Log.info (fun f -> f "received %s" (Command.to_string command));
+  Log.info (fun f -> f "PPP.negotiate: received %s" (Command.to_string command));
   let vif = Vif.create () in
   let buf = Cstruct.create Vif.sizeof in
   let (_: Cstruct.t) = Vif.marshal vif buf in
   let open Lwt.Infix in
-  Log.info (fun f -> f "sending %s" (Vif.to_string vif));
+  Log.info (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
   Lwt_cstruct.(complete (write t.fd) buf)
   >>= fun () ->
   Lwt.return (`Ok ())
@@ -322,7 +322,7 @@ let writev t bufs =
 
 let listen t callback =
   if t.listening then begin
-    Log.warn (fun f -> f "Usernet_ppp.listen called a second time: doing nothing");
+    Log.info (fun f -> f "PPP.listen: called a second time: doing nothing");
     Lwt.return ();
   end else begin
     t.listening <- true;
@@ -350,8 +350,12 @@ let listen t callback =
            Lwt.async (fun () -> callback buf);
            List.iter (fun callback -> Lwt.async (fun () -> callback buf)) t.listeners;
            Lwt.return (`Ok true)
-        ) (fun e ->
-            Log.err (fun f -> f "usernet_ppp.listen caught %s" (Printexc.to_string e));
+        ) (function
+          | End_of_file ->
+            Log.info (fun f -> f "PPP.listen: closing connection");
+            Lwt.return (`Ok false);
+          | e ->
+            Log.err (fun f -> f "PPP.listen: caught unexpected %s: closing" (Printexc.to_string e));
             let open Lwt.Infix in
             Lwt_unix.close t.fd
             >>= fun () ->
