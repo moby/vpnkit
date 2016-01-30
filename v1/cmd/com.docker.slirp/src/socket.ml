@@ -16,9 +16,9 @@
  *)
 
 let src =
-	let src = Logs.Src.create "usernet" ~doc:"Unix socket connections" in
-	Logs.Src.set_level src (Some Logs.Info);
-	src
+  let src = Logs.Src.create "usernet" ~doc:"Unix socket connections" in
+  Logs.Src.set_level src (Some Logs.Info);
+  src
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
@@ -49,12 +49,12 @@ module UDPV4 = struct
       let snapshot = Hashtbl.copy table in
       let now = Unix.gettimeofday () in
       Hashtbl.iter (fun k flow ->
-        if now -. flow.last_use > 60. then begin
-          Log.info (fun f -> f "expiring UDP NAT rule for %s:%d" (Ipaddr.V4.to_string flow.ip) flow.port);
-          Lwt.async (fun () -> Lwt_unix.close flow.fd);
-          Hashtbl.remove table k
-        end
-      ) snapshot;
+          if now -. flow.last_use > 60. then begin
+            Log.info (fun f -> f "expiring UDP NAT rule for %s:%d" (Ipaddr.V4.to_string flow.ip) flow.port);
+            Lwt.async (fun () -> Lwt_unix.close flow.fd);
+            Hashtbl.remove table k
+          end
+        ) snapshot;
       loop () in
     loop ()
 
@@ -62,48 +62,48 @@ module UDPV4 = struct
     let open Lwt.Infix in
     let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.V4.to_string dst, dst_port) in
     (if Hashtbl.mem table (dst, dst_port) then begin
-      Lwt.return (Hashtbl.find table (dst, dst_port))
-    end else begin
-      Log.info (fun f -> f "connecting UDP socket to %s:%d" (Ipaddr.V4.to_string dst) dst_port);
-      let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
-      let last_use = Unix.gettimeofday () in
-      let ip = dst and port = dst_port in
-      let flow = { fd; last_use; reply; ip; port } in
-      Hashtbl.replace table (dst, dst_port) flow;
-      (* Start a listener *)
-      let buffer = Cstruct.create 1500 in
-      let rec loop () =
-        Lwt.catch
-          (fun () ->
-            Lwt_bytes.recvfrom fd buffer.Cstruct.buffer buffer.Cstruct.off buffer.Cstruct.len []
-            >>= fun (n, _) ->
-            let response = Cstruct.sub buffer 0 n in
-            flow.reply response
-            >>= fun () ->
-            Lwt.return true
-          ) (fun e ->
-            Log.err (fun f -> f "Usernet_lwt_unix.UDPV4 recv caught %s" (Printexc.to_string e));
-            Lwt.return false
-          )
-        >>= function
-        | false -> Lwt.return ()
-        | true -> loop () in
-      Lwt.async loop;
-      Lwt.return flow
-    end) >>= fun flow ->
+        Lwt.return (Hashtbl.find table (dst, dst_port))
+      end else begin
+       Log.info (fun f -> f "connecting UDP socket to %s:%d" (Ipaddr.V4.to_string dst) dst_port);
+       let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+       let last_use = Unix.gettimeofday () in
+       let ip = dst and port = dst_port in
+       let flow = { fd; last_use; reply; ip; port } in
+       Hashtbl.replace table (dst, dst_port) flow;
+       (* Start a listener *)
+       let buffer = Cstruct.create 1500 in
+       let rec loop () =
+         Lwt.catch
+           (fun () ->
+              Lwt_bytes.recvfrom fd buffer.Cstruct.buffer buffer.Cstruct.off buffer.Cstruct.len []
+              >>= fun (n, _) ->
+              let response = Cstruct.sub buffer 0 n in
+              flow.reply response
+              >>= fun () ->
+              Lwt.return true
+           ) (fun e ->
+               Log.err (fun f -> f "Usernet_lwt_unix.UDPV4 recv caught %s" (Printexc.to_string e));
+               Lwt.return false
+             )
+         >>= function
+         | false -> Lwt.return ()
+         | true -> loop () in
+       Lwt.async loop;
+       Lwt.return flow
+     end) >>= fun flow ->
     flow.reply <- reply;
     Lwt.catch
       (fun () ->
-        Lwt_bytes.sendto flow.fd payload.Cstruct.buffer payload.Cstruct.off payload.Cstruct.len [] remote_sockaddr
-        >>= fun n ->
-        if n <> payload.Cstruct.len
-        then Log.err (fun f -> f "Lwt_bytes.send short: expected %d got %d" payload.Cstruct.len n);
-        flow.last_use <- Unix.gettimeofday ();
-        Lwt.return ()
+         Lwt_bytes.sendto flow.fd payload.Cstruct.buffer payload.Cstruct.off payload.Cstruct.len [] remote_sockaddr
+         >>= fun n ->
+         if n <> payload.Cstruct.len
+         then Log.err (fun f -> f "Lwt_bytes.send short: expected %d got %d" payload.Cstruct.len n);
+         flow.last_use <- Unix.gettimeofday ();
+         Lwt.return ()
       ) (fun e ->
-        Log.err (fun f -> f "Lwt_bytes.send to %s:%d caught %s" (Ipaddr.V4.to_string dst) dst_port (Printexc.to_string e));
-        Lwt.return ()
-      )
+          Log.err (fun f -> f "Lwt_bytes.send to %s:%d caught %s" (Ipaddr.V4.to_string dst) dst_port (Printexc.to_string e));
+          Lwt.return ()
+        )
 
 end
 
@@ -130,17 +130,17 @@ module TCPV4 = struct
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
     Lwt.catch
       (fun () ->
-        Log.info (fun f -> f "connecting to %s port %d" (Ipaddr.V4.to_string ip) port);
-        Lwt_unix.connect fd (Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.V4.to_string ip, port))
-        >>= fun () ->
-        let read_buffer = Cstruct.create read_buffer_size in
-        let closed = false in
-        Lwt.return (`Ok { fd; read_buffer; read_buffer_size; closed })
+         Log.info (fun f -> f "connecting to %s port %d" (Ipaddr.V4.to_string ip) port);
+         Lwt_unix.connect fd (Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.V4.to_string ip, port))
+         >>= fun () ->
+         let read_buffer = Cstruct.create read_buffer_size in
+         let closed = false in
+         Lwt.return (`Ok { fd; read_buffer; read_buffer_size; closed })
       )
       (fun e ->
-        Lwt_unix.close fd
-        >>= fun () ->
-        errorf "Lwt_unix.connect %s: %s" (Ipaddr.V4.to_string ip) (Printexc.to_string e)
+         Lwt_unix.close fd
+         >>= fun () ->
+         errorf "Lwt_unix.connect %s: %s" (Ipaddr.V4.to_string ip) (Printexc.to_string e)
       )
 
   let shutdown_read { fd; closed } =
@@ -166,47 +166,47 @@ module TCPV4 = struct
   let read t =
     let open Lwt.Infix in
     (if Cstruct.len t.read_buffer = 0 then t.read_buffer <- Cstruct.create t.read_buffer_size);
-		Lwt.catch
-		  (fun () ->
-		    Lwt_bytes.read t.fd t.read_buffer.Cstruct.buffer t.read_buffer.Cstruct.off t.read_buffer.Cstruct.len
-		    >>= function
-		    | 0 -> Lwt.return `Eof
-		    | n ->
-		      let results = Cstruct.sub t.read_buffer 0 n in
-		      t.read_buffer <- Cstruct.shift t.read_buffer n;
-		      Lwt.return (`Ok results)
-			) (fun e ->
-				Log.err (fun f -> f "Socket.TCPV4.read caught %s" (Printexc.to_string e));
-				Lwt.return `Eof
-			)
+    Lwt.catch
+      (fun () ->
+         Lwt_bytes.read t.fd t.read_buffer.Cstruct.buffer t.read_buffer.Cstruct.off t.read_buffer.Cstruct.len
+         >>= function
+         | 0 -> Lwt.return `Eof
+         | n ->
+           let results = Cstruct.sub t.read_buffer 0 n in
+           t.read_buffer <- Cstruct.shift t.read_buffer n;
+           Lwt.return (`Ok results)
+      ) (fun e ->
+          Log.err (fun f -> f "Socket.TCPV4.read caught %s" (Printexc.to_string e));
+          Lwt.return `Eof
+        )
 
   let write t buf =
     let open Lwt.Infix in
-		Lwt.catch
-			(fun () ->
-		    Lwt_cstruct.(complete (write t.fd) buf)
-		    >>= fun () ->
-		    Lwt.return (`Ok ())
-			) (fun e ->
-				Log.err (fun f -> f "Socket.TCP4.write caught %s" (Printexc.to_string e));
-				Lwt.return `Eof
-			)
+    Lwt.catch
+      (fun () ->
+         Lwt_cstruct.(complete (write t.fd) buf)
+         >>= fun () ->
+         Lwt.return (`Ok ())
+      ) (fun e ->
+          Log.err (fun f -> f "Socket.TCP4.write caught %s" (Printexc.to_string e));
+          Lwt.return `Eof
+        )
 
   let writev t bufs =
-		Lwt.catch
-			(fun () ->
-				let open Lwt.Infix in
-				let rec loop = function
-		    | [] -> Lwt.return (`Ok ())
-		    | buf :: bufs ->
-		      Lwt_cstruct.(complete (write t.fd) buf)
-		      >>= fun () ->
-		      loop bufs in
-				loop bufs
-			) (fun e ->
-				Log.err (fun f -> f "Socket.TCP4.writev caught %s" (Printexc.to_string e));
-				Lwt.return `Eof
-			)
+    Lwt.catch
+      (fun () ->
+         let open Lwt.Infix in
+         let rec loop = function
+           | [] -> Lwt.return (`Ok ())
+           | buf :: bufs ->
+             Lwt_cstruct.(complete (write t.fd) buf)
+             >>= fun () ->
+             loop bufs in
+         loop bufs
+      ) (fun e ->
+          Log.err (fun f -> f "Socket.TCP4.writev caught %s" (Printexc.to_string e));
+          Lwt.return `Eof
+        )
 
   let close t =
     if not t.closed then (t.closed <- true; Lwt_unix.close t.fd) else Lwt.return ()

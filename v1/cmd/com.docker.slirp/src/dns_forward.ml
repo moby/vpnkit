@@ -26,14 +26,14 @@ let input s ~src ~dst ~src_port buf =
   >>= fun resolver ->
 
   let process ~src ~dst packet =
-      let open Packet in
-      match packet.questions with
-      | [] -> return None; (* no questions in packet *)
-      | [q] ->
-        Dns_resolver_unix.resolve resolver q.q_class q.q_type q.q_name
-        >>= fun result ->
-        (return (Some (Dns.Query.answer_of_response result)))
-      | _::_::_ -> return None in
+    let open Packet in
+    match packet.questions with
+    | [] -> return None; (* no questions in packet *)
+    | [q] ->
+      Dns_resolver_unix.resolve resolver q.q_class q.q_type q.q_name
+      >>= fun result ->
+      (return (Some (Dns.Query.answer_of_response result)))
+    | _::_::_ -> return None in
 
   let processor = ((Dns_server.processor_of_process process) :> (module Dns_server.PROCESSOR)) in
   let open Dns_server in

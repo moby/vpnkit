@@ -35,14 +35,14 @@ module Forward = struct
       let remote_ip = Ipaddr.V4.of_string remote_ip in
       let remote_port = Port.of_string remote_port in
       begin match local_port, remote_ip, remote_port with
-      | Result.Ok local_port, Some remote_ip, Result.Ok remote_port ->
-        Result.Ok { local_port; remote_ip; remote_port }
-      | Result.Error (`Msg m), _, _ ->
-        Result.Error (`Msg ("Failed to parse local port: " ^ m))
-      | _, None, _ ->
-        Result.Error (`Msg "Failed to parse remote IPv4 address")
-      | _, _, Result.Error (`Msg m) ->
-        Result.Error (`Msg ("Failed to parse remote port: " ^ m))
+        | Result.Ok local_port, Some remote_ip, Result.Ok remote_port ->
+          Result.Ok { local_port; remote_ip; remote_port }
+        | Result.Error (`Msg m), _, _ ->
+          Result.Error (`Msg ("Failed to parse local port: " ^ m))
+        | _, None, _ ->
+          Result.Error (`Msg "Failed to parse remote IPv4 address")
+        | _, _, Result.Error (`Msg m) ->
+          Result.Error (`Msg ("Failed to parse remote port: " ^ m))
       end
     | _ ->
       Result.Error (`Msg ("Failed to parse request, expected local_port:remote_ip:remote_port"))
@@ -128,25 +128,25 @@ the failure.
     try
       let from = Types.Fid.Map.find fid !(connection.fids) in
       let from, wqids = List.fold_left (fun (from,qids) -> function
-        | ".." ->
-          (Root, root_qid), root_qid::qids
-        | "README" ->
-          let qid = next_qid [] in
-          (README, qid), qid :: qids
-        | "ctl" ->
-          let qid = next_qid [] in
-          (ControlFile, qid), qid :: qids
-        | port ->
-          begin match Port.of_string port with
-          | Result.Error _ -> failwith "ENOENT"
-          | Result.Ok port ->
-            if Port.Map.mem port !active then begin
-              let forward = Port.Map.find port !active in
-              let qid = next_qid [] in
-              (Forward forward, qid), qid :: qids
-            end else failwith "ENOENT"
-          end
-      ) ((from, next_qid []), []) wnames in
+          | ".." ->
+            (Root, root_qid), root_qid::qids
+          | "README" ->
+            let qid = next_qid [] in
+            (README, qid), qid :: qids
+          | "ctl" ->
+            let qid = next_qid [] in
+            (ControlFile, qid), qid :: qids
+          | port ->
+            begin match Port.of_string port with
+              | Result.Error _ -> failwith "ENOENT"
+              | Result.Ok port ->
+                if Port.Map.mem port !active then begin
+                  let forward = Port.Map.find port !active in
+                  let qid = next_qid [] in
+                  (Forward forward, qid), qid :: qids
+                end else failwith "ENOENT"
+            end
+        ) ((from, next_qid []), []) wnames in
       connection.fids := Types.Fid.Map.add newfid (fst from) !(connection.fids);
       let wqids = List.rev wqids in
       return { Response.Walk.wqids }
@@ -172,25 +172,25 @@ the failure.
       `Read :: (if writable then [ `Write ] else [] ) @ exec in
     let qid = next_qid [] in
     Types.({
-      Stat.ty = 0xFFFF;
-      dev     = Int32.(neg one);
-      qid     = qid;
-      mode    = FileMode.make
-          ~owner:perms ~group:perms ~other:perms ~is_directory ();
-      atime   = 1146711721l;
-      mtime   = 1146711721l;
-      length  = 0_L; (* TODO: wrong for regular files *)
-      name    = name;
-      uid     = "uid";
-      gid     = "gid";
-      muid    = "muid";
-      u       = None;
-    })
+        Stat.ty = 0xFFFF;
+        dev     = Int32.(neg one);
+        qid     = qid;
+        mode    = FileMode.make
+            ~owner:perms ~group:perms ~other:perms ~is_directory ();
+        atime   = 1146711721l;
+        mtime   = 1146711721l;
+        length  = 0_L; (* TODO: wrong for regular files *)
+        name    = name;
+        uid     = "uid";
+        gid     = "gid";
+        muid    = "muid";
+        u       = None;
+      })
 
   let errors_to_client = Result.(function
-    | Error (`Msg msg) -> Error { Response.Err.ename = msg; errno = None }
-    | Ok _ as ok -> ok
-  )
+      | Error (`Msg msg) -> Error { Response.Err.ename = msg; errno = None }
+      | Ok _ as ok -> ok
+    )
 
   let read connection ~cancel { Request.Read.fid; offset; count } =
     let count = Int32.to_int count in
@@ -254,10 +254,10 @@ the failure.
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       let stat = match resource with
-      | Root -> make_stat ~is_directory:true ~writable:true ~name:""
-      | README -> make_stat ~is_directory:false ~writable:false ~name:"README"
-      | ControlFile -> make_stat ~is_directory:false ~writable:true ~name:"ctl"
-      | Forward f -> make_stat ~is_directory:false ~writable:false ~name:(Forward.to_string f) in
+        | Root -> make_stat ~is_directory:true ~writable:true ~name:""
+        | README -> make_stat ~is_directory:false ~writable:false ~name:"README"
+        | ControlFile -> make_stat ~is_directory:false ~writable:true ~name:"ctl"
+        | Forward f -> make_stat ~is_directory:false ~writable:false ~name:(Forward.to_string f) in
       return { Response.Stat.stat }
     with Not_found -> Error.badfid
 

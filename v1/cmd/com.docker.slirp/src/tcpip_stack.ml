@@ -38,9 +38,9 @@ module Source_ips = struct
 end
 
 let src =
-	let src = Logs.Src.create "tcpip" ~doc:"Mirage TCP/IP" in
-	Logs.Src.set_level src (Some Logs.Info);
-	src
+  let src = Logs.Src.create "tcpip" ~doc:"Mirage TCP/IP" in
+  Logs.Src.set_level src (Some Logs.Info);
+  src
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
@@ -57,7 +57,7 @@ module Udp1 = Udp.Make(Ipv41)
 module Tcp1 = Tcp.Flow.Make(Ipv41)(OS.Time)(Clock)(Random)
 
 include Tcpip_stack_direct.Make(Console_unix)(OS.Time)
-  (Random)(Netif)(Ethif1)(Arpv41)(Ipv41)(Udp1)(Tcp1)
+    (Random)(Netif)(Ethif1)(Arpv41)(Ipv41)(Udp1)(Tcp1)
 
 module Dhcp = struct
   let of_interest dest =
@@ -105,8 +105,8 @@ end
 module Infix = struct
   open Lwt.Infix
   let ( >>= ) m f = m >>= function
-	  | `Ok x -> f x
-		| `Error x -> Lwt.return (`Error x)
+    | `Ok x -> f x
+    | `Error x -> Lwt.return (`Error x)
 end
 
 let or_error name m =
