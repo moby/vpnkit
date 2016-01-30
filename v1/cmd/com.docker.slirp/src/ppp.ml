@@ -351,15 +351,15 @@ let listen t callback =
            List.iter (fun callback -> Lwt.async (fun () -> callback buf)) t.listeners;
            Lwt.return (`Ok true)
         ) (function
-          | End_of_file ->
-            Log.info (fun f -> f "PPP.listen: closing connection");
-            Lwt.return (`Ok false);
-          | e ->
-            Log.err (fun f -> f "PPP.listen: caught unexpected %s: closing" (Printexc.to_string e));
-            let open Lwt.Infix in
-            Lwt_unix.close t.fd
-            >>= fun () ->
-            Lwt.return (`Ok false)
+            | End_of_file ->
+              Log.info (fun f -> f "PPP.listen: closing connection");
+              Lwt.return (`Ok false);
+            | e ->
+              Log.err (fun f -> f "PPP.listen: caught unexpected %s: closing" (Printexc.to_string e));
+              let open Lwt.Infix in
+              Lwt_unix.close t.fd
+              >>= fun () ->
+              Lwt.return (`Ok false)
           )
       >>= fun continue ->
       if continue then loop () else Lwt.return (`Ok ()) in

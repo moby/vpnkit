@@ -70,53 +70,53 @@ module UDPV4 = struct
          Log.info (fun f -> f "Socket.UDPV4.input %s: ignoring broadcast packet" description);
          Lwt.return None
        end else begin
-       Log.info (fun f -> f "Socket.UDPV4.input %s: creating UDP NAT rule" description);
-       let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
-       let last_use = Unix.gettimeofday () in
-       let flow = { description; fd; last_use; reply} in
-       Hashtbl.replace table (dst, dst_port) flow;
-       (* Start a listener *)
-       let buffer = Cstruct.create 1500 in
-       let rec loop () =
-         Lwt.catch
-           (fun () ->
-              Lwt_bytes.recvfrom fd buffer.Cstruct.buffer buffer.Cstruct.off buffer.Cstruct.len []
-              >>= fun (n, _) ->
-              let response = Cstruct.sub buffer 0 n in
-              flow.reply response
-              >>= fun () ->
-              Lwt.return true
-           ) (function
-             | Unix.Unix_error(Unix.EBADF, _, _) ->
-               (* fd has been closed by the GC *)
-               Log.info (fun f -> f "Socket.UDPV4.input %s: shutting down listening thread" description);
-               Lwt.return false
-            | e ->
-               Log.err (fun f -> f "Socket.UDPV4.input %s: caught unexpected exception %s" description (Printexc.to_string e));
-                Lwt.return false
-             )
-         >>= function
-         | false -> Lwt.return ()
-         | true -> loop () in
-       Lwt.async loop;
-       Lwt.return (Some flow)
-     end
-    end) >>= function
+         Log.info (fun f -> f "Socket.UDPV4.input %s: creating UDP NAT rule" description);
+         let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+         let last_use = Unix.gettimeofday () in
+         let flow = { description; fd; last_use; reply} in
+         Hashtbl.replace table (dst, dst_port) flow;
+         (* Start a listener *)
+         let buffer = Cstruct.create 1500 in
+         let rec loop () =
+           Lwt.catch
+             (fun () ->
+                Lwt_bytes.recvfrom fd buffer.Cstruct.buffer buffer.Cstruct.off buffer.Cstruct.len []
+                >>= fun (n, _) ->
+                let response = Cstruct.sub buffer 0 n in
+                flow.reply response
+                >>= fun () ->
+                Lwt.return true
+             ) (function
+                 | Unix.Unix_error(Unix.EBADF, _, _) ->
+                   (* fd has been closed by the GC *)
+                   Log.info (fun f -> f "Socket.UDPV4.input %s: shutting down listening thread" description);
+                   Lwt.return false
+                 | e ->
+                   Log.err (fun f -> f "Socket.UDPV4.input %s: caught unexpected exception %s" description (Printexc.to_string e));
+                   Lwt.return false
+               )
+           >>= function
+           | false -> Lwt.return ()
+           | true -> loop () in
+         Lwt.async loop;
+         Lwt.return (Some flow)
+       end
+     end) >>= function
     | None -> Lwt.return ()
     | Some flow ->
-    flow.reply <- reply;
-    Lwt.catch
-      (fun () ->
-         Lwt_bytes.sendto flow.fd payload.Cstruct.buffer payload.Cstruct.off payload.Cstruct.len [] remote_sockaddr
-         >>= fun n ->
-         if n <> payload.Cstruct.len
-         then Log.err (fun f -> f "Socket.UDPV4.input %s: Lwt_bytes.send short: expected %d got %d" flow.description payload.Cstruct.len n);
-         flow.last_use <- Unix.gettimeofday ();
-         Lwt.return ()
-      ) (fun e ->
-          Log.err (fun f -> f "Socket.UDPV4.input %s: Lwt_bytes.send caught %s" flow.description (Printexc.to_string e));
-          Lwt.return ()
-        )
+      flow.reply <- reply;
+      Lwt.catch
+        (fun () ->
+           Lwt_bytes.sendto flow.fd payload.Cstruct.buffer payload.Cstruct.off payload.Cstruct.len [] remote_sockaddr
+           >>= fun n ->
+           if n <> payload.Cstruct.len
+           then Log.err (fun f -> f "Socket.UDPV4.input %s: Lwt_bytes.send short: expected %d got %d" flow.description payload.Cstruct.len n);
+           flow.last_use <- Unix.gettimeofday ();
+           Lwt.return ()
+        ) (fun e ->
+            Log.err (fun f -> f "Socket.UDPV4.input %s: Lwt_bytes.send caught %s" flow.description (Printexc.to_string e));
+            Lwt.return ()
+          )
 
 end
 
