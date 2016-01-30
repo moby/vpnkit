@@ -18,6 +18,9 @@
 (** Accept connections and talk to clients via the vmnetd protocol, exposing
     the packets as a Mirage NETWORK interface *)
 
-include Network.S
+module type S = sig
+  include V1_LWT.NETWORK
+    with type buffer = Cstruct.t
 
-val of_fd: ?pcap_filename:string -> Lwt_unix.file_descr -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
+  val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
+end

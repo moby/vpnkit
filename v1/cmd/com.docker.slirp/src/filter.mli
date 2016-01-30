@@ -15,9 +15,12 @@
  *
  *)
 
-(** Accept connections and talk to clients via the vmnetd protocol, exposing
-    the packets as a Mirage NETWORK interface *)
+module type CONFIG = sig
+  val valid_sources: Ipaddr.V4.t list
+end
 
-include Network.S
+module Only_source_ipv4(Config: CONFIG)(Input: Network.S): sig
+  include Network.S
 
-val of_fd: ?pcap_filename:string -> Lwt_unix.file_descr -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
+  val connect: Input.t -> [ `Ok of t | `Error of error ] Lwt.t
+end

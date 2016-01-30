@@ -16,21 +16,26 @@
  *)
 
 let ip = Ipaddr.V4.of_string_exn "10.0.0.1"
+let peer_ip = Ipaddr.V4.of_string_exn "10.0.0.2"
 let mac = Macaddr.of_string_exn "0F:F1:CE:0F:F1:CE"
 let netmask = Ipaddr.V4.of_string_exn "255.255.255.0"
 
-let dhcp_conf = "
+let dhcp_conf = Printf.sprintf "
   option  domain-name \"docker.com\";
   subnet 10.0.0.0 netmask 255.255.255.0 {
-    option routers 10.0.0.1;
-    option domain-name-servers 10.0.0.1;
+    option routers %s;
+    option domain-name-servers %s;
     range 10.0.0.100 10.0.0.200;
     host xhyve {
       hardware ethernet c0:ff:ee:c0:ff:ee;
-      fixed-address 10.0.0.2;
+      fixed-address %s;
     }
   }
-"
+" (Ipaddr.V4.to_string ip) (Ipaddr.V4.to_string ip) (Ipaddr.V4.to_string peer_ip)
+
+module Source_ips = struct
+  let valid_sources = [ peer_ip; Ipaddr.V4.of_string_exn "0.0.0.0" ]
+end
 
 let src =
 	let src = Logs.Src.create "tcpip" ~doc:"Mirage TCP/IP" in
@@ -39,7 +44,7 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Netif = Ppp
+module Netif = Filter.Only_source_ipv4(Source_ips)(Ppp)
 
 module Ethif1 = Ethif.Make(Netif)
 
@@ -110,8 +115,10 @@ let or_error name m =
   | `Error _ -> Lwt.return (`Error (`Msg (Printf.sprintf "Failed to connect %s device" name)))
   | `Ok x -> Lwt.return (`Ok x)
 
-let connect (interface: Ppp.t) =
+let connect (ppp: Ppp.t) =
   let open Infix in
+  or_error "filter" @@ Netif.connect ppp
+  >>= fun interface ->
   or_error "console" @@ Console_unix.connect "0"
   >>= fun console ->
   or_error "ethernet" @@ Ethif1.connect interface
