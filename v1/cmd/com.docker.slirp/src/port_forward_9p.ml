@@ -27,9 +27,15 @@ module Forward = struct
     local_port: Port.t;
     remote_ip: Ipaddr.V4.t;
     remote_port: Port.t;
+    mutable fd: Lwt_unix.file_descr option;
   }
   let start t =
     Lwt.return (Result.Error (`Msg "forwarding not implemented"))
+  let stop t = match t.fd with
+    | None -> Lwt.return ()
+    | Some fd ->
+      t.fd <- None;
+      Lwt_unix.close fd
   let to_string t = Printf.sprintf "%d:%s:%d" t.local_port (Ipaddr.V4.to_string t.remote_ip) t.remote_port
   let of_string x = match Stringext.split ~on:':' x with
     | [ local_port; remote_ip; remote_port ] ->
@@ -38,7 +44,7 @@ module Forward = struct
       let remote_port = Port.of_string remote_port in
       begin match local_port, remote_ip, remote_port with
         | Result.Ok local_port, Some remote_ip, Result.Ok remote_port ->
-          Result.Ok { local_port; remote_ip; remote_port }
+          Result.Ok { local_port; remote_ip; remote_port; fd = None }
         | Result.Error (`Msg m), _, _ ->
           Result.Error (`Msg ("Failed to parse local port: " ^ m))
         | _, None, _ ->
@@ -297,6 +303,9 @@ the failure.
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with
       | Forward f ->
+        let open Lwt.Infix in
+        Forward.stop f
+        >>= fun () ->
         active := Port.Map.remove f.Forward.local_port !active;
         clunk connection ~cancel { Request.Clunk.fid }
       | _ -> Error.eperm
