@@ -28,6 +28,8 @@ module Forward = struct
     remote_ip: Ipaddr.V4.t;
     remote_port: Port.t;
   }
+  let start t =
+    Lwt.return (Result.Error (`Msg "forwarding not implemented"))
   let to_string t = Printf.sprintf "%d:%s:%d" t.local_port (Ipaddr.V4.to_string t.remote_ip) t.remote_port
   let of_string x = match Stringext.split ~on:':' x with
     | [ local_port; remote_ip; remote_port ] ->
@@ -273,9 +275,16 @@ the failure.
         then Error.eperm
         else begin match Forward.of_string @@ Cstruct.to_string data with
           | Result.Ok f ->
-            active := Port.Map.add f.Forward.local_port f !active;
-            connection.result <- Some ("OK " ^ (Forward.to_string f) ^ "\n");
-            return ok
+            let open Lwt.Infix in
+            begin Forward.start f >>= function
+            | Result.Ok f' -> (* local_port is resolved *)
+              active := Port.Map.add f'.Forward.local_port f' !active;
+              connection.result <- Some ("OK " ^ (Forward.to_string f) ^ "\n");
+              return ok
+            | Result.Error (`Msg m) ->
+              connection.result <- Some ("ERROR " ^ m ^ "\n");
+              return ok
+            end
           | Result.Error (`Msg m) ->
             connection.result <- Some ("ERROR " ^ m ^ "\n");
             return ok
