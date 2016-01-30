@@ -158,6 +158,7 @@ let command =
   Term.info "proxy" ~doc ~man
 
 let () =
+  Printexc.record_backtrace true;
   match Term.eval command with
   | `Error _ -> exit 1
   | _ -> exit 0
