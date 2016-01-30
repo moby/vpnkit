@@ -29,7 +29,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
 
-let main_t pcap_filename socket_path =
+let main_t pcap_filename socket_path port_control_path =
   Logs.set_reporter (Logs_fmt.reporter ());
   Printexc.record_backtrace true;
 
@@ -54,6 +54,15 @@ let main_t pcap_filename socket_path =
         >>= function
         | `Error (`Msg m) -> failwith m
         | `Ok s ->
+
+          (* Start the 9P port forwarding server *)
+          let fs = Port_forward_9p.Fs.make s in
+          Port_forward_9p.Server.listen fs "unix" port_control_path
+          >>= function
+          | Result.Error (`Msg m) -> failwith m
+          | Result.Ok server ->
+            Lwt.async (fun () -> Port_forward_9p.Server.serve_forever server);
+
           Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input s);
           Ppp.add_listener x (
             fun buf ->
@@ -100,18 +109,7 @@ let main_t pcap_filename socket_path =
                     finally (fun () ->
                         (* proxy between local and remote *)
                         Log.info (fun f -> f "%s connected" description);
-                        let module TCP = struct
-                          include Tcpip_stack.TCPV4
-                          let shutdown_read flow =
-                            (* No change to the TCP PCB: all this means is that I've
-                               got my finders in my ears and am nolonger listening to
-                               what you say. *)
-                            return ()
-                          let shutdown_write flow =
-                            Log.info (fun f -> f "%s Tcpip_stack.TCPv4.close calling Tx.close" description);
-                            Tcpip_stack.TCPV4.close local
-                        end in
-                        Mirage_flow.proxy (module Clock) (module TCP) local (module Socket.TCPV4) remote ()
+                        Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.TCPV4) remote ()
                         >>= function
                         | `Error (`Msg m) ->
                           Log.err (fun f -> f "%s proxy failed with %s" description m);
@@ -137,7 +135,7 @@ let main_t pcap_filename socket_path =
       end in
   loop ()
 
-let main pcap_file socket = Lwt_main.run @@ main_t pcap_file socket
+let main pcap_file socket control = Lwt_main.run @@ main_t pcap_file socket control
 
 open Cmdliner
 
@@ -147,6 +145,9 @@ let pcap_file =
 let socket =
   Arg.(value & opt string "/var/tmp/com.docker.slirp.socket" & info [ "socket" ] ~docv:"SOCKET")
 
+let port_control_path =
+  Arg.(value & opt string "/var/tmp/com.docker.slirp.port.socket" & info [ "port-control" ] ~docv:"PORT")
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -154,7 +155,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ pcap_file $ socket),
+  Term.(pure main $ pcap_file $ socket $ port_control_path),
   Term.info "proxy" ~doc ~man
 
 let () =

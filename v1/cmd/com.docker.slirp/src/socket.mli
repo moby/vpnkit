@@ -32,4 +32,7 @@ module TCPV4: sig
     -> [ `Ok of flow | `Error of [ `Msg of string ] ] Lwt.t
     (** [connect_v4 addr port] creates a connection to [addr:port] and returns
         the connected flow. *)
+
+  val of_fd: ?read_buffer_size:int -> description:string -> Lwt_unix.file_descr -> flow
+
 end

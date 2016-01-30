@@ -139,6 +139,11 @@ module TCPV4 = struct
 
   let errorf fmt = Printf.ksprintf (fun s -> Lwt.return (`Error (`Msg s))) fmt
 
+  let of_fd ?(read_buffer_size = 65536) ~description fd =
+    let read_buffer = Cstruct.create read_buffer_size in
+    let closed = false in
+    { description; fd; read_buffer; read_buffer_size; closed }
+
   let connect_v4 ?(read_buffer_size = 65536) ip port =
     let open Lwt.Infix in
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
@@ -148,9 +153,7 @@ module TCPV4 = struct
          Log.info (fun f -> f "Socket.TCPV4.connect_v4 %s: connecting" description);
          Lwt_unix.connect fd (Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.V4.to_string ip, port))
          >>= fun () ->
-         let read_buffer = Cstruct.create read_buffer_size in
-         let closed = false in
-         Lwt.return (`Ok { description; fd; read_buffer; read_buffer_size; closed })
+         Lwt.return (`Ok (of_fd ~read_buffer_size ~description fd))
       )
       (fun e ->
          Lwt_unix.close fd

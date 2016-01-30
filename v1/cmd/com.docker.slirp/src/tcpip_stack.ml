@@ -143,3 +143,14 @@ let connect (ppp: Ppp.t) =
   let open Lwt.Infix in
   Netif.add_listener interface (Dhcp.listen interface);
   Lwt.return (`Ok stack)
+
+(* FIXME: this is unnecessary, mirage-flow should be changed *)
+module TCPV4_half_close = struct
+  include TCPV4
+  let shutdown_read flow =
+    (* No change to the TCP PCB: all this means is that I've
+       got my finders in my ears and am nolonger listening to
+       what you say. *)
+    Lwt.return ()
+  let shutdown_write = close
+end

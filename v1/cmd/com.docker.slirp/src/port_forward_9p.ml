@@ -1,3 +1,15 @@
+
+let src =
+  let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
+  Logs.Src.set_level src (Some Logs.Info);
+  src
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
+let finally f g =
+  let open Lwt.Infix in
+  Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
+
 module Result = struct
   include Result
   let return x = Ok x
@@ -29,7 +41,8 @@ module Forward = struct
     remote_port: Port.t;
     mutable fd: Lwt_unix.file_descr option;
   }
-  let start t =
+  let to_string t = Printf.sprintf "%d:%s:%d" t.local_port (Ipaddr.V4.to_string t.remote_ip) t.remote_port
+  let start stack t =
     let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string "127.0.0.1", t.local_port) in
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
     Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
@@ -39,7 +52,45 @@ module Forward = struct
         Lwt_unix.bind fd addr;
         match Lwt_unix.getsockname fd with
         | Lwt_unix.ADDR_INET(_, local_port) ->
-          Lwt.return (Result.Ok { t with local_port; fd = Some fd })
+          let t = { t with local_port; fd = Some fd } in
+          let description = to_string t in
+          Lwt_unix.listen fd 5;
+          let rec loop () =
+            Lwt_unix.accept fd
+            >>= fun (local_fd, _) ->
+            let local = Socket.TCPV4.of_fd ~description local_fd in
+            let proxy () =
+              finally (fun () ->
+                Tcpip_stack.TCPV4.create_connection (Tcpip_stack.tcpv4 stack) (t.remote_ip,t.remote_port)
+                >>= function
+                | `Error e ->
+                  Log.err (fun f -> f "%s: failed to connect: %s" description (Tcpip_stack.TCPV4.error_message e));
+                  Lwt.return ()
+                | `Ok remote ->
+                  (* The proxy function will close the remote flow *)
+                  (* proxy between local and remote *)
+                  Log.info (fun f -> f "%s connected" description);
+                  Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) remote (module Socket.TCPV4) local ()
+                  >>= function
+                  | `Error (`Msg m) ->
+                    Log.err (fun f -> f "%s proxy failed with %s" description m);
+                    Lwt.return ()
+                  | `Ok (l_stats, r_stats) ->
+                    Log.info (fun f ->
+                        f "%s closing: l2r = %s; r2l = %s" description
+                          (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
+                      );
+                    Lwt.return ()
+              ) (fun () ->
+                Socket.TCPV4.close local
+                >>= fun () ->
+                Log.info (fun f -> f "%s close local" description);
+                Lwt.return ()
+              ) in
+            Lwt.async proxy;
+            loop () in
+          Lwt.async loop;
+          Lwt.return (Result.Ok t)
         | _ ->
           Lwt.fail (Failure "failed to query local port")
       ) (function
@@ -58,7 +109,6 @@ module Forward = struct
     | Some fd ->
       t.fd <- None;
       Lwt_unix.close fd
-  let to_string t = Printf.sprintf "%d:%s:%d" t.local_port (Ipaddr.V4.to_string t.remote_ip) t.remote_port
   let of_string x = match Stringext.split ~on:':' x with
     | [ local_port; remote_ip; remote_port ] ->
       let local_port = Port.of_string local_port in
@@ -83,9 +133,11 @@ let active : Forward.t Port.Map.t ref = ref Port.Map.empty
 module Fs = struct
   open Protocol_9p
 
-  type t = unit
+  type t = {
+    stack: Tcpip_stack.t;
+  }
 
-  let make () = ()
+  let make stack = { stack }
 
   type resource =
     | ControlFile (* "/ctl" *)
@@ -94,11 +146,13 @@ module Fs = struct
     | Root
 
   type connection = {
+    t: t;
     fids: resource Types.Fid.Map.t ref;
     mutable result: string option;
   }
 
   let connect t info = {
+    t;
     fids = ref (Types.Fid.Map.empty);
     result = None;
   }
@@ -303,7 +357,7 @@ the failure.
         else begin match Forward.of_string @@ Cstruct.to_string data with
           | Result.Ok f ->
             let open Lwt.Infix in
-            begin Forward.start f >>= function
+            begin Forward.start connection.t.stack f >>= function
             | Result.Ok f' -> (* local_port is resolved *)
               active := Port.Map.add f'.Forward.local_port f' !active;
               connection.result <- Some ("OK " ^ (Forward.to_string f') ^ "\n");
@@ -335,13 +389,4 @@ the failure.
   let wstat _info ~cancel _ = Error.eperm
 end
 
-let serve path =
-  let open Lwt.Infix in
-  let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Fs) in
-  let fs = Fs.make () in
-  Server.listen fs "unix" path
-  >>= function
-  | Result.Ok server -> Server.serve_forever server
-  | Result.Error (`Msg m) -> failwith m
-
-let _ = Lwt_main.run (serve "/tmp/port.socket")
+module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Fs)

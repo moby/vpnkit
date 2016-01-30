@@ -14,10 +14,4 @@ Executable Main
   CompiledObject: best
   Path: src
   MainIs: main.ml
-  BuildDepends: sexplib, sexplib.syntax, cstruct, cstruct.lwt, cstruct.syntax, lwt.unix, io-page.unix, mirage-unix, mirage-clock-unix, mirage-console.unix, tcpip.ethif, tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct, pcap-format, cmdliner, charrua-core.server, logs.fmt, dns, dns.lwt, mirage-flow
-
-Executable test
-  CompiledObject: best
-  Path: src
-  MainIs: port_forward_9p.ml
   BuildDepends: protocol-9p, protocol-9p.unix, sexplib, sexplib.syntax, cstruct, cstruct.lwt, cstruct.syntax, lwt.unix, io-page.unix, mirage-unix, mirage-clock-unix, mirage-console.unix, tcpip.ethif, tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct, pcap-format, cmdliner, charrua-core.server, logs.fmt, dns, dns.lwt, mirage-flow

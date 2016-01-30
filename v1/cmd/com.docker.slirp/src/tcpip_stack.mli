@@ -18,3 +18,9 @@
 include V1_LWT.STACKV4
 
 val connect: Ppp.t -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
+
+val peer_ip: Ipaddr.V4.t
+(** IP address of the VM on the other end of the link *)
+
+module TCPV4_half_close : Mirage_flow_s.SHUTDOWNABLE
+  with type flow = TCPV4.flow
