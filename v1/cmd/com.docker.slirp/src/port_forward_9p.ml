@@ -30,7 +30,29 @@ module Forward = struct
     mutable fd: Lwt_unix.file_descr option;
   }
   let start t =
-    Lwt.return (Result.Error (`Msg "forwarding not implemented"))
+    let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string "127.0.0.1", t.local_port) in
+    let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
+    Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
+    let open Lwt.Infix in
+    Lwt.catch
+      (fun () ->
+        Lwt_unix.bind fd addr;
+        match Lwt_unix.getsockname fd with
+        | Lwt_unix.ADDR_INET(_, local_port) ->
+          Lwt.return (Result.Ok { t with local_port; fd = Some fd })
+        | _ ->
+          Lwt.fail (Failure "failed to query local port")
+      ) (function
+        | Failure m ->
+          Lwt_unix.close fd
+          >>= fun () ->
+          Lwt.return (Result.Error (`Msg m))
+        | e ->
+          Lwt_unix.close fd
+          >>= fun () ->
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to bind port %s" (Printexc.to_string e))))
+      )
+
   let stop t = match t.fd with
     | None -> Lwt.return ()
     | Some fd ->
@@ -144,14 +166,13 @@ the failure.
           | "ctl" ->
             let qid = next_qid [] in
             (ControlFile, qid), qid :: qids
-          | port ->
-            begin match Port.of_string port with
+          | forward ->
+            begin match Forward.of_string forward with
               | Result.Error _ -> failwith "ENOENT"
-              | Result.Ok port ->
-                if Port.Map.mem port !active then begin
-                  let forward = Port.Map.find port !active in
+              | Result.Ok f ->
+                if Port.Map.mem f.Forward.local_port !active then begin
                   let qid = next_qid [] in
-                  (Forward forward, qid), qid :: qids
+                  (Forward (Port.Map.find f.Forward.local_port !active), qid), qid :: qids
                 end else failwith "ENOENT"
             end
         ) ((from, next_qid []), []) wnames in
@@ -285,7 +306,7 @@ the failure.
             begin Forward.start f >>= function
             | Result.Ok f' -> (* local_port is resolved *)
               active := Port.Map.add f'.Forward.local_port f' !active;
-              connection.result <- Some ("OK " ^ (Forward.to_string f) ^ "\n");
+              connection.result <- Some ("OK " ^ (Forward.to_string f') ^ "\n");
               return ok
             | Result.Error (`Msg m) ->
               connection.result <- Some ("ERROR " ^ m ^ "\n");
