@@ -166,27 +166,47 @@ module TCPV4 = struct
   let read t =
     let open Lwt.Infix in
     (if Cstruct.len t.read_buffer = 0 then t.read_buffer <- Cstruct.create t.read_buffer_size);
-    Lwt_bytes.read t.fd t.read_buffer.Cstruct.buffer t.read_buffer.Cstruct.off t.read_buffer.Cstruct.len
-    >>= function
-    | 0 -> Lwt.return `Eof
-    | n ->
-      let results = Cstruct.sub t.read_buffer 0 n in
-      t.read_buffer <- Cstruct.shift t.read_buffer n;
-      Lwt.return (`Ok results)
+		Lwt.catch
+		  (fun () ->
+		    Lwt_bytes.read t.fd t.read_buffer.Cstruct.buffer t.read_buffer.Cstruct.off t.read_buffer.Cstruct.len
+		    >>= function
+		    | 0 -> Lwt.return `Eof
+		    | n ->
+		      let results = Cstruct.sub t.read_buffer 0 n in
+		      t.read_buffer <- Cstruct.shift t.read_buffer n;
+		      Lwt.return (`Ok results)
+			) (fun e ->
+				Log.err (fun f -> f "Socket.TCPV4.read caught %s" (Printexc.to_string e));
+				Lwt.return `Eof
+			)
 
   let write t buf =
     let open Lwt.Infix in
-    Lwt_cstruct.(complete (write t.fd) buf)
-    >>= fun () ->
-    Lwt.return (`Ok ())
+		Lwt.catch
+			(fun () ->
+		    Lwt_cstruct.(complete (write t.fd) buf)
+		    >>= fun () ->
+		    Lwt.return (`Ok ())
+			) (fun e ->
+				Log.err (fun f -> f "Socket.TCP4.write caught %s" (Printexc.to_string e));
+				Lwt.return `Eof
+			)
 
-  let rec writev t =
-    let open Lwt.Infix in function
-    | [] -> Lwt.return (`Ok ())
-    | buf :: bufs ->
-      Lwt_cstruct.(complete (write t.fd) buf)
-      >>= fun () ->
-      writev t bufs
+  let writev t bufs =
+		Lwt.catch
+			(fun () ->
+				let open Lwt.Infix in
+				let rec loop = function
+		    | [] -> Lwt.return (`Ok ())
+		    | buf :: bufs ->
+		      Lwt_cstruct.(complete (write t.fd) buf)
+		      >>= fun () ->
+		      loop bufs in
+				loop bufs
+			) (fun e ->
+				Log.err (fun f -> f "Socket.TCP4.writev caught %s" (Printexc.to_string e));
+				Lwt.return `Eof
+			)
 
   let close t =
     if not t.closed then (t.closed <- true; Lwt_unix.close t.fd) else Lwt.return ()
