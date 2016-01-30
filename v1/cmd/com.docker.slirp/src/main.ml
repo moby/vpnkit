@@ -103,11 +103,13 @@ let main_t pcap_filename socket_path =
 									let module TCP = struct
 									  include Tcpip_stack.TCPV4
 										let shutdown_read flow =
-											Log.info (fun f -> f "%s unimplemented Tcpip_stack.TCPV4.shutdown_read" description);
+											(* No change to the TCP PCB: all this means is that I've
+											   got my finders in my ears and am nolonger listening to
+												 what you say. *)
 											return ()
 										let shutdown_write flow =
-											Log.info (fun f -> f "%s unimplemented Tcpip_stack.TCPV4.shutdown_write" description);
-											return ()
+											Log.info (fun f -> f "%s Tcpip_stack.TCPv4.close calling Tx.close" description);
+											Tcpip_stack.TCPV4.close local
 									end in
 									Mirage_flow.proxy (module Clock) (module TCP) local (module Socket.TCPV4) remote ()
 									>>= function
@@ -121,11 +123,9 @@ let main_t pcap_filename socket_path =
 										);
 										return ()
 								) (fun () ->
-									Tcpip_stack.TCPV4.close local
-									>>= fun () ->
 									Socket.TCPV4.close remote
 									>>= fun () ->
-				          Log.info (fun f -> f "%s closed" description);
+				          Log.info (fun f -> f "%s Socket.TCPV4.close" description);
 									Lwt.return ()
 								)
 							))
