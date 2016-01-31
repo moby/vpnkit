@@ -47,68 +47,70 @@ module Forward = struct
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
     Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
     let open Lwt.Infix in
+    (* On failure here, we must close the fd *)
     Lwt.catch
       (fun () ->
         Lwt_unix.bind fd addr;
         match Lwt_unix.getsockname fd with
         | Lwt_unix.ADDR_INET(_, local_port) ->
-          let t = { t with local_port; fd = Some fd } in
-          let description = to_string t in
           Lwt_unix.listen fd 5;
-          let rec loop () =
-            Lwt_unix.accept fd
-            >>= fun (local_fd, _) ->
-            let local = Socket.TCPV4.of_fd ~description local_fd in
-            let proxy () =
-              finally (fun () ->
-                Tcpip_stack.TCPV4.create_connection (Tcpip_stack.tcpv4 stack) (t.remote_ip,t.remote_port)
-                >>= function
-                | `Error e ->
-                  Log.err (fun f -> f "%s: failed to connect: %s" description (Tcpip_stack.TCPV4.error_message e));
-                  Lwt.return ()
-                | `Ok remote ->
-                  (* The proxy function will close the remote flow *)
-                  (* proxy between local and remote *)
-                  Log.info (fun f -> f "%s connected" description);
-                  Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) remote (module Socket.TCPV4) local ()
-                  >>= function
-                  | `Error (`Msg m) ->
-                    Log.err (fun f -> f "%s proxy failed with %s" description m);
-                    Lwt.return ()
-                  | `Ok (l_stats, r_stats) ->
-                    Log.info (fun f ->
-                        f "%s closing: l2r = %s; r2l = %s" description
-                          (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
-                      );
-                    Lwt.return ()
-              ) (fun () ->
-                Socket.TCPV4.close local
-                >>= fun () ->
-                Log.info (fun f -> f "%s close local" description);
-                Lwt.return ()
-              ) in
-            Lwt.async proxy;
-            loop () in
-          Lwt.async loop;
-          Lwt.return (Result.Ok t)
+          Lwt.return (Result.Ok (local_port, fd))
         | _ ->
-          Lwt.fail (Failure "failed to query local port")
-      ) (function
-        | Failure m ->
-          Lwt_unix.close fd
-          >>= fun () ->
-          Lwt.return (Result.Error (`Msg m))
-        | e ->
+          Lwt.return (Result.Error (`Msg "failed to query local port"))
+      ) (fun e ->
           Lwt_unix.close fd
           >>= fun () ->
           Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to bind port %s" (Printexc.to_string e))))
       )
+    >>= function
+    | Result.Error e -> Lwt.return (Result.Error e)
+    | Result.Ok (local_port, fd) ->
+      (* The `Forward.stop` function is in charge of closing the fd *)
+      let t = { t with local_port; fd = Some fd } in
+      let description = to_string t in
+      let rec loop () =
+        Lwt_unix.accept fd
+        >>= fun (local_fd, _) ->
+        let local = Socket.TCPV4.of_fd ~description local_fd in
+        let proxy () =
+          finally (fun () ->
+            Tcpip_stack.TCPV4.create_connection (Tcpip_stack.tcpv4 stack) (t.remote_ip,t.remote_port)
+            >>= function
+            | `Error e ->
+              Log.err (fun f -> f "%s: failed to connect: %s" description (Tcpip_stack.TCPV4.error_message e));
+              Lwt.return ()
+            | `Ok remote ->
+              (* The proxy function will close the remote flow *)
+              (* proxy between local and remote *)
+              Log.info (fun f -> f "%s connected" description);
+              Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) remote (module Socket.TCPV4) local ()
+              >>= function
+              | `Error (`Msg m) ->
+                Log.err (fun f -> f "%s proxy failed with %s" description m);
+                Lwt.return ()
+              | `Ok (l_stats, r_stats) ->
+                Log.info (fun f ->
+                    f "%s closing: l2r = %s; r2l = %s" description
+                      (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
+                  );
+                Lwt.return ()
+          ) (fun () ->
+            Socket.TCPV4.close local
+            >>= fun () ->
+            Log.info (fun f -> f "%s close local" description);
+            Lwt.return ()
+          ) in
+        Lwt.async proxy;
+        loop () in
+      Lwt.async loop;
+      Lwt.return (Result.Ok t)
 
   let stop t = match t.fd with
     | None -> Lwt.return ()
     | Some fd ->
       t.fd <- None;
       Lwt_unix.close fd
+
   let of_string x = match Stringext.split ~on:':' x with
     | [ local_port; remote_ip; remote_port ] ->
       let local_port = Port.of_string local_port in
