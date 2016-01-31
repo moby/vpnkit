@@ -43,6 +43,14 @@ let main_t pcap_filename socket_path port_control_path =
   Lwt_unix.bind s (Lwt_unix.ADDR_UNIX socket_path);
   Lwt_unix.listen s 5;
 
+  (* Start the 9P port forwarding server *)
+  let fs = Port_forward_9p.Fs.make () in
+  Port_forward_9p.Server.listen fs "unix" port_control_path
+  >>= function
+  | Result.Error (`Msg m) -> failwith m
+  | Result.Ok server ->
+    Lwt.async (fun () -> Port_forward_9p.Server.serve_forever server);
+
   let rec loop () =
     Lwt_unix.accept s
     >>= fun (client, _) ->
@@ -54,15 +62,7 @@ let main_t pcap_filename socket_path port_control_path =
         >>= function
         | `Error (`Msg m) -> failwith m
         | `Ok s ->
-
-          (* Start the 9P port forwarding server *)
-          let fs = Port_forward_9p.Fs.make s in
-          Port_forward_9p.Server.listen fs "unix" port_control_path
-          >>= function
-          | Result.Error (`Msg m) -> failwith m
-          | Result.Ok server ->
-            Lwt.async (fun () -> Port_forward_9p.Server.serve_forever server);
-
+          Port_forward_9p.Fs.set_stack fs s;
           Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input s);
           Ppp.add_listener x (
             fun buf ->

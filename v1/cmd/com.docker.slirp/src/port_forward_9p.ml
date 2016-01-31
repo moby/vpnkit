@@ -134,10 +134,12 @@ module Fs = struct
   open Protocol_9p
 
   type t = {
-    stack: Tcpip_stack.t;
+    mutable stack: Tcpip_stack.t option;
   }
 
-  let make stack = { stack }
+  let make () = { stack = None }
+
+  let set_stack t stack = t.stack <- Some stack
 
   type resource =
     | ControlFile (* "/ctl" *)
@@ -357,14 +359,20 @@ the failure.
         else begin match Forward.of_string @@ Cstruct.to_string data with
           | Result.Ok f ->
             let open Lwt.Infix in
-            begin Forward.start connection.t.stack f >>= function
-            | Result.Ok f' -> (* local_port is resolved *)
-              active := Port.Map.add f'.Forward.local_port f' !active;
-              connection.result <- Some ("OK " ^ (Forward.to_string f') ^ "\n");
+            begin match connection.t.stack with
+            | None ->
+              connection.result <- Some ("ERROR no TCP/IP stack configured\n");
               return ok
-            | Result.Error (`Msg m) ->
-              connection.result <- Some ("ERROR " ^ m ^ "\n");
-              return ok
+            | Some stack ->
+              begin Forward.start stack f >>= function
+              | Result.Ok f' -> (* local_port is resolved *)
+                active := Port.Map.add f'.Forward.local_port f' !active;
+                connection.result <- Some ("OK " ^ (Forward.to_string f') ^ "\n");
+                return ok
+              | Result.Error (`Msg m) ->
+                connection.result <- Some ("ERROR " ^ m ^ "\n");
+                return ok
+              end
             end
           | Result.Error (`Msg m) ->
             connection.result <- Some ("ERROR " ^ m ^ "\n");
