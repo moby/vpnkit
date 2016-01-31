@@ -1,4 +1,6 @@
 
+open Utils
+
 let src =
   let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
   Logs.Src.set_level src (Some Logs.Info);
@@ -50,18 +52,18 @@ module Forward = struct
     (* On failure here, we must close the fd *)
     Lwt.catch
       (fun () ->
-        Lwt_unix.bind fd addr;
-        match Lwt_unix.getsockname fd with
-        | Lwt_unix.ADDR_INET(_, local_port) ->
-          Lwt_unix.listen fd 5;
-          Lwt.return (Result.Ok (local_port, fd))
-        | _ ->
-          Lwt.return (Result.Error (`Msg "failed to query local port"))
+         Lwt_unix.bind fd addr;
+         match Lwt_unix.getsockname fd with
+         | Lwt_unix.ADDR_INET(_, local_port) ->
+           Lwt_unix.listen fd 5;
+           Lwt.return (Result.Ok (local_port, fd))
+         | _ ->
+           Lwt.return (Result.Error (`Msg "failed to query local port"))
       ) (fun e ->
           Lwt_unix.close fd
           >>= fun () ->
           Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to bind port %s" (Printexc.to_string e))))
-      )
+        )
     >>= function
     | Result.Error e -> Lwt.return (Result.Error e)
     | Result.Ok (local_port, fd) ->
@@ -69,39 +71,51 @@ module Forward = struct
       let t = { t with local_port; fd = Some fd } in
       let description = to_string t in
       let rec loop () =
-        Lwt_unix.accept fd
-        >>= fun (local_fd, _) ->
-        let local = Socket.TCPV4.of_fd ~description local_fd in
-        let proxy () =
-          finally (fun () ->
-            Tcpip_stack.TCPV4.create_connection (Tcpip_stack.tcpv4 stack) (t.remote_ip,t.remote_port)
-            >>= function
-            | `Error e ->
-              Log.err (fun f -> f "%s: failed to connect: %s" description (Tcpip_stack.TCPV4.error_message e));
-              Lwt.return ()
-            | `Ok remote ->
-              (* The proxy function will close the remote flow *)
-              (* proxy between local and remote *)
-              Log.info (fun f -> f "%s connected" description);
-              Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) remote (module Socket.TCPV4) local ()
-              >>= function
-              | `Error (`Msg m) ->
-                Log.err (fun f -> f "%s proxy failed with %s" description m);
+        Lwt.catch (fun () ->
+            Lwt_unix.accept fd
+            >>= fun (local_fd, _) ->
+            Lwt.return (Some local_fd)
+          ) (function
+            | Unix.Unix_error(Unix.EBADF, _, _) -> Lwt.return None
+            | e ->
+              Log.err (fun f -> f "%s: failed to accept: %s" description (Printexc.to_string e));
+              Lwt.return None
+          )
+        >>= function
+        | None -> Lwt.return ()
+        | Some local_fd ->
+          let local = Socket.TCPV4.of_fd ~description local_fd in
+          let proxy () =
+            finally (fun () ->
+                Tcpip_stack.TCPV4.create_connection (Tcpip_stack.tcpv4 stack) (t.remote_ip,t.remote_port)
+                >>= function
+                | `Error e ->
+                  Log.err (fun f -> f "%s: failed to connect: %s" description (Tcpip_stack.TCPV4.error_message e));
+                  Lwt.return ()
+                | `Ok remote ->
+                  (* The proxy function will close the remote flow *)
+                  (* proxy between local and remote *)
+                  Log.info (fun f -> f "%s connected" description);
+                  Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) remote (module Socket.TCPV4) local ()
+                  >>= function
+                  | `Error (`Msg m) ->
+                    Log.err (fun f -> f "%s proxy failed with %s" description m);
+                    Lwt.return ()
+                  | `Ok (l_stats, r_stats) ->
+                    Log.info (fun f ->
+                        f "%s closing: l2r = %s; r2l = %s" description
+                          (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
+                      );
+                    Lwt.return ()
+              ) (fun () ->
+                Socket.TCPV4.close local
+                >>= fun () ->
+                Log.info (fun f -> f "%s close local" description);
                 Lwt.return ()
-              | `Ok (l_stats, r_stats) ->
-                Log.info (fun f ->
-                    f "%s closing: l2r = %s; r2l = %s" description
-                      (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
-                  );
-                Lwt.return ()
-          ) (fun () ->
-            Socket.TCPV4.close local
-            >>= fun () ->
-            Log.info (fun f -> f "%s close local" description);
-            Lwt.return ()
-          ) in
-        Lwt.async proxy;
-        loop () in
+              )
+          in
+          Lwt.async (fun () -> log_exception_continue (description ^ " proxy") proxy);
+          loop () in
       Lwt.async loop;
       Lwt.return (Result.Ok t)
 
@@ -362,19 +376,19 @@ the failure.
           | Result.Ok f ->
             let open Lwt.Infix in
             begin match connection.t.stack with
-            | None ->
-              connection.result <- Some ("ERROR no TCP/IP stack configured\n");
-              return ok
-            | Some stack ->
-              begin Forward.start stack f >>= function
-              | Result.Ok f' -> (* local_port is resolved *)
-                active := Port.Map.add f'.Forward.local_port f' !active;
-                connection.result <- Some ("OK " ^ (Forward.to_string f') ^ "\n");
+              | None ->
+                connection.result <- Some ("ERROR no TCP/IP stack configured\n");
                 return ok
-              | Result.Error (`Msg m) ->
-                connection.result <- Some ("ERROR " ^ m ^ "\n");
-                return ok
-              end
+              | Some stack ->
+                begin Forward.start stack f >>= function
+                  | Result.Ok f' -> (* local_port is resolved *)
+                    active := Port.Map.add f'.Forward.local_port f' !active;
+                    connection.result <- Some ("OK " ^ (Forward.to_string f') ^ "\n");
+                    return ok
+                  | Result.Error (`Msg m) ->
+                    connection.result <- Some ("ERROR " ^ m ^ "\n");
+                    return ok
+                end
             end
           | Result.Error (`Msg m) ->
             connection.result <- Some ("ERROR " ^ m ^ "\n");

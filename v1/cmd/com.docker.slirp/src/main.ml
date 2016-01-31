@@ -51,89 +51,89 @@ let main_t pcap_filename socket_path port_control_path =
   | Result.Ok server ->
     Lwt.async (fun () -> Port_forward_9p.Server.serve_forever server);
 
-  let rec loop () =
-    Lwt_unix.accept s
-    >>= fun (client, _) ->
-    Ppp.of_fd ?pcap_filename client
-    >>= function
-    | `Error (`Msg m) -> failwith m
-    | `Ok x ->
-      begin Tcpip_stack.connect x
-        >>= function
-        | `Error (`Msg m) -> failwith m
-        | `Ok s ->
-          Port_forward_9p.Fs.set_stack fs s;
-          Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input s);
-          Ppp.add_listener x (
-            fun buf ->
-              match (Wire_structs.parse_ethernet_frame buf) with
-              | Some (Some Wire_structs.IPv4, _, payload) ->
-                let src = Ipaddr.V4.of_int32 @@ Wire_structs.Ipv4_wire.get_ipv4_src payload in
-                let dst = Ipaddr.V4.of_int32 @@ Wire_structs.Ipv4_wire.get_ipv4_dst payload in
-                begin match Wire_structs.Ipv4_wire.(int_to_protocol @@ get_ipv4_proto payload) with
-                  | Some `UDP ->
-                    let udp = Cstruct.shift payload Wire_structs.Ipv4_wire.sizeof_ipv4 in
-                    let src_port = Wire_structs.get_udp_source_port udp in
-                    let dst_port = Wire_structs.get_udp_dest_port udp in
-                    let length = Wire_structs.get_udp_length udp in
-                    let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
-                    Log.info (fun f -> f "UDP %s:%d -> %s:%d len %d"
-                                 (Ipaddr.V4.to_string src) src_port
-                                 (Ipaddr.V4.to_string dst) dst_port
-                                 length
-                             );
-                    (* We handle DNS on port 53 ourselves *)
-                    if dst_port <> 53 then begin
-                      let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
-                      Socket.UDPV4.input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload
-                    end else Lwt.return_unit
-                  | _ -> Lwt.return_unit
-                end
-              | _ -> Lwt.return_unit
-          );
-          Tcpip_stack.listen_tcpv4_flow s (
-            fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
-              let description =
-                Printf.sprintf "TCP %s:%d > %s:%d"
-                  (Ipaddr.V4.to_string src_ip) src_port
-                  (Ipaddr.V4.to_string dst_ip) dst_port in
-              Log.info (fun f -> f "%s connecting" description);
+    let rec loop () =
+      Lwt_unix.accept s
+      >>= fun (client, _) ->
+      Ppp.of_fd ?pcap_filename client
+      >>= function
+      | `Error (`Msg m) -> failwith m
+      | `Ok x ->
+        begin Tcpip_stack.connect x
+          >>= function
+          | `Error (`Msg m) -> failwith m
+          | `Ok s ->
+            Port_forward_9p.Fs.set_stack fs s;
+            Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input s);
+            Ppp.add_listener x (
+              fun buf ->
+                match (Wire_structs.parse_ethernet_frame buf) with
+                | Some (Some Wire_structs.IPv4, _, payload) ->
+                  let src = Ipaddr.V4.of_int32 @@ Wire_structs.Ipv4_wire.get_ipv4_src payload in
+                  let dst = Ipaddr.V4.of_int32 @@ Wire_structs.Ipv4_wire.get_ipv4_dst payload in
+                  begin match Wire_structs.Ipv4_wire.(int_to_protocol @@ get_ipv4_proto payload) with
+                    | Some `UDP ->
+                      let udp = Cstruct.shift payload Wire_structs.Ipv4_wire.sizeof_ipv4 in
+                      let src_port = Wire_structs.get_udp_source_port udp in
+                      let dst_port = Wire_structs.get_udp_dest_port udp in
+                      let length = Wire_structs.get_udp_length udp in
+                      let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
+                      Log.info (fun f -> f "UDP %s:%d -> %s:%d len %d"
+                                   (Ipaddr.V4.to_string src) src_port
+                                   (Ipaddr.V4.to_string dst) dst_port
+                                   length
+                               );
+                      (* We handle DNS on port 53 ourselves *)
+                      if dst_port <> 53 then begin
+                        let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
+                        Socket.UDPV4.input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload
+                      end else Lwt.return_unit
+                    | _ -> Lwt.return_unit
+                  end
+                | _ -> Lwt.return_unit
+            );
+            Tcpip_stack.listen_tcpv4_flow s (
+              fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
+                let description =
+                  Printf.sprintf "TCP %s:%d > %s:%d"
+                    (Ipaddr.V4.to_string src_ip) src_port
+                    (Ipaddr.V4.to_string dst_ip) dst_port in
+                Log.info (fun f -> f "%s connecting" description);
 
-              Socket.TCPV4.connect_v4 src_ip src_port
-              >>= function
-              | `Error (`Msg m) ->
-                Log.info (fun f -> f "%s rejected: %s" description m);
-                return `Reject
-              | `Ok remote ->
-                Lwt.return (`Accept (fun local ->
-                    finally (fun () ->
-                        (* proxy between local and remote *)
-                        Log.info (fun f -> f "%s connected" description);
-                        Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.TCPV4) remote ()
-                        >>= function
-                        | `Error (`Msg m) ->
-                          Log.err (fun f -> f "%s proxy failed with %s" description m);
-                          return ()
-                        | `Ok (l_stats, r_stats) ->
-                          Log.info (fun f ->
-                              f "%s closing: l2r = %s; r2l = %s" description
-                                (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
-                            );
-                          return ()
-                      ) (fun () ->
-                        Socket.TCPV4.close remote
-                        >>= fun () ->
-                        Log.info (fun f -> f "%s Socket.TCPV4.close" description);
-                        Lwt.return ()
-                      )
-                  ))
-          );
-          Tcpip_stack.listen s
-          >>= fun () ->
-          Log.info (fun f -> f "TCP/IP ready");
-          loop ()
-      end in
-  loop ()
+                Socket.TCPV4.connect_v4 src_ip src_port
+                >>= function
+                | `Error (`Msg m) ->
+                  Log.info (fun f -> f "%s rejected: %s" description m);
+                  return `Reject
+                | `Ok remote ->
+                  Lwt.return (`Accept (fun local ->
+                      finally (fun () ->
+                          (* proxy between local and remote *)
+                          Log.info (fun f -> f "%s connected" description);
+                          Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.TCPV4) remote ()
+                          >>= function
+                          | `Error (`Msg m) ->
+                            Log.err (fun f -> f "%s proxy failed with %s" description m);
+                            return ()
+                          | `Ok (l_stats, r_stats) ->
+                            Log.info (fun f ->
+                                f "%s closing: l2r = %s; r2l = %s" description
+                                  (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
+                              );
+                            return ()
+                        ) (fun () ->
+                          Socket.TCPV4.close remote
+                          >>= fun () ->
+                          Log.info (fun f -> f "%s Socket.TCPV4.close" description);
+                          Lwt.return ()
+                        )
+                    ))
+            );
+            Tcpip_stack.listen s
+            >>= fun () ->
+            Log.info (fun f -> f "TCP/IP ready");
+            loop ()
+        end in
+    loop ()
 
 let main pcap_file socket control = Lwt_main.run @@ main_t pcap_file socket control
 

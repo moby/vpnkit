@@ -16,6 +16,7 @@
  *)
 open Lwt
 open Sexplib.Std
+open Utils
 
 (* Assign the client a single MAC address *)
 let macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
@@ -347,6 +348,7 @@ let listen t callback =
                Cstruct.hexdump_to_buffer b buf;
                f "received\n%s" (Buffer.contents b)
              );
+           let callback buf = log_exception_continue "PPP.listen callback" (fun () -> callback buf) in
            Lwt.async (fun () -> callback buf);
            List.iter (fun callback -> Lwt.async (fun () -> callback buf)) t.listeners;
            Lwt.return (`Ok true)
