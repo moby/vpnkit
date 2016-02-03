@@ -17,6 +17,13 @@
 open Lwt
 open Dns
 
+let src =
+  let src = Logs.Src.create "dns" ~doc:"Resolve DNS queries on the host" in
+  Logs.Src.set_level src (Some Logs.Info);
+  src
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
 let resolver_t =
   (* We need to proxy DNS to the host resolver *)
   Dns_resolver_unix.create () (* create resolver using /etc/resolv.conf *)
@@ -30,9 +37,19 @@ let input s ~src ~dst ~src_port buf =
     match packet.questions with
     | [] -> return None; (* no questions in packet *)
     | [q] ->
-      Dns_resolver_unix.resolve resolver q.q_class q.q_type q.q_name
-      >>= fun result ->
-      (return (Some (Dns.Query.answer_of_response result)))
+      Lwt.catch
+        (fun () ->
+          Dns_resolver_unix.resolve resolver q.q_class q.q_type q.q_name
+          >>= fun result ->
+          (return (Some (Dns.Query.answer_of_response result)))
+        ) (function
+          | Dns.Protocol.Dns_resolve_error exns ->
+            Log.err (fun f -> f "DNS resolution failed for %s: %s" (Dns.Packet.question_to_string q) (String.concat "; " (List.map Printexc.to_string exns)));
+            return None
+          | e ->
+            Log.err (fun f -> f "DNS resolution failed for %s: %s" (Dns.Packet.question_to_string q) (Printexc.to_string e));
+            return None
+          )
     | _::_::_ -> return None in
 
   let processor = ((Dns_server.processor_of_process process) :> (module Dns_server.PROCESSOR)) in
