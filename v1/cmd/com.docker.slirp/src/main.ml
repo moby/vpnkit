@@ -44,7 +44,7 @@ let main_t pcap_filename socket_path port_control_path =
   Lwt_unix.listen s 5;
 
   (* Start the 9P port forwarding server *)
-  let module Ports = Port_forward_9p.Fs(Forward) in
+  let module Ports = Active_list.Make(Forward) in
   let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
 
   let fs = Ports.make () in

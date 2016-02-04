@@ -1,13 +1,6 @@
 
 open Utils
 
-let src =
-  let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
-  Logs.Src.set_level src (Some Logs.Info);
-  src
-
-module Log = (val Logs.src_log src : Logs.LOG)
-
 let finally f g =
   let open Lwt.Infix in
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
@@ -19,7 +12,7 @@ module type Instance = sig
 
   val description_of_format: string
 
-  type context = Tcpip_stack.t
+  type context
   (** The context in which a [t] is [start]ed, for example a TCP/IP stack *)
 
   val start: context -> t -> (t, [ `Msg of string ]) Result.result Lwt.t
@@ -32,7 +25,7 @@ module type Instance = sig
 end
 
 
-module Fs(Instance: Instance) = struct
+module Make(Instance: Instance) = struct
   open Protocol_9p
 
   let active : Instance.t Instance.Map.t ref = ref Instance.Map.empty
