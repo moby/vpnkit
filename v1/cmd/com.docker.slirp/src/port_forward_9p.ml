@@ -13,10 +13,11 @@ let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
 
 module type Instance = sig
-
   type t
   val to_string: t -> string
   val of_string: string -> (t, [ `Msg of string ]) Result.result
+
+  val description_of_format: string
 
   type context = Tcpip_stack.t
   (** The context in which a [t] is [start]ed, for example a TCP/IP stack *)
@@ -79,33 +80,27 @@ module Fs(Instance: Instance) = struct
 
   let root_qid = next_qid []
 
-  let readme = Cstruct.of_string "
-Active port fowards directory
+  let readme = Cstruct.of_string (Printf.sprintf "
+Directory of active Instances
 -----------------------------
 
-Every active port forward is represented by a file, whose name is the
-local port number. The file contents are of the form:
+Every active Instance is represented by a file. To shut down an Instance,
+remove the file.
 
-<destination IP>:<destination port>
+To request an additional Instance, open the special file `/ctl` and `write`
+a single string of the following form:
 
-The files may not be written to, but may be read and removed. When a file
-is removed, the listening socket is closed (but active connection forwards
-remain active).
+%s
 
-To request an additional forward of a specific local port, open the
-special file `/ctl` and write `local_port:destination_ip:destination_port`.
 Immediately read the file contents and check whether it says:
 
-- `OK local_port:destination_ip:destination_port`: this means the forwarding
-  has been setup on `127.0.0.1:local_port`.
-- `ERROR some error message`: this means the forwarding has failed, perhaps
-  the port is still in use.
-
-To request an additional forward of any free local port, open the special
-file `/ctl` and write `0:destination_ip:destination_port` then read the file
-contents to discover the identity of the allocated local port, or details of
-the failure.
-"
+- `OK <instance details>`: this means the Instance has been configured and
+  the details returned to you. For some instance types the server might modify
+  the request slightly, for example by choosing a local port number or
+  temporary path.
+- `ERROR some error message`: this means the Instance creation has failed, perhaps
+  some needed resource is still in use.
+" Instance.description_of_format)
 
   let return x = Lwt.return (Result.Ok x)
 

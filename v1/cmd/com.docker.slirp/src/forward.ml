@@ -51,6 +51,9 @@ module Map = Port.Map
 type context = Tcpip_stack.t
 
 let to_string t = Printf.sprintf "%d:%s:%d" t.local_port (Ipaddr.V4.to_string t.remote_ip) t.remote_port
+
+let description_of_format = "local port:IPv4 address of remote:remote port"
+
 let start stack t =
   let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string "127.0.0.1", t.local_port) in
   let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in

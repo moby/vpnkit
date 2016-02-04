@@ -18,3 +18,5 @@ type key
 module Map: Map.S with type key = key
 
 val get_key: t -> key
+
+val description_of_format: string
