@@ -12,10 +12,29 @@ let finally f g =
   let open Lwt.Infix in
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
 
-let active : Forward.t Forward.Map.t ref = ref Forward.Map.empty
+module type Instance = sig
 
-module Fs = struct
+  type t
+  val to_string: t -> string
+  val of_string: string -> (t, [ `Msg of string ]) Result.result
+
+  type context = Tcpip_stack.t
+  (** The context in which a [t] is [start]ed, for example a TCP/IP stack *)
+
+  val start: context -> t -> (t, [ `Msg of string ]) Result.result Lwt.t
+
+  val stop: t -> unit Lwt.t
+
+  type key
+  val get_key: t -> key
+  module Map: Map.S with type key = key
+end
+
+
+module Fs(Forward: Instance) = struct
   open Protocol_9p
+
+  let active : Forward.t Forward.Map.t ref = ref Forward.Map.empty
 
   type t = {
     mutable stack: Tcpip_stack.t option;
@@ -283,5 +302,3 @@ the failure.
 
   let wstat _info ~cancel _ = Error.eperm
 end
-
-module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Fs)
