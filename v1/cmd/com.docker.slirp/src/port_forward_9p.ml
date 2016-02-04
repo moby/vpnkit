@@ -31,13 +31,13 @@ module type Instance = sig
 end
 
 
-module Fs(Forward: Instance) = struct
+module Fs(Instance: Instance) = struct
   open Protocol_9p
 
-  let active : Forward.t Forward.Map.t ref = ref Forward.Map.empty
+  let active : Instance.t Instance.Map.t ref = ref Instance.Map.empty
 
   type t = {
-    mutable context: Forward.context option;
+    mutable context: Instance.context option;
   }
 
   let make () = { context = None }
@@ -47,7 +47,7 @@ module Fs(Forward: Instance) = struct
   type resource =
     | ControlFile (* "/ctl" *)
     | README
-    | Forward of Forward.t
+    | Instance of Instance.t
     | Root
 
   type connection = {
@@ -125,14 +125,14 @@ the failure.
           | "ctl" ->
             let qid = next_qid [] in
             (ControlFile, qid), qid :: qids
-          | forward ->
-            begin match Forward.of_string forward with
+          | instance ->
+            begin match Instance.of_string instance with
               | Result.Error _ -> failwith "ENOENT"
               | Result.Ok f ->
-                let key = Forward.get_key f in
-                if Forward.Map.mem key !active then begin
+                let key = Instance.get_key f in
+                if Instance.Map.mem key !active then begin
                   let qid = next_qid [] in
-                  (Forward (Forward.Map.find key !active), qid), qid :: qids
+                  (Instance (Instance.Map.find key !active), qid), qid :: qids
                 end else failwith "ENOENT"
             end
         ) ((from, next_qid []), []) wnames in
@@ -201,8 +201,8 @@ the failure.
         let len = min count Cstruct.(len readme - offset) in
         let data = Cstruct.sub readme offset len in
         return { Response.Read.data }
-      | Forward f ->
-        let f' = Forward.to_string f in
+      | Instance f ->
+        let f' = Instance.to_string f in
         let data = Cstruct.create (String.length f') in
         Cstruct.blit_from_string f' 0 data 0 (Cstruct.len data);
         let len = min count Cstruct.(len data - offset) in
@@ -214,8 +214,8 @@ the failure.
           :: make_stat ~is_directory:true ~writable:false ~name:".."
           :: make_stat ~is_directory:false ~writable:false ~name:"README"
           :: make_stat ~is_directory:false ~writable:false ~name:"ctl"
-          :: (Forward.Map.fold (fun _ forward acc ->
-              make_stat ~is_directory:false ~writable:false ~name:(Forward.to_string forward)
+          :: (Instance.Map.fold (fun _ instance acc ->
+              make_stat ~is_directory:false ~writable:false ~name:(Instance.to_string instance)
               :: acc) !active []) in
         let buf = Cstruct.create count in
         let rec write off rest = function
@@ -246,7 +246,7 @@ the failure.
         | Root -> make_stat ~is_directory:true ~writable:true ~name:""
         | README -> make_stat ~is_directory:false ~writable:false ~name:"README"
         | ControlFile -> make_stat ~is_directory:false ~writable:true ~name:"ctl"
-        | Forward f -> make_stat ~is_directory:false ~writable:false ~name:(Forward.to_string f) in
+        | Instance f -> make_stat ~is_directory:false ~writable:false ~name:(Instance.to_string f) in
       return { Response.Stat.stat }
     with Not_found -> Error.badfid
 
@@ -260,7 +260,7 @@ the failure.
       | ControlFile ->
         if connection.result <> None
         then Error.eperm
-        else begin match Forward.of_string @@ Cstruct.to_string data with
+        else begin match Instance.of_string @@ Cstruct.to_string data with
           | Result.Ok f ->
             let open Lwt.Infix in
             begin match connection.t.context with
@@ -268,11 +268,11 @@ the failure.
                 connection.result <- Some ("ERROR no TCP/IP stack configured\n");
                 return ok
               | Some context ->
-                begin Forward.start context f >>= function
+                begin Instance.start context f >>= function
                   | Result.Ok f' -> (* local_port is resolved *)
-                    let key = Forward.get_key f' in
-                    active := Forward.Map.add key f' !active;
-                    connection.result <- Some ("OK " ^ (Forward.to_string f') ^ "\n");
+                    let key = Instance.get_key f' in
+                    active := Instance.Map.add key f' !active;
+                    connection.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
                     return ok
                   | Result.Error (`Msg m) ->
                     connection.result <- Some ("ERROR " ^ m ^ "\n");
@@ -290,12 +290,12 @@ the failure.
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with
-      | Forward f ->
+      | Instance f ->
         let open Lwt.Infix in
-        Forward.stop f
+        Instance.stop f
         >>= fun () ->
-        let key = Forward.get_key f in
-        active := Forward.Map.remove key !active;
+        let key = Instance.get_key f in
+        active := Instance.Map.remove key !active;
         clunk connection ~cancel { Request.Clunk.fid }
       | _ -> Error.eperm
     with Not_found -> Error.badfid
