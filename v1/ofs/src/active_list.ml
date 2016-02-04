@@ -253,7 +253,7 @@ Immediately read the file contents and check whether it says:
             let open Lwt.Infix in
             begin match connection.t.context with
               | None ->
-                connection.result <- Some ("ERROR no TCP/IP stack configured\n");
+                connection.result <- Some ("ERROR no context stack configured\n");
                 return ok
               | Some context ->
                 begin Instance.start context f >>= function
