@@ -37,12 +37,12 @@ module Fs(Forward: Instance) = struct
   let active : Forward.t Forward.Map.t ref = ref Forward.Map.empty
 
   type t = {
-    mutable stack: Tcpip_stack.t option;
+    mutable context: Forward.context option;
   }
 
-  let make () = { stack = None }
+  let make () = { context = None }
 
-  let set_stack t stack = t.stack <- Some stack
+  let set_context t context = t.context <- Some context
 
   type resource =
     | ControlFile (* "/ctl" *)
@@ -263,12 +263,12 @@ the failure.
         else begin match Forward.of_string @@ Cstruct.to_string data with
           | Result.Ok f ->
             let open Lwt.Infix in
-            begin match connection.t.stack with
+            begin match connection.t.context with
               | None ->
                 connection.result <- Some ("ERROR no TCP/IP stack configured\n");
                 return ok
-              | Some stack ->
-                begin Forward.start stack f >>= function
+              | Some context ->
+                begin Forward.start context f >>= function
                   | Result.Ok f' -> (* local_port is resolved *)
                     let key = Forward.get_key f' in
                     active := Forward.Map.add key f' !active;

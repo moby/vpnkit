@@ -65,7 +65,7 @@ let main_t pcap_filename socket_path port_control_path =
           >>= function
           | `Error (`Msg m) -> failwith m
           | `Ok s ->
-            Ports.set_stack fs s;
+            Ports.set_context fs s;
             Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input s);
             Ppp.add_listener x (
               fun buf ->
