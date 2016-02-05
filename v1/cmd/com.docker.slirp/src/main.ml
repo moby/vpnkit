@@ -33,6 +33,16 @@ let main_t pcap_filename socket_path port_control_path =
   Logs.set_reporter (Logs_fmt.reporter ());
   Printexc.record_backtrace true;
 
+  (* Start the 9P port forwarding server *)
+  let module Ports = Active_list.Make(Forward) in
+  let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
+  let fs = Ports.make () in
+  Server.listen fs "unix" port_control_path
+  >>= function
+  | Result.Error (`Msg m) -> failwith m
+  | Result.Ok server ->
+    Lwt.async (fun () -> Server.serve_forever server);
+
   Lwt.catch
     (fun () -> Lwt_unix.unlink socket_path)
     (function
@@ -42,18 +52,6 @@ let main_t pcap_filename socket_path port_control_path =
   let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
   Lwt_unix.bind s (Lwt_unix.ADDR_UNIX socket_path);
   Lwt_unix.listen s 5;
-
-  (* Start the 9P port forwarding server *)
-  let module Ports = Active_list.Make(Forward) in
-  let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
-
-  let fs = Ports.make () in
-  Server.listen fs "unix" port_control_path
-  >>= function
-  | Result.Error (`Msg m) -> failwith m
-  | Result.Ok server ->
-    Lwt.async (fun () -> Server.serve_forever server);
-
     let rec loop () =
       Lwt_unix.accept s
       >>= fun (client, _) ->
