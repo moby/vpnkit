@@ -30,11 +30,7 @@ module Infix = struct
     | `Error x -> Lwt.return (`Error x)
 end
 
-module type CONFIG = sig
-  val valid_sources: Ipaddr.V4.t list
-end
-
-module Only_source_ipv4(Config: CONFIG)(Input: Network.S) = struct
+module Make(Input: Network.S) = struct
 
   type stats = {
     mutable rx_bytes: int64;
@@ -46,24 +42,25 @@ module Only_source_ipv4(Config: CONFIG)(Input: Network.S) = struct
   type t = {
     input: Input.t;
     stats: stats;
+    valid_sources: Ipaddr.V4.t list;
   }
 
-  let connect input =
+  let connect ~valid_sources input =
     let stats = {
       rx_bytes = 0L; rx_pkts = 0l; tx_bytes = 0L; tx_pkts = 0l;
     } in
-    Lwt.return (`Ok { input; stats })
+    Lwt.return (`Ok { input; stats; valid_sources })
 
   let disconnect t = Input.disconnect t.input
 
   let write t buf = Input.write t.input buf
   let writev t bufs = Input.writev t.input bufs
 
-  let filter next buf =
+  let filter valid_sources next buf =
     match (Wire_structs.parse_ethernet_frame buf) with
     | Some (Some Wire_structs.IPv4, _, payload) ->
       let src = Ipaddr.V4.of_int32 @@ Wire_structs.Ipv4_wire.get_ipv4_src payload in
-      if List.fold_left (fun acc valid -> acc || (Ipaddr.V4.compare src valid = 0)) false Config.valid_sources
+      if List.fold_left (fun acc valid -> acc || (Ipaddr.V4.compare src valid = 0)) false valid_sources
       then next buf
       else begin
         let src = Ipaddr.V4.to_string src in
@@ -85,8 +82,8 @@ module Only_source_ipv4(Config: CONFIG)(Input: Network.S) = struct
       end
     | _ -> next buf
 
-  let listen t callback = Input.listen t.input (filter @@ callback)
-  let add_listener t callback = Input.add_listener t.input (filter @@ callback)
+  let listen t callback = Input.listen t.input @@ filter t.valid_sources callback
+  let add_listener t callback = Input.add_listener t.input @@ filter t.valid_sources callback
 
   let mac t = Input.mac t.input
 

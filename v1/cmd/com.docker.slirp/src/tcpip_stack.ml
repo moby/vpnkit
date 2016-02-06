@@ -15,27 +15,56 @@
  *
  *)
 
-let ip = Ipaddr.V4.of_string_exn "10.0.0.1"
-let peer_ip = Ipaddr.V4.of_string_exn "10.0.0.2"
-let mac = Macaddr.of_string_exn "0F:F1:CE:0F:F1:CE"
-let netmask = Ipaddr.V4.of_string_exn "255.255.255.0"
+type configuration = {
+  local_ip: Ipaddr.V4.t;
+  peer_ip: Ipaddr.V4.t;
+  low_ip: Ipaddr.V4.t; (* FIXME: this is needed by the DHCP server for no good reason *)
+  high_ip: Ipaddr.V4.t; (* FIXME: this is needed by the DHCP server for no good reason *)
+  prefix: Ipaddr.V4.Prefix.t;
+  mac: Macaddr.t;
+}
 
-let dhcp_conf = Printf.sprintf "
-  option  domain-name \"docker.com\";
-  subnet 10.0.0.0 netmask 255.255.255.0 {
+(* Compute the smallest IPv4 network which includes both [a_ip]
+   and all [other_ips]. *)
+let rec smallest_prefix a_ip other_ips = function
+  | 0 -> Ipaddr.V4.Prefix.global
+  | bits ->
+    let prefix = Ipaddr.V4.Prefix.make bits a_ip in
+    if List.for_all (fun b_ip -> Ipaddr.V4.Prefix.mem b_ip prefix) other_ips
+    then prefix
+    else smallest_prefix a_ip other_ips (bits - 1)
+
+let make ~peer_ip ~local_ip =
+  let mac = Macaddr.of_string_exn "0F:F1:CE:0F:F1:CE" in
+  (* FIXME: We need a third IP just to make the DHCP server happy *)
+  let low_ip, high_ip =
+    let open Ipaddr.V4 in
+    let highest = if compare local_ip peer_ip < 0 then peer_ip else local_ip in
+    let i32 = to_int32 highest in
+    of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
+  let prefix = smallest_prefix peer_ip [ local_ip; low_ip; high_ip ] 32 in
+  { local_ip; peer_ip; low_ip; high_ip; prefix; mac }
+
+let dhcp_conf ~config =
+  let network = Ipaddr.V4.(to_string (Prefix.network config.prefix)) in
+  let netmask = Ipaddr.V4.(to_string (Prefix.netmask config.prefix)) in
+  let local_ip = Ipaddr.V4.to_string config.local_ip in
+  let peer_ip = Ipaddr.V4.to_string config.peer_ip in
+  let low_ip = Ipaddr.V4.to_string config.low_ip in
+  let high_ip = Ipaddr.V4.to_string config.high_ip in
+
+  Printf.sprintf "
+  option domain-name \"docker.com\";
+  subnet %s netmask %s {
     option routers %s;
     option domain-name-servers %s;
-    range 10.0.0.100 10.0.0.200;
+    range %s %s;
     host xhyve {
       hardware ethernet c0:ff:ee:c0:ff:ee;
       fixed-address %s;
     }
   }
-" (Ipaddr.V4.to_string ip) (Ipaddr.V4.to_string ip) (Ipaddr.V4.to_string peer_ip)
-
-module Source_ips = struct
-  let valid_sources = [ peer_ip; Ipaddr.V4.of_string_exn "0.0.0.0" ]
-end
+  " network netmask local_ip local_ip low_ip high_ip peer_ip
 
 let src =
   let src = Logs.Src.create "tcpip" ~doc:"Mirage TCP/IP" in
@@ -44,7 +73,7 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Netif = Filter.Only_source_ipv4(Source_ips)(Ppp)
+module Netif = Filter.Make(Ppp)
 
 module Ethif1 = Ethif.Make(Netif)
 
@@ -60,7 +89,7 @@ include Tcpip_stack_direct.Make(Console_unix)(OS.Time)
     (Random)(Netif)(Ethif1)(Arpv41)(Ipv41)(Udp1)(Tcp1)
 
 module Dhcp = struct
-  let of_interest dest =
+  let of_interest mac dest =
     Macaddr.compare dest mac = 0 || not (Macaddr.is_unicast dest)
 
   let input net config subnet buf =
@@ -86,12 +115,13 @@ module Dhcp = struct
         Log.info (fun f -> f "Sent reply %s" (Dhcp_wire.pkt_to_string reply));
         Lwt.return ()
 
-  let config = Dhcp_server.Config.parse dhcp_conf [(ip, mac)]
-  let subnet = List.hd config.Dhcp_server.Config.subnets
+  let config ~config =
+    Dhcp_server.Config.parse (dhcp_conf ~config) [(config.local_ip, config.mac)]
 
-  let listen net buf =
+  let listen mac config net buf =
+    let subnet = List.hd config.Dhcp_server.Config.subnets in
     match (Wire_structs.parse_ethernet_frame buf) with
-    | Some (proto, dst, payload) when of_interest dst ->
+    | Some (proto, dst, payload) when of_interest mac dst ->
       (match proto with
        | Some Wire_structs.IPv4 ->
          if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then
@@ -115,9 +145,10 @@ let or_error name m =
   | `Error _ -> Lwt.return (`Error (`Msg (Printf.sprintf "Failed to connect %s device" name)))
   | `Ok x -> Lwt.return (`Ok x)
 
-let connect (ppp: Ppp.t) =
+let connect ~config (ppp: Ppp.t) =
   let open Infix in
-  or_error "filter" @@ Netif.connect ppp
+  let valid_sources = [ config.peer_ip; Ipaddr.V4.of_string_exn "0.0.0.0" ] in
+  or_error "filter" @@ Netif.connect ~valid_sources ppp
   >>= fun interface ->
   or_error "console" @@ Console_unix.connect "0"
   >>= fun console ->
@@ -131,17 +162,19 @@ let connect (ppp: Ppp.t) =
   >>= fun udp4 ->
   or_error "tcp" @@ Tcp1.connect ipv4
   >>= fun tcp4 ->
-  let config = {
+  let netmask = Ipaddr.V4.Prefix.netmask config.prefix in
+  let cfg = {
     V1_LWT. name = "stackv4_ip";
     console;
     interface;
-    mode = `IPv4 (ip, netmask, []);
+    mode = `IPv4 (config.local_ip, netmask, []);
   } in
-  or_error "stack" @@ connect config ethif arp ipv4 udp4 tcp4
+  or_error "stack" @@ connect cfg ethif arp ipv4 udp4 tcp4
   >>= fun stack ->
   (* Hook in the DHCP server too *)
   let open Lwt.Infix in
-  Netif.add_listener interface (Dhcp.listen interface);
+  let dhcp_config = Dhcp.config ~config in
+  Netif.add_listener interface (Dhcp.listen config.mac dhcp_config interface);
   Lwt.return (`Ok stack)
 
 (* FIXME: this is unnecessary, mirage-flow should be changed *)

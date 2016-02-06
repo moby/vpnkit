@@ -15,12 +15,12 @@
  *
  *)
 
-module type CONFIG = sig
-  val valid_sources: Ipaddr.V4.t list
-end
-
-module Only_source_ipv4(Config: CONFIG)(Input: Network.S): sig
+module Make(Input: Network.S): sig
   include Network.S
 
-  val connect: Input.t -> [ `Ok of t | `Error of error ] Lwt.t
+  val connect:
+    valid_sources:Ipaddr.V4.t list -> Input.t
+    -> [ `Ok of t | `Error of error ] Lwt.t
+  (** Construct a filtered ethernet network which removes IP packets whose
+      source IP is not in [valid_sources] *)
 end

@@ -29,9 +29,12 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
 
-let main_t pcap_filename socket_path port_control_path =
+let main_t pcap_filename socket_path port_control_path peer_ip local_ip =
   Logs.set_reporter (Logs_fmt.reporter ());
   Printexc.record_backtrace true;
+  let peer_ip = Ipaddr.V4.of_string_exn peer_ip in
+  let local_ip = Ipaddr.V4.of_string_exn local_ip in
+  let config = Tcpip_stack.make ~peer_ip ~local_ip in
 
   (* Start the 9P port forwarding server *)
   let module Ports = Active_list.Make(Forward) in
@@ -59,7 +62,7 @@ let main_t pcap_filename socket_path port_control_path =
       >>= function
       | `Error (`Msg m) -> failwith m
       | `Ok x ->
-        begin Tcpip_stack.connect x
+        begin Tcpip_stack.connect ~config x
           >>= function
           | `Error (`Msg m) -> failwith m
           | `Ok s ->
@@ -136,7 +139,7 @@ let main_t pcap_filename socket_path port_control_path =
         end in
     loop ()
 
-let main pcap_file socket control = Lwt_main.run @@ main_t pcap_file socket control
+let main pcap_file socket control peer_ip local_ip = Lwt_main.run @@ main_t pcap_file socket control peer_ip local_ip
 
 open Cmdliner
 
@@ -149,6 +152,13 @@ let socket =
 let port_control_path =
   Arg.(value & opt string "/var/tmp/com.docker.slirp.port.socket" & info [ "port-control" ] ~docv:"PORT")
 
+let peer_ip =
+  Arg.(value & opt string "10.0.0.2" & info [ "peer-ip" ] ~docv:"PEER-IP")
+
+let local_ip =
+  Arg.(value & opt string "10.0.0.1" & info [ "local-ip" ] ~docv:"LOCAL-IP")
+
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -156,7 +166,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ pcap_file $ socket $ port_control_path),
+  Term.(pure main $ pcap_file $ socket $ port_control_path $ peer_ip $ local_ip),
   Term.info "proxy" ~doc ~man
 
 let () =
