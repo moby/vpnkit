@@ -39,8 +39,8 @@ let main_t pcap_filename socket_path port_control_path db_path =
   >>= fun peer_ips ->
   Active_config.string config (dir @ [ "host" ])
   >>= fun host_ips ->
-  let default_peer_ip = Ipaddr.V4.of_string_exn "10.0.0.2" in
-  let default_host_ip = Ipaddr.V4.of_string_exn "10.0.0.1" in
+  let default_peer_ip = Ipaddr.V4.of_string_exn "169.254.0.2" in
+  let default_host_ip = Ipaddr.V4.of_string_exn "169.254.0.1" in
 
   let peer_ip, local_ip = match Active_config.hd peer_ips, Active_config.hd host_ips with
     | Some peer, Some host ->
