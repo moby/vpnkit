@@ -29,11 +29,46 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
 
-let main_t pcap_filename socket_path port_control_path peer_ip local_ip =
+let main_t pcap_filename socket_path port_control_path db_path =
   Logs.set_reporter (Logs_fmt.reporter ());
   Printexc.record_backtrace true;
-  let peer_ip = Ipaddr.V4.of_string_exn peer_ip in
-  let local_ip = Ipaddr.V4.of_string_exn local_ip in
+  Active_config.create "unix" db_path
+  >>= fun config ->
+  let dir = [ "com.docker.driver.amd64-linux"; "slirp" ] in
+  Active_config.string config (dir @ [ "docker" ])
+  >>= fun peer_ips ->
+  Active_config.string config (dir @ [ "host" ])
+  >>= fun host_ips ->
+  let default_peer_ip = Ipaddr.V4.of_string_exn "10.0.0.2" in
+  let default_host_ip = Ipaddr.V4.of_string_exn "10.0.0.1" in
+
+  let peer_ip, local_ip = match Active_config.hd peer_ips, Active_config.hd host_ips with
+    | Some peer, Some host ->
+      begin
+        try
+          Ipaddr.V4.of_string_exn @@ String.trim peer, Ipaddr.V4.of_string_exn @@ String.trim host
+        with
+        | e ->
+          Log.err (fun f -> f "failed to parse IPv4 addresses: %s and %s" peer host);
+          default_peer_ip, default_host_ip
+      end
+    | _, _ ->
+      Log.info (fun f -> f "no slirp/host and slirp/docker: using default IPs");
+      (* If one is given and the other not, use the defaults *)
+      default_peer_ip, default_host_ip in
+  Lwt.async (fun () ->
+    Active_config.tl peer_ips
+    >>= fun next ->
+    Log.info (fun f -> f "slirp/docker changed to %s in database, I should restart" (match Active_config.hd next with None -> "None" | Some x -> x));
+    exit 1
+  );
+  Lwt.async (fun () ->
+    Active_config.tl host_ips
+    >>= fun next ->
+    Log.info (fun f -> f "slirp/host changed to %s in database, I should restart" (match Active_config.hd next with None -> "None" | Some x -> x));
+    exit 1
+  );
+
   let config = Tcpip_stack.make ~peer_ip ~local_ip in
 
   (* Start the 9P port forwarding server *)
@@ -139,7 +174,7 @@ let main_t pcap_filename socket_path port_control_path peer_ip local_ip =
         end in
     loop ()
 
-let main pcap_file socket control peer_ip local_ip = Lwt_main.run @@ main_t pcap_file socket control peer_ip local_ip
+let main pcap_file socket control db = Lwt_main.run @@ main_t pcap_file socket control db
 
 open Cmdliner
 
@@ -152,12 +187,8 @@ let socket =
 let port_control_path =
   Arg.(value & opt string "/var/tmp/com.docker.slirp.port.socket" & info [ "port-control" ] ~docv:"PORT")
 
-let peer_ip =
-  Arg.(value & opt string "10.0.0.2" & info [ "peer-ip" ] ~docv:"PEER-IP")
-
-let local_ip =
-  Arg.(value & opt string "10.0.0.1" & info [ "local-ip" ] ~docv:"LOCAL-IP")
-
+let db_path =
+  Arg.(value & opt string "/var/tmp/com.docker.db.socket" & info [ "db" ] ~docv:"DB")
 
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
@@ -166,7 +197,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ pcap_file $ socket $ port_control_path $ peer_ip $ local_ip),
+  Term.(pure main $ pcap_file $ socket $ port_control_path $ db_path),
   Term.info "proxy" ~doc ~man
 
 let () =
