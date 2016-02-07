@@ -10,7 +10,7 @@ BuildTools:  ocamlbuild
 Library ofs
   Path: src
   Findlibname: ofs
-  Modules: Active_list
+  Modules: Active_list, Active_config
   BuildDepends: protocol-9p, protocol-9p.unix, cstruct, cstruct.lwt, cstruct.syntax, lwt.unix, io-page.unix, logs
 
 Document ofs
@@ -20,4 +20,3 @@ Document ofs
   Install:              true
   XOCamlbuildPath:      src
   XOCamlbuildLibraries: ofs
-
