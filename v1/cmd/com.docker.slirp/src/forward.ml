@@ -56,7 +56,7 @@ let to_string t = Printf.sprintf "%s:%d:%s:%d" (Ipaddr.V4.to_string t.local_ip) 
 let description_of_format = "[local ip:]local port:IPv4 address of remote:remote port"
 
 let start stack t =
-  let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string "127.0.0.1", t.local_port) in
+  let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string t.local_ip), t.local_port) in
   let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
   Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
   let open Lwt.Infix in
