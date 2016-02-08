@@ -73,7 +73,11 @@ let start stack t =
     ) (fun e ->
         Lwt_unix.close fd
         >>= fun () ->
-        Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to bind port %s" (Printexc.to_string e))))
+        (* Pretty-print the most common exception *)
+        let message = match e with
+        | Unix.Unix_error(Unix.EADDRINUSE, _, _) -> "address already in use"
+        | e -> Printexc.to_string e in
+        Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to bind port: %s" message)))
       )
   >>= function
   | Result.Error e -> Lwt.return (Result.Error e)
