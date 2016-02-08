@@ -93,7 +93,9 @@ let start stack t =
             Lwt.return None
         )
       >>= function
-      | None -> Lwt.return ()
+      | None ->
+        Log.info (fun f -> f "%s: listening thread shutting down" description);
+        Lwt.return ()
       | Some local_fd ->
         let local = Socket.TCPV4.of_fd ~description local_fd in
         let proxy () =
@@ -106,7 +108,7 @@ let start stack t =
               | `Ok remote ->
                 (* The proxy function will close the remote flow *)
                 (* proxy between local and remote *)
-                Log.info (fun f -> f "%s connected" description);
+                Log.info (fun f -> f "%s: connected" description);
                 Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) remote (module Socket.TCPV4) local ()
                 >>= function
                 | `Error (`Msg m) ->
@@ -121,7 +123,7 @@ let start stack t =
             ) (fun () ->
               Socket.TCPV4.close local
               >>= fun () ->
-              Log.info (fun f -> f "%s close local" description);
+              Log.info (fun f -> f "%s: closed forwarded connection" description);
               Lwt.return ()
             )
         in
@@ -134,7 +136,7 @@ let stop t = match t.fd with
   | None -> Lwt.return ()
   | Some fd ->
     t.fd <- None;
-    Log.info (fun f -> f "closing listening socket");
+    Log.info (fun f -> f "%s: closing listening socket" (to_string t));
     Lwt_unix.close fd
 
 let of_string x =
