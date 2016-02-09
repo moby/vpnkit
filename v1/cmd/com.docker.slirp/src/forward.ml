@@ -84,6 +84,7 @@ let start stack t =
   | Result.Ok (local_port, fd) ->
     (* The `Forward.stop` function is in charge of closing the fd *)
     let t = { t with local_port; fd = Some fd } in
+    let t = if t.remote_port = 0 then { t with remote_port = t.local_port } else t in
     let description = to_string t in
     let rec loop () =
       Lwt.catch (fun () ->
