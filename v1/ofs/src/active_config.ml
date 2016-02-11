@@ -116,3 +116,11 @@ let int t path =
     | None -> return None
     | Some s -> return (try Some (int_of_string s) with _ -> None) in
   changes @@ map parse strings
+
+let bool t path =
+  string t path
+  >>= fun strings ->
+  let parse = function
+    | None -> return None
+    | Some s -> return (try Some (bool_of_string s) with _ -> None) in
+  changes @@ map parse strings

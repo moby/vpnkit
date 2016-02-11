@@ -34,10 +34,18 @@ let main_t pcap_filename socket_path port_control_path db_path =
   Printexc.record_backtrace true;
   Active_config.create "unix" db_path
   >>= fun config ->
-  let dir = [ "com.docker.driver.amd64-linux"; "slirp" ] in
-  Active_config.string config (dir @ [ "docker" ])
+  let driver = [ "com.docker.driver.amd64-linux" ] in
+  let network_path = driver @ [ "network" ] in
+  Active_config.string config network_path
+  >>= fun network ->
+  let native_port_forwarding_path = driver @ [ "native"; "port-forwarding" ] in
+  Active_config.bool config native_port_forwarding_path
+  >>= fun native_port_forwarding ->
+  let peer_ips_path = driver @ [ "slirp"; "docker" ] in
+  Active_config.string config peer_ips_path
   >>= fun peer_ips ->
-  Active_config.string config (dir @ [ "host" ])
+  let host_ips_path = driver @ [ "slirp"; "host" ] in
+  Active_config.string config host_ips_path
   >>= fun host_ips ->
   let default_peer_ip = Ipaddr.V4.of_string_exn "169.254.0.2" in
   let default_host_ip = Ipaddr.V4.of_string_exn "169.254.0.1" in
@@ -56,18 +64,23 @@ let main_t pcap_filename socket_path port_control_path db_path =
       Log.info (fun f -> f "no slirp/host and slirp/docker: using default IPs");
       (* If one is given and the other not, use the defaults *)
       default_peer_ip, default_host_ip in
-  Lwt.async (fun () ->
-    Active_config.tl peer_ips
-    >>= fun next ->
-    Log.info (fun f -> f "slirp/docker changed to %s in database, I should restart" (match Active_config.hd next with None -> "None" | Some x -> x));
-    exit 1
-  );
-  Lwt.async (fun () ->
-    Active_config.tl host_ips
-    >>= fun next ->
-    Log.info (fun f -> f "slirp/host changed to %s in database, I should restart" (match Active_config.hd next with None -> "None" | Some x -> x));
-    exit 1
-  );
+  List.iter (fun (path, strings) ->
+    Lwt.async (fun () ->
+      Active_config.tl strings
+      >>= fun next ->
+      Log.info (fun f -> f "%s changed to %s in database, I should restart" (String.concat "/" path) (match Active_config.hd next with None -> "None" | Some x -> x));
+      exit 1
+    )
+  ) [ network_path, network;
+      peer_ips_path, peer_ips; host_ips_path, host_ips ];
+  List.iter (fun (path, bools) ->
+    Lwt.async (fun () ->
+      Active_config.tl bools
+      >>= fun next ->
+      Log.info (fun f -> f "%s changed to %s in database, I should restart" (String.concat "/" path) (match Active_config.hd next with None -> "None" | Some x -> string_of_bool x));
+      exit 1
+    )
+  ) [ native_port_forwarding_path, native_port_forwarding ];
 
   let config = Tcpip_stack.make ~peer_ip ~local_ip in
 
