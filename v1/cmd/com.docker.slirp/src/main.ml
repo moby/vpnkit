@@ -16,9 +16,6 @@
  *)
 open Lwt
 
-(* HACK: need to tweak the tcp-ip API *)
-let local_port = 8080
-
 let src =
   let src = Logs.Src.create "usernet" ~doc:"Mirage TCP/IP <-> socket proxy" in
   Logs.Src.set_level src (Some Logs.Info);
