@@ -15,3 +15,11 @@
  *
  *)
 include Network_stack.S
+
+type configuration
+
+val make: peer_ip: Ipaddr.V4.t -> local_ip:Ipaddr.V4.t -> configuration
+
+val connect:
+  config:configuration -> Ppp.t
+  -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
