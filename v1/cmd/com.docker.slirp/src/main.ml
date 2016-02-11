@@ -137,6 +137,13 @@ let start_native port_control_path =
   let module Ports = Active_list.Make(Forward.Make(Socket_stack)) in
   let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
   let fs = Ports.make () in
+  Socket_stack.connect ()
+  >>= function
+  | `Error (`Msg m) ->
+    Log.err (fun f -> f "Failed to create a socket stack: %s" m);
+    exit 1
+  | `Ok s ->
+  Ports.set_context fs s;
   Server.listen fs "unix" port_control_path
   >>= function
   | Result.Error (`Msg m) -> failwith m

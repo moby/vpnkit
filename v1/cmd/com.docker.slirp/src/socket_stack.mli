@@ -15,3 +15,6 @@
  *
  *)
 include Network_stack.S
+
+val connect: unit
+  -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
