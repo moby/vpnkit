@@ -1,3 +1,3 @@
 
-include Active_list.Instance
-  with type context = Tcpip_stack.t
+module Make(S: Network_stack.S) : Active_list.Instance
+  with type context = S.t

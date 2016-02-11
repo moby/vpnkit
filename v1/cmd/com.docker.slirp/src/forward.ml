@@ -35,6 +35,7 @@ module Port = struct
     | _ -> Result.errorf "port is not an integer: '%s'" x
 end
 
+module Make(S: Network_stack.S) = struct
 type t = {
   local_ip: Ipaddr.V4.t;
   local_port: Port.t;
@@ -49,7 +50,7 @@ let get_key t = t.local_port
 
 module Map = Port.Map
 
-type context = Tcpip_stack.t
+type context = S.t
 
 let to_string t = Printf.sprintf "%s:%d:%s:%d" (Ipaddr.V4.to_string t.local_ip) t.local_port (Ipaddr.V4.to_string t.remote_ip) t.remote_port
 
@@ -105,16 +106,16 @@ let start stack t =
         let local = Socket.TCPV4.of_fd ~description local_fd in
         let proxy () =
           finally (fun () ->
-              Tcpip_stack.TCPV4.create_connection (Tcpip_stack.tcpv4 stack) (t.remote_ip,t.remote_port)
+              S.TCPV4.create_connection (S.tcpv4 stack) (t.remote_ip,t.remote_port)
               >>= function
               | `Error e ->
-                Log.err (fun f -> f "%s: failed to connect: %s" description (Tcpip_stack.TCPV4.error_message e));
+                Log.err (fun f -> f "%s: failed to connect: %s" description (S.TCPV4.error_message e));
                 Lwt.return ()
               | `Ok remote ->
                 (* The proxy function will close the remote flow *)
                 (* proxy between local and remote *)
                 Log.info (fun f -> f "%s: connected" description);
-                Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) remote (module Socket.TCPV4) local ()
+                Mirage_flow.proxy (module Clock) (module S.TCPV4_half_close) remote (module Socket.TCPV4) local ()
                 >>= function
                 | `Error (`Msg m) ->
                   Log.err (fun f -> f "%s proxy failed with %s" description m);
@@ -175,3 +176,4 @@ let of_string x =
     Result.Error (`Msg "Failed to parse remote IPv4 address")
   | Result.Ok (_, _, _, Result.Error (`Msg m)) ->
     Result.Error (`Msg ("Failed to parse remote port: " ^ m))
+end

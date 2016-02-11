@@ -72,7 +72,7 @@ let main_t pcap_filename socket_path port_control_path db_path =
   let config = Tcpip_stack.make ~peer_ip ~local_ip in
 
   (* Start the 9P port forwarding server *)
-  let module Ports = Active_list.Make(Forward) in
+  let module Ports = Active_list.Make(Forward.Make(Tcpip_stack)) in
   let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
   let fs = Ports.make () in
   Server.listen fs "unix" port_control_path
