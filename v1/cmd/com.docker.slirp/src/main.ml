@@ -135,6 +135,16 @@ let start_slirp pcap_filename socket_path port_control_path peer_ip local_ip =
         end in
     loop ()
 
+let start_native port_control_path =
+  (* Start the 9P port forwarding server *)
+  let module Ports = Active_list.Make(Forward.Make(Socket_stack)) in
+  let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
+  let fs = Ports.make () in
+  Server.listen fs "unix" port_control_path
+  >>= function
+  | Result.Error (`Msg m) -> failwith m
+  | Result.Ok server ->
+    Server.serve_forever server
 
 let main_t pcap_filename socket_path port_control_path db_path =
   Logs.set_reporter (Logs_fmt.reporter ());
@@ -189,8 +199,9 @@ let main_t pcap_filename socket_path port_control_path db_path =
     )
   ) [ native_port_forwarding_path, native_port_forwarding ];
 
-  start_slirp pcap_filename socket_path port_control_path peer_ip local_ip
-
+  if Active_config.hd network = Some "slirp"
+  then start_slirp pcap_filename socket_path port_control_path peer_ip local_ip
+  else start_native port_control_path
 
 let main pcap_file socket control db = Lwt_main.run @@ main_t pcap_file socket control db
 
