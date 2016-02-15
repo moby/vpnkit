@@ -203,9 +203,14 @@ let main_t pcap_filename socket_path port_control_path db_path =
     )
   ) [ native_port_forwarding_path, native_port_forwarding ];
 
-  if Active_config.hd network = Some "slirp"
-  then start_slirp pcap_filename socket_path port_control_path peer_ip local_ip
-  else start_native port_control_path
+  match Active_config.hd network with
+  | Some x when String.trim x = "slirp" ->
+    start_slirp pcap_filename socket_path port_control_path peer_ip local_ip
+  | Some x ->
+    Log.info (fun f -> f "Unrecognised networking mode %s, defaulting to native" x);
+    start_native port_control_path
+  | None ->
+    start_native port_control_path
 
 let main pcap_file socket control db = Lwt_main.run @@ main_t pcap_file socket control db
 
