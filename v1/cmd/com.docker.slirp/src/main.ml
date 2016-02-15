@@ -30,6 +30,7 @@ let start_slirp pcap_filename socket_path port_control_path peer_ip local_ip =
   let config = Tcpip_stack.make ~peer_ip ~local_ip in
 
   (* Start the 9P port forwarding server *)
+  Log.info (fun f -> f "Starting 9P port forwarding service");
   let module Ports = Active_list.Make(Forward.Make(Tcpip_stack)) in
   let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
   let fs = Ports.make () in
@@ -39,6 +40,7 @@ let start_slirp pcap_filename socket_path port_control_path peer_ip local_ip =
   | Result.Ok server ->
     Lwt.async (fun () -> Server.serve_forever server);
 
+  Log.info (fun f -> f "Starting slirp network stack on %s" socket_path);
   Lwt.catch
     (fun () -> Lwt_unix.unlink socket_path)
     (function
@@ -134,6 +136,7 @@ let start_slirp pcap_filename socket_path port_control_path peer_ip local_ip =
 
 let start_native port_control_path =
   (* Start the 9P port forwarding server *)
+  Log.info (fun f -> f "Starting 9P port forwarding service");
   let module Ports = Active_list.Make(Forward.Make(Socket_stack)) in
   let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
   let fs = Ports.make () in
