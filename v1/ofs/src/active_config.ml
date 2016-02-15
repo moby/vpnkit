@@ -2,6 +2,13 @@ open Protocol_9p
 open Lwt
 open Result
 
+let src =
+  let src = Logs.Src.create "active_config" ~doc:"Database configuration values" in
+  Logs.Src.set_level src (Some Logs.Info);
+  src
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
 module Client = Client9p_unix.Make(Log9p_unix.Stdout)
 
 type 'a values = Value of ('a * ('a values) Lwt.t)
@@ -81,11 +88,24 @@ let rwx = [`Read; `Write; `Execute]
 let rx = [`Read; `Execute]
 let rwxr_xr_x = Protocol_9p.Types.FileMode.make ~owner:rwx ~group:rx ~other:rx ()
 
+let connect proto address ?username () =
+  let rec loop = function
+    | 0 -> failwith "I failed to connect to the database"
+    | n ->
+      Client.connect proto address ?username ()
+      >>= function
+      | Result.Error (`Msg x) ->
+        Log.err (fun f -> f "Failure connecting to db: %s" x);
+        Lwt_unix.sleep 0.1
+        >>= fun () ->
+        loop (n - 1)
+      | Result.Ok conn ->
+        Lwt.return conn in
+  loop 50 (* up to 5s *)
+
 let create ?username proto address =
-  Client.connect proto address ?username ()
-  >>= function
-  | Result.Error (`Msg x) -> failwith x
-  | Result.Ok conn ->
+  connect proto address ?username ()
+  >>= fun conn ->
     (* If we start first we need to create the master branch *)
     Client.mkdir conn ["branch"] "master" rwxr_xr_x
     >>*= fun () ->
