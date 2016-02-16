@@ -44,21 +44,21 @@ module TCPV4_half_close = struct
 
   let shutdown_write fd =
     try
+      Lwt_unix.shutdown fd Unix.SHUTDOWN_SEND;
+      Lwt.return ()
+    with
+    | Unix.Unix_error(Unix.ENOTCONN, _, _) -> Lwt.return ()
+    | e ->
+      Log.err (fun f -> f "Socket_stack.TCPV4.shutdown_write: caught %s returning Eof" (Printexc.to_string e));
+      Lwt.return ()
+
+  let shutdown_read fd =
+    try
       Lwt_unix.shutdown fd Unix.SHUTDOWN_RECEIVE;
       Lwt.return ()
     with
     | Unix.Unix_error(Unix.ENOTCONN, _, _) -> Lwt.return ()
     | e ->
       Log.err (fun f -> f "Socket_stack.TCPV4.shutdown_read: caught %s returning Eof" (Printexc.to_string e));
-      Lwt.return ()
-
-  let shutdown_read fd =
-    try
-      Lwt_unix.shutdown fd Unix.SHUTDOWN_SEND;
-      Lwt.return ()
-    with
-    | Unix.Unix_error(Unix.ENOTCONN, _, _) -> Lwt.return ()
-    | e ->
-      Log.err (fun f -> f "Socket_stack.TCPV4.shutdown_send: caught %s returning Eof" (Printexc.to_string e));
       Lwt.return ()
 end
