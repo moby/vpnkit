@@ -35,40 +35,68 @@ module Port = struct
     | _ -> Result.errorf "port is not an integer: '%s'" x
 end
 
+module Local = struct
+  module M = struct
+    type t = [
+      | `Ip of Ipaddr.V4.t * Port.t
+      | `Unix of string
+    ]
+    let compare = compare
+  end
+  include M
+  module Map = Map.Make(M)
+  module Set = Set.Make(M)
+
+  let to_string = function
+    | `Ip (addr, port) -> Printf.sprintf "%s:%d" (Ipaddr.V4.to_string addr) port
+    | `Unix path -> "unix:" ^ path
+end
+
 module Make(S: Network_stack.S) = struct
+
 type t = {
-  local_ip: Ipaddr.V4.t;
-  local_port: Port.t;
+  local: Local.t;
   remote_ip: Ipaddr.V4.t;
   remote_port: Port.t;
   mutable fd: Lwt_unix.file_descr option;
 }
 
-type key = Port.t
+type key = Local.t
 
-let get_key t = t.local_port
+let get_key t = t.local
 
-module Map = Port.Map
+module Map = Local.Map
 
 type context = S.t
 
-let to_string t = Printf.sprintf "%s:%d:%s:%d" (Ipaddr.V4.to_string t.local_ip) t.local_port (Ipaddr.V4.to_string t.remote_ip) t.remote_port
+let to_string t = Printf.sprintf "%s:%s:%d" (Local.to_string t.local) (Ipaddr.V4.to_string t.remote_ip) t.remote_port
 
-let description_of_format = "[local ip:]local port:IPv4 address of remote:remote port"
+let description_of_format = "'[local ip:]local port:IPv4 address of remote:remote port' or 'unix:local path:IPv4 address of remote: remote port'"
 
 let start stack t =
-  let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string t.local_ip), t.local_port) in
-  let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
+  let addr, fd = match t.local with
+    | `Ip (local_ip, local_port) ->
+      let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
+      let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
+      addr, fd
+    | `Unix path ->
+      let addr = Lwt_unix.ADDR_UNIX(path) in
+      let fd = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
+      addr, fd in
   Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
   let open Lwt.Infix in
   (* On failure here, we must close the fd *)
   Lwt.catch
     (fun () ->
        Lwt_unix.bind fd addr;
-       match Lwt_unix.getsockname fd with
-       | Lwt_unix.ADDR_INET(_, local_port) ->
-         Lwt_unix.listen fd 5;
-         Lwt.return (Result.Ok (local_port, fd))
+       Lwt_unix.listen fd 5;
+       match t.local, Lwt_unix.getsockname fd with
+       | `Ip (local_ip, _), Lwt_unix.ADDR_INET(_, local_port) ->
+         let t = { t with local = `Ip(local_ip, local_port) } in
+         let t = if t.remote_port = 0 then { t with remote_port = local_port } else t in
+         Lwt.return (Result.Ok (t, fd))
+       | `Unix _, Lwt_unix.ADDR_UNIX(_) ->
+         Lwt.return (Result.Ok (t, fd))
        | _ ->
          Lwt.return (Result.Error (`Msg "failed to query local port"))
     ) (fun e ->
@@ -82,10 +110,9 @@ let start stack t =
       )
   >>= function
   | Result.Error e -> Lwt.return (Result.Error e)
-  | Result.Ok (local_port, fd) ->
+  | Result.Ok (t, fd) ->
     (* The `Forward.stop` function is in charge of closing the fd *)
-    let t = { t with local_port; fd = Some fd } in
-    let t = if t.remote_port = 0 then { t with remote_port = t.local_port } else t in
+    let t = { t with fd = Some fd } in
     let description = to_string t in
     let rec loop () =
       Lwt.catch (fun () ->
@@ -148,32 +175,42 @@ let stop t = match t.fd with
 let of_string x =
   match (
     match Stringext.split ~on:':' x with
+    | [ "unix"; path; remote_ip; remote_port ] ->
+      Result.Ok (
+        `Unix path,
+        Ipaddr.V4.of_string remote_ip,
+        Port.of_string remote_port
+      )
     | [ local_ip; local_port; remote_ip; remote_port ] ->
-      Result.Ok (
-        Ipaddr.V4.of_string local_ip,
-        Port.of_string local_port,
-        Ipaddr.V4.of_string remote_ip,
-        Port.of_string remote_port
-      )
+      let local_ip = Ipaddr.V4.of_string local_ip in
+      let local_port = Port.of_string local_port in
+      begin match local_ip, local_port with
+      | Some ip, Result.Ok port ->
+        Result.Ok (
+          `Ip (ip, port),
+          Ipaddr.V4.of_string remote_ip,
+          Port.of_string remote_port
+        )
+      | _, _ -> Result.Error (`Msg "Failed to parse local IP and port")
+      end
     | [ local_port; remote_ip; remote_port ] ->
-      Result.Ok (
-        Ipaddr.V4.of_string "127.0.0.1",
-        Port.of_string local_port,
-        Ipaddr.V4.of_string remote_ip,
-        Port.of_string remote_port
-      )
+      begin match Port.of_string local_port with
+      | Result.Error x -> Result.Error x
+      | Result.Ok port ->
+        Result.Ok (
+          `Ip(Ipaddr.V4.of_string_exn "127.0.0.1", port),
+          Ipaddr.V4.of_string remote_ip,
+          Port.of_string remote_port
+        )
+      end
     | _ ->
       Result.Error (`Msg ("Failed to parse request, expected " ^ description_of_format))
   ) with
   | Result.Error x -> Result.Error x
-  | Result.Ok (Some local_ip, Result.Ok local_port, Some remote_ip, Result.Ok remote_port) ->
-    Result.Ok { local_ip; local_port; remote_ip; remote_port; fd = None }
-  | Result.Ok (None, _, _, _) ->
-    Result.Error (`Msg ("Failed to parse local IPv4 address"))
-  | Result.Ok (_, Result.Error (`Msg m), _, _) ->
-    Result.Error (`Msg ("Failed to parse local port: " ^ m))
-  | Result.Ok (_, _, None, _) ->
+  | Result.Ok (local, Some remote_ip, Result.Ok remote_port) ->
+    Result.Ok { local; remote_ip; remote_port; fd = None }
+  | Result.Ok (_, None, _) ->
     Result.Error (`Msg "Failed to parse remote IPv4 address")
-  | Result.Ok (_, _, _, Result.Error (`Msg m)) ->
+  | Result.Ok (_, _, Result.Error (`Msg m)) ->
     Result.Error (`Msg ("Failed to parse remote port: " ^ m))
 end
