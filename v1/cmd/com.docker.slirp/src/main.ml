@@ -155,6 +155,8 @@ let start_native port_control_path =
 
 let main_t pcap_filename socket_path port_control_path db_path =
   Logs.set_reporter (Logs_fmt.reporter ());
+  Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
+  Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   Printexc.record_backtrace true;
   Active_config.create "unix" db_path
   >>= fun config ->
