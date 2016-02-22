@@ -139,20 +139,23 @@ let start stack t =
                 Log.err (fun f -> f "%s: failed to connect: %s" description (S.TCPV4.error_message e));
                 Lwt.return ()
               | `Ok remote ->
-                (* The proxy function will close the remote flow *)
-                (* proxy between local and remote *)
-                Log.info (fun f -> f "%s: connected" description);
-                Mirage_flow.proxy (module Clock) (module S.TCPV4_half_close) remote (module Socket.TCPV4) local ()
-                >>= function
-                | `Error (`Msg m) ->
-                  Log.err (fun f -> f "%s proxy failed with %s" description m);
-                  Lwt.return ()
-                | `Ok (l_stats, r_stats) ->
-                  Log.info (fun f ->
-                      f "%s closing: l2r = %s; r2l = %s" description
-                        (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
-                    );
-                  Lwt.return ()
+                finally (fun () ->
+                  (* proxy between local and remote *)
+                  Log.info (fun f -> f "%s: connected" description);
+                  Mirage_flow.proxy (module Clock) (module S.TCPV4_half_close) remote (module Socket.TCPV4) local ()
+                  >>= function
+                  | `Error (`Msg m) ->
+                    Log.err (fun f -> f "%s proxy failed with %s" description m);
+                    Lwt.return ()
+                  | `Ok (l_stats, r_stats) ->
+                    Log.info (fun f ->
+                        f "%s closing: l2r = %s; r2l = %s" description
+                          (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
+                      );
+                    Lwt.return ()
+                ) (fun () ->
+                  S.TCPV4_half_close.close remote
+                )
             ) (fun () ->
               Socket.TCPV4.close local
               >>= fun () ->
