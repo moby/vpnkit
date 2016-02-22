@@ -21,6 +21,7 @@ depends: [
   "fmt"
   "mirage-flow" { >= "1.1.0" }
   "mirage-types-lwt" { >= "3.0.0" }
+  "proto-vmnet"
   "ounit" {test}
   "alcotest" {test}
 ]

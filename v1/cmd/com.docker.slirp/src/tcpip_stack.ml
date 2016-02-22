@@ -73,7 +73,7 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Netif = Filter.Make(Ppp)
+module Netif = Filter.Make(Vmnet)
 
 module Ethif1 = Ethif.Make(Netif)
 
@@ -145,7 +145,7 @@ let or_error name m =
   | `Error _ -> Lwt.return (`Error (`Msg (Printf.sprintf "Failed to connect %s device" name)))
   | `Ok x -> Lwt.return (`Ok x)
 
-let connect ~config (ppp: Ppp.t) =
+let connect ~config (ppp: Vmnet.t) =
   let open Infix in
   let valid_sources = [ config.peer_ip; Ipaddr.V4.of_string_exn "0.0.0.0" ] in
   or_error "filter" @@ Netif.connect ~valid_sources ppp

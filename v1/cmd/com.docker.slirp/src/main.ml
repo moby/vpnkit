@@ -53,7 +53,7 @@ let start_slirp pcap_filename socket_path port_control_path peer_ip local_ip =
     let rec loop () =
       Lwt_unix.accept s
       >>= fun (client, _) ->
-      Ppp.of_fd ?pcap_filename client
+      Vmnet.of_fd ?pcap_filename client
       >>= function
       | `Error (`Msg m) -> failwith m
       | `Ok x ->
@@ -63,7 +63,7 @@ let start_slirp pcap_filename socket_path port_control_path peer_ip local_ip =
           | `Ok s ->
             Ports.set_context fs s;
             Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input s);
-            Ppp.add_listener x (
+            Vmnet.add_listener x (
               fun buf ->
                 match (Wire_structs.parse_ethernet_frame buf) with
                 | Some (Some Wire_structs.IPv4, _, payload) ->
