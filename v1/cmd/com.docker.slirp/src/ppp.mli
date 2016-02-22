@@ -21,3 +21,13 @@
 include Network.S
 
 val of_fd: ?pcap_filename:string -> Lwt_unix.file_descr -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
+
+module Client: sig
+  type t
+  (** A negotiated connection *)
+
+  val of_fd: Lwt_unix.file_descr -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
+
+  val install_symlinks: t -> [ `Ok of unit | `Error of [ `Msg of string ]] Lwt.t
+  val uninstall: t -> [ `Ok of unit | `Error of [ `Msg of string ]] Lwt.t
+end

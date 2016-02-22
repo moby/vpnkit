@@ -94,6 +94,8 @@ module Command = struct
 
   type t =
     | Ethernet of string (* 36 bytes *)
+    | Uninstall
+    | Install_symlinks
   with sexp
 
   let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
@@ -106,6 +108,12 @@ module Command = struct
       let rest = Cstruct.shift rest sizeof_msg in
       Cstruct.blit_from_string uuid 0 rest 0 (String.length uuid);
       Cstruct.shift rest (String.length uuid)
+    | Uninstall ->
+      set_msg_command rest 2;
+      Cstruct.shift rest sizeof_msg
+    | Install_symlinks ->
+      set_msg_command rest 3;
+      Cstruct.shift rest sizeof_msg
 
   let unmarshal rest =
     match get_msg_command rest with
@@ -113,6 +121,10 @@ module Command = struct
       let uuid = Cstruct.(to_string (sub rest 1 36)) in
       let rest = Cstruct.shift rest 37 in
       `Ok (Ethernet uuid, rest)
+    | 2 ->
+      `Ok (Uninstall, Cstruct.shift rest 1)
+    | 3 ->
+      `Ok (Install_symlinks, Cstruct.shift rest 1)
     | n -> `Error (`Msg (Printf.sprintf "Unknown command: %d" n))
 end
 
@@ -176,6 +188,40 @@ module Infix = struct
   let ( >>= ) m f = m >>= function
     | `Ok x -> f x
     | `Error x -> Lwt.return (`Error x)
+end
+
+module Client = struct
+  type t = {
+    fd: Lwt_unix.file_descr;
+  }
+
+  let of_fd fd =
+    let buf = Cstruct.create Init.sizeof in
+    let (_: Cstruct.t) = Init.marshal Init.default buf in
+    Lwt_cstruct.(complete (write fd) buf)
+    >>= fun () ->
+    Lwt_cstruct.(complete (read fd) buf)
+    >>= fun () ->
+    let open Infix in
+    Lwt.return (Init.unmarshal buf)
+    >>= fun (init, _) ->
+    Log.info (fun f -> f "Client.negotiate: received %s" (Init.to_string init));
+    Lwt.return (`Ok { fd })
+
+  let simple_bool_command cmd t =
+    let buf = Cstruct.create Command.sizeof in
+    let (_: Cstruct.t) = Command.marshal cmd buf in
+    Lwt_cstruct.(complete (write t.fd) buf)
+    >>= fun () ->
+    let result = Cstruct.create 1 in
+    Lwt_cstruct.(complete (read t.fd) result)
+    >>= fun () ->
+    match Cstruct.get_uint8 result 0 with
+    | 0 -> Lwt.return (`Ok ())
+    | n -> Lwt.return (`Error (`Msg (Printf.sprintf "Command failed with code %d" n)))
+
+  let install_symlinks = simple_bool_command Command.Install_symlinks
+  let uninstall = simple_bool_command Command.Uninstall
 end
 
 let negotiate t =
