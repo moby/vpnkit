@@ -97,14 +97,14 @@ let connect proto address ?username () =
           Client.connect proto address ?username ()
           >>= function
           | Result.Error (`Msg x) ->
-            Log.err (fun f -> f "Failure connecting to db: %s" x);
+            Log.err (fun f -> f "Failure connecting to db %S: %s" address x);
             Lwt_unix.sleep 0.1
             >>= fun () ->
             loop (n - 1)
           | Result.Ok conn ->
             Lwt.return conn
         ) (fun e ->
-            Log.err (fun f -> f "Failure connecting to db: %s" (Printexc.to_string e));
+            Log.err (fun f -> f "Failure connecting to db %S: %s" address (Printexc.to_string e));
             Lwt_unix.sleep 0.1
             >>= fun () ->
             loop (n - 1)
