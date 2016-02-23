@@ -74,15 +74,25 @@ let to_string t = Printf.sprintf "%s:%s:%d" (Local.to_string t.local) (Ipaddr.V4
 let description_of_format = "'[local ip:]local port:IPv4 address of remote:remote port' or 'unix:local path:IPv4 address of remote: remote port'"
 
 let start stack t =
-  let addr, fd = match t.local with
+  let open Lwt.Infix in
+  (match t.local with
     | `Ip (local_ip, local_port) ->
       let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
       let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
-      addr, fd
+      Lwt.return (addr, fd)
     | `Unix path ->
+      Lwt.catch
+        (fun () -> Lwt_unix.unlink path)
+        (function
+          | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
+          | e ->
+            Log.err (fun f -> f "failed to remove %s: %s" path (Printexc.to_string e));
+            Lwt.return ()
+      ) >>= fun () ->
       let addr = Lwt_unix.ADDR_UNIX(path) in
       let fd = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
-      addr, fd in
+      Lwt.return (addr, fd)
+  ) >>= fun (addr, fd) ->
   Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
   let open Lwt.Infix in
   (* On failure here, we must close the fd *)
