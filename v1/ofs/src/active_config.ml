@@ -134,21 +134,22 @@ let create ?username proto address =
 
 type path = string list
 
-let string t path =
-  changes @@ map (fun sha -> read t.conn ("trees" :: sha :: path)) t.shas
+let string t ~default path =
+  changes @@ map (fun sha ->
+    read t.conn ("trees" :: sha :: path)
+    >>= function
+    | None -> Lwt.return default
+    | Some x -> Lwt.return x
+  ) t.shas
 
-let int t path =
-  string t path
+let int t ~default path =
+  string t ~default:(string_of_int default) path
   >>= fun strings ->
-  let parse = function
-    | None -> return None
-    | Some s -> return (try Some (int_of_string s) with _ -> None) in
+  let parse s = return (try int_of_string s with _ -> default) in
   changes @@ map parse strings
 
-let bool t path =
-  string t path
+let bool t ~default path =
+  string t ~default:(string_of_bool default) path
   >>= fun strings ->
-  let parse = function
-    | None -> return None
-    | Some s -> return (try Some (bool_of_string s) with _ -> None) in
+  let parse s = return (try bool_of_string s with _ -> default) in
   changes @@ map parse strings

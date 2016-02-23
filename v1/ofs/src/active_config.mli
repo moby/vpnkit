@@ -13,13 +13,16 @@ val hd: 'a values -> 'a
 val tl: 'a values -> 'a values Lwt.t
 (** The rest of a stream of values, after the first element *)
 
+val map: ('a -> 'b Lwt.t) -> 'a values -> 'b values Lwt.t
+(** Transform an infinite stream of values *)
+
 type path = string list
 
-val string: t -> path -> string option values Lwt.t
+val string: t -> default:string -> path -> string values Lwt.t
 (** The stream of string values at [path] *)
 
-val int: t -> path -> int option values Lwt.t
+val int: t -> default:int -> path -> int values Lwt.t
 (** The stream of int values at [path] *)
 
-val bool: t -> path -> bool option values Lwt.t
+val bool: t -> default:bool -> path -> bool values Lwt.t
 (** The stream of bool values at [path] *)

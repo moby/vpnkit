@@ -153,68 +153,64 @@ let start_native port_control_path =
   | Result.Ok server ->
     Server.serve_forever server
 
+let restart_on_change name to_string values =
+  Active_config.tl values
+  >>= fun values ->
+  let v = Active_config.hd values in
+  Log.info (fun f -> f "%s changed to %s in the database: restarting" name (to_string v));
+  exit 1
+
 let main_t pcap_filename socket_path port_control_path db_path =
   Logs.set_reporter (Logs_fmt.reporter ());
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   Printexc.record_backtrace true;
+
   Active_config.create "unix" db_path
   >>= fun config ->
   let driver = [ "com.docker.driver.amd64-linux" ] in
   let network_path = driver @ [ "network" ] in
-  Active_config.string config network_path
+  Active_config.string config ~default:"native" network_path
+  >>= fun string_network ->
+  let parse_network x = Lwt.return (if String.trim x = "slirp" then `Slirp else `Native) in
+  let print_network = function `Slirp -> "slirp" | `Native -> "native" in
+  Active_config.map parse_network string_network
   >>= fun network ->
-  let native_port_forwarding_path = driver @ [ "native"; "port-forwarding" ] in
-  Active_config.bool config native_port_forwarding_path
-  >>= fun native_port_forwarding ->
-  let peer_ips_path = driver @ [ "slirp"; "docker" ] in
-  Active_config.string config peer_ips_path
-  >>= fun peer_ips ->
-  let host_ips_path = driver @ [ "slirp"; "host" ] in
-  Active_config.string config host_ips_path
-  >>= fun host_ips ->
-  let default_peer_ip = Ipaddr.V4.of_string_exn "169.254.0.2" in
-  let default_host_ip = Ipaddr.V4.of_string_exn "169.254.0.1" in
+  Lwt.async (fun () -> restart_on_change "network" print_network network);
 
-  let peer_ip, local_ip = match Active_config.hd peer_ips, Active_config.hd host_ips with
-    | Some peer, Some host ->
-      begin
-        try
-          Ipaddr.V4.of_string_exn @@ String.trim peer, Ipaddr.V4.of_string_exn @@ String.trim host
-        with
-        | e ->
-          Log.err (fun f -> f "failed to parse IPv4 addresses: %s and %s" peer host);
-          default_peer_ip, default_host_ip
-      end
-    | _, _ ->
-      Log.info (fun f -> f "no slirp/host and slirp/docker: using default IPs");
-      (* If one is given and the other not, use the defaults *)
-      default_peer_ip, default_host_ip in
-  List.iter (fun (path, strings) ->
-    Lwt.async (fun () ->
-      Active_config.tl strings
-      >>= fun next ->
-      Log.info (fun f -> f "%s changed to %s in database, I should restart" (String.concat "/" path) (match Active_config.hd next with None -> "None" | Some x -> x));
-      exit 1
-    )
-  ) [ network_path, network;
-      peer_ips_path, peer_ips; host_ips_path, host_ips ];
-  List.iter (fun (path, bools) ->
-    Lwt.async (fun () ->
-      Active_config.tl bools
-      >>= fun next ->
-      Log.info (fun f -> f "%s changed to %s in database, I should restart" (String.concat "/" path) (match Active_config.hd next with None -> "None" | Some x -> string_of_bool x));
-      exit 1
-    )
-  ) [ native_port_forwarding_path, native_port_forwarding ];
+  let native_port_forwarding_path = driver @ [ "native"; "port-forwarding" ] in
+  Active_config.bool config ~default:false native_port_forwarding_path
+  >>= fun native_port_forwarding ->
+  Lwt.async (fun () -> restart_on_change "native/port-forwarding" string_of_bool native_port_forwarding);
+
+  let peer_ips_path = driver @ [ "slirp"; "docker" ] in
+  let parse_ipv4 default x = match Ipaddr.V4.of_string x with
+    | None -> Lwt.return default
+    | Some x -> Lwt.return x in
+  let default_peer = "169.254.0.2" in
+  let default_host = "169.254.0.1" in
+  Active_config.string config ~default:default_peer peer_ips_path
+  >>= fun string_peer_ips ->
+  Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips
+  >>= fun peer_ips ->
+  Lwt.async (fun () -> restart_on_change "slirp/docker" Ipaddr.V4.to_string peer_ips);
+
+  let host_ips_path = driver @ [ "slirp"; "host" ] in
+  Active_config.string config ~default:default_host host_ips_path
+  >>= fun string_host_ips ->
+  Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_host)) string_host_ips
+  >>= fun host_ips ->
+  Lwt.async (fun () -> restart_on_change "slirp/host" Ipaddr.V4.to_string host_ips);
+
+  let peer_ip = Active_config.hd peer_ips in
+  let local_ip = Active_config.hd host_ips in
 
   match Active_config.hd network with
-  | Some x when String.trim x = "slirp" ->
+  | `Slirp ->
+    Log.info (fun f -> f "starting in slirp mode");
     start_slirp pcap_filename socket_path port_control_path peer_ip local_ip
-  | Some x ->
-    Log.info (fun f -> f "Unrecognised networking mode %s, defaulting to native" x);
-    start_native port_control_path
-  | None ->
+  | `Native ->
+    Log.info (fun f -> f "starting in native mode");
     start_native port_control_path
 
 let main pcap_file socket control db = Lwt_main.run @@ main_t pcap_file socket control db
