@@ -16,6 +16,12 @@ let ( >>*= ) x f =
   | Ok y -> f y
   | Error (`Msg msg) -> Lwt.fail (Failure msg)
 
+let ( >>|= ) x f =
+  x >>= function
+  | Ok y -> f y
+  | Error (`Msg msg) -> Lwt.return (Error (`Msg msg))
+
+
 type 'a values = Value of ('a * ('a values) Lwt.t)
 
 let hd = function Value(first, _) -> first
@@ -111,20 +117,20 @@ module Transport = struct
       (fun () ->
         (* If we start first we need to create the master branch *)
         Client.mkdir conn ["branch"] "master" rwxr_xr_x
-        >>*= fun () ->
+        >>|= fun () ->
         Client.LowLevel.allocate_fid conn
-        >>*= fun fid ->
+        >>|= fun fid ->
         Client.walk_from_root conn fid ["branch"; "master"; "watch"; "tree.live"]
-        >>*= fun _walk ->
+        >>|= fun _walk ->
         Client.LowLevel.openfid conn fid Protocol_9p.Types.OpenMode.read_only
-        >>*= fun _openfid ->
+        >>|= fun _openfid ->
         lines conn fid
         >>= fun shas ->
-        Lwt.return { conn; fid; shas }
+        Lwt.return (Ok { conn; fid; shas })
       ) (fun e ->
         Client.disconnect conn
         >>= fun () ->
-        fail e
+        Lwt.return (Error (`Msg ("Transport.create: " ^ (Printexc.to_string e))))
       )
 end
 
@@ -142,7 +148,10 @@ let create ?username proto address =
   { proto; address; username; transport; transport_m }
 
 let rec retry_forever f =
-  Lwt.catch f (fun e -> retry_forever f)
+  f ()
+  >>= function
+  | Ok x -> Lwt.return x
+  | Error (`Msg _) -> retry_forever f
 
 (* Will retry forever to create a connected transport *)
 let transport ({ proto; address; username; transport } as t) =
