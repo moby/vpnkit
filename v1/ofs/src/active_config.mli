@@ -1,6 +1,6 @@
 type t
 
-val create: ?username:string -> string -> string -> t Lwt.t
+val create: ?username:string -> string -> string -> t
 (** [create ?username proto address] creates an active configuration
     system backed by the database at [proto:address]. *)
 

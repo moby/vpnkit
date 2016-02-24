@@ -11,18 +11,16 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Client = Client9p_unix.Make(Log9p_unix.Stdout)
 
+let ( >>*= ) x f =
+  x >>= function
+  | Ok y -> f y
+  | Error (`Msg msg) -> Lwt.fail (Failure msg)
+
 type 'a values = Value of ('a * ('a values) Lwt.t)
 
 let hd = function Value(first, _) -> first
 let tl = function Value(_, next) -> next
-let rec map f = function Value(first, next) ->
-  f first
-  >>= fun first' ->
-  let next' =
-    next
-    >>= fun next ->
-    map f next in
-  return (Value(first', next'))
+
 let changes values =
   let rec loop last next =
     next >>= function Value(first, next) ->
@@ -31,89 +29,85 @@ let changes values =
     else return (Value(first, loop (Some first) next)) in
   loop None values
 
-type t = {
-  conn: Client.t;
-  fid: Protocol_9p.Types.Fid.t;
-  shas: string values;
-}
+module Transport = struct
+  type t = {
+    conn: Client.t;
+    fid: Protocol_9p.Types.Fid.t;
+    shas: string values;
+  }
 
-(* very similar to functions in i9p/tests/test_utils *)
+  (* very similar to functions in i9p/tests/test_utils *)
 
-let ( >>*= ) x f =
-  x >>= function
-  | Ok y -> f y
-  | Error (`Msg msg) -> Lwt.fail (Failure msg)
+  let ( ++ ) = Int64.add
 
-let ( ++ ) = Int64.add
+  let lines conn fid : string values Lwt.t =
+    let rec loop ~saw_flush ~buf ~off =
+      match String.index buf '\n' with
+      | i ->
+        let line = String.sub buf 0 i in
+        let buf = String.sub buf (i + 1) (String.length buf - i - 1) in
+        return (Value (line, loop ~saw_flush ~buf ~off))
+      | exception Not_found ->
+        Client.LowLevel.read conn fid off 256l >>*= fun resp ->
+        match Cstruct.to_string resp.Protocol_9p.Response.Read.data with
+        | "" when saw_flush -> Lwt.fail End_of_file
+        | "" -> loop ~saw_flush:true ~buf ~off
+        | data ->
+            loop
+              ~saw_flush:false
+              ~buf:(buf ^ data)
+              ~off:(off ++ Int64.of_int (String.length data)) in
+    loop ~saw_flush:false ~buf:"" ~off:0L
 
-let lines conn fid : string values Lwt.t =
-  let rec loop ~saw_flush ~buf ~off =
-    match String.index buf '\n' with
-    | i ->
-      let line = String.sub buf 0 i in
-      let buf = String.sub buf (i + 1) (String.length buf - i - 1) in
-      return (Value (line, loop ~saw_flush ~buf ~off))
-    | exception Not_found ->
-      Client.LowLevel.read conn fid off 256l >>*= fun resp ->
-      match Cstruct.to_string resp.Protocol_9p.Response.Read.data with
-      | "" when saw_flush -> Lwt.fail End_of_file
-      | "" -> loop ~saw_flush:true ~buf ~off
-      | data ->
-          loop
-            ~saw_flush:false
-            ~buf:(buf ^ data)
-            ~off:(off ++ Int64.of_int (String.length data)) in
-  loop ~saw_flush:false ~buf:"" ~off:0L
+  let read conn path =
+    let buffer = Buffer.create 128 in
+    let rec loop ofs =
+      Client.read conn path ofs 1024l
+      >>*= fun bufs ->
+      let n = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
+      if n = 0
+      then return @@ Buffer.contents buffer
+      else begin
+        List.iter (fun x -> Buffer.add_string buffer (Cstruct.to_string x)) bufs;
+        loop Int64.(add ofs (of_int n))
+      end in
+    Lwt.catch
+      (fun () ->
+        loop 0L
+        >>= fun text ->
+        return (Some text)
+      ) (fun _ -> return None)
 
-let read conn path =
-  let buffer = Buffer.create 128 in
-  let rec loop ofs =
-    Client.read conn path ofs 1024l
-    >>*= fun bufs ->
-    let n = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
-    if n = 0
-    then return @@ Buffer.contents buffer
-    else begin
-      List.iter (fun x -> Buffer.add_string buffer (Cstruct.to_string x)) bufs;
-      loop Int64.(add ofs (of_int n))
-    end in
-  Lwt.catch
-    (fun () ->
-      loop 0L
-      >>= fun text ->
-      return (Some text)
-    ) (fun _ -> return None)
+  let rwx = [`Read; `Write; `Execute]
+  let rx = [`Read; `Execute]
+  let rwxr_xr_x = Protocol_9p.Types.FileMode.make ~owner:rwx ~group:rx ~other:rx ()
 
-let rwx = [`Read; `Write; `Execute]
-let rx = [`Read; `Execute]
-let rwxr_xr_x = Protocol_9p.Types.FileMode.make ~owner:rwx ~group:rx ~other:rx ()
+  let connect proto address ?username () =
+    let rec loop = function
+      | 0 -> failwith "I failed to connect to the database"
+      | n ->
+        Lwt.catch
+          (fun () ->
+            Client.connect proto address ?username ()
+            >>= function
+            | Result.Error (`Msg x) ->
+              Log.err (fun f -> f "Failure connecting to db %S: %s" address x);
+              Lwt_unix.sleep 0.1
+              >>= fun () ->
+              loop (n - 1)
+            | Result.Ok conn ->
+              Lwt.return conn
+          ) (fun e ->
+              Log.err (fun f -> f "Failure connecting to db %S: %s" address (Printexc.to_string e));
+              Lwt_unix.sleep 0.1
+              >>= fun () ->
+              loop (n - 1)
+            ) in
+    loop 50 (* up to 5s *)
 
-let connect proto address ?username () =
-  let rec loop = function
-    | 0 -> failwith "I failed to connect to the database"
-    | n ->
-      Lwt.catch
-        (fun () ->
-          Client.connect proto address ?username ()
-          >>= function
-          | Result.Error (`Msg x) ->
-            Log.err (fun f -> f "Failure connecting to db %S: %s" address x);
-            Lwt_unix.sleep 0.1
-            >>= fun () ->
-            loop (n - 1)
-          | Result.Ok conn ->
-            Lwt.return conn
-        ) (fun e ->
-            Log.err (fun f -> f "Failure connecting to db %S: %s" address (Printexc.to_string e));
-            Lwt_unix.sleep 0.1
-            >>= fun () ->
-            loop (n - 1)
-          ) in
-  loop 50 (* up to 5s *)
-
-let create ?username proto address =
-  connect proto address ?username ()
-  >>= fun conn ->
+  let create ?username proto address =
+    connect proto address ?username ()
+    >>= fun conn ->
     (* If we start first we need to create the master branch *)
     Client.mkdir conn ["branch"] "master" rwxr_xr_x
     >>*= fun () ->
@@ -126,16 +120,55 @@ let create ?username proto address =
     lines conn fid
     >>= fun shas ->
     Lwt.return { conn; fid; shas }
+end
+
+type t = {
+  proto: string;
+  address: string;
+  username: string option;
+  mutable transport: Transport.t option;
+  transport_c: unit Lwt_condition.t;
+}
+
+let create ?username proto address =
+  let transport = None in
+  let transport_c = Lwt_condition.create () in
+  { proto; address; username; transport; transport_c }
+
+let transport ({ proto; address; username; transport } as t) = match transport with
+  | Some transport -> Lwt.return transport
+  | None ->
+    Transport.create ?username proto address
+    >>= fun transport ->
+    t.transport <- Some transport;
+    Lwt.return transport
+
+let read t path =
+  transport t
+  >>= fun transport ->
+  (* TODO: on failure, repeat *)
+  Transport.read transport.Transport.conn path
+
+let rec map f = function Value(first, next) ->
+  f first
+  >>= fun first' ->
+  let next' =
+    next
+    >>= fun next ->
+    map f next in
+  return (Value(first', next'))
 
 type path = string list
 
 let string t ~default path =
+  transport t
+  >>= fun transport ->
   changes @@ map (fun sha ->
-    read t.conn ("trees" :: sha :: path)
+    read t ("trees" :: sha :: path)
     >>= function
     | None -> Lwt.return default
     | Some x -> Lwt.return x
-  ) t.shas
+  ) transport.Transport.shas
 
 let int t ~default path =
   string t ~default:(string_of_int default) path
