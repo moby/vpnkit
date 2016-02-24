@@ -166,8 +166,7 @@ let main_t pcap_filename socket_path port_control_path db_path =
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   Printexc.record_backtrace true;
 
-  Active_config.create "unix" db_path
-  >>= fun config ->
+  let config = Active_config.create "unix" db_path in
   let driver = [ "com.docker.driver.amd64-linux" ] in
   let network_path = driver @ [ "network" ] in
   Active_config.string config ~default:"native" network_path
