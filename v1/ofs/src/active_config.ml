@@ -117,13 +117,8 @@ let create ?username proto address =
     (* If we start first we need to create the master branch *)
     Client.mkdir conn ["branch"] "master" rwxr_xr_x
     >>*= fun () ->
-    (* FIXME: the ocaml-9p client API is terrible *)
-    let fid_t, fid_u = Lwt.task () in
-    let _t = Client.with_fid conn (fun newfid ->
-      Lwt.wakeup fid_u newfid; (* let it escape the scope *)
-      fst @@ Lwt.task () (* never returns *)
-    ) in
-    fid_t >>= fun fid ->
+    Client.LowLevel.allocate_fid conn
+    >>*= fun fid ->
     Client.walk_from_root conn fid ["branch"; "master"; "watch"; "tree.live"]
     >>*= fun _walk ->
     Client.LowLevel.openfid conn fid Protocol_9p.Types.OpenMode.read_only
