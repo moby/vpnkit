@@ -107,18 +107,25 @@ module Transport = struct
   let create ?username proto address =
     connect proto address ?username ()
     >>= fun conn ->
-    (* If we start first we need to create the master branch *)
-    Client.mkdir conn ["branch"] "master" rwxr_xr_x
-    >>*= fun () ->
-    Client.LowLevel.allocate_fid conn
-    >>*= fun fid ->
-    Client.walk_from_root conn fid ["branch"; "master"; "watch"; "tree.live"]
-    >>*= fun _walk ->
-    Client.LowLevel.openfid conn fid Protocol_9p.Types.OpenMode.read_only
-    >>*= fun _openfid ->
-    lines conn fid
-    >>= fun shas ->
-    Lwt.return { conn; fid; shas }
+    Lwt.catch
+      (fun () ->
+        (* If we start first we need to create the master branch *)
+        Client.mkdir conn ["branch"] "master" rwxr_xr_x
+        >>*= fun () ->
+        Client.LowLevel.allocate_fid conn
+        >>*= fun fid ->
+        Client.walk_from_root conn fid ["branch"; "master"; "watch"; "tree.live"]
+        >>*= fun _walk ->
+        Client.LowLevel.openfid conn fid Protocol_9p.Types.OpenMode.read_only
+        >>*= fun _openfid ->
+        lines conn fid
+        >>= fun shas ->
+        Lwt.return { conn; fid; shas }
+      ) (fun e ->
+        Client.disconnect conn
+        >>= fun () ->
+        fail e
+      )
 end
 
 type t = {
