@@ -133,23 +133,32 @@ type t = {
   address: string;
   username: string option;
   mutable transport: Transport.t option;
-  transport_c: unit Lwt_condition.t;
+  transport_m: Lwt_mutex.t;
 }
 
 let create ?username proto address =
   let transport = None in
-  let transport_c = Lwt_condition.create () in
-  { proto; address; username; transport; transport_c }
+  let transport_m = Lwt_mutex.create () in
+  { proto; address; username; transport; transport_m }
 
-let transport ({ proto; address; username; transport } as t) = match transport with
-  | Some transport -> Lwt.return transport
-  | None ->
-    Transport.create ?username proto address
-    >>= fun transport ->
-    t.transport <- Some transport;
-    Lwt.return transport
+let rec retry_forever f =
+  Lwt.catch f (fun e -> retry_forever f)
 
-let values t path =
+(* Will retry forever to create a connected transport *)
+let transport ({ proto; address; username; transport } as t) =
+  Lwt_mutex.with_lock t.transport_m
+    (fun () ->
+      match transport with
+        | Some transport -> Lwt.return transport
+        | None ->
+          retry_forever (fun () -> Transport.create ?username proto address)
+          >>= fun transport ->
+          Log.info (fun f -> f "reconnected transport layer");
+          t.transport <- Some transport;
+          Lwt.return transport
+    )
+
+let rec values t path =
   transport t
   >>= fun { Transport.conn; shas } ->
   let rec loop = function
@@ -157,7 +166,15 @@ let values t path =
     Transport.read conn ("trees" :: hd :: path)
     >>= fun v_opt ->
     Lwt.return (Value(v_opt, tl_t >>= fun tl -> loop tl )) in
-  loop shas
+  Lwt.catch
+    (fun () -> loop shas)
+    (fun _ ->
+      (* If the Client has shutdown, throw it away *)
+      if Lwt.state (Client.on_disconnect conn) <> Lwt.Sleep then begin
+        t.transport <- None;
+        Log.info (fun f -> f "transport layer has disconnected");
+      end;
+      values t path)
 
 let rec map f = function Value(first, next) ->
   f first
