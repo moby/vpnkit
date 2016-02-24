@@ -83,27 +83,26 @@ module Transport = struct
   let rwxr_xr_x = Protocol_9p.Types.FileMode.make ~owner:rwx ~group:rx ~other:rx ()
 
   let connect proto address ?username () =
-    let rec loop = function
-      | 0 -> failwith "I failed to connect to the database"
-      | n ->
-        Lwt.catch
-          (fun () ->
-            Client.connect proto address ?username ()
-            >>= function
-            | Result.Error (`Msg x) ->
-              Log.err (fun f -> f "Failure connecting to db %S: %s" address x);
-              Lwt_unix.sleep 0.1
-              >>= fun () ->
-              loop (n - 1)
-            | Result.Ok conn ->
-              Lwt.return conn
-          ) (fun e ->
-              Log.err (fun f -> f "Failure connecting to db %S: %s" address (Printexc.to_string e));
-              Lwt_unix.sleep 0.1
-              >>= fun () ->
-              loop (n - 1)
-            ) in
-    loop 50 (* up to 5s *)
+    let log_every = 100 in (* 10s *)
+    let rec loop ?(x="") n =
+      if n = 0 then Log.err (fun f -> f "Failure connecting to db %S: %s" address x);
+      let n = if n = 0 then log_every else n - 1 in
+      Lwt.catch
+        (fun () ->
+          Client.connect proto address ?username ()
+          >>= function
+          | Result.Error (`Msg x) ->
+            Lwt_unix.sleep 0.1
+            >>= fun () ->
+            loop ~x (n - 1)
+          | Result.Ok conn ->
+            Lwt.return conn
+        ) (fun e ->
+            Lwt_unix.sleep 0.1
+            >>= fun () ->
+            loop ~x:(Printexc.to_string e) (n - 1)
+          ) in
+    loop 1 (* if we fail straightaway, log the error *)
 
   let create ?username proto address =
     connect proto address ?username ()
