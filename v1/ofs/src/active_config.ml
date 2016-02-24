@@ -143,11 +143,15 @@ let transport ({ proto; address; username; transport } as t) = match transport w
     t.transport <- Some transport;
     Lwt.return transport
 
-let read t path =
+let values t path =
   transport t
-  >>= fun transport ->
-  (* TODO: on failure, repeat *)
-  Transport.read transport.Transport.conn path
+  >>= fun { Transport.conn; shas } ->
+  let rec loop = function
+  | Value(hd, tl_t) ->
+    Transport.read conn ("trees" :: hd :: path)
+    >>= fun v_opt ->
+    Lwt.return (Value(v_opt, tl_t >>= fun tl -> loop tl )) in
+  loop shas
 
 let rec map f = function Value(first, next) ->
   f first
@@ -161,14 +165,12 @@ let rec map f = function Value(first, next) ->
 type path = string list
 
 let string t ~default path =
-  transport t
-  >>= fun transport ->
-  changes @@ map (fun sha ->
-    read t ("trees" :: sha :: path)
-    >>= function
+  values t path
+  >>= fun vs ->
+  changes @@ map (function
     | None -> Lwt.return default
     | Some x -> Lwt.return x
-  ) transport.Transport.shas
+  ) vs
 
 let int t ~default path =
   string t ~default:(string_of_int default) path
