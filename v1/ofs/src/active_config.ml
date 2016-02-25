@@ -154,12 +154,13 @@ let rec retry_forever f =
   | Error (`Msg _) -> retry_forever f
 
 (* Will retry forever to create a connected transport *)
-let transport ({ proto; address; username; transport } as t) =
+let transport ({ username; proto; address } as t) =
   Lwt_mutex.with_lock t.transport_m
     (fun () ->
-      match transport with
+      match t.transport with
         | Some transport -> Lwt.return transport
         | None ->
+          Log.info (fun f -> f "attempting to reconnect to database");
           retry_forever (fun () -> Transport.create ?username proto address)
           >>= fun transport ->
           Log.info (fun f -> f "reconnected transport layer");
@@ -174,16 +175,18 @@ let rec values t path =
   | Value(hd, tl_t) ->
     Transport.read conn ("trees" :: hd :: path)
     >>= fun v_opt ->
-    Lwt.return (Value(v_opt, tl_t >>= fun tl -> loop tl )) in
-  Lwt.catch
-    (fun () -> loop shas)
-    (fun _ ->
-      (* If the Client has shutdown, throw it away *)
-      if Lwt.state (Client.on_disconnect conn) <> Lwt.Sleep then begin
-        t.transport <- None;
-        Log.info (fun f -> f "transport layer has disconnected");
-      end;
-      values t path)
+    let next =
+      Lwt.catch
+        (fun () -> tl_t >>= fun tl -> loop tl)
+        (fun e ->
+          if Lwt.state (Client.on_disconnect conn) <> Lwt.Sleep && t.transport <> None then begin
+            t.transport <- None;
+            Log.info (fun f -> f "transport layer has disconnected");
+          end;
+          values t path
+        ) in
+    Lwt.return (Value(v_opt, next )) in
+  loop shas
 
 let rec map f = function Value(first, next) ->
   f first
