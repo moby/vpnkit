@@ -177,11 +177,6 @@ let main_t pcap_filename socket_path port_control_path db_path =
   >>= fun network ->
   Lwt.async (fun () -> restart_on_change "network" print_network network);
 
-  let native_port_forwarding_path = driver @ [ "native"; "port-forwarding" ] in
-  Active_config.bool config ~default:false native_port_forwarding_path
-  >>= fun native_port_forwarding ->
-  Lwt.async (fun () -> restart_on_change "native/port-forwarding" string_of_bool native_port_forwarding);
-
   let peer_ips_path = driver @ [ "slirp"; "docker" ] in
   let parse_ipv4 default x = match Ipaddr.V4.of_string x with
     | None -> Lwt.return default
