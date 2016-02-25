@@ -42,6 +42,15 @@ let connect () =
 module TCPV4_half_close = struct
   include TCPV4
 
+  (* Workaround [mirage/mirage-tcpip#183] *)
+  let handle_epipe f = Lwt.catch f (function
+    | Unix.Unix_error(Unix.EPIPE, _, _) -> Lwt.return `Eof
+    | e -> Lwt.fail e
+  )
+
+  let write fd buf = handle_epipe (fun () -> write fd buf)
+  let writev fd bufs = handle_epipe (fun () -> writev fd bufs)
+
   let shutdown_write fd =
     try
       Lwt_unix.shutdown fd Unix.SHUTDOWN_SEND;
