@@ -179,7 +179,7 @@ let rec values t path =
       Lwt.catch
         (fun () -> tl_t >>= fun tl -> loop tl)
         (fun e ->
-          if Lwt.state (Client.on_disconnect conn) <> Lwt.Sleep && t.transport <> None then begin
+          if Lwt.state (Client.after_disconnect conn) <> Lwt.Sleep && t.transport <> None then begin
             t.transport <- None;
             Log.info (fun f -> f "transport layer has disconnected");
           end;
