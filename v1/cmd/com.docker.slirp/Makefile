@@ -1,6 +1,3 @@
-# OASIS_START
-# DO NOT EDIT (digest: a3c674b4239234cbbe53afe090018954)
-
 SETUP = ocaml setup.ml
 
 build: setup.data
@@ -24,12 +21,6 @@ uninstall: setup.data
 reinstall: setup.data
 	$(SETUP) -reinstall $(REINSTALLFLAGS)
 
-clean:
-	$(SETUP) -clean $(CLEANFLAGS)
-
-distclean:
-	$(SETUP) -distclean $(DISTCLEANFLAGS)
-
 setup.data:
 	$(SETUP) -configure $(CONFIGUREFLAGS)
 
@@ -38,7 +29,6 @@ configure:
 
 .PHONY: build doc test all install uninstall reinstall clean distclean configure
 
-# OASIS_STOP
 clean:
-	$(SETUP) -clean $(CLEANFLAGS)
+	rm -rf _build setup.data
 	rm -f com.docker.slirp
