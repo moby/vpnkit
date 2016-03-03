@@ -24,6 +24,27 @@ module type Instance = sig
   module Map: Map.S with type key = key
 end
 
+module Ivar = struct
+  type 'a t = {
+    mutable thing: 'a option;
+    c: unit Lwt_condition.t;
+  }
+  let create () =
+    let c = Lwt_condition.create () in
+    { thing = None; c }
+  let fill t thing =
+    t.thing <- Some thing;
+    Lwt_condition.broadcast t.c ()
+  let read t =
+    let open Lwt.Infix in
+    let rec loop () = match t.thing with
+      | Some c -> Lwt.return c
+      | None ->
+        Lwt_condition.wait t.c
+        >>= fun () ->
+        loop () in
+    loop ()
+end
 
 module Make(Instance: Instance) = struct
   open Protocol_9p
@@ -31,12 +52,14 @@ module Make(Instance: Instance) = struct
   let active : Instance.t Instance.Map.t ref = ref Instance.Map.empty
 
   type t = {
-    mutable context: Instance.context option;
+    context: Instance.context Ivar.t;
   }
 
-  let make () = { context = None }
+  let make () =
+    let context = Ivar.create () in
+    { context }
 
-  let set_context t context = t.context <- Some context
+  let set_context { context } x = Ivar.fill context x
 
   type resource =
     | ControlFile (* "/ctl" *)
@@ -251,21 +274,17 @@ Immediately read the file contents and check whether it says:
         else begin match Instance.of_string @@ Cstruct.to_string data with
           | Result.Ok f ->
             let open Lwt.Infix in
-            begin match connection.t.context with
-              | None ->
-                connection.result <- Some ("ERROR no context stack configured\n");
+            Ivar.read connection.t.context
+            >>= fun context ->
+            begin Instance.start context f >>= function
+              | Result.Ok f' -> (* local_port is resolved *)
+                let key = Instance.get_key f' in
+                active := Instance.Map.add key f' !active;
+                connection.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
                 return ok
-              | Some context ->
-                begin Instance.start context f >>= function
-                  | Result.Ok f' -> (* local_port is resolved *)
-                    let key = Instance.get_key f' in
-                    active := Instance.Map.add key f' !active;
-                    connection.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
-                    return ok
-                  | Result.Error (`Msg m) ->
-                    connection.result <- Some ("ERROR " ^ m ^ "\n");
-                    return ok
-                end
+              | Result.Error (`Msg m) ->
+                connection.result <- Some ("ERROR " ^ m ^ "\n");
+                return ok
             end
           | Result.Error (`Msg m) ->
             connection.result <- Some ("ERROR " ^ m ^ "\n");
