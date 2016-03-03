@@ -28,7 +28,47 @@ let resolver_t =
   (* We need to proxy DNS to the host resolver *)
   Dns_resolver_unix.create () (* create resolver using /etc/resolv.conf *)
 
+(* A queue of responses per source port. Returning results out of order
+   seems to confuse the Linux resolver, even though the requests and responses
+   have transaction ids *)
+
+type response_sender = unit -> unit Lwt.t
+
+type queue = {
+  senders: response_sender Lwt.t Queue.t;
+}
+
+let per_source_port : (int, queue) Hashtbl.t = Hashtbl.create 7
+
+let enter_queue src_port =
+  let t, u = Lwt.task () in
+  if Hashtbl.mem per_source_port src_port then begin
+    let q = Hashtbl.find per_source_port src_port in
+    Queue.push t q.senders;
+  end else begin
+    let senders = Queue.create () in
+    let q = { senders } in
+    Hashtbl.replace per_source_port src_port q;
+    Queue.push t q.senders;
+    let rec process () =
+      if Queue.is_empty q.senders then begin
+        Hashtbl.remove per_source_port src_port;
+        Lwt.return ()
+      end else begin
+        let t = Queue.pop q.senders in
+        t >>= fun response_sender ->
+        response_sender ()
+        >>= fun () ->
+        process ()
+      end in
+    let _thread = process () in
+    ()
+  end;
+  u
+
 let input s ~src ~dst ~src_port buf =
+  let wakener = enter_queue src_port in
+
   resolver_t
   >>= fun resolver ->
 
@@ -61,7 +101,16 @@ let input s ~src ~dst ~src_port buf =
   let obuf = Dns.Buf.create 4096 in
   process_query buf len obuf src' dst' processor
   >>= function
-  | None -> Lwt.return_unit
+  | None ->
+    Lwt.wakeup_later wakener (fun () -> Lwt.return_unit);
+    Lwt.return_unit
   | Some buf ->
     let buf = Cstruct.of_bigarray buf in
-    Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) buf
+    (* Take a copy of the response buffer to put in the response queue *)
+    let copy = Cstruct.create (Cstruct.len buf) in
+    Cstruct.blit buf 0 copy 0 (Cstruct.len buf);
+    Lwt.wakeup_later wakener
+      (fun () ->
+        Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) copy
+      );
+    Lwt.return ()
