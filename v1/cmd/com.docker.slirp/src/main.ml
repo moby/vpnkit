@@ -76,13 +76,13 @@ let start_slirp pcap_filename socket_path port_control_path peer_ip local_ip =
                       let dst_port = Wire_structs.get_udp_dest_port udp in
                       let length = Wire_structs.get_udp_length udp in
                       let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
-                      Log.info (fun f -> f "UDP %s:%d -> %s:%d len %d"
-                                   (Ipaddr.V4.to_string src) src_port
-                                   (Ipaddr.V4.to_string dst) dst_port
-                                   length
-                               );
                       (* We handle DNS on port 53 ourselves *)
                       if dst_port <> 53 then begin
+                        Log.info (fun f -> f "UDP %s:%d -> %s:%d len %d"
+                                     (Ipaddr.V4.to_string src) src_port
+                                     (Ipaddr.V4.to_string dst) dst_port
+                                     length
+                                 );
                         let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
                         Socket.UDPV4.input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload
                       end else Lwt.return_unit

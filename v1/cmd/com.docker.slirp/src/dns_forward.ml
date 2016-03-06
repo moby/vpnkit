@@ -72,15 +72,25 @@ let input s ~src ~dst ~src_port buf =
   resolver_t
   >>= fun resolver ->
 
+  (* HACK: grab the DNS response in [process] but which isn't conveniently
+     returned by processor *)
+  let response = ref None in
+
+  let src_str = Ipaddr.V4.to_string src in
+  let dst_str = Ipaddr.V4.to_string dst in
+
   let process ~src ~dst packet =
     let open Packet in
+    Log.info (fun f -> f "DNS %s:%d -> %s %s" src_str src_port dst_str (Dns.Packet.to_string packet));
     match packet.questions with
-    | [] -> return None; (* no questions in packet *)
+    | [] ->
+      return None; (* no questions in packet *)
     | [q] ->
       Lwt.catch
         (fun () ->
           Dns_resolver_unix.resolve resolver q.q_class q.q_type q.q_name
           >>= fun result ->
+          response := Some result;
           (return (Some (Dns.Query.answer_of_response result)))
         ) (function
           | Dns.Protocol.Dns_resolve_error exns ->
@@ -112,5 +122,8 @@ let input s ~src ~dst ~src_port buf =
     Lwt.wakeup_later wakener
       (fun () ->
         Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) copy
+        >>= fun () ->
+        Log.info (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (match !response with Some x -> Dns.Packet.to_string x | None -> "None"));
+        Lwt.return ()
       );
     Lwt.return ()
