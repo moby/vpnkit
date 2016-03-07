@@ -159,7 +159,7 @@ let start stack t =
                     Lwt.return ()
                   | `Ok (l_stats, r_stats) ->
                     Log.info (fun f ->
-                        f "%s closing: l2r = %s; r2l = %s" description
+                        f "%s completed: l2r = %s; r2l = %s" description
                           (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
                       );
                     Lwt.return ()
@@ -169,7 +169,6 @@ let start stack t =
             ) (fun () ->
               Socket.TCPV4.close local
               >>= fun () ->
-              Log.info (fun f -> f "%s: closed forwarded connection" description);
               Lwt.return ()
             )
         in

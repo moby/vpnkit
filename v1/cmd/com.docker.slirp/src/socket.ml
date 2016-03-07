@@ -229,7 +229,6 @@ module TCPV4 = struct
   let close t =
     if not t.closed then begin
       t.closed <- true;
-      Log.info (fun f -> f "Socket.TCPV4.close %s" t.description);
       Lwt_unix.close t.fd
     end else Lwt.return ()
 
