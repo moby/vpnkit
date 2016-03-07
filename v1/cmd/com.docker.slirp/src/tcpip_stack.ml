@@ -77,7 +77,7 @@ module Netif = Filter.Make(Vmnet)
 
 module Ethif1 = Ethif.Make(Netif)
 
-module Arpv41 = Arpv4.Make(Ethif1)(Clock)(OS.Time)
+module Arpv41 = Arp.Make(Ethif1)
 
 module Ipv41 = Ipv4.Make(Ethif1)(Arpv41)
 
@@ -148,13 +148,17 @@ let or_error name m =
 let connect ~config (ppp: Vmnet.t) =
   let open Infix in
   let valid_sources = [ config.peer_ip; Ipaddr.V4.of_string_exn "0.0.0.0" ] in
+  let arp_table = [
+    config.peer_ip, Vmnet.mac ppp;
+    config.local_ip, config.mac;
+  ] in
   or_error "filter" @@ Netif.connect ~valid_sources ppp
   >>= fun interface ->
   or_error "console" @@ Console_unix.connect "0"
   >>= fun console ->
   or_error "ethernet" @@ Ethif1.connect interface
   >>= fun ethif ->
-  or_error "arp" @@ Arpv41.connect ethif
+  or_error "arp" @@ Arpv41.connect ~table:arp_table ethif
   >>= fun arp ->
   or_error "ipv4" @@ Ipv41.connect ethif arp
   >>= fun ipv4 ->
