@@ -109,10 +109,24 @@ module Dhcp = struct
         Log.err (fun f -> f "%s" e);
         Lwt.return ()
       | Reply reply ->
-        Log.info (fun f -> f "Received packet %s" (Dhcp_wire.pkt_to_string pkt));
+        let open Dhcp_wire in
+        Log.info (fun f -> f "%s from %s" (op_to_string pkt.op) (Macaddr.to_string (pkt.srcmac)));
         Netif.write net (Dhcp_wire.buf_of_pkt reply)
         >>= fun () ->
-        Log.info (fun f -> f "Sent reply %s" (Dhcp_wire.pkt_to_string reply));
+        let domain = List.fold_left (fun acc x -> match x with
+          | Domain_name y -> y
+          | _ -> acc) "unknown" reply.options in
+        let dns = List.fold_left (fun acc x -> match x with
+          | Dns_servers ys -> String.concat ", " (List.map Ipaddr.V4.to_string ys)
+          | _ -> acc) "none" reply.options in
+        let routers = List.fold_left (fun acc x -> match x with
+          | Routers ys -> String.concat ", " (List.map Ipaddr.V4.to_string ys)
+          | _ -> acc) "none" reply.options in
+        Log.info (fun f -> f "%s to %s yiddr %s siddr %s dns %s router %s domain %s"
+          (op_to_string reply.op) (Macaddr.to_string (reply.dstmac))
+          (Ipaddr.V4.to_string reply.yiaddr) (Ipaddr.V4.to_string reply.siaddr)
+          dns routers domain
+        );
         Lwt.return ()
 
   let config ~config =
