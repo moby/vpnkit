@@ -54,7 +54,7 @@ let dhcp_conf ~config =
   let high_ip = Ipaddr.V4.to_string config.high_ip in
 
   Printf.sprintf "
-  option domain-name \"docker.com\";
+  option domain-name \"local\";
   subnet %s netmask %s {
     option routers %s;
     option domain-name-servers %s;
