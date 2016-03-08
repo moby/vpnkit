@@ -24,10 +24,6 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let resolver_t =
-  (* We need to proxy DNS to the host resolver *)
-  Dns_resolver_unix.create () (* create resolver using /etc/resolv.conf *)
-
 (* A queue of responses per source port. Returning results out of order
    seems to confuse the Linux resolver, even though the requests and responses
    have transaction ids *)
@@ -69,7 +65,11 @@ let enter_queue src_port =
 let input s ~src ~dst ~src_port buf =
   let wakener = enter_queue src_port in
 
-  resolver_t
+  (* Re-read /etc/resolv.conf on every request. This ensures that
+     changes to DNS on sleep/resume or switching networks are reflected
+     immediately. The file is very small, and parsing it shouldn't be
+     too slow. *)
+  Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
   >>= fun resolver ->
 
   (* HACK: grab the DNS response in [process] but which isn't conveniently
