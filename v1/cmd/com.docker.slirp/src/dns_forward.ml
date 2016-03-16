@@ -24,6 +24,12 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+module OptionThread = struct
+  let (>>=) m f = m >>= function
+    | None -> Lwt.return_none
+    | Some x -> f x
+end
+
 (* A queue of responses per source port. Returning results out of order
    seems to confuse the Linux resolver, even though the requests and responses
    have transaction ids *)
@@ -72,50 +78,56 @@ let input s ~src ~dst ~src_port buf =
   Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
   >>= fun resolver ->
 
-  (* HACK: grab the DNS response in [process] but which isn't conveniently
-     returned by processor *)
-  let response = ref None in
-
   let src_str = Ipaddr.V4.to_string src in
   let dst_str = Ipaddr.V4.to_string dst in
 
-  let process ~src ~dst packet =
-    let open Packet in
-    Log.info (fun f -> f "DNS %s:%d -> %s %s" src_str src_port dst_str (Dns.Packet.to_string packet));
-    match packet.questions with
-    | [] ->
-      return None; (* no questions in packet *)
-    | [q] ->
-      Lwt.catch
-        (fun () ->
-          Dns_resolver_unix.resolve resolver q.q_class q.q_type q.q_name
-          >>= fun result ->
-          let result = { result with Dns.Packet.id = packet.Dns.Packet.id } in
-          response := Some result;
-          (return (Some (Dns.Query.answer_of_response result)))
-        ) (function
-          | Dns.Protocol.Dns_resolve_error exns ->
-            Log.err (fun f -> f "DNS resolution failed for %s: %s" (Dns.Packet.question_to_string q) (String.concat "; " (List.map Printexc.to_string exns)));
-            return None
-          | e ->
-            Log.err (fun f -> f "DNS resolution failed for %s: %s" (Dns.Packet.question_to_string q) (Printexc.to_string e));
-            return None
-          )
-    | _::_::_ -> return None in
-
-  let processor = ((Dns_server.processor_of_process process) :> (module Dns_server.PROCESSOR)) in
-  let open Dns_server in
   let len = Cstruct.len buf in
   let buf = Dns.Buf.of_cstruct buf in
-  let src' = Ipaddr.V4 src, src_port in
-  let dst' = Ipaddr.V4 dst, 53 in
   let obuf = Dns.Buf.create 4096 in
-  process_query buf len obuf src' dst' processor
+
+  let result =
+    let open OptionThread in
+    ( match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
+    | None ->
+      Log.err (fun f -> f "Failed to parse DNS packet");
+      Lwt.return_none
+    | Some request ->
+      Log.info (fun f -> f "DNS %s:%d -> %s %s" src_str src_port dst_str (Dns.Packet.to_string request));
+      begin match request.Dns.Packet.questions with
+      | [] -> Lwt.return_none (* no questions in packet *)
+      | [q] ->
+        Lwt.catch
+          (fun () ->
+            let open Lwt.Infix in
+            Dns_resolver_unix.resolve resolver q.Dns.Packet.q_class q.Dns.Packet.q_type q.Dns.Packet.q_name
+            >>= fun response ->
+            Lwt.return (Some (request, { response with Dns.Packet.id = request.Dns.Packet.id }))
+          ) (function
+            | Dns.Protocol.Dns_resolve_error exns ->
+              Log.err (fun f -> f "DNS resolution failed for %s: %s" (Dns.Packet.question_to_string q) (String.concat "; " (List.map Printexc.to_string exns)));
+              Lwt.return_none
+            | e ->
+              Log.err (fun f -> f "DNS resolution failed for %s: %s" (Dns.Packet.question_to_string q) (Printexc.to_string e));
+              Lwt.return_none
+            )
+      | _::_::_ ->
+        Log.err (fun f -> f "More than 1 query in DNS request: %s" (Dns.Packet.to_string request));
+        Lwt.return_none
+      end
+    ) >>= fun (request, response) ->
+    let query = Dns.Protocol.Server.query_of_context request in
+    let answer = Dns.Query.answer_of_response response in
+    let response = Dns.Query.response_of_answer query answer in
+    match Dns.Protocol.Server.marshal obuf request response with
+    | None -> Lwt.return_none
+    | Some buf -> Lwt.return (Some (response, buf)) in
+
+  result
   >>= function
   | None ->
     Lwt.wakeup_later wakener (fun () -> Lwt.return_unit);
     Lwt.return_unit
-  | Some buf ->
+  | Some (response, buf) ->
     let buf = Cstruct.of_bigarray buf in
     (* Take a copy of the response buffer to put in the response queue *)
     let copy = Cstruct.create (Cstruct.len buf) in
@@ -124,7 +136,7 @@ let input s ~src ~dst ~src_port buf =
       (fun () ->
         Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) copy
         >>= fun () ->
-        Log.info (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (match !response with Some x -> Dns.Packet.to_string x | None -> "None"));
+        Log.info (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (Dns.Packet.to_string response));
         Lwt.return ()
       );
     Lwt.return ()
