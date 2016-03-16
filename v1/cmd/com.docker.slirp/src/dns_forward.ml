@@ -90,6 +90,7 @@ let input s ~src ~dst ~src_port buf =
         (fun () ->
           Dns_resolver_unix.resolve resolver q.q_class q.q_type q.q_name
           >>= fun result ->
+          let result = { result with Dns.Packet.id = packet.Dns.Packet.id } in
           response := Some result;
           (return (Some (Dns.Query.answer_of_response result)))
         ) (function
