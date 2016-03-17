@@ -18,7 +18,8 @@ include Network_stack.S
 
 type configuration
 
-val make: peer_ip: Ipaddr.V4.t -> local_ip:Ipaddr.V4.t -> configuration
+val make: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t
+  -> peer_ip: Ipaddr.V4.t -> local_ip:Ipaddr.V4.t -> configuration
 
 val connect:
   config:configuration -> Vmnet.t

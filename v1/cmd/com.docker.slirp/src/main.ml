@@ -23,11 +23,14 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+let client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
+let server_macaddr = Macaddr.of_string_exn "0F:F1:CE:0F:F1:CE"
+
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
 
 let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
-  let config = Tcpip_stack.make ~peer_ip ~local_ip in
+  let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in
 
   (* Start the 9P port forwarding server *)
   Log.info (fun f -> f "Starting 9P port forwarding service");
@@ -53,7 +56,7 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
     let rec loop () =
       Lwt_unix.accept s
       >>= fun (client, _) ->
-      Vmnet.of_fd client
+      Vmnet.of_fd ~client_macaddr ~server_macaddr client
       >>= function
       | `Error (`Msg m) -> failwith m
       | `Ok x ->

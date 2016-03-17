@@ -21,7 +21,8 @@ type configuration = {
   low_ip: Ipaddr.V4.t; (* FIXME: this is needed by the DHCP server for no good reason *)
   high_ip: Ipaddr.V4.t; (* FIXME: this is needed by the DHCP server for no good reason *)
   prefix: Ipaddr.V4.Prefix.t;
-  mac: Macaddr.t;
+  client_macaddr: Macaddr.t;
+  server_macaddr: Macaddr.t;
 }
 
 (* Compute the smallest IPv4 network which includes both [a_ip]
@@ -34,8 +35,7 @@ let rec smallest_prefix a_ip other_ips = function
     then prefix
     else smallest_prefix a_ip other_ips (bits - 1)
 
-let make ~peer_ip ~local_ip =
-  let mac = Macaddr.of_string_exn "0F:F1:CE:0F:F1:CE" in
+let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
   (* FIXME: We need a third IP just to make the DHCP server happy *)
   let low_ip, high_ip =
     let open Ipaddr.V4 in
@@ -43,7 +43,7 @@ let make ~peer_ip ~local_ip =
     let i32 = to_int32 highest in
     of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
   let prefix = smallest_prefix peer_ip [ local_ip; low_ip; high_ip ] 32 in
-  { local_ip; peer_ip; low_ip; high_ip; prefix; mac }
+  { local_ip; peer_ip; low_ip; high_ip; prefix; client_macaddr; server_macaddr }
 
 let dhcp_conf ~config =
   let network = Ipaddr.V4.(to_string (Prefix.network config.prefix)) in
@@ -60,11 +60,12 @@ let dhcp_conf ~config =
     option domain-name-servers %s;
     range %s %s;
     host xhyve {
-      hardware ethernet c0:ff:ee:c0:ff:ee;
+      hardware ethernet %s;
       fixed-address %s;
     }
   }
-  " network netmask local_ip local_ip low_ip high_ip peer_ip
+  " network netmask local_ip local_ip low_ip high_ip
+  (Macaddr.to_string config.client_macaddr) peer_ip
 
 let src =
   let src = Logs.Src.create "tcpip" ~doc:"Mirage TCP/IP" in
@@ -130,7 +131,7 @@ module Dhcp = struct
         Lwt.return ()
 
   let config ~config =
-    Dhcp_server.Config.parse (dhcp_conf ~config) [(config.local_ip, config.mac)]
+    Dhcp_server.Config.parse (dhcp_conf ~config) [(config.local_ip, config.server_macaddr)]
 
   let listen mac config net buf =
     let subnet = List.hd config.Dhcp_server.Config.subnets in
@@ -163,8 +164,8 @@ let connect ~config (ppp: Vmnet.t) =
   let open Infix in
   let valid_sources = [ config.peer_ip; Ipaddr.V4.of_string_exn "0.0.0.0" ] in
   let arp_table = [
-    config.peer_ip, Vmnet.mac ppp;
-    config.local_ip, config.mac;
+    config.peer_ip, config.client_macaddr;
+    config.local_ip, config.server_macaddr;
   ] in
   or_error "filter" @@ Netif.connect ~valid_sources ppp
   >>= fun interface ->
@@ -192,7 +193,7 @@ let connect ~config (ppp: Vmnet.t) =
   (* Hook in the DHCP server too *)
   let open Lwt.Infix in
   let dhcp_config = Dhcp.config ~config in
-  Netif.add_listener interface (Dhcp.listen config.mac dhcp_config interface);
+  Netif.add_listener interface (Dhcp.listen config.server_macaddr dhcp_config interface);
   Lwt.return (`Ok stack)
 
 (* FIXME: this is unnecessary, mirage-flow should be changed *)
