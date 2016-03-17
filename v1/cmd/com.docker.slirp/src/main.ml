@@ -24,7 +24,8 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 let client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
-let server_macaddr = Macaddr.of_string_exn "0F:F1:CE:0F:F1:CE"
+(* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
+let server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
