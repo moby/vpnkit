@@ -115,9 +115,14 @@ let input s ~src ~dst ~src_port buf =
         Lwt.return_none
       end
     ) >>= fun (request, response) ->
+    (* Preserve the ra flag from the response *)
+    let ra = response.Dns.Packet.detail.Dns.Packet.ra in
+
     let query = Dns.Protocol.Server.query_of_context request in
-    let answer = Dns.Query.answer_of_response response in
+    let answer = Dns.Query.answer_of_response ~preserve_aa:true response in
     let response = Dns.Query.response_of_answer query answer in
+    let response = { response with Dns.Packet.detail = { response.Dns.Packet.detail with Dns.Packet.ra }} in
+    (* response.Dns.Packet.deail.ra =  true *)
     match Dns.Protocol.Server.marshal obuf request response with
     | None -> Lwt.return_none
     | Some buf -> Lwt.return (Some (response, buf)) in
