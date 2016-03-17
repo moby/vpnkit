@@ -26,7 +26,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
 
-let start_slirp pcap_filename socket_path port_control_path peer_ip local_ip =
+let start_slirp socket_path port_control_path peer_ip local_ip =
   let config = Tcpip_stack.make ~peer_ip ~local_ip in
 
   (* Start the 9P port forwarding server *)
@@ -53,7 +53,7 @@ let start_slirp pcap_filename socket_path port_control_path peer_ip local_ip =
     let rec loop () =
       Lwt_unix.accept s
       >>= fun (client, _) ->
-      Vmnet.of_fd ?pcap_filename client
+      Vmnet.of_fd client
       >>= function
       | `Error (`Msg m) -> failwith m
       | `Ok x ->
@@ -160,7 +160,7 @@ let restart_on_change name to_string values =
   Log.info (fun f -> f "%s changed to %s in the database: restarting" name (to_string v));
   exit 1
 
-let main_t pcap_filename socket_path port_control_path db_path =
+let main_t socket_path port_control_path db_path =
   Logs.set_reporter (Logs_fmt.reporter ());
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
@@ -202,17 +202,14 @@ let main_t pcap_filename socket_path port_control_path db_path =
   match Active_config.hd network with
   | `Slirp ->
     Log.info (fun f -> f "starting in slirp mode");
-    start_slirp pcap_filename socket_path port_control_path peer_ip local_ip
+    start_slirp socket_path port_control_path peer_ip local_ip
   | `Native ->
     Log.info (fun f -> f "starting in native mode");
     start_native port_control_path
 
-let main pcap_file socket control db = Lwt_main.run @@ main_t pcap_file socket control db
+let main socket control db = Lwt_main.run @@ main_t socket control db
 
 open Cmdliner
-
-let pcap_file =
-  Arg.(value & opt (some string) None & info [ "pcap" ] ~docv:"PCAP")
 
 let socket =
   Arg.(value & opt string "/var/tmp/com.docker.slirp.socket" & info [ "socket" ] ~docv:"SOCKET")
@@ -230,7 +227,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ pcap_file $ socket $ port_control_path $ db_path),
+  Term.(pure main $ socket $ port_control_path $ db_path),
   Term.info "proxy" ~doc ~man
 
 let () =
