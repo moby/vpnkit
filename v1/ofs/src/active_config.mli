@@ -18,6 +18,9 @@ val map: ('a -> 'b Lwt.t) -> 'a values -> 'b values Lwt.t
 
 type path = string list
 
+val string_option: t -> path -> string option values Lwt.t
+(** The stream of optional string values at [path] *)
+
 val string: t -> default:string -> path -> string values Lwt.t
 (** The stream of string values at [path] *)
 

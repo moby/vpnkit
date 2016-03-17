@@ -26,7 +26,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
 
-let start_slirp socket_path port_control_path peer_ip local_ip =
+let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
   let config = Tcpip_stack.make ~peer_ip ~local_ip in
 
   (* Start the 9P port forwarding server *)
@@ -57,6 +57,21 @@ let start_slirp socket_path port_control_path peer_ip local_ip =
       >>= function
       | `Error (`Msg m) -> failwith m
       | `Ok x ->
+
+        let rec monitor_pcap_settings pcap_settings =
+          Active_config.tl pcap_settings
+          >>= fun pcap_settings ->
+          ( match Active_config.hd pcap_settings with
+            | None ->
+              Log.info (fun f -> f "Disabling any active packet capture");
+              Vmnet.stop_capture x
+            | Some (filename, size_limit) ->
+              Log.info (fun f -> f "Capturing packets to %s %s" filename (match size_limit with None -> "with no limit" | Some x -> Printf.sprintf "limited to %Ld bytes" x));
+              Vmnet.start_capture x ?size_limit filename )
+          >>= fun () ->
+          monitor_pcap_settings pcap_settings in
+        Lwt.async (fun () -> Utils.log_exception_continue "monitor_pcap_settings" (fun () -> monitor_pcap_settings pcap_settings));
+
         begin Tcpip_stack.connect ~config x
           >>= function
           | `Error (`Msg m) -> failwith m
@@ -177,6 +192,30 @@ let main_t socket_path port_control_path db_path =
   >>= fun network ->
   Lwt.async (fun () -> restart_on_change "network" print_network network);
 
+  let pcap_path = driver @ [ "slirp"; "capture" ] in
+  Active_config.string_option config pcap_path
+  >>= fun string_pcap_settings ->
+  let parse_pcap = function
+    | None -> Lwt.return None
+    | Some x ->
+      begin match Stringext.split (String.trim x) ~on:':' with
+      | [ filename ] ->
+        (** Assume 10MiB limit for safety *)
+        Lwt.return (Some (filename, Some 16777216L))
+      | [ filename; limit ] ->
+        let limit =
+          try
+            Int64.of_string limit
+          with
+          | _ -> 16777216L in
+        let limit = if limit = 0L then None else Some limit in
+        Lwt.return (Some (filename, limit))
+      | _ ->
+        Lwt.return None
+      end in
+  Active_config.map parse_pcap string_pcap_settings
+  >>= fun pcap_settings ->
+
   let peer_ips_path = driver @ [ "slirp"; "docker" ] in
   let parse_ipv4 default x = match Ipaddr.V4.of_string x with
     | None -> Lwt.return default
@@ -202,7 +241,7 @@ let main_t socket_path port_control_path db_path =
   match Active_config.hd network with
   | `Slirp ->
     Log.info (fun f -> f "starting in slirp mode");
-    start_slirp socket_path port_control_path peer_ip local_ip
+    start_slirp socket_path port_control_path pcap_settings peer_ip local_ip
   | `Native ->
     Log.info (fun f -> f "starting in native mode");
     start_native port_control_path

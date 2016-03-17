@@ -199,6 +199,9 @@ let rec map f = function Value(first, next) ->
 
 type path = string list
 
+let string_option t path =
+  changes @@ values t path
+  
 let string t ~default path =
   values t path
   >>= fun vs ->
