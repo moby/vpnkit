@@ -217,12 +217,18 @@ let main_t socket_path port_control_path db_path =
       | _ ->
         Lwt.return None
       end in
+  let print_pcap = function
+    | None -> "disabled"
+    | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
+    | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit) in
   Active_config.map parse_pcap string_pcap_settings
   >>= fun pcap_settings ->
 
   let peer_ips_path = driver @ [ "slirp"; "docker" ] in
   let parse_ipv4 default x = match Ipaddr.V4.of_string x with
-    | None -> Lwt.return default
+    | None ->
+      Log.info (fun f -> f "Failed to parse IPv4 address '%s', using default of %s" x (Ipaddr.V4.to_string default));
+      Lwt.return default
     | Some x -> Lwt.return x in
   let default_peer = "169.254.0.2" in
   let default_host = "169.254.0.1" in
@@ -244,10 +250,13 @@ let main_t socket_path port_control_path db_path =
 
   match Active_config.hd network with
   | `Slirp ->
-    Log.info (fun f -> f "starting in slirp mode");
+    Log.info (fun f -> f "starting in slirp mode socket_path:%s port_control_path:%s pcap_settings:%s peer_ip:%s local_ip:%s"
+      socket_path port_control_path (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
+    );
     start_slirp socket_path port_control_path pcap_settings peer_ip local_ip
   | `Native ->
-    Log.info (fun f -> f "starting in native mode");
+    Log.info (fun f -> f "starting in native mode port_control_path:%s" port_control_path
+    );
     start_native port_control_path
 
 let main socket control db = Lwt_main.run @@ main_t socket control db
