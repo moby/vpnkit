@@ -225,7 +225,7 @@ let main_t socket_path port_control_path db_path =
   >>= fun pcap_settings ->
 
   let peer_ips_path = driver @ [ "slirp"; "docker" ] in
-  let parse_ipv4 default x = match Ipaddr.V4.of_string x with
+  let parse_ipv4 default x = match Ipaddr.V4.of_string @@ String.trim x with
     | None ->
       Log.info (fun f -> f "Failed to parse IPv4 address '%s', using default of %s" x (Ipaddr.V4.to_string default));
       Lwt.return default
