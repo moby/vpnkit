@@ -230,8 +230,8 @@ let main_t socket_path port_control_path db_path =
       Log.info (fun f -> f "Failed to parse IPv4 address '%s', using default of %s" x (Ipaddr.V4.to_string default));
       Lwt.return default
     | Some x -> Lwt.return x in
-  let default_peer = "169.254.0.2" in
-  let default_host = "169.254.0.1" in
+  let default_peer = "192.168.64.2" in
+  let default_host = "192.168.64.1" in
   Active_config.string config ~default:default_peer peer_ips_path
   >>= fun string_peer_ips ->
   Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips
