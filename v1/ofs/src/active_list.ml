@@ -21,7 +21,6 @@ module type Instance = sig
 
   type key
   val get_key: t -> key
-  module Map: Map.S with type key = key
 end
 
 module Ivar = struct
@@ -46,10 +45,18 @@ module Ivar = struct
     loop ()
 end
 
+module Transaction = struct
+  type t = {
+    name: string; (* directory name *)
+    mutable source: string;
+    mutable destination: string;
+  }
+end
+
+module StringMap = Map.Make(String)
+
 module Make(Instance: Instance) = struct
   open Protocol_9p
-
-  let active : Instance.t Instance.Map.t ref = ref Instance.Map.empty
 
   type t = {
     context: Instance.context Ivar.t;
@@ -61,22 +68,29 @@ module Make(Instance: Instance) = struct
 
   let set_context { context } x = Ivar.fill context x
 
+  (* We manage a list of named entries *)
+  type entry = {
+    name: string;
+    mutable instance: Instance.t option;
+    mutable result: string option;
+  }
+
+  let active : entry StringMap.t ref = ref StringMap.empty
+
   type resource =
-    | ControlFile (* "/ctl" *)
+    | ControlFile of entry
     | README
-    | Instance of Instance.t
+    | Entry of entry
     | Root
 
   type connection = {
     t: t;
     fids: resource Types.Fid.Map.t ref;
-    mutable result: string option;
   }
 
   let connect t info = {
     t;
     fids = ref (Types.Fid.Map.empty);
-    result = None;
   }
 
   module Error = struct
@@ -94,7 +108,7 @@ module Make(Instance: Instance) = struct
     qid_path := Int64.(add one !qid_path);
     Protocol_9p.Types.Qid.({ flags; version = 0_l; id; })
 
-  let root_qid = next_qid []
+  let root_qid = next_qid [ Types.Qid.Directory ]
 
   let readme = Cstruct.of_string (Printf.sprintf "
 Directory of active Instances
@@ -103,8 +117,9 @@ Directory of active Instances
 Every active Instance is represented by a file. To shut down an Instance,
 remove the file.
 
-To request an additional Instance, open the special file `/ctl` and `write`
-a single string of the following form:
+To request an additional Instance, make a directory with a unique name,
+then open the special file `ctl` inside, and `write` a single string of the following
+form:
 
 %s
 
@@ -116,6 +131,8 @@ Immediately read the file contents and check whether it says:
   temporary path.
 - `ERROR some error message`: this means the Instance creation has failed, perhaps
   some needed resource is still in use.
+
+The directory will be deleted and replaced with a file of the same name.
 " Instance.description_of_format)
 
   let return x = Lwt.return (Result.Ok x)
@@ -127,25 +144,25 @@ Immediately read the file contents and check whether it says:
   let walk connection ~cancel { Request.Walk.fid; newfid; wnames } =
     try
       let from = Types.Fid.Map.find fid !(connection.fids) in
-      let from, wqids = List.fold_left (fun (from,qids) -> function
-          | ".." ->
+      let from, wqids = List.fold_left (fun (from,qids) x -> match x, fst from with
+          | "..", _ ->
             (Root, root_qid), root_qid::qids
-          | "README" ->
+          | "README", _ ->
             let qid = next_qid [] in
             (README, qid), qid :: qids
-          | "ctl" ->
+          | name, Root ->
+            if StringMap.mem name !active then begin
+              let entry = StringMap.find name !active in
+              let qid = next_qid (match entry.instance with
+                | None -> [ Types.Qid.Directory ]
+                | Some _ -> []
+              ) in
+              (Entry entry, qid), qid :: qids
+            end else failwith "ENOENT"
+          | "ctl", Entry entry ->
             let qid = next_qid [] in
-            (ControlFile, qid), qid :: qids
-          | instance ->
-            begin match Instance.of_string instance with
-              | Result.Error _ -> failwith "ENOENT"
-              | Result.Ok f ->
-                let key = Instance.get_key f in
-                if Instance.Map.mem key !active then begin
-                  let qid = next_qid [] in
-                  (Instance (Instance.Map.find key !active), qid), qid :: qids
-                end else failwith "ENOENT"
-            end
+            (ControlFile entry, qid), qid :: qids
+          | _, _ -> failwith "ENOENT"
         ) ((from, next_qid []), []) wnames in
       connection.fids := Types.Fid.Map.add newfid (fst from) !(connection.fids);
       let wqids = List.rev wqids in
@@ -192,62 +209,74 @@ Immediately read the file contents and check whether it says:
       | Ok _ as ok -> ok
     )
 
+  let read_children count offset children =
+    let buf = Cstruct.create count in
+    let rec write off rest = function
+      | [] -> return off
+      | stat :: xs ->
+        let open Infix in
+        let n = Types.Stat.sizeof stat in
+        if off < offset
+        then write (off + n) rest xs
+        else if Cstruct.len rest < n then return off
+        else
+          Lwt.return (Types.Stat.write stat rest)
+          >>*= fun rest ->
+          write (off + n) rest xs in
+    let open Lwt.Infix in
+    write 0 buf children
+    >>= function
+    | Result.Ok offset' ->
+      let data = Cstruct.sub buf 0 (max 0 (offset' - offset)) in
+      return { Response.Read.data }
+    | Result.Error _ -> Error.badfid
+
+  let dot = make_stat ~is_directory:true ~writable:false ~name:"."
+  let dotdot = make_stat ~is_directory:true ~writable:false ~name:".."
+
+  let read_string count offset message =
+    let data = Cstruct.create (String.length message) in
+    Cstruct.blit_from_string message 0 data 0 (String.length message);
+    let len = min count Cstruct.(len data - offset) in
+    let data = Cstruct.sub data offset len in
+    return { Response.Read.data }
+
   let read connection ~cancel { Request.Read.fid; offset; count } =
     let count = Int32.to_int count in
     let offset = Int64.to_int offset in
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with
-      | ControlFile ->
-        let message = match connection.result with
+      | ControlFile entry ->
+        let message = match entry.result with
           | None -> "ERROR no request received. Please read the README.\n"
           | Some x -> x in
-        let data = Cstruct.create (String.length message) in
-        Cstruct.blit_from_string message 0 data 0 (String.length message);
-        let len = min count Cstruct.(len data - offset) in
-        let data = Cstruct.sub data offset len in
-        if Cstruct.len data = 0 then connection.result <- None;
-        return { Response.Read.data }
+        read_string count offset message
       | README ->
         let len = min count Cstruct.(len readme - offset) in
         let data = Cstruct.sub readme offset len in
         return { Response.Read.data }
-      | Instance f ->
-        let f' = Instance.to_string f in
-        let data = Cstruct.create (String.length f') in
-        Cstruct.blit_from_string f' 0 data 0 (Cstruct.len data);
-        let len = min count Cstruct.(len data - offset) in
-        let data = Cstruct.sub data offset len in
-        return { Response.Read.data }
+      | Entry { instance = Some i } ->
+        let i' = Instance.to_string i in
+        read_string count offset (i' ^ "\n")
+      | Entry { instance = None } ->
+        let children =
+          dot
+          :: dotdot
+          :: [ make_stat ~is_directory:false ~writable:false ~name:"ctl" ] in
+        read_children count offset children
       | Root ->
         let children =
-          make_stat ~is_directory:true ~writable:false ~name:"."
-          :: make_stat ~is_directory:true ~writable:false ~name:".."
+          dot
+          :: dotdot
           :: make_stat ~is_directory:false ~writable:false ~name:"README"
-          :: make_stat ~is_directory:false ~writable:false ~name:"ctl"
-          :: (Instance.Map.fold (fun _ instance acc ->
-              make_stat ~is_directory:false ~writable:false ~name:(Instance.to_string instance)
+          :: (StringMap.fold (fun name entry acc ->
+              let is_directory = match entry.instance with
+                | None -> true
+                | Some _ -> false in
+              make_stat ~is_directory ~writable:false ~name
               :: acc) !active []) in
-        let buf = Cstruct.create count in
-        let rec write off rest = function
-          | [] -> return off
-          | stat :: xs ->
-            let open Infix in
-            let n = Types.Stat.sizeof stat in
-            if off < offset
-            then write (off + n) rest xs
-            else if Cstruct.len rest < n then return off
-            else
-              Lwt.return (Types.Stat.write stat rest)
-              >>*= fun rest ->
-              write (off + n) rest xs in
-        let open Lwt.Infix in
-        write 0 buf children
-        >>= function
-        | Result.Ok offset' ->
-          let data = Cstruct.sub buf 0 (max 0 (offset' - offset)) in
-          return { Response.Read.data }
-        | Result.Error _ -> Error.badfid
+        read_children count offset children
     with Not_found -> Error.badfid
 
   let stat connection ~cancel { Request.Stat.fid } =
@@ -256,39 +285,47 @@ Immediately read the file contents and check whether it says:
       let stat = match resource with
         | Root -> make_stat ~is_directory:true ~writable:true ~name:""
         | README -> make_stat ~is_directory:false ~writable:false ~name:"README"
-        | ControlFile -> make_stat ~is_directory:false ~writable:true ~name:"ctl"
-        | Instance f -> make_stat ~is_directory:false ~writable:false ~name:(Instance.to_string f) in
+        | ControlFile _ -> make_stat ~is_directory:false ~writable:true ~name:"ctl"
+        | Entry { name; instance = None } -> make_stat ~is_directory:true ~writable:false ~name
+        | Entry { name; instance = Some _ } -> make_stat ~is_directory:false ~writable:false ~name in
       return { Response.Stat.stat }
     with Not_found -> Error.badfid
 
-  let create connection ~cancel _ = Error.eperm
+  let create connection ~cancel { Request.Create.fid; name; perm; mode } =
+    let resource = Types.Fid.Map.find fid !(connection.fids) in
+    match resource with
+    | Root when perm.Types.FileMode.is_directory ->
+      let qid = next_qid [ Types.Qid.Directory ] in
+      active := StringMap.add name { name; instance = None; result = None } !active;
+      return { Response.Create.qid; iounit = 512l }
+    | _ ->
+      Error.eperm
 
   let write connection ~cancel { Request.Write.fid; offset; data } =
     let ok = { Response.Write.count = Int32.of_int @@ Cstruct.len data } in
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with
-      | ControlFile ->
-        if connection.result <> None
+      | ControlFile entry ->
+        if entry.result <> None
         then Error.eperm
         else begin match Instance.of_string @@ Cstruct.to_string data with
-          | Result.Ok f ->
-            let open Lwt.Infix in
-            Ivar.read connection.t.context
-            >>= fun context ->
-            begin Instance.start context f >>= function
-              | Result.Ok f' -> (* local_port is resolved *)
-                let key = Instance.get_key f' in
-                active := Instance.Map.add key f' !active;
-                connection.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
-                return ok
-              | Result.Error (`Msg m) ->
-                connection.result <- Some ("ERROR " ^ m ^ "\n");
-                return ok
-            end
-          | Result.Error (`Msg m) ->
-            connection.result <- Some ("ERROR " ^ m ^ "\n");
-            return ok
+        | Result.Ok f ->
+          let open Lwt.Infix in
+          Ivar.read connection.t.context
+          >>= fun context ->
+          begin Instance.start context f >>= function
+            | Result.Ok f' -> (* local_port is resolved *)
+              entry.instance <- Some f';
+              entry.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
+              return ok
+            | Result.Error (`Msg m) ->
+              entry.result <- Some ("ERROR " ^ m ^ "\n");
+              return ok
+          end
+        | Result.Error (`Msg m) ->
+          entry.result <- Some ("ERROR " ^ m ^ "\n");
+          return ok
         end
       | _ -> Error.eperm
     with Not_found -> Error.badfid
@@ -297,12 +334,15 @@ Immediately read the file contents and check whether it says:
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with
-      | Instance f ->
+      | Entry entry
+      | ControlFile entry ->
         let open Lwt.Infix in
-        Instance.stop f
+        ( match entry.instance with
+          | None -> Lwt.return ()
+          | Some f -> Instance.stop f )
         >>= fun () ->
-        let key = Instance.get_key f in
-        active := Instance.Map.remove key !active;
+        entry.instance <- None;
+        active := StringMap.remove entry.name !active;
         clunk connection ~cancel { Request.Clunk.fid }
       | _ -> Error.eperm
     with Not_found -> Error.badfid
