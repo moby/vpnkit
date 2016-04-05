@@ -83,6 +83,12 @@ module Make(Instance: Instance) = struct
     | Entry of entry
     | Root
 
+  let string_of_resource = function
+    | ControlFile entry -> Printf.sprintf "ControlFile(%s)" entry.name
+    | README -> "README"
+    | Entry entry -> Printf.sprintf "Entry(%s)" entry.name
+    | Root -> "Root"
+
   type connection = {
     t: t;
     fids: resource Types.Fid.Map.t ref;
@@ -298,7 +304,9 @@ The directory will be deleted and replaced with a file of the same name.
       let qid = next_qid [ Types.Qid.Directory ] in
       active := StringMap.add name { name; instance = None; result = None } !active;
       return { Response.Create.qid; iounit = 512l }
-    | _ ->
+    | resource ->
+      Printf.eprintf "Active_list.create failed: resource = %s\n%!"
+        (string_of_resource resource);
       Error.eperm
 
   let write connection ~cancel { Request.Write.fid; offset; data } =
