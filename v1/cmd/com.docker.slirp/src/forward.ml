@@ -59,6 +59,7 @@ type t = {
   remote_ip: Ipaddr.V4.t;
   remote_port: Port.t;
   mutable fd: Lwt_unix.file_descr option;
+  mutable path: string option;
 }
 
 type key = Local.t
@@ -73,26 +74,30 @@ let to_string t = Printf.sprintf "%s:%s:%d" (Local.to_string t.local) (Ipaddr.V4
 
 let description_of_format = "'[local ip:]local port:IPv4 address of remote:remote port' or 'unix:local path:IPv4 address of remote: remote port'"
 
-let start stack t =
+let rm_f path =
+  Lwt.catch
+    (fun () -> Lwt_unix.unlink path)
+    (function
+      | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
+      | e ->
+        Log.err (fun f -> f "failed to remove %s: %s" path (Printexc.to_string e));
+        Lwt.return ()
+    )
+
+let start stack_var t =
   let open Lwt.Infix in
   (match t.local with
     | `Ip (local_ip, local_port) ->
       let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
       let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
-      Lwt.return (addr, fd)
+      Lwt.return (addr, fd, None)
     | `Unix path ->
-      Lwt.catch
-        (fun () -> Lwt_unix.unlink path)
-        (function
-          | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
-          | e ->
-            Log.err (fun f -> f "failed to remove %s: %s" path (Printexc.to_string e));
-            Lwt.return ()
-      ) >>= fun () ->
+      rm_f path
+      >>= fun () ->
       let addr = Lwt_unix.ADDR_UNIX(path) in
       let fd = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
-      Lwt.return (addr, fd)
-  ) >>= fun (addr, fd) ->
+      Lwt.return (addr, fd, Some path)
+  ) >>= fun (addr, fd, path) ->
   Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
   let open Lwt.Infix in
   (* On failure here, we must close the fd *)
@@ -104,9 +109,9 @@ let start stack t =
        | `Ip (local_ip, _), Lwt_unix.ADDR_INET(_, local_port) ->
          let t = { t with local = `Ip(local_ip, local_port) } in
          let t = if t.remote_port = 0 then { t with remote_port = local_port } else t in
-         Lwt.return (Result.Ok (t, fd))
+         Lwt.return (Result.Ok (t, fd, path))
        | `Unix _, Lwt_unix.ADDR_UNIX(_) ->
-         Lwt.return (Result.Ok (t, fd))
+         Lwt.return (Result.Ok (t, fd, path))
        | _ ->
          Lwt.return (Result.Error (`Msg "failed to query local port"))
     ) (fun e ->
@@ -120,9 +125,9 @@ let start stack t =
       )
   >>= function
   | Result.Error e -> Lwt.return (Result.Error e)
-  | Result.Ok (t, fd) ->
+  | Result.Ok (t, fd, path) ->
     (* The `Forward.stop` function is in charge of closing the fd *)
-    let t = { t with fd = Some fd } in
+    let t = { t with fd = Some fd; path } in
     let description = to_string t in
     let rec loop () =
       Lwt.catch (fun () ->
@@ -141,6 +146,8 @@ let start stack t =
         Lwt.return ()
       | Some local_fd ->
         let local = Socket.TCPV4.of_fd ~description local_fd in
+        Active_list.Var.read stack_var
+        >>= fun stack ->
         let proxy () =
           finally (fun () ->
               S.TCPV4.create_connection (S.tcpv4 stack) (t.remote_ip,t.remote_port)
@@ -180,9 +187,16 @@ let start stack t =
 let stop t = match t.fd with
   | None -> Lwt.return ()
   | Some fd ->
+    let open Lwt.Infix in
     t.fd <- None;
     Log.info (fun f -> f "%s: closing listening socket" (to_string t));
     Lwt_unix.close fd
+    >>= fun () ->
+    match t.path with
+    | None -> Lwt.return ()
+    | Some path ->
+      t.path <- None;
+      rm_f path
 
 let of_string x =
   match (
@@ -220,7 +234,7 @@ let of_string x =
   ) with
   | Result.Error x -> Result.Error x
   | Result.Ok (local, Some remote_ip, Result.Ok remote_port) ->
-    Result.Ok { local; remote_ip; remote_port; fd = None }
+    Result.Ok { local; remote_ip; remote_port; fd = None; path = None }
   | Result.Ok (_, None, _) ->
     Result.Error (`Msg "Failed to parse remote IPv4 address")
   | Result.Ok (_, _, Result.Error (`Msg m)) ->

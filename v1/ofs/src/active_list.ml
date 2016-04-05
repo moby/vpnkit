@@ -5,25 +5,7 @@ let finally f g =
   let open Lwt.Infix in
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
 
-module type Instance = sig
-  type t
-  val to_string: t -> string
-  val of_string: string -> (t, [ `Msg of string ]) Result.result
-
-  val description_of_format: string
-
-  type context
-  (** The context in which a [t] is [start]ed, for example a TCP/IP stack *)
-
-  val start: context -> t -> (t, [ `Msg of string ]) Result.result Lwt.t
-
-  val stop: t -> unit Lwt.t
-
-  type key
-  val get_key: t -> key
-end
-
-module Ivar = struct
+module Var = struct
   type 'a t = {
     mutable thing: 'a option;
     c: unit Lwt_condition.t;
@@ -45,6 +27,24 @@ module Ivar = struct
     loop ()
 end
 
+module type Instance = sig
+  type t
+  val to_string: t -> string
+  val of_string: string -> (t, [ `Msg of string ]) Result.result
+
+  val description_of_format: string
+
+  type context
+  (** The context in which a [t] is [start]ed, for example a TCP/IP stack *)
+
+  val start: context Var.t -> t -> (t, [ `Msg of string ]) Result.result Lwt.t
+
+  val stop: t -> unit Lwt.t
+
+  type key
+  val get_key: t -> key
+end
+
 module Transaction = struct
   type t = {
     name: string; (* directory name *)
@@ -59,14 +59,14 @@ module Make(Instance: Instance) = struct
   open Protocol_9p
 
   type t = {
-    context: Instance.context Ivar.t;
+    mutable context: Instance.context Var.t;
   }
 
   let make () =
-    let context = Ivar.create () in
+    let context = Var.create () in
     { context }
 
-  let set_context { context } x = Ivar.fill context x
+  let set_context { context } x = Var.fill context x
 
   (* We manage a list of named entries *)
   type entry = {
@@ -312,9 +312,7 @@ The directory will be deleted and replaced with a file of the same name.
         else begin match Instance.of_string @@ Cstruct.to_string data with
         | Result.Ok f ->
           let open Lwt.Infix in
-          Ivar.read connection.t.context
-          >>= fun context ->
-          begin Instance.start context f >>= function
+          begin Instance.start connection.t.context f >>= function
             | Result.Ok f' -> (* local_port is resolved *)
               entry.instance <- Some f';
               entry.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
