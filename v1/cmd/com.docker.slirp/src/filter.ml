@@ -19,7 +19,7 @@ open Sexplib.Std
 
 let src =
   let src = Logs.Src.create "ppp" ~doc:"point-to-point network link" in
-  Logs.Src.set_level src (Some Logs.Info);
+  Logs.Src.set_level src (Some Logs.Debug);
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)

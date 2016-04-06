@@ -19,7 +19,7 @@ open Dns
 
 let src =
   let src = Logs.Src.create "dns" ~doc:"Resolve DNS queries on the host" in
-  Logs.Src.set_level src (Some Logs.Info);
+  Logs.Src.set_level src (Some Logs.Debug);
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
