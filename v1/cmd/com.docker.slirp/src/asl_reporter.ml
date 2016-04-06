@@ -14,6 +14,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  *)
+let src =
+  let src = Logs.Src.create "logging" ~doc:"logging control" in
+  Logs.Src.set_level src (Some Logs.Debug);
+  src
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
 let install () =
   let home = try Unix.getenv "HOME" with Not_found -> failwith "No $HOME environment variable defined" in
   let (/) = Filename.concat in
@@ -38,4 +45,11 @@ let install () =
   if not (Asl.Client.add_output_file client fd msg_fmt time_fmt `Debug) then begin
     failwith (Printf.sprintf "Failed to start logging to %s" file)
   end;
-  Logs.set_reporter (Log_asl.reporter ~client ())
+  Logs.set_reporter (Log_asl.reporter ~client ());
+  (* Replace stdout and stderr with /dev/null to avoid 2 overlapping logging
+     streams (possibly leading to corruption if the App writes to the same
+     file) *)
+  let dev_null = Unix.openfile "/dev/null" [ Unix.O_WRONLY ] 0 in
+  Unix.dup2 dev_null Unix.stdout;
+  Unix.dup2 dev_null Unix.stderr;
+  Log.debug (fun f -> f "stdout and stderr have been redirected to /dev/null")
