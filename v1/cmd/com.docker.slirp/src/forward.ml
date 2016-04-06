@@ -142,7 +142,7 @@ let start stack_var t =
         )
       >>= function
       | None ->
-        Log.info (fun f -> f "%s: listening thread shutting down" description);
+        Log.debug (fun f -> f "%s: listening thread shutting down" description);
         Lwt.return ()
       | Some local_fd ->
         let local = Socket.TCPV4.of_fd ~description local_fd in
@@ -158,14 +158,14 @@ let start stack_var t =
               | `Ok remote ->
                 finally (fun () ->
                   (* proxy between local and remote *)
-                  Log.info (fun f -> f "%s: connected" description);
+                  Log.debug (fun f -> f "%s: connected" description);
                   Mirage_flow.proxy (module Clock) (module S.TCPV4_half_close) remote (module Socket.TCPV4) local ()
                   >>= function
                   | `Error (`Msg m) ->
                     Log.err (fun f -> f "%s proxy failed with %s" description m);
                     Lwt.return ()
                   | `Ok (l_stats, r_stats) ->
-                    Log.info (fun f ->
+                    Log.debug (fun f ->
                         f "%s completed: l2r = %s; r2l = %s" description
                           (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
                       );
@@ -189,7 +189,7 @@ let stop t = match t.fd with
   | Some fd ->
     let open Lwt.Infix in
     t.fd <- None;
-    Log.info (fun f -> f "%s: closing listening socket" (to_string t));
+    Log.debug (fun f -> f "%s: closing listening socket" (to_string t));
     Lwt_unix.close fd
     >>= fun () ->
     match t.path with

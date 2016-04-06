@@ -71,16 +71,16 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
       >>= function
        | `Error (`Msg m) -> failwith m
        | `Ok x ->
-        Log.info (fun f -> f "accepted vmnet connection");
+        Log.debug (fun f -> f "accepted vmnet connection");
         let rec monitor_pcap_settings pcap_settings =
           Active_config.tl pcap_settings
           >>= fun pcap_settings ->
           ( match Active_config.hd pcap_settings with
             | None ->
-              Log.info (fun f -> f "Disabling any active packet capture");
+              Log.debug (fun f -> f "Disabling any active packet capture");
               Vmnet.stop_capture x
             | Some (filename, size_limit) ->
-              Log.info (fun f -> f "Capturing packets to %s %s" filename (match size_limit with None -> "with no limit" | Some x -> Printf.sprintf "limited to %Ld bytes" x));
+              Log.debug (fun f -> f "Capturing packets to %s %s" filename (match size_limit with None -> "with no limit" | Some x -> Printf.sprintf "limited to %Ld bytes" x));
               Vmnet.start_capture x ?size_limit filename )
           >>= fun () ->
           monitor_pcap_settings pcap_settings in
@@ -107,7 +107,7 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
                       let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
                       (* We handle DNS on port 53 ourselves *)
                       if dst_port <> 53 then begin
-                        Log.info (fun f -> f "UDP %s:%d -> %s:%d len %d"
+                        Log.debug (fun f -> f "UDP %s:%d -> %s:%d len %d"
                                      (Ipaddr.V4.to_string src) src_port
                                      (Ipaddr.V4.to_string dst) dst_port
                                      length
@@ -125,7 +125,7 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
                   Printf.sprintf "TCP %s:%d > %s:%d"
                     (Ipaddr.V4.to_string src_ip) src_port
                     (Ipaddr.V4.to_string dst_ip) dst_port in
-                Log.info (fun f -> f "%s connecting" description);
+                Log.debug (fun f -> f "%s connecting" description);
 
                 Socket.TCPV4.connect_v4 src_ip src_port
                 >>= function
@@ -136,14 +136,14 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
                   Lwt.return (`Accept (fun local ->
                       finally (fun () ->
                           (* proxy between local and remote *)
-                          Log.info (fun f -> f "%s connected" description);
+                          Log.debug (fun f -> f "%s connected" description);
                           Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.TCPV4) remote ()
                           >>= function
                           | `Error (`Msg m) ->
                             Log.err (fun f -> f "%s proxy failed with %s" description m);
                             return ()
                           | `Ok (l_stats, r_stats) ->
-                            Log.info (fun f ->
+                            Log.debug (fun f ->
                                 f "%s closing: l2r = %s; r2l = %s" description
                                   (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
                               );
@@ -151,7 +151,7 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
                         ) (fun () ->
                           Socket.TCPV4.close remote
                           >>= fun () ->
-                          Log.info (fun f -> f "%s Socket.TCPV4.close" description);
+                          Log.debug (fun f -> f "%s Socket.TCPV4.close" description);
                           Lwt.return ()
                         )
                     ))
@@ -228,7 +228,7 @@ let main_t socket_path slirp_port_control_path vmnet_port_control_path db_path =
   let peer_ips_path = driver @ [ "slirp"; "docker" ] in
   let parse_ipv4 default x = match Ipaddr.V4.of_string @@ String.trim x with
     | None ->
-      Log.info (fun f -> f "Failed to parse IPv4 address '%s', using default of %s" x (Ipaddr.V4.to_string default));
+      Log.err (fun f -> f "Failed to parse IPv4 address '%s', using default of %s" x (Ipaddr.V4.to_string default));
       Lwt.return default
     | Some x -> Lwt.return x in
   let default_peer = "192.168.64.2" in

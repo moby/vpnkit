@@ -51,7 +51,7 @@ module UDPV4 = struct
       let now = Unix.gettimeofday () in
       Hashtbl.iter (fun k flow ->
           if now -. flow.last_use > 60. then begin
-            Log.info (fun f -> f "Socket.UDPV4 %s: expiring UDP NAT rule" flow.description);
+            Log.debug (fun f -> f "Socket.UDPV4 %s: expiring UDP NAT rule" flow.description);
             Lwt.async (fun () -> Lwt_unix.close flow.fd);
             Hashtbl.remove table k
           end
@@ -67,10 +67,10 @@ module UDPV4 = struct
       end else begin
        let description = Ipaddr.V4.to_string dst ^ ":" ^ (string_of_int dst_port) in
        if Ipaddr.V4.compare dst broadcast = 0 then begin
-         Log.info (fun f -> f "Socket.UDPV4.input %s: ignoring broadcast packet" description);
+         Log.debug (fun f -> f "Socket.UDPV4.input %s: ignoring broadcast packet" description);
          Lwt.return None
        end else begin
-         Log.info (fun f -> f "Socket.UDPV4.input %s: creating UDP NAT rule" description);
+         Log.debug (fun f -> f "Socket.UDPV4.input %s: creating UDP NAT rule" description);
          let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
          let last_use = Unix.gettimeofday () in
          let flow = { description; fd; last_use; reply} in
@@ -89,7 +89,7 @@ module UDPV4 = struct
              ) (function
                  | Unix.Unix_error(Unix.EBADF, _, _) ->
                    (* fd has been closed by the GC *)
-                   Log.info (fun f -> f "Socket.UDPV4.input %s: shutting down listening thread" description);
+                   Log.debug (fun f -> f "Socket.UDPV4.input %s: shutting down listening thread" description);
                    Lwt.return false
                  | e ->
                    Log.err (fun f -> f "Socket.UDPV4.input %s: caught unexpected exception %s" description (Printexc.to_string e));
@@ -150,7 +150,7 @@ module TCPV4 = struct
     let description = Ipaddr.V4.to_string ip ^ ":" ^ (string_of_int port) in
     Lwt.catch
       (fun () ->
-         Log.info (fun f -> f "Socket.TCPV4.connect_v4 %s: connecting" description);
+         Log.debug (fun f -> f "Socket.TCPV4.connect_v4 %s: connecting" description);
          Lwt_unix.connect fd (Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.V4.to_string ip, port))
          >>= fun () ->
          Lwt.return (`Ok (of_fd ~read_buffer_size ~description fd))

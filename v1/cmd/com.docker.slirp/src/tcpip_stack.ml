@@ -111,7 +111,7 @@ module Dhcp = struct
         Lwt.return ()
       | Reply reply ->
         let open Dhcp_wire in
-        Log.info (fun f -> f "%s from %s" (op_to_string pkt.op) (Macaddr.to_string (pkt.srcmac)));
+        Log.debug (fun f -> f "%s from %s" (op_to_string pkt.op) (Macaddr.to_string (pkt.srcmac)));
         Netif.write net (Dhcp_wire.buf_of_pkt reply)
         >>= fun () ->
         let domain = List.fold_left (fun acc x -> match x with
@@ -123,7 +123,7 @@ module Dhcp = struct
         let routers = List.fold_left (fun acc x -> match x with
           | Routers ys -> String.concat ", " (List.map Ipaddr.V4.to_string ys)
           | _ -> acc) "none" reply.options in
-        Log.info (fun f -> f "%s to %s yiddr %s siddr %s dns %s router %s domain %s"
+        Log.debug (fun f -> f "%s to %s yiddr %s siddr %s dns %s router %s domain %s"
           (op_to_string reply.op) (Macaddr.to_string (reply.dstmac))
           (Ipaddr.V4.to_string reply.yiaddr) (Ipaddr.V4.to_string reply.siaddr)
           dns routers domain

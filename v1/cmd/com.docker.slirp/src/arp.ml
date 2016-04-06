@@ -68,13 +68,13 @@ module Make(Ethif: V1_LWT.ETHIF) = struct
     Lwt.return_unit
   let set_ips t ips = Lwt_list.iter_s (add_ip t) ips
   let remove_ip t ip =
-    Log.info (fun f -> f "ARP ignoring request to remove IP %s" (Ipaddr.V4.to_string ip));
+    Log.err (fun f -> f "ARP ignoring request to remove IP %s" (Ipaddr.V4.to_string ip));
     Lwt.return_unit
   let query t ip =
     if List.mem_assoc ip t.table
     then Lwt.return (`Ok (List.assoc ip t.table))
     else begin
-      Log.err (fun f -> f "ARP table has no entry for %s" (Ipaddr.V4.to_string ip));
+      Log.warn (fun f -> f "ARP table has no entry for %s" (Ipaddr.V4.to_string ip));
       Lwt.return `Timeout
     end
 
@@ -92,7 +92,7 @@ module Make(Ethif: V1_LWT.ETHIF) = struct
     |1 -> (* Request *)
       let req_ipv4 = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
       if List.mem_assoc req_ipv4 t.table then begin
-        Log.info (fun f -> f "ARP responding to: who-has %s?" (Ipaddr.V4.to_string req_ipv4));
+        Log.debug (fun f -> f "ARP responding to: who-has %s?" (Ipaddr.V4.to_string req_ipv4));
         let sha = List.assoc req_ipv4 t.table in
         let tha = Macaddr.of_bytes_exn (copy_arp_sha frame) in
         let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in (* the requested address *)
@@ -101,10 +101,10 @@ module Make(Ethif: V1_LWT.ETHIF) = struct
       end else Lwt.return_unit
     |2 -> (* Reply *)
       let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in (* the requested address *)
-      Log.info (fun f -> f "ARP ignoring reply %s" (Ipaddr.V4.to_string spa));
+      Log.debug (fun f -> f "ARP ignoring reply %s" (Ipaddr.V4.to_string spa));
       Lwt.return_unit
     |n ->
-      Log.info (fun f -> f "ARP: Unknown message %d ignored" n);
+      Log.debug (fun f -> f "ARP: Unknown message %d ignored" n);
       Lwt.return_unit
 
   and output t arp =
