@@ -92,7 +92,7 @@ let input s ~src ~dst ~src_port buf =
       Log.err (fun f -> f "Failed to parse DNS packet");
       Lwt.return_none
     | Some request ->
-      Log.info (fun f -> f "DNS %s:%d -> %s %s" src_str src_port dst_str (Dns.Packet.to_string request));
+      Log.debug (fun f -> f "DNS %s:%d -> %s %s" src_str src_port dst_str (Dns.Packet.to_string request));
       begin match request.Dns.Packet.questions with
       | [] -> Lwt.return_none (* no questions in packet *)
       | [q] ->
@@ -141,7 +141,7 @@ let input s ~src ~dst ~src_port buf =
       (fun () ->
         Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) copy
         >>= fun () ->
-        Log.info (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (Dns.Packet.to_string response));
+        Log.debug (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (Dns.Packet.to_string response));
         Lwt.return ()
       );
     Lwt.return ()
