@@ -192,8 +192,10 @@ let restart_on_change name to_string values =
   Log.info (fun f -> f "%s changed to %s in the database: restarting" name (to_string v));
   exit 1
 
-let main_t socket_path slirp_port_control_path vmnet_port_control_path db_path =
-  Asl_reporter.install ();
+let main_t socket_path slirp_port_control_path vmnet_port_control_path db_path debug =
+  if debug
+  then Logs.set_reporter (Logs_fmt.reporter ())
+  else Asl_reporter.install ();
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   Printexc.record_backtrace true;
@@ -254,7 +256,7 @@ let main_t socket_path slirp_port_control_path vmnet_port_control_path db_path =
     start_native vmnet_port_control_path;
   ]
 
-let main socket slirp_control vmnet_control db = Lwt_main.run @@ main_t socket slirp_control vmnet_control db
+let main socket slirp_control vmnet_control db debug = Lwt_main.run @@ main_t socket slirp_control vmnet_control db debug
 
 open Cmdliner
 
@@ -270,6 +272,10 @@ let vmnet_port_control_path =
 let db_path =
   Arg.(value & opt string "/var/tmp/com.docker.db.socket" & info [ "db" ] ~docv:"DB")
 
+let debug =
+  let doc = "Verbose debug logging to stdout" in
+  Arg.(value & flag & info [ "debug" ] ~doc)
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -277,7 +283,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ slirp_port_control_path $ vmnet_port_control_path $ db_path),
+  Term.(pure main $ socket $ slirp_port_control_path $ vmnet_port_control_path $ db_path $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =
