@@ -193,9 +193,7 @@ let restart_on_change name to_string values =
   exit 1
 
 let main_t socket_path slirp_port_control_path vmnet_port_control_path db_path debug =
-  if debug
-  then Logs.set_reporter (Logs_fmt.reporter ())
-  else Asl_reporter.install ();
+  Osx_reporter.install ~stdout:debug;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   Printexc.record_backtrace true;
