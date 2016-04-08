@@ -39,6 +39,30 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
+let startswith prefix x =
+  let prefix' = String.length prefix in
+  let x' = String.length x in
+  prefix' <= x' && (String.sub x 0 prefix' = prefix)
+
+let listen path =
+  if startswith "fd:" path then begin
+    let i = String.sub path 3 (String.length path - 3) in
+    let x = int_of_string i in
+    let fd : Unix.file_descr = Obj.magic x in
+    Lwt.return (Lwt_unix.of_unix_file_descr fd)
+  end else begin
+    Lwt.catch
+      (fun () -> Lwt_unix.unlink path)
+      (function
+        | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
+        | e -> fail e)
+    >>= fun () ->
+    let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
+    Lwt_unix.bind s (Lwt_unix.ADDR_UNIX path);
+    Lwt_unix.listen s 5;
+    Lwt.return s
+  end
+
 let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
   Log.info (fun f -> f "Starting slirp server socket_path:%s port_control_path:%s pcap_settings:%s peer_ip:%s local_ip:%s"
     socket_path port_control_path (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
@@ -55,15 +79,8 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
   Lwt.async (fun () -> Server.serve_forever server);
 
   Log.info (fun f -> f "Starting slirp network stack on %s" socket_path);
-  Lwt.catch
-    (fun () -> Lwt_unix.unlink socket_path)
-    (function
-      | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
-      | e -> fail e)
-  >>= fun () ->
-  let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
-  Lwt_unix.bind s (Lwt_unix.ADDR_UNIX socket_path);
-  Lwt_unix.listen s 5;
+  listen socket_path
+  >>= fun s ->
     let rec loop () =
       Lwt_unix.accept s
       >>= fun (client, _) ->
