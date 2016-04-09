@@ -12,7 +12,7 @@ depends: [
   "ipaddr"
   "lwt"
   "ofs"
-  "osx-logs"
+  "osx-daemon"
   "tcpip" { >= "3.0.0" }
   "dns"
   "pcap-format" { >= "0.4.0" }
