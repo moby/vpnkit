@@ -73,9 +73,9 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
   let module Ports = Active_list.Make(Forward.Make(Tcpip_stack)) in
   let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
   let fs = Ports.make () in
-  Server.listen fs "unix" port_control_path
-  >>= fun r ->
-  let server = or_failwith r in
+  listen port_control_path
+  >>= fun port_s ->
+  let server = Server.of_fd fs port_s in
   Lwt.async (fun () -> Server.serve_forever server);
 
   Log.info (fun f -> f "Starting slirp network stack on %s" socket_path);
@@ -195,9 +195,9 @@ let start_native port_control_path =
     exit 1
   | `Ok s ->
   Ports.set_context fs s;
-  Server.listen fs "unix" port_control_path
-  >>= fun r ->
-  let server = or_failwith r in
+  listen port_control_path
+  >>= fun port_s ->
+  let server = Server.of_fd fs port_s in
   Server.serve_forever server
   >>= fun r ->
   Lwt.return (or_failwith r)
