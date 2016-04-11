@@ -1,5 +1,10 @@
 
-open Utils
+let src =
+  let src = Logs.Src.create "ofs" ~doc:"active_list" in
+  Logs.Src.set_level src (Some Logs.Info);
+  src
+
+module Log = (val Logs.src_log src : Logs.LOG)
 
 let finally f g =
   let open Lwt.Infix in
@@ -178,9 +183,34 @@ The directory will be deleted and replaced with a file of the same name.
     | Failure "ENOENT" -> Error.enoent
     | Failure "BADWALK" -> Error.badwalk
 
+  let free_resource = function
+    | ControlFile entry ->
+      Log.debug (fun f -> f "freeing entry %s" entry.name);
+      let open Lwt.Infix in
+      ( match entry.instance with
+        | None -> Lwt.return ()
+        | Some f -> Instance.stop f )
+      >>= fun () ->
+      entry.instance <- None;
+      active := StringMap.remove entry.name !active;
+      Lwt.return ()
+    | _ ->
+      Lwt.return ()
+
   let clunk connection ~cancel { Request.Clunk.fid } =
+    let open Lwt.Infix in
+    ( if Types.Fid.Map.mem fid !(connection.fids) then begin
+        let resource = Types.Fid.Map.find fid !(connection.fids) in
+        free_resource resource
+      end else Lwt.return () )
+    >>= fun () ->
     connection.fids := Types.Fid.Map.remove fid !(connection.fids);
     return ()
+
+  let disconnect connection info =
+    Log.debug (fun f -> f "disconnecting 9P client");
+    let resources = Types.Fid.Map.fold (fun _ resource acc -> resource :: acc) !(connection.fids) [] in
+    Lwt_list.iter_s free_resource resources
 
   let open_ connection ~cancel { Request.Open.fid; mode } =
     try
@@ -342,13 +372,6 @@ The directory will be deleted and replaced with a file of the same name.
       match resource with
       | Entry entry
       | ControlFile entry ->
-        let open Lwt.Infix in
-        ( match entry.instance with
-          | None -> Lwt.return ()
-          | Some f -> Instance.stop f )
-        >>= fun () ->
-        entry.instance <- None;
-        active := StringMap.remove entry.name !active;
         clunk connection ~cancel { Request.Clunk.fid }
       | _ -> Error.eperm
     with Not_found -> Error.badfid
