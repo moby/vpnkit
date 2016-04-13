@@ -84,26 +84,77 @@ let rm_f path =
         Lwt.return ()
     )
 
+let finally f g =
+  let open Lwt.Infix in
+  Lwt.catch (fun () ->
+    f ()
+    >>= fun r ->
+    g ()
+    >>= fun () ->
+    Lwt.return r
+  ) (fun e ->
+    g ()
+    >>= fun () ->
+    Lwt.fail e
+  )
+
+let bind local =
+  let open Lwt.Infix in
+  match local with
+  | `Unix path ->
+    rm_f path
+    >>= fun () ->
+    let fd = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
+    Lwt.catch
+      (fun () -> Lwt_unix.bind fd (Lwt_unix.ADDR_UNIX(path)); Lwt.return ())
+      (fun e -> Lwt_unix.close fd >>= fun () -> Lwt.fail e)
+    >>= fun () ->
+    Lwt.return (Result.Ok fd)
+  | `Ip (local_ip, local_port) when local_port < 1024 ->
+    (* TODO: add a policy switch here *)
+    let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
+    finally
+      (fun () ->
+        let open Lwt.Infix in
+        Lwt_unix.connect s (Unix.ADDR_UNIX "/var/tmp/com.docker.vmnetd.socket")
+        >>= fun () ->
+        Vmnet.Client.of_fd s
+        >>= fun r ->
+        begin match r with
+        | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
+        | `Ok c ->
+          Vmnet.Client.bind_ipv4 c (local_ip, local_port)
+          >>= fun r ->
+          begin match r with
+          | `Ok fd ->
+            Log.debug (fun f -> f "Received fd successfully");
+            Lwt.return (Result.Ok fd)
+          | `Error (`Msg x) ->
+            Log.err (fun f -> f "Error binding to %s:%d: %s" (Ipaddr.V4.to_string local_ip) local_port x);
+            Lwt.return (Result.Error (`Msg x))
+          end
+        end
+      ) (fun () -> Lwt_unix.close s)
+  | `Ip (local_ip, local_port) ->
+    let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
+    let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
+    Lwt.catch
+      (fun () -> Lwt_unix.bind fd addr; Lwt.return ())
+      (fun e -> Lwt_unix.close fd >>= fun () -> Lwt.fail e)
+    >>= fun () ->
+    Lwt.return (Result.Ok fd)
+
 let start stack_var t =
   let open Lwt.Infix in
-  (match t.local with
-    | `Ip (local_ip, local_port) ->
-      let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
-      let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
-      Lwt.return (addr, fd, None)
-    | `Unix path ->
-      rm_f path
-      >>= fun () ->
-      let addr = Lwt_unix.ADDR_UNIX(path) in
-      let fd = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
-      Lwt.return (addr, fd, Some path)
-  ) >>= fun (addr, fd, path) ->
+  let path = match t.local with `Unix path -> Some path | _ -> None in
+  bind t.local
+  >>= function
+  | Result.Error e -> Lwt.return (Result.Error e)
+  | Result.Ok fd ->
   Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
-  let open Lwt.Infix in
   (* On failure here, we must close the fd *)
   Lwt.catch
     (fun () ->
-       Lwt_unix.bind fd addr;
        Lwt_unix.listen fd 5;
        match t.local, Lwt_unix.getsockname fd with
        | `Ip (local_ip, _), Lwt_unix.ADDR_INET(_, local_port) ->
