@@ -11,6 +11,15 @@ let finally f g =
   let open Lwt.Infix in
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
 
+let allowed_addresses = ref None
+
+let set_allowed_addresses ips =
+  Log.info (fun f -> f "allowing binds to %s" (match ips with
+    | None -> "any IP addresses"
+    | Some ips -> String.concat ", " (List.map Ipaddr.to_string ips)
+  ));
+  allowed_addresses := ips
+
 module Result = struct
   include Result
   let return x = Ok x
@@ -98,6 +107,17 @@ let finally f g =
     Lwt.fail e
   )
 
+let check_bind_allowed ip = match !allowed_addresses with
+  | None -> Lwt.return () (* no restriction *)
+  | Some ips ->
+    let match_ipv4 = function
+      | Ipaddr.V6 _ -> false
+      | Ipaddr.V4 x when x = Ipaddr.V4.any -> true
+      | Ipaddr.V4 x -> x = ip in
+    if List.fold_left (||) false (List.map match_ipv4 ips)
+    then Lwt.return ()
+    else Lwt.fail (Unix.Unix_error(Unix.EPERM, "bind", ""))
+
 let bind local =
   let open Lwt.Infix in
   match local with
@@ -111,7 +131,8 @@ let bind local =
     >>= fun () ->
     Lwt.return (Result.Ok fd)
   | `Ip (local_ip, local_port) when local_port < 1024 ->
-    (* TODO: add a policy switch here *)
+    check_bind_allowed local_ip
+    >>= fun () ->
     let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
     finally
       (fun () ->
@@ -136,6 +157,8 @@ let bind local =
         end
       ) (fun () -> Lwt_unix.close s)
   | `Ip (local_ip, local_port) ->
+    check_bind_allowed local_ip
+    >>= fun () ->
     let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
     Lwt.catch

@@ -218,6 +218,33 @@ let main_t socket_path slirp_port_control_path vmnet_port_control_path db_path d
   Active_config.map parse_pcap string_pcap_settings
   >>= fun pcap_settings ->
 
+  let bind_path = driver @ [ "allowed-bind-address" ] in
+  Active_config.string_option config bind_path
+  >>= fun string_allowed_bind_address ->
+  let parse_bind_address = function
+    | None -> Lwt.return None
+    | Some x ->
+      let strings = List.map String.trim @@ Stringext.split x ~on:',' in
+      let ip_opts = List.map
+        (fun x ->
+          try
+            Some (Ipaddr.of_string_exn x)
+          with _ ->
+            Log.err (fun f -> f "Failed to parse IP address in allowed-bind-address: %s" x);
+            None
+        ) strings in
+      let ips = List.fold_left (fun acc x -> match x with None -> acc | Some x -> x :: acc) [] ip_opts in
+      Lwt.return (Some ips) in
+  Active_config.map parse_bind_address string_allowed_bind_address
+  >>= fun allowed_bind_address ->
+
+  let rec monitor_allowed_bind_settings allowed_bind_address =
+    Active_config.tl allowed_bind_address
+    >>= fun allowed_bind_address ->
+    Forward.set_allowed_addresses (Active_config.hd allowed_bind_address);
+    monitor_allowed_bind_settings allowed_bind_address in
+  Lwt.async (fun () -> Utils.log_exception_continue "monitor_allowed_bind_settings" (fun () -> monitor_allowed_bind_settings allowed_bind_address));
+
   let peer_ips_path = driver @ [ "slirp"; "docker" ] in
   let parse_ipv4 default x = match Ipaddr.V4.of_string @@ String.trim x with
     | None ->
