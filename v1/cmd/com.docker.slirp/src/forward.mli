@@ -1,5 +1,5 @@
 
-module Make(S: Network_stack.S) : Active_list.Instance
-  with type context = S.t
+include Active_list.Instance
+  with type context = string
 
 val set_allowed_addresses: Ipaddr.t list option -> unit

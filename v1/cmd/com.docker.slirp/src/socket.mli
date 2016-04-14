@@ -17,7 +17,7 @@
 
 (** User-space socket connections *)
 
-module UDPV4: sig
+module Datagram: sig
 
   type reply = Cstruct.t -> unit Lwt.t
 
@@ -25,7 +25,7 @@ module UDPV4: sig
 
 end
 
-module TCPV4: sig
+module Stream: sig
   include Mirage_flow_s.SHUTDOWNABLE
 
   val connect_v4: ?read_buffer_size:int -> Ipaddr.V4.t -> int

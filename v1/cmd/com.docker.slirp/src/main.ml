@@ -39,16 +39,17 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
-let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
-  Log.info (fun f -> f "Starting slirp server socket_path:%s port_control_path:%s pcap_settings:%s peer_ip:%s local_ip:%s"
-    socket_path port_control_path (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
+let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip local_ip =
+  Log.info (fun f -> f "Starting slirp server socket_path:%s port_control_path:%s vsock_path:%s pcap_settings:%s peer_ip:%s local_ip:%s"
+    socket_path port_control_path vsock_path (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
   );
   let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in
 
   (* Start the 9P port forwarding server *)
-  let module Ports = Active_list.Make(Forward.Make(Tcpip_stack)) in
+  let module Ports = Active_list.Make(Forward) in
   let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
   let fs = Ports.make () in
+  Ports.set_context fs vsock_path;
   Osx_socket.listen port_control_path
   >>= fun port_s ->
   let server = Server.of_fd fs port_s in
@@ -83,7 +84,6 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
         >>= function
         | `Error (`Msg m) -> failwith m
         | `Ok s ->
-            Ports.set_context fs s;
             Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input s);
             Vmnet.add_listener x (
               fun buf ->
@@ -106,7 +106,7 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
                                      length
                                  );
                         let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
-                        Socket.UDPV4.input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload
+                        Socket.Datagram.input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload
                       end else Lwt.return_unit
                     | _ -> Lwt.return_unit
                   end
@@ -120,7 +120,7 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
                     (Ipaddr.V4.to_string dst_ip) dst_port in
                 Log.debug (fun f -> f "%s connecting" description);
 
-                Socket.TCPV4.connect_v4 src_ip src_port
+                Socket.Stream.connect_v4 src_ip src_port
                 >>= function
                 | `Error (`Msg m) ->
                   Log.info (fun f -> f "%s rejected: %s" description m);
@@ -130,7 +130,7 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
                       finally (fun () ->
                           (* proxy between local and remote *)
                           Log.debug (fun f -> f "%s connected" description);
-                          Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.TCPV4) remote ()
+                          Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.Stream) remote ()
                           >>= function
                           | `Error (`Msg m) ->
                             Log.err (fun f -> f "%s proxy failed with %s" description m);
@@ -142,9 +142,9 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
                               );
                             return ()
                         ) (fun () ->
-                          Socket.TCPV4.close remote
+                          Socket.Stream.close remote
                           >>= fun () ->
-                          Log.debug (fun f -> f "%s Socket.TCPV4.close" description);
+                          Log.debug (fun f -> f "%s Socket.Stream.close" description);
                           Lwt.return ()
                         )
                     ))
@@ -158,10 +158,10 @@ let start_slirp socket_path port_control_path pcap_settings peer_ip local_ip =
     >>= fun r ->
     Lwt.return (or_failwith r)
 
-let start_native port_control_path =
-  Log.info (fun f -> f "starting in native mode port_control_path:%s" port_control_path);
+let start_native port_control_path vsock_path =
+  Log.info (fun f -> f "starting in native mode port_control_path:%s vsock_path:%s" port_control_path vsock_path);
   (* Start the 9P port forwarding server *)
-  let module Ports = Active_list.Make(Forward.Make(Socket_stack)) in
+  let module Ports = Active_list.Make(Forward) in
   let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
   let fs = Ports.make () in
   Socket_stack.connect ()
@@ -170,7 +170,7 @@ let start_native port_control_path =
     Log.err (fun f -> f "Failed to create a socket stack: %s" m);
     exit 1
   | `Ok s ->
-  Ports.set_context fs s;
+  Ports.set_context fs vsock_path;
   Osx_socket.listen port_control_path
   >>= fun port_s ->
   let server = Server.of_fd fs port_s in
@@ -185,7 +185,7 @@ let restart_on_change name to_string values =
   Log.info (fun f -> f "%s changed to %s in the database: restarting" name (to_string v));
   exit 1
 
-let main_t socket_path slirp_port_control_path vmnet_port_control_path db_path debug =
+let main_t socket_path slirp_port_control_path vmnet_port_control_path vsock_path db_path debug =
   Osx_reporter.install ~stdout:debug;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
@@ -270,11 +270,11 @@ let main_t socket_path slirp_port_control_path vmnet_port_control_path db_path d
   let local_ip = Active_config.hd host_ips in
 
   Lwt.join [
-    start_slirp socket_path slirp_port_control_path pcap_settings peer_ip local_ip;
-    start_native vmnet_port_control_path;
+    start_slirp socket_path slirp_port_control_path vsock_path pcap_settings peer_ip local_ip;
+    start_native vmnet_port_control_path vsock_path;
   ]
 
-let main socket slirp_control vmnet_control db debug = Lwt_main.run @@ main_t socket slirp_control vmnet_control db debug
+let main socket slirp_control vmnet_control vsock_path db debug = Lwt_main.run @@ main_t socket slirp_control vmnet_control vsock_path db debug
 
 open Cmdliner
 
@@ -286,6 +286,9 @@ let slirp_port_control_path =
 
 let vmnet_port_control_path =
   Arg.(value & opt string "/var/tmp/com.docker.vmnet.port.socket" & info [ "vmnet-port-control" ] ~docv:"PORT")
+
+let vsock_path =
+  Arg.(value & opt string "/var/tmp/com.docker.vsock/connect" & info [ "vsock-path" ] ~docv:"VSOCK")
 
 let db_path =
   Arg.(value & opt string "/var/tmp/com.docker.db.socket" & info [ "db" ] ~docv:"DB")
@@ -301,7 +304,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ slirp_port_control_path $ vmnet_port_control_path $ db_path $ debug),
+  Term.(pure main $ socket $ slirp_port_control_path $ vmnet_port_control_path $ vsock_path $ db_path $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =

@@ -44,6 +44,16 @@ module Port = struct
     | _ -> Result.errorf "port is not an integer: '%s'" x
 end
 
+module VsockPort = struct
+  type t = int32
+
+  let of_string x =
+    try
+      Result.return @@ Int32.of_string x
+    with
+    | _ -> Result.errorf "vchan port is not an int32: '%s'" x
+end
+
 module Local = struct
   module M = struct
     type t = [
@@ -61,12 +71,9 @@ module Local = struct
     | `Unix path -> "unix:" ^ path
 end
 
-module Make(S: Network_stack.S) = struct
-
 type t = {
   local: Local.t;
-  remote_ip: Ipaddr.V4.t;
-  remote_port: Port.t;
+  remote_port: VsockPort.t; (* vsock port *)
   mutable fd: Lwt_unix.file_descr option;
   mutable path: string option;
 }
@@ -77,11 +84,11 @@ let get_key t = t.local
 
 module Map = Local.Map
 
-type context = S.t
+type context = string
 
-let to_string t = Printf.sprintf "%s:%s:%d" (Local.to_string t.local) (Ipaddr.V4.to_string t.remote_ip) t.remote_port
+let to_string t = Printf.sprintf "%s:%08lx" (Local.to_string t.local) t.remote_port
 
-let description_of_format = "'[local ip:]local port:IPv4 address of remote:remote port' or 'unix:local path:IPv4 address of remote: remote port'"
+let description_of_format = "'[local ip:]local port:remote vchan port' or 'unix:local path:remote vchan port'"
 
 let rm_f path =
   Lwt.catch
@@ -167,7 +174,7 @@ let bind local =
     >>= fun () ->
     Lwt.return (Result.Ok fd)
 
-let start stack_var t =
+let start vsock_path_var t =
   let open Lwt.Infix in
   let path = match t.local with `Unix path -> Some path | _ -> None in
   bind t.local
@@ -182,7 +189,6 @@ let start stack_var t =
        match t.local, Lwt_unix.getsockname fd with
        | `Ip (local_ip, _), Lwt_unix.ADDR_INET(_, local_port) ->
          let t = { t with local = `Ip(local_ip, local_port) } in
-         let t = if t.remote_port = 0 then { t with remote_port = local_port } else t in
          Lwt.return (Result.Ok (t, fd, path))
        | `Unix _, Lwt_unix.ADDR_UNIX(_) ->
          Lwt.return (Result.Ok (t, fd, path))
@@ -219,39 +225,36 @@ let start stack_var t =
         Log.debug (fun f -> f "%s: listening thread shutting down" description);
         Lwt.return ()
       | Some local_fd ->
-        let local = Socket.TCPV4.of_fd ~description local_fd in
-        Active_list.Var.read stack_var
-        >>= fun stack ->
+        let local = Socket.Stream.of_fd ~description local_fd in
+        Active_list.Var.read vsock_path_var
+        >>= fun vsock_path ->
         let proxy () =
           finally (fun () ->
-              S.TCPV4.create_connection (S.tcpv4 stack) (t.remote_ip,t.remote_port)
+            Osx_hyperkit.Vsock.connect ~path:vsock_path ~port:t.remote_port ()
+            >>= fun v ->
+            let remote = Socket.Stream.of_fd ~description v in
+            finally (fun () ->
+              (* proxy between local and remote *)
+              Log.debug (fun f -> f "%s: connected" description);
+              Mirage_flow.proxy (module Clock) (module Socket.Stream) remote (module Socket.Stream) local ()
               >>= function
-              | `Error e ->
-                Log.err (fun f -> f "%s: failed to connect: %s" description (S.TCPV4.error_message e));
+              | `Error (`Msg m) ->
+                Log.err (fun f -> f "%s proxy failed with %s" description m);
                 Lwt.return ()
-              | `Ok remote ->
-                finally (fun () ->
-                  (* proxy between local and remote *)
-                  Log.debug (fun f -> f "%s: connected" description);
-                  Mirage_flow.proxy (module Clock) (module S.TCPV4_half_close) remote (module Socket.TCPV4) local ()
-                  >>= function
-                  | `Error (`Msg m) ->
-                    Log.err (fun f -> f "%s proxy failed with %s" description m);
-                    Lwt.return ()
-                  | `Ok (l_stats, r_stats) ->
-                    Log.debug (fun f ->
-                        f "%s completed: l2r = %s; r2l = %s" description
-                          (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
-                      );
-                    Lwt.return ()
-                ) (fun () ->
-                  S.TCPV4_half_close.close remote
-                )
+              | `Ok (l_stats, r_stats) ->
+                Log.debug (fun f ->
+                    f "%s completed: l2r = %s; r2l = %s" description
+                      (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
+                  );
+                Lwt.return ()
             ) (fun () ->
-              Socket.TCPV4.close local
-              >>= fun () ->
-              Lwt.return ()
+              Socket.Stream.close remote
             )
+          ) (fun () ->
+            Socket.Stream.close local
+            >>= fun () ->
+            Lwt.return ()
+          )
         in
         Lwt.async (fun () -> log_exception_continue (description ^ " proxy") proxy);
         loop () in
@@ -275,42 +278,36 @@ let stop t = match t.fd with
 let of_string x =
   match (
     match Stringext.split ~on:':' x with
-    | [ "unix"; path; remote_ip; remote_port ] ->
+    | [ "unix"; path; remote_port ] ->
       Result.Ok (
         `Unix path,
-        Ipaddr.V4.of_string remote_ip,
-        Port.of_string remote_port
+        VsockPort.of_string remote_port
       )
-    | [ local_ip; local_port; remote_ip; remote_port ] ->
+    | [ local_ip; local_port; remote_port ] ->
       let local_ip = Ipaddr.V4.of_string local_ip in
       let local_port = Port.of_string local_port in
       begin match local_ip, local_port with
       | Some ip, Result.Ok port ->
         Result.Ok (
           `Ip (ip, port),
-          Ipaddr.V4.of_string remote_ip,
-          Port.of_string remote_port
+          VsockPort.of_string remote_port
         )
       | _, _ -> Result.Error (`Msg "Failed to parse local IP and port")
       end
-    | [ local_port; remote_ip; remote_port ] ->
+    | [ local_port; remote_port ] ->
       begin match Port.of_string local_port with
       | Result.Error x -> Result.Error x
       | Result.Ok port ->
         Result.Ok (
           `Ip(Ipaddr.V4.of_string_exn "127.0.0.1", port),
-          Ipaddr.V4.of_string remote_ip,
-          Port.of_string remote_port
+          VsockPort.of_string remote_port
         )
       end
     | _ ->
       Result.Error (`Msg ("Failed to parse request, expected " ^ description_of_format))
   ) with
   | Result.Error x -> Result.Error x
-  | Result.Ok (local, Some remote_ip, Result.Ok remote_port) ->
-    Result.Ok { local; remote_ip; remote_port; fd = None; path = None }
-  | Result.Ok (_, None, _) ->
-    Result.Error (`Msg "Failed to parse remote IPv4 address")
-  | Result.Ok (_, _, Result.Error (`Msg m)) ->
+  | Result.Ok (local, Result.Ok remote_port) ->
+    Result.Ok { local; remote_port; fd = None; path = None }
+  | Result.Ok (_, Result.Error (`Msg m)) ->
     Result.Error (`Msg ("Failed to parse remote port: " ^ m))
-end
