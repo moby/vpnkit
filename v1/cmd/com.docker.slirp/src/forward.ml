@@ -49,9 +49,9 @@ module VsockPort = struct
 
   let of_string x =
     try
-      Result.return @@ Int32.of_string x
+      Result.return @@ Int32.of_string ("0x" ^ x)
     with
-    | _ -> Result.errorf "vchan port is not an int32: '%s'" x
+    | _ -> Result.errorf "vchan port is not a hexadecimal int32: '%s'" x
 end
 
 module Local = struct
@@ -88,7 +88,7 @@ type context = string
 
 let to_string t = Printf.sprintf "%s:%08lx" (Local.to_string t.local) t.remote_port
 
-let description_of_format = "'[local ip:]local port:remote vchan port' or 'unix:local path:remote vchan port'"
+let description_of_format = "'[local ip:]local port:remote vchan port' or 'unix:local path:remote vchan port' where the remote vchan port matches %08x"
 
 let rm_f path =
   Lwt.catch
@@ -292,7 +292,7 @@ let of_string x =
           `Ip (ip, port),
           VsockPort.of_string remote_port
         )
-      | _, _ -> Result.Error (`Msg "Failed to parse local IP and port")
+      | _, _ -> Result.Error (`Msg ("Failed to parse local IP and port: " ^ x))
       end
     | [ local_port; remote_port ] ->
       begin match Port.of_string local_port with
