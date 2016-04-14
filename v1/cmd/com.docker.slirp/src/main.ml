@@ -239,9 +239,9 @@ let main_t socket_path slirp_port_control_path vmnet_port_control_path db_path d
   >>= fun allowed_bind_address ->
 
   let rec monitor_allowed_bind_settings allowed_bind_address =
+    Forward.set_allowed_addresses (Active_config.hd allowed_bind_address);
     Active_config.tl allowed_bind_address
     >>= fun allowed_bind_address ->
-    Forward.set_allowed_addresses (Active_config.hd allowed_bind_address);
     monitor_allowed_bind_settings allowed_bind_address in
   Lwt.async (fun () -> Utils.log_exception_continue "monitor_allowed_bind_settings" (fun () -> monitor_allowed_bind_settings allowed_bind_address));
 
