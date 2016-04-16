@@ -185,7 +185,7 @@ let restart_on_change name to_string values =
   Log.info (fun f -> f "%s changed to %s in the database: restarting" name (to_string v));
   exit 1
 
-let main_t socket_path slirp_port_control_path vmnet_port_control_path vsock_path db_path debug =
+let main_t socket_path port_control_path vsock_path db_path debug =
   Osx_reporter.install ~stdout:debug;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
@@ -270,22 +270,19 @@ let main_t socket_path slirp_port_control_path vmnet_port_control_path vsock_pat
   let local_ip = Active_config.hd host_ips in
 
   Lwt.join [
-    start_slirp socket_path slirp_port_control_path vsock_path pcap_settings peer_ip local_ip;
-    start_native vmnet_port_control_path vsock_path;
+    start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip local_ip;
+    start_native port_control_path vsock_path ;
   ]
 
-let main socket slirp_control vmnet_control vsock_path db debug = Lwt_main.run @@ main_t socket slirp_control vmnet_control vsock_path db debug
+let main socket port_control vsock_path db debug = Lwt_main.run @@ main_t socket port_control vsock_path db debug
 
 open Cmdliner
 
 let socket =
   Arg.(value & opt string "/var/tmp/com.docker.slirp.socket" & info [ "socket" ] ~docv:"SOCKET")
 
-let slirp_port_control_path =
-  Arg.(value & opt string "/var/tmp/com.docker.slirp.port.socket" & info [ "slirp-port-control" ] ~docv:"PORT")
-
-let vmnet_port_control_path =
-  Arg.(value & opt string "/var/tmp/com.docker.vmnet.port.socket" & info [ "vmnet-port-control" ] ~docv:"PORT")
+let port_control_path =
+  Arg.(value & opt string "/var/tmp/com.docker.port.socket" & info [ "port-control" ] ~docv:"PORT")
 
 let vsock_path =
   Arg.(value & opt string "/var/tmp/com.docker.vsock/connect" & info [ "vsock-path" ] ~docv:"VSOCK")
@@ -304,7 +301,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ slirp_port_control_path $ vmnet_port_control_path $ vsock_path $ db_path $ debug),
+  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =
