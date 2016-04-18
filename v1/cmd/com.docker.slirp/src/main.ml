@@ -99,7 +99,8 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                       let length = Wire_structs.get_udp_length udp in
                       let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
                       (* We handle DNS on port 53 ourselves *)
-                      if dst_port <> 53 then begin
+                      (* ...but not if it's supposed to go somewhere else *)
+                      if (dst_port <> 53 || dst != local_ip) then begin
                         Log.debug (fun f -> f "UDP %s:%d -> %s:%d len %d"
                                      (Ipaddr.V4.to_string src) src_port
                                      (Ipaddr.V4.to_string dst) dst_port
@@ -107,7 +108,8 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                                  );
                         let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
                         Socket.Datagram.input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload
-                      end else Lwt.return_unit
+                          end
+                      else Lwt.return_unit
                     | _ -> Lwt.return_unit
                   end
                 | _ -> Lwt.return_unit
