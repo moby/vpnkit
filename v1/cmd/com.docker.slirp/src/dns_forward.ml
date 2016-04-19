@@ -69,6 +69,7 @@ let enter_queue src_port =
   u
 
 let input s ~src ~dst ~src_port buf =
+  if List.mem dst (Tcpip_stack.IPV4.get_ip (Tcpip_stack.ipv4 s)) then begin
   let wakener = enter_queue src_port in
 
   (* Re-read /etc/resolv.conf on every request. This ensures that
@@ -145,3 +146,4 @@ let input s ~src ~dst ~src_port buf =
         Lwt.return ()
       );
     Lwt.return ()
+  end else Lwt.return_unit
