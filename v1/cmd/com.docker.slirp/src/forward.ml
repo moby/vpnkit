@@ -243,34 +243,129 @@ let start_tcp_proxy vsock_path_var local_ip local_port fd t =
     Lwt.async loop;
     Lwt.return (Result.Ok t)
 
-let max_udp_length = 2048 (* > 1500 the MTU of our link *)
+let max_udp_length = 2048 (* > 1500 the MTU of our link + header *)
+
+let max_vsock_header_length = 1024
 
 let start_udp_proxy vsock_path_var local_ip local_port fd t =
   let open Lwt.Infix in
   let description = to_string t in
-  let buffer = Lwt_bytes.create max_udp_length in
-  let rec loop () =
-    Lwt.catch (fun () ->
-      Lwt_bytes.recvfrom fd buffer 0 0 []
-      >>= fun (len, sockaddr) ->
-      Lwt.return (Some (len, sockaddr))
-    ) (function
-      | Unix.Unix_error(Unix.EBADF, _, _) -> Lwt.return None
-      | e ->
-        Log.err (fun f -> f "%s: failed to recvfrom: %s" description (Printexc.to_string e));
-        Lwt.return None
-    )
-    >>= function
-    | None ->
-      Log.debug (fun f -> f "%s: listening thread shutting down" description);
-      Lwt.return ()
-    | Some (len, sockaddr) ->
-      Log.debug (fun f -> f "UDP: dropping %d bytes from %s" len (match sockaddr with
-        | Unix.ADDR_INET(inet, port) -> Unix.string_of_inet_addr inet ^ ":" ^ (string_of_int port)
-        | Unix.ADDR_UNIX _ -> "UNIX?"
-      ));
-      loop () in
-  Lwt.async loop;
+  let from_internet_bytes = Lwt_bytes.create max_udp_length in
+  let from_internet_buffer = Cstruct.of_bigarray from_internet_bytes in
+  (* We write to the internet using the from_vsock_buffer *)
+  let from_vsock_bytes = Lwt_bytes.create max_udp_length in
+  let from_vsock_buffer = Cstruct.of_bigarray from_vsock_bytes in
+
+  let _ =
+    Active_list.Var.read vsock_path_var
+    >>= fun vsock_path ->
+    Osx_hyperkit.Vsock.connect ~path:vsock_path ~port:t.remote_port ()
+    >>= fun v ->
+    (* Construct the vsock header in a separate buffer but write the payload
+       directly from the from_internet_buffer *)
+    let write_header_buffer = Cstruct.create max_vsock_header_length in
+    let write buf sockaddr = match sockaddr with
+      | Unix.ADDR_UNIX _ ->
+        Log.err (fun f -> f "%s: dropping UDP packet from unix domain socket" description);
+        Lwt.return ()
+      | Unix.ADDR_INET (ip, port) ->
+        (* Leave space for a uint16 frame length *)
+        let rest = Cstruct.shift write_header_buffer 2 in
+        (* uint16 IP address length *)
+        let ip_bytes =
+          match Ipaddr.of_string @@ Unix.string_of_inet_addr ip with
+          | Some Ipaddr.V4 ipv4 -> Ipaddr.V4.to_bytes ipv4
+          | Some Ipaddr.V6 ipv6 -> Ipaddr.V6.to_bytes ipv6
+          | None ->
+            Log.err (fun f -> f "%s: Ipaddr.of_string failed to parse IP %s" description (Unix.string_of_inet_addr ip));
+            failwith "Failed to parse IP" in
+        let ip_bytes_len = String.length ip_bytes in
+        Cstruct.LE.set_uint16 rest 0 ip_bytes_len;
+        let rest = Cstruct.shift rest 2 in
+        (* IP address bytes *)
+        Cstruct.blit_from_string ip_bytes 0 rest 0 ip_bytes_len;
+        let rest = Cstruct.shift rest ip_bytes_len in
+        (* uint16 Port *)
+        Cstruct.LE.set_uint16 rest 0 port;
+        let rest = Cstruct.shift rest 2 in
+        (* uint16 Zone length *)
+        Cstruct.LE.set_uint16 rest 0 0;
+        let rest = Cstruct.shift rest 2 in
+        (* Zone string *)
+        (* uint16 payload length *)
+        Cstruct.LE.set_uint16 rest 0 (Cstruct.len buf);
+        let rest = Cstruct.shift rest 2 in
+        let header_len = rest.Cstruct.off - write_header_buffer.Cstruct.off + (Cstruct.len buf) in
+        let header = Cstruct.sub write_header_buffer 0 header_len in
+        (* Add an overall header length at the start *)
+        Cstruct.LE.set_uint16 header 0 header_len;
+        Lwt_cstruct.(complete (write v)) header
+        >>= fun () ->
+        Lwt_cstruct.(complete (write v)) buf in
+    (* Read the vsock header and payload into the same buffer, and write it
+       to the internet from there. *)
+    let read () =
+      Lwt_cstruct.(complete (read v)) (Cstruct.sub from_vsock_buffer 0 2)
+      >>= fun () ->
+      let frame_length = Cstruct.LE.get_uint16 from_vsock_buffer 0 in
+      let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in
+      Lwt_cstruct.(complete (read v)) rest
+      >>= fun () ->
+      (* uint16 IP address length *)
+      let ip_bytes_len = Cstruct.LE.get_uint16 rest 0 in
+      (* IP address bytes *)
+      let ip_bytes_string = Cstruct.(to_string (sub rest 2 ip_bytes_len)) in
+      let rest = Cstruct.shift rest (2 + ip_bytes_len) in
+      let ip =
+        Unix.inet_addr_of_string (
+          if String.length ip_bytes_string = 4
+          then Ipaddr.V4.to_string @@ Ipaddr.V4.of_bytes_exn ip_bytes_string
+          else Ipaddr.V6.to_string @@ Ipaddr.V6.of_bytes_exn ip_bytes_string
+        ) in
+      (* uint16 Port *)
+      let port = Cstruct.LE.get_uint16 rest 0 in
+      let rest = Cstruct.shift rest 2 in
+      (* uint16 Zone length *)
+      let zone_length = Cstruct.LE.get_uint16 rest 0 in
+      let rest = Cstruct.shift rest (2 + zone_length) in
+      (* uint16 payload length *)
+      let payload_length = Cstruct.LE.get_uint16 rest 0 in
+      (* payload *)
+      let payload = Cstruct.sub rest 2 payload_length in
+      Lwt.return (payload.Cstruct.off, payload_length, Unix.ADDR_INET(ip, port)) in
+    let rec from_internet () =
+      Lwt.catch (fun () ->
+        Lwt_bytes.recvfrom fd from_internet_bytes 0 0 []
+        >>= fun (len, sockaddr) ->
+        write (Cstruct.sub from_internet_buffer 0 len) sockaddr
+        >>= fun () ->
+        Lwt.return true
+      ) (function
+        | Unix.Unix_error(Unix.EBADF, _, _) -> Lwt.return false
+        | e ->
+          Log.err (fun f -> f "%s: shutting down recvfrom thread: %s" description (Printexc.to_string e));
+          Lwt.return false
+      )
+      >>= function
+      | true -> from_internet ()
+      | false -> Lwt.return () in
+    let rec from_vsock () =
+      Lwt.catch
+        (fun () ->
+          read ()
+          >>= fun (ofs, len, sockaddr) ->
+          Lwt_bytes.sendto fd from_vsock_bytes ofs len [] sockaddr
+          >>= fun _ ->
+          Lwt.return true
+        ) (fun e ->
+          Log.debug (fun f -> f "%s: shutting down from vsock thread: %s" description (Printexc.to_string e));
+          Lwt.return false
+        ) >>= function
+        | true -> from_vsock ()
+        | false -> Lwt.return () in
+    let _ = from_internet () in
+    let _ = from_vsock () in
+    Lwt_unix.close v in
   Lwt.return (Result.Ok t)
 
 let start vsock_path_var t =
