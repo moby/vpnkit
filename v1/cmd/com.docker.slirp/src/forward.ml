@@ -57,7 +57,7 @@ end
 module Local = struct
   module M = struct
     type t = [
-      | `Ip of Ipaddr.V4.t * Port.t
+      | `Tcp of Ipaddr.V4.t * Port.t
     ]
     let compare = compare
   end
@@ -66,7 +66,7 @@ module Local = struct
   module Set = Set.Make(M)
 
   let to_string = function
-    | `Ip (addr, port) -> Printf.sprintf "%s:%d" (Ipaddr.V4.to_string addr) port
+    | `Tcp (addr, port) -> Printf.sprintf "%s:%d" (Ipaddr.V4.to_string addr) port
 end
 
 type t = {
@@ -115,7 +115,7 @@ let check_bind_allowed ip = match !allowed_addresses with
 let bind local =
   let open Lwt.Infix in
   match local with
-  | `Ip (local_ip, local_port) when local_port < 1024 ->
+  | `Tcp (local_ip, local_port) when local_port < 1024 ->
     check_bind_allowed local_ip
     >>= fun () ->
     let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
@@ -141,7 +141,7 @@ let bind local =
           end
         end
       ) (fun () -> Lwt_unix.close s)
-  | `Ip (local_ip, local_port) ->
+  | `Tcp (local_ip, local_port) ->
     check_bind_allowed local_ip
     >>= fun () ->
     let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
@@ -164,8 +164,8 @@ let start vsock_path_var t =
     (fun () ->
        Lwt_unix.listen fd 5;
        match t.local, Lwt_unix.getsockname fd with
-       | `Ip (local_ip, _), Lwt_unix.ADDR_INET(_, local_port) ->
-         let t = { t with local = `Ip(local_ip, local_port) } in
+       | `Tcp (local_ip, _), Lwt_unix.ADDR_INET(_, local_port) ->
+         let t = { t with local = `Tcp(local_ip, local_port) } in
          Lwt.return (Result.Ok (t, fd))
        | _ ->
          Lwt.return (Result.Error (`Msg "failed to query local port"))
@@ -253,7 +253,7 @@ let of_string x =
       begin match local_ip, local_port with
       | Some ip, Result.Ok port ->
         Result.Ok (
-          `Ip (ip, port),
+          `Tcp (ip, port),
           VsockPort.of_string remote_port
         )
       | _, _ -> Result.Error (`Msg ("Failed to parse local IP and port: " ^ x))
@@ -263,7 +263,7 @@ let of_string x =
       | Result.Error x -> Result.Error x
       | Result.Ok port ->
         Result.Ok (
-          `Ip(Ipaddr.V4.of_string_exn "127.0.0.1", port),
+          `Tcp(Ipaddr.V4.of_string_exn "127.0.0.1", port),
           VsockPort.of_string remote_port
         )
       end
