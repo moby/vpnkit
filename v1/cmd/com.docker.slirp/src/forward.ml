@@ -58,6 +58,7 @@ module Local = struct
   module M = struct
     type t = [
       | `Tcp of Ipaddr.V4.t * Port.t
+      | `Udp of Ipaddr.V4.t * Port.t
     ]
     let compare = compare
   end
@@ -66,7 +67,8 @@ module Local = struct
   module Set = Set.Make(M)
 
   let to_string = function
-    | `Tcp (addr, port) -> Printf.sprintf "%s:%d" (Ipaddr.V4.to_string addr) port
+    | `Tcp (addr, port) -> Printf.sprintf "tcp:%s:%d" (Ipaddr.V4.to_string addr) port
+    | `Udp (addr, port) -> Printf.sprintf "udp:%s:%d" (Ipaddr.V4.to_string addr) port
 end
 
 type t = {
@@ -85,7 +87,7 @@ type context = string
 
 let to_string t = Printf.sprintf "%s:%08lx" (Local.to_string t.local) t.remote_port
 
-let description_of_format = "'[local ip:]local port:remote vchan port' where the remote vchan port matches %08x"
+let description_of_format = "'<tcp|udp>:local ip:local port:remote vchan port' where the remote vchan port matches %08x"
 
 let finally f g =
   let open Lwt.Infix in
@@ -151,14 +153,19 @@ let bind local =
       (fun e -> Lwt_unix.close fd >>= fun () -> Lwt.fail e)
     >>= fun () ->
     Lwt.return (Result.Ok fd)
+  | `Udp (local_ip, local_port) ->
+    check_bind_allowed local_ip
+    >>= fun () ->
+    let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
+    let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+    Lwt.catch
+      (fun () -> Lwt_unix.bind fd addr; Lwt.return ())
+      (fun e -> Lwt_unix.close fd >>= fun () -> Lwt.fail e)
+    >>= fun () ->
+    Lwt.return (Result.Ok fd)
 
-let start vsock_path_var t =
+let start_tcp_proxy vsock_path_var local_ip local_port fd t =
   let open Lwt.Infix in
-  bind t.local
-  >>= function
-  | Result.Error e -> Lwt.return (Result.Error e)
-  | Result.Ok fd ->
-  Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
   (* On failure here, we must close the fd *)
   Lwt.catch
     (fun () ->
@@ -236,6 +243,50 @@ let start vsock_path_var t =
     Lwt.async loop;
     Lwt.return (Result.Ok t)
 
+let max_udp_length = 2048 (* > 1500 the MTU of our link *)
+
+let start_udp_proxy vsock_path_var local_ip local_port fd t =
+  let open Lwt.Infix in
+  let description = to_string t in
+  let buffer = Lwt_bytes.create max_udp_length in
+  let rec loop () =
+    Lwt.catch (fun () ->
+      Lwt_bytes.recvfrom fd buffer 0 0 []
+      >>= fun (len, sockaddr) ->
+      Lwt.return (Some (len, sockaddr))
+    ) (function
+      | Unix.Unix_error(Unix.EBADF, _, _) -> Lwt.return None
+      | e ->
+        Log.err (fun f -> f "%s: failed to recvfrom: %s" description (Printexc.to_string e));
+        Lwt.return None
+    )
+    >>= function
+    | None ->
+      Log.debug (fun f -> f "%s: listening thread shutting down" description);
+      Lwt.return ()
+    | Some (len, sockaddr) ->
+      Log.debug (fun f -> f "UDP: dropping %d bytes from %s" len (match sockaddr with
+        | Unix.ADDR_INET(inet, port) -> Unix.string_of_inet_addr inet ^ ":" ^ (string_of_int port)
+        | Unix.ADDR_UNIX _ -> "UNIX?"
+      ));
+      loop () in
+  Lwt.async loop;
+  Lwt.return (Result.Ok t)
+
+let start vsock_path_var t =
+  let open Lwt.Infix in
+  bind t.local
+  >>= function
+  | Result.Error e -> Lwt.return (Result.Error e)
+  | Result.Ok fd ->
+  Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
+  let t = { t with fd = Some fd } in
+  match t.local with
+  | `Tcp (local_ip, local_port) ->
+    start_tcp_proxy vsock_path_var local_ip local_port fd t
+  | `Udp (local_ip, local_port) ->
+    start_udp_proxy vsock_path_var local_ip local_port fd t
+
 let stop t = match t.fd with
   | None -> Lwt.return ()
   | Some fd ->
@@ -247,7 +298,7 @@ let stop t = match t.fd with
 let of_string x =
   match (
     match Stringext.split ~on:':' x with
-    | [ local_ip; local_port; remote_port ] ->
+    | [ "tcp"; local_ip; local_port; remote_port ] ->
       let local_ip = Ipaddr.V4.of_string local_ip in
       let local_port = Port.of_string local_port in
       begin match local_ip, local_port with
@@ -258,14 +309,16 @@ let of_string x =
         )
       | _, _ -> Result.Error (`Msg ("Failed to parse local IP and port: " ^ x))
       end
-    | [ local_port; remote_port ] ->
-      begin match Port.of_string local_port with
-      | Result.Error x -> Result.Error x
-      | Result.Ok port ->
+    | [ "udp"; local_ip; local_port; remote_port ] ->
+      let local_ip = Ipaddr.V4.of_string local_ip in
+      let local_port = Port.of_string local_port in
+      begin match local_ip, local_port with
+      | Some ip, Result.Ok port ->
         Result.Ok (
-          `Tcp(Ipaddr.V4.of_string_exn "127.0.0.1", port),
+          `Udp (ip, port),
           VsockPort.of_string remote_port
         )
+      | _, _ -> Result.Error (`Msg ("Failed to parse local IP and port: " ^ x))
       end
     | _ ->
       Result.Error (`Msg ("Failed to parse request, expected " ^ description_of_format))
