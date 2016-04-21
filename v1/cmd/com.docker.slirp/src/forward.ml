@@ -58,7 +58,6 @@ module Local = struct
   module M = struct
     type t = [
       | `Ip of Ipaddr.V4.t * Port.t
-      | `Unix of string
     ]
     let compare = compare
   end
@@ -68,14 +67,12 @@ module Local = struct
 
   let to_string = function
     | `Ip (addr, port) -> Printf.sprintf "%s:%d" (Ipaddr.V4.to_string addr) port
-    | `Unix path -> "unix:" ^ path
 end
 
 type t = {
   local: Local.t;
   remote_port: VsockPort.t; (* vsock port *)
   mutable fd: Lwt_unix.file_descr option;
-  mutable path: string option;
 }
 
 type key = Local.t
@@ -88,17 +85,7 @@ type context = string
 
 let to_string t = Printf.sprintf "%s:%08lx" (Local.to_string t.local) t.remote_port
 
-let description_of_format = "'[local ip:]local port:remote vchan port' or 'unix:local path:remote vchan port' where the remote vchan port matches %08x"
-
-let rm_f path =
-  Lwt.catch
-    (fun () -> Lwt_unix.unlink path)
-    (function
-      | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
-      | e ->
-        Log.err (fun f -> f "failed to remove %s: %s" path (Printexc.to_string e));
-        Lwt.return ()
-    )
+let description_of_format = "'[local ip:]local port:remote vchan port' where the remote vchan port matches %08x"
 
 let finally f g =
   let open Lwt.Infix in
@@ -128,15 +115,6 @@ let check_bind_allowed ip = match !allowed_addresses with
 let bind local =
   let open Lwt.Infix in
   match local with
-  | `Unix path ->
-    rm_f path
-    >>= fun () ->
-    let fd = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
-    Lwt.catch
-      (fun () -> Lwt_unix.bind fd (Lwt_unix.ADDR_UNIX(path)); Lwt.return ())
-      (fun e -> Lwt_unix.close fd >>= fun () -> Lwt.fail e)
-    >>= fun () ->
-    Lwt.return (Result.Ok fd)
   | `Ip (local_ip, local_port) when local_port < 1024 ->
     check_bind_allowed local_ip
     >>= fun () ->
@@ -176,7 +154,6 @@ let bind local =
 
 let start vsock_path_var t =
   let open Lwt.Infix in
-  let path = match t.local with `Unix path -> Some path | _ -> None in
   bind t.local
   >>= function
   | Result.Error e -> Lwt.return (Result.Error e)
@@ -189,9 +166,7 @@ let start vsock_path_var t =
        match t.local, Lwt_unix.getsockname fd with
        | `Ip (local_ip, _), Lwt_unix.ADDR_INET(_, local_port) ->
          let t = { t with local = `Ip(local_ip, local_port) } in
-         Lwt.return (Result.Ok (t, fd, path))
-       | `Unix _, Lwt_unix.ADDR_UNIX(_) ->
-         Lwt.return (Result.Ok (t, fd, path))
+         Lwt.return (Result.Ok (t, fd))
        | _ ->
          Lwt.return (Result.Error (`Msg "failed to query local port"))
     ) (fun e ->
@@ -205,9 +180,9 @@ let start vsock_path_var t =
       )
   >>= function
   | Result.Error e -> Lwt.return (Result.Error e)
-  | Result.Ok (t, fd, path) ->
+  | Result.Ok (t, fd) ->
     (* The `Forward.stop` function is in charge of closing the fd *)
-    let t = { t with fd = Some fd; path } in
+    let t = { t with fd = Some fd } in
     let description = to_string t in
     let rec loop () =
       Lwt.catch (fun () ->
@@ -268,21 +243,10 @@ let stop t = match t.fd with
     t.fd <- None;
     Log.debug (fun f -> f "%s: closing listening socket" (to_string t));
     Lwt_unix.close fd
-    >>= fun () ->
-    match t.path with
-    | None -> Lwt.return ()
-    | Some path ->
-      t.path <- None;
-      rm_f path
 
 let of_string x =
   match (
     match Stringext.split ~on:':' x with
-    | [ "unix"; path; remote_port ] ->
-      Result.Ok (
-        `Unix path,
-        VsockPort.of_string remote_port
-      )
     | [ local_ip; local_port; remote_port ] ->
       let local_ip = Ipaddr.V4.of_string local_ip in
       let local_port = Port.of_string local_port in
@@ -308,6 +272,6 @@ let of_string x =
   ) with
   | Result.Error x -> Result.Error x
   | Result.Ok (local, Result.Ok remote_port) ->
-    Result.Ok { local; remote_port; fd = None; path = None }
+    Result.Ok { local; remote_port; fd = None  }
   | Result.Ok (_, Result.Error (`Msg m)) ->
     Result.Error (`Msg ("Failed to parse remote port: " ^ m))
