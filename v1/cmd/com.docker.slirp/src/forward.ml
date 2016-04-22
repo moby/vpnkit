@@ -156,6 +156,7 @@ let bind local =
   | `Udp (local_ip, local_port) ->
     check_bind_allowed local_ip
     >>= fun () ->
+    Log.info (fun f -> f "binding socket to %s:%d" (Ipaddr.V4.to_string local_ip) local_port);
     let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
     Lwt.catch
@@ -259,8 +260,10 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
   let _ =
     Active_list.Var.read vsock_path_var
     >>= fun vsock_path ->
+    Log.debug (fun f -> f "%s: connecting to vsock port %08lx" description t.remote_port);
     Osx_hyperkit.Vsock.connect ~path:vsock_path ~port:t.remote_port ()
     >>= fun v ->
+    Log.debug (fun f -> f "%s: connected to vsock port %08lx" description t.remote_port);
     (* Construct the vsock header in a separate buffer but write the payload
        directly from the from_internet_buffer *)
     let write_header_buffer = Cstruct.create max_vsock_header_length in
@@ -295,10 +298,11 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
         (* uint16 payload length *)
         Cstruct.LE.set_uint16 rest 0 (Cstruct.len buf);
         let rest = Cstruct.shift rest 2 in
-        let header_len = rest.Cstruct.off - write_header_buffer.Cstruct.off + (Cstruct.len buf) in
+        let header_len = rest.Cstruct.off - write_header_buffer.Cstruct.off in
+        let frame_len = header_len + (Cstruct.len buf) in
         let header = Cstruct.sub write_header_buffer 0 header_len in
-        (* Add an overall header length at the start *)
-        Cstruct.LE.set_uint16 header 0 header_len;
+        (* Add an overall frame length at the start *)
+        Cstruct.LE.set_uint16 header 0 frame_len;
         Lwt_cstruct.(complete (write v)) header
         >>= fun () ->
         Lwt_cstruct.(complete (write v)) buf in
@@ -335,7 +339,7 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
       Lwt.return (payload.Cstruct.off, payload_length, Unix.ADDR_INET(ip, port)) in
     let rec from_internet () =
       Lwt.catch (fun () ->
-        Lwt_bytes.recvfrom fd from_internet_bytes 0 0 []
+        Lwt_bytes.recvfrom fd from_internet_bytes 0 (Cstruct.len from_internet_buffer) []
         >>= fun (len, sockaddr) ->
         write (Cstruct.sub from_internet_buffer 0 len) sockaddr
         >>= fun () ->
@@ -363,8 +367,9 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
         ) >>= function
         | true -> from_vsock ()
         | false -> Lwt.return () in
-    let _ = from_internet () in
     let _ = from_vsock () in
+    from_internet ()
+    >>= fun () ->
     Lwt_unix.close v in
   Lwt.return (Result.Ok t)
 
