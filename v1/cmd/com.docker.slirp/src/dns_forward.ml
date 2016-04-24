@@ -30,47 +30,8 @@ module OptionThread = struct
     | Some x -> f x
 end
 
-(* A queue of responses per source port. Returning results out of order
-   seems to confuse the Linux resolver, even though the requests and responses
-   have transaction ids *)
-
-type response_sender = unit -> unit Lwt.t
-
-type queue = {
-  senders: response_sender Lwt.t Queue.t;
-}
-
-let per_source_port : (int, queue) Hashtbl.t = Hashtbl.create 7
-
-let enter_queue src_port =
-  let t, u = Lwt.task () in
-  if Hashtbl.mem per_source_port src_port then begin
-    let q = Hashtbl.find per_source_port src_port in
-    Queue.push t q.senders;
-  end else begin
-    let senders = Queue.create () in
-    let q = { senders } in
-    Hashtbl.replace per_source_port src_port q;
-    Queue.push t q.senders;
-    let rec process () =
-      if Queue.is_empty q.senders then begin
-        Hashtbl.remove per_source_port src_port;
-        Lwt.return ()
-      end else begin
-        let t = Queue.pop q.senders in
-        t >>= fun response_sender ->
-        response_sender ()
-        >>= fun () ->
-        process ()
-      end in
-    let _thread = process () in
-    ()
-  end;
-  u
-
 let input s ~src ~dst ~src_port buf =
   if List.mem dst (Tcpip_stack.IPV4.get_ip (Tcpip_stack.ipv4 s)) then begin
-  let wakener = enter_queue src_port in
 
   (* Re-read /etc/resolv.conf on every request. This ensures that
      changes to DNS on sleep/resume or switching networks are reflected
@@ -131,19 +92,14 @@ let input s ~src ~dst ~src_port buf =
   result
   >>= function
   | None ->
-    Lwt.wakeup_later wakener (fun () -> Lwt.return_unit);
     Lwt.return_unit
   | Some (response, buf) ->
     let buf = Cstruct.of_bigarray buf in
     (* Take a copy of the response buffer to put in the response queue *)
     let copy = Cstruct.create (Cstruct.len buf) in
     Cstruct.blit buf 0 copy 0 (Cstruct.len buf);
-    Lwt.wakeup_later wakener
-      (fun () ->
-        Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) copy
-        >>= fun () ->
-        Log.debug (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (Dns.Packet.to_string response));
-        Lwt.return ()
-      );
+    Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) copy
+    >>= fun () ->
+    Log.debug (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (Dns.Packet.to_string response));
     Lwt.return ()
   end else Lwt.return_unit
