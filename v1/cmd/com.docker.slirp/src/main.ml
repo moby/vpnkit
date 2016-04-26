@@ -93,7 +93,9 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                   let dst = Ipaddr.V4.of_int32 @@ Wire_structs.Ipv4_wire.get_ipv4_dst payload in
                   begin match Wire_structs.Ipv4_wire.(int_to_protocol @@ get_ipv4_proto payload) with
                     | Some `UDP ->
-                      let udp = Cstruct.shift payload Wire_structs.Ipv4_wire.sizeof_ipv4 in
+                      let hlen_version = Wire_structs.Ipv4_wire.get_ipv4_hlen_version payload in
+                      let ihl = hlen_version land 0xf in
+                      let udp = Cstruct.shift payload (ihl * 4) in
                       let src_port = Wire_structs.get_udp_source_port udp in
                       let dst_port = Wire_structs.get_udp_dest_port udp in
                       let length = Wire_structs.get_udp_length udp in
