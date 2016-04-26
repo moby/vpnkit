@@ -114,35 +114,42 @@ let check_bind_allowed ip = match !allowed_addresses with
     then Lwt.return ()
     else Lwt.fail (Unix.Unix_error(Unix.EPERM, "bind", ""))
 
+let request_privileged_port local_ip local_port sock_stream =
+  let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
+  finally
+    (fun () ->
+      let open Lwt.Infix in
+      Lwt_unix.connect s (Unix.ADDR_UNIX "/var/tmp/com.docker.vmnetd.socket")
+      >>= fun () ->
+      Vmnet.Client.of_fd s
+      >>= fun r ->
+      begin match r with
+      | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
+      | `Ok c ->
+        Vmnet.Client.bind_ipv4 c (local_ip, local_port, sock_stream)
+        >>= fun r ->
+        begin match r with
+        | `Ok fd ->
+          Log.debug (fun f -> f "Received fd successfully");
+          Lwt.return (Result.Ok fd)
+        | `Error (`Msg x) ->
+          Log.err (fun f -> f "Error binding to %s:%d: %s" (Ipaddr.V4.to_string local_ip) local_port x);
+          Lwt.return (Result.Error (`Msg x))
+        end
+      end
+    ) (fun () -> Lwt_unix.close s)
+
 let bind local =
   let open Lwt.Infix in
   match local with
   | `Tcp (local_ip, local_port) when local_port < 1024 ->
     check_bind_allowed local_ip
     >>= fun () ->
-    let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
-    finally
-      (fun () ->
-        let open Lwt.Infix in
-        Lwt_unix.connect s (Unix.ADDR_UNIX "/var/tmp/com.docker.vmnetd.socket")
-        >>= fun () ->
-        Vmnet.Client.of_fd s
-        >>= fun r ->
-        begin match r with
-        | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
-        | `Ok c ->
-          Vmnet.Client.bind_ipv4 c (local_ip, local_port)
-          >>= fun r ->
-          begin match r with
-          | `Ok fd ->
-            Log.debug (fun f -> f "Received fd successfully");
-            Lwt.return (Result.Ok fd)
-          | `Error (`Msg x) ->
-            Log.err (fun f -> f "Error binding to %s:%d: %s" (Ipaddr.V4.to_string local_ip) local_port x);
-            Lwt.return (Result.Error (`Msg x))
-          end
-        end
-      ) (fun () -> Lwt_unix.close s)
+    request_privileged_port local_ip local_port true
+  | `Udp (local_ip, local_port) when local_port < 1024 ->
+    check_bind_allowed local_ip
+    >>= fun () ->
+    request_privileged_port local_ip local_port false
   | `Tcp (local_ip, local_port) ->
     check_bind_allowed local_ip
     >>= fun () ->
