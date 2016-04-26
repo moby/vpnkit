@@ -98,9 +98,10 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                       let dst_port = Wire_structs.get_udp_dest_port udp in
                       let length = Wire_structs.get_udp_length udp in
                       let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
-                      (* We handle DNS on port 53 ourselves *)
-                      (* ...but not if it's supposed to go somewhere else *)
-                      if (dst_port <> 53 || dst != local_ip) then begin
+                      (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
+                      (* ... but if it's going to an external IP then we treat it like all other
+                         UDP and NAT it *)
+                      if Ipaddr.V4.compare dst local_ip != 0 then begin
                         Log.debug (fun f -> f "UDP %s:%d -> %s:%d len %d"
                                      (Ipaddr.V4.to_string src) src_port
                                      (Ipaddr.V4.to_string dst) dst_port
