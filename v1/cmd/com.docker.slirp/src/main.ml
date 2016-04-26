@@ -97,20 +97,27 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                       let src_port = Wire_structs.get_udp_source_port udp in
                       let dst_port = Wire_structs.get_udp_dest_port udp in
                       let length = Wire_structs.get_udp_length udp in
-                      let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
-                      (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
-                      (* ... but if it's going to an external IP then we treat it like all other
-                         UDP and NAT it *)
-                      if Ipaddr.V4.compare dst local_ip != 0 then begin
-                        Log.debug (fun f -> f "UDP %s:%d -> %s:%d len %d"
+                      if Cstruct.len udp < length then begin
+                        Log.err (fun f -> f "Dropping UDP %s:%d -> %s:%d reported len %d actual len %d"
                                      (Ipaddr.V4.to_string src) src_port
                                      (Ipaddr.V4.to_string dst) dst_port
-                                     length
-                                 );
-                        let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
-                        Socket.Datagram.input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload
-                          end
-                      else Lwt.return_unit
+                                     length (Cstruct.len udp));
+                        Lwt.return_unit
+                      end else begin
+                        let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
+                        (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
+                        (* ... but if it's going to an external IP then we treat it like all other
+                           UDP and NAT it *)
+                        if Ipaddr.V4.compare dst local_ip != 0 then begin
+                          Log.debug (fun f -> f "UDP %s:%d -> %s:%d len %d"
+                                       (Ipaddr.V4.to_string src) src_port
+                                       (Ipaddr.V4.to_string dst) dst_port
+                                       length
+                                   );
+                          let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
+                          Socket.Datagram.input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload
+                        end else Lwt.return_unit
+                      end
                     | _ -> Lwt.return_unit
                   end
                 | _ -> Lwt.return_unit
