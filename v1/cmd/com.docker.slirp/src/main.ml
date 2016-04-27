@@ -111,7 +111,7 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                         Lwt.return_unit
                       end else if dnf && (Cstruct.len payload > mtu) then begin
                         let would_fragment ~ip_header ~ip_payload =
-                          let open Icmpv4_wire in
+                          let open Wire_structs.Ipv4_wire in
                           let header = Cstruct.create sizeof_icmpv4 in
                           set_icmpv4_ty header 0x03;
                           set_icmpv4_code header 0x04;
@@ -131,9 +131,13 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                           set_icmpv4_csum header (Tcpip_checksum.ones_complement_list [ icmp_packet ]);
                           icmp_packet
                         in
+                        let ethernet_frame, len = Tcpip_stack.IPV4.allocate (Tcpip_stack.ipv4 s)
+                          ~src:dst ~dst:src ~proto:`ICMP in
+                        let ethernet_ip_hdr = Cstruct.sub ethernet_frame 0 len in
+
                         let reply = would_fragment
                             ~ip_header:(Cstruct.sub payload 0 (ihl * 4))
-                            ~ip_payload:(Cstruct.sub payload (ihl * 4) 8) in
+                            ~ip_payload:(Some (Cstruct.sub payload (ihl * 4) 8)) in
                         (* Rather than silently unset the do not fragment bit, we
                            respond with an ICMP error message which will
                            hopefully prompt the other side to send messages we
@@ -143,9 +147,7 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                                      (Ipaddr.V4.to_string src) src_port
                                      (Ipaddr.V4.to_string dst) dst_port
                                      length);
-                        Tcpip_stack.IPV4.writev ~source_ip:dst
-                          ~source_port:dst_port ~dest_ip:src ~dest_port:src_port
-                          (Tcpip_stack.ipv4 s) [ reply ];
+                        Tcpip_stack.IPV4.writev (Tcpip_stack.ipv4 s) ethernet_ip_hdr [ reply ];
                       end else begin
                         let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
                         (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
