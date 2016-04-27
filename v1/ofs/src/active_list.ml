@@ -339,36 +339,45 @@ The directory will be deleted and replaced with a file of the same name.
       Log.info (fun f -> f "Creating resource %s" (string_of_resource resource));
       return { Response.Create.qid; iounit = 512l }
     | resource ->
-      Printf.eprintf "Active_list.create failed: resource = %s\n%!"
-        (string_of_resource resource);
+      Log.err (fun f -> f "EPERM creating resource = %s"
+        (string_of_resource resource));
       Error.eperm
 
   let write connection ~cancel { Request.Write.fid; offset; data } =
+    Log.info (fun f -> f "Write offset=%Ld data=[%s] to file" offset (Cstruct.to_string data));
     let ok = { Response.Write.count = Int32.of_int @@ Cstruct.len data } in
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with
       | ControlFile entry ->
-        if entry.result <> None
-        then Error.eperm
-        else begin match Instance.of_string @@ Cstruct.to_string data with
+        if entry.result <> None then begin
+          Log.err (fun f -> f "EPERM writing to an already-configured control file");
+          Error.eperm
+        end else begin match Instance.of_string @@ Cstruct.to_string data with
         | Result.Ok f ->
           let open Lwt.Infix in
           begin Instance.start connection.t.context f >>= function
             | Result.Ok f' -> (* local_port is resolved *)
               entry.instance <- Some f';
               entry.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
+              Log.info (fun f -> f "Created instance %s" (Instance.to_string f'));
               return ok
             | Result.Error (`Msg m) ->
+              Log.err (fun f -> f "Failed to start instance: %s" m);
               entry.result <- Some ("ERROR " ^ m ^ "\n");
               return ok
           end
         | Result.Error (`Msg m) ->
+          Log.err (fun f -> f "Return an error message via the control file: %s" m);
           entry.result <- Some ("ERROR " ^ m ^ "\n");
           return ok
         end
-      | _ -> Error.eperm
-    with Not_found -> Error.badfid
+      | _ ->
+        Log.err (fun f -> f "EPERM writing to resource %s" (string_of_resource resource));
+        Error.eperm
+    with Not_found ->
+      Log.err (fun f -> f "Fid not bound, returning badfid");
+      Error.badfid
 
   let remove connection ~cancel { Request.Remove.fid } =
     try
@@ -377,8 +386,12 @@ The directory will be deleted and replaced with a file of the same name.
       | Entry entry
       | ControlFile entry ->
         clunk connection ~cancel { Request.Clunk.fid }
-      | _ -> Error.eperm
-    with Not_found -> Error.badfid
+      | _ ->
+        Log.err (fun f -> f "EPERM removing resource %s" (string_of_resource resource));
+        Error.eperm
+    with Not_found ->
+      Log.err (fun f -> f "Fid not bound, returning badfid");
+      Error.badfid
 
   let wstat _info ~cancel _ = Error.eperm
 end
