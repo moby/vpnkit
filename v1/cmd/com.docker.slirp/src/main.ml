@@ -127,8 +127,10 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                               end else Cstruct.append ip_header ip_payload
                             | None -> ip_header
                           in
+                          set_icmpv4_csum header
+                            (Tcpip_checksum.ones_complement_list [ header;
+                                                                   icmp_payload ]);
                           let icmp_packet = Cstruct.append header icmp_payload in
-                          set_icmpv4_csum header (Tcpip_checksum.ones_complement_list [ icmp_packet ]);
                           icmp_packet
                         in
                         let ethernet_frame, len = Tcpip_stack.IPV4.allocate (Tcpip_stack.ipv4 s)
