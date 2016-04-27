@@ -27,6 +27,8 @@ let client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 
+let mtu = 1452 (* packets above this size with DNF set will get ICMP errors *)
+
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
 
@@ -107,15 +109,43 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                                      (Ipaddr.V4.to_string dst) dst_port
                                      length (Cstruct.len udp));
                         Lwt.return_unit
-                      end else if dnf && (Cstruct.len payload > 1452) then begin
+                      end else if dnf && (Cstruct.len payload > mtu) then begin
+                        let would_fragment ~ip_header ~ip_payload =
+                          let open Icmpv4_wire in
+                          let header = Cstruct.create sizeof_icmpv4 in
+                          set_icmpv4_ty header 0x03;
+                          set_icmpv4_code header 0x04;
+                          set_icmpv4_csum header 0x0000;
+                          (* this field is unused for icmp destination unreachable *)
+                          set_icmpv4_id header 0x00;
+                          set_icmpv4_seq header mtu;
+                          let icmp_payload = match ip_payload with
+                            | Some ip_payload ->
+                              if (Cstruct.len ip_payload > 8) then begin
+                                let ip_payload = Cstruct.sub ip_payload 0 8 in
+                                Cstruct.append ip_header ip_payload
+                              end else Cstruct.append ip_header ip_payload
+                            | None -> ip_header
+                          in
+                          let icmp_packet = Cstruct.append header icmp_payload in
+                          set_icmpv4_csum header (Tcpip_checksum.ones_complement_list [ icmp_packet ]);
+                          icmp_packet
+                        in
+                        let reply = would_fragment
+                            ~ip_header:(Cstruct.sub payload 0 (ihl * 4))
+                            ~ip_payload:(Cstruct.sub payload (ihl * 4) 8) in
                         (* Rather than silently unset the do not fragment bit, we
-                           drop larger IPv4 packets which we think would be fragmented
-                           and assume that smaller ones will survive intact. See #2811 *)
-                        Log.err (fun f -> f "Dropping UDP %s:%d -> %s:%d with DNF set IPv4 len %d"
+                           respond with an ICMP error message which will
+                           hopefully prompt the other side to send messages we
+                           can forward *)
+                        Log.err (fun f -> f
+                                    "Sending icmp-dst-unreachable in response to UDP %s:%d -> %s:%d with DNF set IPv4 len %d"
                                      (Ipaddr.V4.to_string src) src_port
                                      (Ipaddr.V4.to_string dst) dst_port
                                      length);
-                        Lwt.return_unit
+                        Tcpip_stack.IPV4.writev ~source_ip:dst
+                          ~source_port:dst_port ~dest_ip:src ~dest_port:src_port
+                          (Tcpip_stack.ipv4 s) [ reply ];
                       end else begin
                         let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
                         (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
