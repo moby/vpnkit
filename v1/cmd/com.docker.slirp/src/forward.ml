@@ -156,10 +156,15 @@ let bind local =
     let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
     Lwt.catch
-      (fun () -> Lwt_unix.bind fd addr; Lwt.return ())
-      (fun e -> Lwt_unix.close fd >>= fun () -> Lwt.fail e)
-    >>= fun () ->
-    Lwt.return (Result.Ok fd)
+      (fun () ->
+        Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
+        Lwt_unix.bind fd addr;
+        Lwt.return (Result.Ok fd))
+      (fun e ->
+        Lwt_unix.close fd
+        >>= fun () ->
+        Lwt.return (Result.Error (`Msg (Printf.sprintf "Failed to bind TCP %s:%d %s" (Ipaddr.V4.to_string local_ip) local_port (Printexc.to_string e))))
+      )
   | `Udp (local_ip, local_port) ->
     check_bind_allowed local_ip
     >>= fun () ->
@@ -167,10 +172,15 @@ let bind local =
     let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
     Lwt.catch
-      (fun () -> Lwt_unix.bind fd addr; Lwt.return ())
-      (fun e -> Lwt_unix.close fd >>= fun () -> Lwt.fail e)
-    >>= fun () ->
-    Lwt.return (Result.Ok fd)
+      (fun () ->
+        Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
+        Lwt_unix.bind fd addr;
+        Lwt.return (Result.Ok fd))
+      (fun e ->
+        Lwt_unix.close fd
+        >>= fun () ->
+        Lwt.return (Result.Error (`Msg (Printf.sprintf "Failed to bind UDP %s:%d %s" (Ipaddr.V4.to_string local_ip) local_port (Printexc.to_string e))))
+      )
 
 let start_tcp_proxy vsock_path_var local_ip local_port fd t =
   let open Lwt.Infix in
@@ -384,9 +394,9 @@ let start vsock_path_var t =
   let open Lwt.Infix in
   bind t.local
   >>= function
-  | Result.Error e -> Lwt.return (Result.Error e)
+  | Result.Error (`Msg m) ->
+    Lwt.return (Result.Error (`Msg m))
   | Result.Ok fd ->
-  Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
   let t = { t with fd = Some fd } in
   match t.local with
   | `Tcp (local_ip, local_port) ->
