@@ -99,11 +99,22 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                       let src_port = Wire_structs.get_udp_source_port udp in
                       let dst_port = Wire_structs.get_udp_dest_port udp in
                       let length = Wire_structs.get_udp_length udp in
+                      let flags_fragment_offset = Wire_structs.Ipv4_wire.get_ipv4_off payload in
+                      let dnf = ((flags_fragment_offset lsr 8) land 0x40) <> 0 in
                       if Cstruct.len udp < length then begin
                         Log.err (fun f -> f "Dropping UDP %s:%d -> %s:%d reported len %d actual len %d"
                                      (Ipaddr.V4.to_string src) src_port
                                      (Ipaddr.V4.to_string dst) dst_port
                                      length (Cstruct.len udp));
+                        Lwt.return_unit
+                      end else if dnf && (Cstruct.len payload > 1452) then begin
+                        (* Rather than silently unset the do not fragment bit, we
+                           drop larger IPv4 packets which we think would be fragmented
+                           and assume that smaller ones will survive intact. See #2811 *)
+                        Log.err (fun f -> f "Dropping UDP %s:%d -> %s:%d with DNF set IPv4 len %d"
+                                     (Ipaddr.V4.to_string src) src_port
+                                     (Ipaddr.V4.to_string dst) dst_port
+                                     length);
                         Lwt.return_unit
                       end else begin
                         let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
