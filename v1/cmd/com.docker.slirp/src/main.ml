@@ -176,7 +176,15 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
                     (Ipaddr.V4.to_string src_ip) src_port
                     (Ipaddr.V4.to_string dst_ip) dst_port in
                 Log.debug (fun f -> f "%s connecting" description);
-
+                ( if Ipaddr.V4.compare src_ip local_ip == 0 && src_port = 53 then begin
+                    Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
+                    >>= function
+                    | { Dns_resolver_unix.servers = (Ipaddr.V4 ip, port) :: _ } -> Lwt.return (ip, port)
+                    | _ ->
+                      Log.err (fun f -> f "Failed to discover DNS server: assuming 127.0.01");
+                      Lwt.return (Ipaddr.V4.of_string_exn "127.0.0.1", 53)
+                  end else Lwt.return (src_ip, src_port)
+                ) >>= fun (src_ip, src_port) ->
                 Socket.Stream.connect_v4 src_ip src_port
                 >>= function
                 | `Error (`Msg m) ->
