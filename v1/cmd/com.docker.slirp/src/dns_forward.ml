@@ -30,76 +30,72 @@ module OptionThread = struct
     | Some x -> f x
 end
 
+let string_of_dns buf =
+  let len = Cstruct.len buf in
+  let buf = Dns.Buf.of_cstruct buf in
+  match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
+  | None ->
+    "Unparsable DNS packet"
+  | Some request ->
+    Dns.Packet.to_string request
+
 let input s ~src ~dst ~src_port buf =
   if List.mem dst (Tcpip_stack.IPV4.get_ip (Tcpip_stack.ipv4 s)) then begin
+
+  let src_str = Ipaddr.V4.to_string src in
+  let dst_str = Ipaddr.V4.to_string dst in
+
+  Log.debug (fun f -> f "DNS %s:%d -> %s %s" src_str src_port dst_str (string_of_dns buf));
 
   (* Re-read /etc/resolv.conf on every request. This ensures that
      changes to DNS on sleep/resume or switching networks are reflected
      immediately. The file is very small, and parsing it shouldn't be
      too slow. *)
   Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
-  >>= fun resolver ->
-
-  let src_str = Ipaddr.V4.to_string src in
-  let dst_str = Ipaddr.V4.to_string dst in
-
-  let len = Cstruct.len buf in
-  let buf = Dns.Buf.of_cstruct buf in
-  let obuf = Dns.Buf.create 4096 in
-
-  let result =
-    let open OptionThread in
-    ( match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
-    | None ->
-      Log.err (fun f -> f "Failed to parse DNS packet");
-      Lwt.return_none
-    | Some request ->
-      Log.debug (fun f -> f "DNS %s:%d -> %s %s" src_str src_port dst_str (Dns.Packet.to_string request));
-      begin match request.Dns.Packet.questions with
-      | [] -> Lwt.return_none (* no questions in packet *)
-      | [q] ->
-        Lwt.catch
-          (fun () ->
-            let open Lwt.Infix in
-            Dns_resolver_unix.resolve resolver q.Dns.Packet.q_class q.Dns.Packet.q_type q.Dns.Packet.q_name
-            >>= fun response ->
-            Lwt.return (Some (request, { response with Dns.Packet.id = request.Dns.Packet.id }))
-          ) (function
-            | Dns.Protocol.Dns_resolve_error exns ->
-              Log.err (fun f -> f "DNS resolution failed for %s: %s" (Dns.Packet.question_to_string q) (String.concat "; " (List.map Printexc.to_string exns)));
-              Lwt.return_none
-            | e ->
-              Log.err (fun f -> f "DNS resolution failed for %s: %s" (Dns.Packet.question_to_string q) (Printexc.to_string e));
-              Lwt.return_none
-            )
-      | _::_::_ ->
-        Log.err (fun f -> f "More than 1 query in DNS request: %s" (Dns.Packet.to_string request));
-        Lwt.return_none
-      end
-    ) >>= fun (request, response) ->
-    (* Preserve the ra flag from the response *)
-    let ra = response.Dns.Packet.detail.Dns.Packet.ra in
-
-    let query = Dns.Protocol.Server.query_of_context request in
-    let answer = Dns.Query.answer_of_response ~preserve_aa:true response in
-    let response = Dns.Query.response_of_answer query answer in
-    let response = { response with Dns.Packet.detail = { response.Dns.Packet.detail with Dns.Packet.ra }} in
-    (* response.Dns.Packet.deail.ra =  true *)
-    match Dns.Protocol.Server.marshal obuf request response with
-    | None -> Lwt.return_none
-    | Some buf -> Lwt.return (Some (response, buf)) in
-
-  result
   >>= function
-  | None ->
-    Lwt.return_unit
-  | Some (response, buf) ->
-    let buf = Cstruct.of_bigarray buf in
-    (* Take a copy of the response buffer to put in the response queue *)
-    let copy = Cstruct.create (Cstruct.len buf) in
-    Cstruct.blit buf 0 copy 0 (Cstruct.len buf);
-    Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) copy
+  | { Dns_resolver_unix.servers = (Ipaddr.V4 dst, dst_port) :: _ } -> begin
+    let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.V4.to_string dst, dst_port) in
+
+    let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+    Lwt.catch
+      (fun () ->
+        Lwt_bytes.sendto fd buf.Cstruct.buffer buf.Cstruct.off buf.Cstruct.len [] remote_sockaddr
+        >>= fun n ->
+        if n <> buf.Cstruct.len
+        then Log.err (fun f -> f "DNS forwarder: Lwt_bytes.send short: expected %d got %d"  buf.Cstruct.len n);
+        Lwt.return ()
+      ) (fun e ->
+        Log.err (fun f -> f "sendto failed with %s" (Printexc.to_string e));
+        Lwt.return ()
+      )
     >>= fun () ->
-    Log.debug (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (Dns.Packet.to_string response));
-    Lwt.return ()
+    let receiver =
+      let buffer = Cstruct.create 4096 in
+      Lwt.catch
+        (fun () ->
+           Lwt_bytes.recvfrom fd buffer.Cstruct.buffer buffer.Cstruct.off buffer.Cstruct.len []
+           >>= fun (n, _) ->
+           Lwt.return (`Result (Cstruct.sub buffer 0 n))
+        ) (fun e ->
+           Log.err (fun f -> f "recvfrom failed with %s" (Printexc.to_string e));
+           Lwt.return `Error
+        ) in
+    let timeout = Lwt_unix.sleep 5. >>= fun () -> Lwt.return `Timeout in
+    Lwt.pick [ receiver; timeout ]
+    >>= fun r ->
+    Lwt_unix.close fd
+    >>= fun () ->
+    match r with
+    | `Error ->
+      Lwt.return_unit
+    | `Timeout ->
+      Log.err (fun f -> f "DNS response timed out after 5s");
+      Lwt.return_unit
+    | `Result buffer ->
+      Log.debug (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (string_of_dns buffer));
+      Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) buffer
+    end
+  | _ ->
+    Log.err (fun f -> f "No upstream DNS server configured: dropping request");
+    Lwt.return_unit
   end else Lwt.return_unit
