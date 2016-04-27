@@ -35,7 +35,7 @@ let string_of_dns buf =
   let buf = Dns.Buf.of_cstruct buf in
   match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
   | None ->
-    "Unparsable DNS packet"
+    Printf.sprintf "Unparsable DNS packet length %d" len
   | Some request ->
     Dns.Packet.to_string request
 
