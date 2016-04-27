@@ -332,7 +332,11 @@ The directory will be deleted and replaced with a file of the same name.
     match resource with
     | Root when perm.Types.FileMode.is_directory ->
       let qid = next_qid [ Types.Qid.Directory ] in
-      active := StringMap.add name { name; instance = None; result = None } !active;
+      let entry = { name; instance = None; result = None } in
+      active := StringMap.add name entry !active;
+      let resource = Entry entry in
+      connection.fids :=  Types.Fid.Map.add fid resource !(connection.fids);
+      Log.info (fun f -> f "Creating resource %s" (string_of_resource resource));
       return { Response.Create.qid; iounit = 512l }
     | resource ->
       Printf.eprintf "Active_list.create failed: resource = %s\n%!"
