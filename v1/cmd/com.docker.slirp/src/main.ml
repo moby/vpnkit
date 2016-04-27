@@ -256,6 +256,13 @@ let main_t socket_path port_control_path vsock_path db_path debug =
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   Printexc.record_backtrace true;
 
+  Lwt.async_exception_hook := (fun exn ->
+    Log.err (fun f -> f "Lwt.async failure %s: %s"
+      (Printexc.to_string exn)
+      (Printexc.get_backtrace ())
+    )
+  );
+
   let config = Active_config.create "unix" db_path in
   let driver = [ "com.docker.driver.amd64-linux" ] in
 
