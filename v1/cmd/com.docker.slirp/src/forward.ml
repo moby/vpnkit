@@ -122,12 +122,12 @@ let request_privileged_port local_ip local_port sock_stream =
       let open Lwt.Infix in
       Lwt_unix.connect s (Unix.ADDR_UNIX "/var/tmp/com.docker.vmnetd.socket")
       >>= fun () ->
-      Vmnet.Client.of_fd s
+      Vmnet_client.of_fd s
       >>= fun r ->
       begin match r with
       | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
       | `Ok c ->
-        Vmnet.Client.bind_ipv4 c (local_ip, local_port, sock_stream)
+        Vmnet_client.bind_ipv4 c (local_ip, local_port, sock_stream)
         >>= fun r ->
         begin match r with
         | `Ok fd ->

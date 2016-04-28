@@ -15,4 +15,4 @@ Executable Main
   Path: src
   MainIs: main.ml
   BuildDepends: hostnet, osx-daemon, osx-hyperkit, ofs, protocol-9p,
-    protocol-9p.unix, proto-vmnet, cmdliner
+    protocol-9p.unix, proto-vmnet, vmnet-client, cmdliner
