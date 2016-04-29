@@ -103,6 +103,9 @@ let main socket port_control vsock_path db debug = Lwt_main.run @@ main_t socket
 
 open Cmdliner
 
+(* NOTE(aduermael): it seems to me that "/var/tmp/com.docker.slirp.socket" is a default value, right?
+the db socket path is now dynamic, depending on current user's home directory. Could we just
+make it fail instead? In case no argument is supplied? *)
 let socket =
   Arg.(value & opt string "/var/tmp/com.docker.slirp.socket" & info [ "socket" ] ~docv:"SOCKET")
 
