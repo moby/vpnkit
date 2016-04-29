@@ -112,6 +112,9 @@ let port_control_path =
 let vsock_path =
   Arg.(value & opt string "/var/tmp/com.docker.vsock/connect" & info [ "vsock-path" ] ~docv:"VSOCK")
 
+(* NOTE(aduermael): it seems to me that "/var/tmp/com.docker.db.socket" is a default value, right?
+the db socket path is now dynamic, depending on current user's home directory. Could we just
+make it fail instead? In case no argument is supplied? *)
 let db_path =
   Arg.(value & opt string "/var/tmp/com.docker.db.socket" & info [ "db" ] ~docv:"DB")
 
