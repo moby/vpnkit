@@ -180,7 +180,7 @@ let main_t socket_path port_control_path vsock_path db_path debug =
       Lwt.async (fun () ->
         Utils.log_exception_continue "Slirp_stack.connect"
           (fun () ->
-            Slirp_stack.connect x pcap_settings peer_ip local_ip
+            Slirp_stack.connect x peer_ip local_ip
           )
         );
       loop () in

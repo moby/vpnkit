@@ -43,7 +43,7 @@ module Make(Vmnet: Sig.VMNET) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)
   module Dns_forward = Dns_forward.Make(Tcpip_stack)
 
-let connect x pcap_settings peer_ip local_ip =
+let connect x peer_ip local_ip =
   let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in
         begin Tcpip_stack.connect ~config x
         >>= function

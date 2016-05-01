@@ -10,8 +10,19 @@ BuildTools: ocamlbuild
 
 Description: proxy ethernet frames to and from sockets
 
+Library hostnet
+  Path: lib
+  Pack: true
+  Findlibname: hostnet
+  Modules: Arp, Dns_forward, Filter, Slirp, Socket, Socket_stack, Tcpip_stack
+  BuildDepends: cstruct, lwt.unix, logs, mirage-types.lwt, ipaddr, mirage-flow,
+    mirage-unix, mirage-clock-unix, mirage-console.unix, tcpip.ethif,
+    tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct,
+    tcpip.stack-socket, charrua-core.server, dns, dns.lwt
+
 Executable Main
   CompiledObject: best
   Path: src
   MainIs: main.ml
-  BuildDepends: osx-daemon, osx-hyperkit, ofs, protocol-9p, protocol-9p.unix, sexplib, sexplib.syntax, cstruct, cstruct.lwt, cstruct.syntax, lwt.unix, io-page.unix, mirage-unix, mirage-clock-unix, mirage-console.unix, tcpip.ethif, tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct, tcpip.stack-socket, pcap-format, cmdliner, charrua-core.server, logs.fmt, dns, dns.lwt, mirage-flow, proto-vmnet
+  BuildDepends: hostnet, osx-daemon, osx-hyperkit, ofs, protocol-9p,
+    protocol-9p.unix, proto-vmnet, cmdliner
