@@ -49,7 +49,7 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
 
   (* Start the 9P port forwarding server *)
   let module Ports = Active_list.Make(Forward) in
-  let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
+  let module Server = Server9p_unix.Make(Log)(Ports) in
   let fs = Ports.make () in
   Ports.set_context fs vsock_path;
   Osx_socket.listen port_control_path
@@ -227,7 +227,7 @@ let start_native port_control_path vsock_path =
   Log.info (fun f -> f "starting in native mode port_control_path:%s vsock_path:%s" port_control_path vsock_path);
   (* Start the 9P port forwarding server *)
   let module Ports = Active_list.Make(Forward) in
-  let module Server = Server9p_unix.Make(Log9p_unix.Stdout)(Ports) in
+  let module Server = Server9p_unix.Make(Log)(Ports) in
   let fs = Ports.make () in
   Socket_stack.connect ()
   >>= function

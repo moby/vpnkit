@@ -8,8 +8,7 @@ let src =
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
-
-module Client = Client9p_unix.Make(Log9p_unix.Stdout)
+module Client = Client9p_unix.Make(Log)
 
 let ( >>*= ) x f =
   x >>= function
