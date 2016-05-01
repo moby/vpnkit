@@ -39,9 +39,9 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
-module Make(Vmnet: Sig.VMNET) = struct
+module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)
-  module Dns_forward = Dns_forward.Make(Tcpip_stack)
+  module Dns_forward = Dns_forward.Make(Tcpip_stack)(Resolv_conv)
 
 let connect x peer_ip local_ip =
   let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in

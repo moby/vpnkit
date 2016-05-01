@@ -14,28 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  *)
+open Lwt
+open Dns
 
-module type VMNET = sig
-  (** A virtual ethernet link to the VM *)
-
-  include V1_LWT.NETWORK
-
-  val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
-  (** Add a callback which will be invoked in parallel with all received packets *)
-
-end
-
-module type TCPIP = sig
-  (** A TCP/IP stack *)
-
-  include V1_LWT.STACKV4
-
-  module TCPV4_half_close : Mirage_flow_s.SHUTDOWNABLE
-    with type flow = TCPV4.flow
-end
-
-module type RESOLV_CONF = sig
-  (** The system DNS configuration *)
-
-  val get : unit -> (Ipaddr.t * int) list Lwt.t
-end
+let get () =
+  Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
+  >>= function
+  | { Dns_resolver_unix.servers } -> Lwt.return servers

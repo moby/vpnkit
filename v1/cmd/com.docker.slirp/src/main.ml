@@ -50,7 +50,7 @@ let restart_on_change name to_string values =
   Log.info (fun f -> f "%s changed to %s in the database: restarting" name (to_string v));
   exit 1
 
-module Slirp_stack = Slirp.Make(Vmnet)
+module Slirp_stack = Slirp.Make(Vmnet)(Resolv_conf)
 
 let main_t socket_path port_control_path vsock_path db_path debug =
   Osx_reporter.install ~stdout:debug;

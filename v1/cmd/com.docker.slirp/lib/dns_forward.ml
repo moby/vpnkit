@@ -39,7 +39,7 @@ let string_of_dns buf =
   | Some request ->
     Dns.Packet.to_string request
 
-module Make(Tcpip_stack: Sig.TCPIP) = struct
+module Make(Tcpip_stack: Sig.TCPIP)(Resolv_conf: Sig.RESOLV_CONF) = struct
 
 let input s ~src ~dst ~src_port buf =
   if List.mem dst (Tcpip_stack.IPV4.get_ip (Tcpip_stack.ipv4 s)) then begin
@@ -53,9 +53,9 @@ let input s ~src ~dst ~src_port buf =
      changes to DNS on sleep/resume or switching networks are reflected
      immediately. The file is very small, and parsing it shouldn't be
      too slow. *)
-  Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
+  Resolv_conf.get ()
   >>= function
-  | { Dns_resolver_unix.servers = (Ipaddr.V4 dst, dst_port) :: _ } -> begin
+  | (Ipaddr.V4 dst, dst_port) :: _ -> begin
     let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.V4.to_string dst, dst_port) in
 
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
