@@ -1,0 +1,11 @@
+# OASIS_START
+# DO NOT EDIT (digest: 3c0cbe0314b05a3e740ab6d34ebed912)
+Arp
+Dns_forward
+Filter
+Slirp
+Socket
+Socket_stack
+Tcpip_stack
+Sig
+# OASIS_STOP
