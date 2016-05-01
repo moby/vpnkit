@@ -15,6 +15,7 @@
  *
  *)
 open Lwt
+open Hostnet
 
 let src =
   let src = Logs.Src.create "usernet" ~doc:"Mirage TCP/IP <-> socket proxy" in

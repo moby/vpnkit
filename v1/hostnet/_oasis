@@ -1,0 +1,22 @@
+OASISFormat: 0.4
+Name: usernet
+Version: 0.1
+Synopsis: a userspace ethernet to socket proxy
+Authors: David Scott (dave@recoil.org)
+License: ISC
+Plugins: META (0.4), DevFiles (0.4)
+AlphaFeatures: pure_interface
+BuildTools: ocamlbuild
+
+Description: proxy ethernet frames to and from sockets
+
+Library hostnet
+  Path: lib
+  Pack: true
+  Findlibname: hostnet
+  Modules: Arp, Dns_forward, Filter, Slirp, Socket, Socket_stack, Tcpip_stack,
+    Sig
+  BuildDepends: cstruct, lwt.unix, logs, mirage-types.lwt, ipaddr, mirage-flow,
+    mirage-unix, mirage-clock-unix, mirage-console.unix, tcpip.ethif,
+    tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct,
+    tcpip.stack-socket, charrua-core.server, dns, dns.lwt

@@ -1,8 +1,19 @@
 opam-version: "1.2"
-name: "slirp"
+name: "hostnet"
 version: "0.0.0"
 maintainer: "David Scott <dave.scott@docker.com>"
 authors: [ "David Scott <dave.scott@docker.com>" ]
+
+build: [
+  ["./configure" "--prefix" prefix]
+  [make]
+]
+build-test: [
+  ["./configure" "--enable-tests"]
+  [make "test"]
+]
+install: [make "install"]
+remove: ["ocamlfind" "remove" "hostnet"]
 
 depends: [
   "ocamlfind" {build}
@@ -11,9 +22,6 @@ depends: [
   "result"
   "ipaddr"
   "lwt"
-  "ofs"
-  "osx-daemon"
-  "hostnet"
   "tcpip" { >= "3.0.0" }
   "dns"
   "pcap-format" { >= "0.4.0" }
@@ -23,7 +31,6 @@ depends: [
   "fmt"
   "mirage-flow" { >= "1.1.0" }
   "mirage-types-lwt" { >= "3.0.0" }
-  "proto-vmnet"
   "ounit" {test}
   "alcotest" {test}
 ]

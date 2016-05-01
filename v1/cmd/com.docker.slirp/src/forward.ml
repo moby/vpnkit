@@ -1,4 +1,5 @@
 open Utils
+open Hostnet
 
 let src =
   let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
