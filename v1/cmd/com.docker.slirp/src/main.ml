@@ -41,21 +41,11 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
-let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip local_ip =
-  Log.info (fun f -> f "Starting slirp server socket_path:%s port_control_path:%s vsock_path:%s pcap_settings:%s peer_ip:%s local_ip:%s"
-    socket_path port_control_path vsock_path (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
+let start_slirp socket_path pcap_settings peer_ip local_ip =
+  Log.info (fun f -> f "Starting slirp server socket_path:%s pcap_settings:%s peer_ip:%s local_ip:%s"
+    socket_path (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
   );
   let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in
-
-  (* Start the 9P port forwarding server *)
-  let module Ports = Active_list.Make(Forward) in
-  let module Server = Server9p_unix.Make(Log)(Ports) in
-  let fs = Ports.make () in
-  Ports.set_context fs vsock_path;
-  Osx_socket.listen port_control_path
-  >>= fun port_s ->
-  let server = Server.of_fd fs port_s in
-  Lwt.async (fun () -> Server.serve_forever server);
 
   Log.info (fun f -> f "Starting slirp network stack on %s" socket_path);
   Osx_socket.listen socket_path
@@ -223,8 +213,8 @@ let start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip l
     >>= fun r ->
     Lwt.return (or_failwith r)
 
-let start_native port_control_path vsock_path =
-  Log.info (fun f -> f "starting in native mode port_control_path:%s vsock_path:%s" port_control_path vsock_path);
+let start_port_forwarding port_control_path vsock_path =
+  Log.info (fun f -> f "starting port_forwarding port_control_path:%s vsock_path:%s" port_control_path vsock_path);
   (* Start the 9P port forwarding server *)
   let module Ports = Active_list.Make(Forward) in
   let module Server = Server9p_unix.Make(Log)(Ports) in
@@ -341,10 +331,9 @@ let main_t socket_path port_control_path vsock_path db_path debug =
   let peer_ip = Active_config.hd peer_ips in
   let local_ip = Active_config.hd host_ips in
 
-  Lwt.join [
-    start_slirp socket_path port_control_path vsock_path pcap_settings peer_ip local_ip;
-    start_native port_control_path vsock_path ;
-  ]
+  Lwt.async (fun () -> Utils.log_exception_continue "start_port_server" (fun () -> start_port_forwarding port_control_path vsock_path));
+
+  start_slirp socket_path pcap_settings peer_ip local_ip
 
 let main socket port_control vsock_path db debug = Lwt_main.run @@ main_t socket port_control vsock_path db debug
 
