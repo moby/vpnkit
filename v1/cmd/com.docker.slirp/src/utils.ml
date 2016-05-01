@@ -29,3 +29,7 @@ let log_exception_continue description f =
        Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
        Lwt.return ()
     )
+
+let or_failwith = function
+  | Result.Error (`Msg m) -> failwith m
+  | Result.Ok x -> x
