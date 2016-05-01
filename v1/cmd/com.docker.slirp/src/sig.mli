@@ -15,12 +15,21 @@
  *
  *)
 
-(** Accept connections and talk to clients via the vmnetd protocol, exposing
-    the packets as a Mirage NETWORK interface *)
+module type VMNET = sig
+  (** A virtual ethernet link to the VM *)
 
-module type S = sig
   include V1_LWT.NETWORK
-    with type buffer = Cstruct.t
 
   val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
+  (** Add a callback which will be invoked in parallel with all received packets *)
+
+end
+
+module type TCPIP = sig
+  (** A TCP/IP stack *)
+
+  include V1_LWT.STACKV4
+
+  module TCPV4_half_close : Mirage_flow_s.SHUTDOWNABLE
+    with type flow = TCPV4.flow
 end

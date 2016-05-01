@@ -30,7 +30,7 @@ module Infix = struct
     | `Error x -> Lwt.return (`Error x)
 end
 
-module Make(Input: Network.S) = struct
+module Make(Input: Sig.VMNET) = struct
 
   type stats = {
     mutable rx_bytes: int64;

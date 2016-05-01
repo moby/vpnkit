@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  *)
-include Network_stack.S
+include Sig.TCPIP
 
 val connect: unit
   -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t

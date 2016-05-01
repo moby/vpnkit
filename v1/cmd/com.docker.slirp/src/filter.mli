@@ -15,8 +15,8 @@
  *
  *)
 
-module Make(Input: Network.S): sig
-  include Network.S
+module Make(Input: Sig.VMNET): sig
+  include Sig.VMNET
 
   val connect:
     valid_sources:Ipaddr.V4.t list -> Input.t

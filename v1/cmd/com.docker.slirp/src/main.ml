@@ -50,6 +50,8 @@ let restart_on_change name to_string values =
   Log.info (fun f -> f "%s changed to %s in the database: restarting" name (to_string v));
   exit 1
 
+module Slirp_stack = Slirp.Make(Vmnet)
+
 let main_t socket_path port_control_path vsock_path db_path debug =
   Osx_reporter.install ~stdout:debug;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
@@ -143,7 +145,46 @@ let main_t socket_path port_control_path vsock_path db_path debug =
 
   Lwt.async (fun () -> Utils.log_exception_continue "start_port_server" (fun () -> start_port_forwarding port_control_path vsock_path));
 
-  Slirp.start socket_path pcap_settings peer_ip local_ip
+  Log.info (fun f -> f "Starting slirp server socket_path:%s pcap_settings:%s peer_ip:%s local_ip:%s"
+    socket_path (Slirp.print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
+  );
+  Osx_socket.listen socket_path
+  >>= fun s ->
+  let rec loop () =
+    Lwt_unix.accept s
+    >>= fun (client, _) ->
+    Vmnet.of_fd ~client_macaddr:Slirp.client_macaddr ~server_macaddr:Slirp.server_macaddr client
+    >>= function
+    | `Error (`Msg m) -> failwith m
+    | `Ok x ->
+      Log.debug (fun f -> f "accepted vmnet connection");
+
+      let rec monitor_pcap_settings pcap_settings =
+        Active_config.tl pcap_settings
+        >>= fun pcap_settings ->
+        ( match Active_config.hd pcap_settings with
+          | None ->
+            Log.debug (fun f -> f "Disabling any active packet capture");
+            Vmnet.stop_capture x
+          | Some (filename, size_limit) ->
+            Log.debug (fun f -> f "Capturing packets to %s %s" filename (match size_limit with None -> "with no limit" | Some x -> Printf.sprintf "limited to %Ld bytes" x));
+            Vmnet.start_capture x ?size_limit filename )
+        >>= fun () ->
+        monitor_pcap_settings pcap_settings in
+      Lwt.async (fun () ->
+        Utils.log_exception_continue "monitor_pcap_settings"
+          (fun () ->
+            monitor_pcap_settings pcap_settings
+          )
+        );
+      Lwt.async (fun () ->
+        Utils.log_exception_continue "Slirp_stack.connect"
+          (fun () ->
+            Slirp_stack.connect x pcap_settings peer_ip local_ip
+          )
+        );
+      loop () in
+  loop ()
 
 let main socket port_control vsock_path db debug = Lwt_main.run @@ main_t socket port_control vsock_path db debug
 

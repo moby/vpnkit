@@ -15,6 +15,16 @@
  *
  *)
 
+
+let src =
+  let src = Logs.Src.create "tcpip" ~doc:"Mirage TCP/IP" in
+  Logs.Src.set_level src (Some Logs.Debug);
+  src
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
+module Make(Vmnet: Sig.VMNET) = struct
+
 type configuration = {
   local_ip: Ipaddr.V4.t;
   peer_ip: Ipaddr.V4.t;
@@ -66,13 +76,6 @@ let dhcp_conf ~config =
   }
   " network netmask local_ip local_ip low_ip high_ip
   (Macaddr.to_string config.client_macaddr) peer_ip
-
-let src =
-  let src = Logs.Src.create "tcpip" ~doc:"Mirage TCP/IP" in
-  Logs.Src.set_level src (Some Logs.Debug);
-  src
-
-module Log = (val Logs.src_log src : Logs.LOG)
 
 module Netif = Filter.Make(Vmnet)
 
@@ -205,4 +208,5 @@ module TCPV4_half_close = struct
        what you say. *)
     Lwt.return ()
   let shutdown_write = close
+end
 end

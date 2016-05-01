@@ -32,42 +32,19 @@ let mtu = 1452 (* packets above this size with DNF set will get ICMP errors *)
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
 
+type pcap = (string * int64 option) option
+
 let print_pcap = function
   | None -> "disabled"
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
-let start socket_path pcap_settings peer_ip local_ip =
-  Log.info (fun f -> f "Starting slirp server socket_path:%s pcap_settings:%s peer_ip:%s local_ip:%s"
-    socket_path (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
-  );
+module Make(Vmnet: Sig.VMNET) = struct
+  module Tcpip_stack = Tcpip_stack.Make(Vmnet)
+  module Dns_forward = Dns_forward.Make(Tcpip_stack)
+
+let connect x pcap_settings peer_ip local_ip =
   let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in
-
-  Log.info (fun f -> f "Starting slirp network stack on %s" socket_path);
-  Osx_socket.listen socket_path
-  >>= fun s ->
-    let rec loop () =
-      Lwt_unix.accept s
-      >>= fun (client, _) ->
-      Vmnet.of_fd ~client_macaddr ~server_macaddr client
-      >>= function
-       | `Error (`Msg m) -> failwith m
-       | `Ok x ->
-        Log.debug (fun f -> f "accepted vmnet connection");
-        let rec monitor_pcap_settings pcap_settings =
-          Active_config.tl pcap_settings
-          >>= fun pcap_settings ->
-          ( match Active_config.hd pcap_settings with
-            | None ->
-              Log.debug (fun f -> f "Disabling any active packet capture");
-              Vmnet.stop_capture x
-            | Some (filename, size_limit) ->
-              Log.debug (fun f -> f "Capturing packets to %s %s" filename (match size_limit with None -> "with no limit" | Some x -> Printf.sprintf "limited to %Ld bytes" x));
-              Vmnet.start_capture x ?size_limit filename )
-          >>= fun () ->
-          monitor_pcap_settings pcap_settings in
-        Lwt.async (fun () -> Utils.log_exception_continue "monitor_pcap_settings" (fun () -> monitor_pcap_settings pcap_settings));
-
         begin Tcpip_stack.connect ~config x
         >>= function
         | `Error (`Msg m) -> failwith m
@@ -203,8 +180,6 @@ let start socket_path pcap_settings peer_ip local_ip =
             Tcpip_stack.listen s
             >>= fun () ->
             Log.info (fun f -> f "TCP/IP ready");
-            loop ()
-        end in
-    loop ()
-    >>= fun r ->
-    Lwt.return (Utils.or_failwith r)
+            Lwt.return ()
+        end
+end

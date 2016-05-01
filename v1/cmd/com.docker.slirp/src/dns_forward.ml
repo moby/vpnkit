@@ -39,6 +39,8 @@ let string_of_dns buf =
   | Some request ->
     Dns.Packet.to_string request
 
+module Make(Tcpip_stack: Sig.TCPIP) = struct
+
 let input s ~src ~dst ~src_port buf =
   if List.mem dst (Tcpip_stack.IPV4.get_ip (Tcpip_stack.ipv4 s)) then begin
 
@@ -99,3 +101,4 @@ let input s ~src ~dst ~src_port buf =
     Log.err (fun f -> f "No upstream DNS server configured: dropping request");
     Lwt.return_unit
   end else Lwt.return_unit
+end
