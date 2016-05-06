@@ -20,3 +20,9 @@ Document ofs
   Install:              true
   XOCamlbuildPath:      src
   XOCamlbuildLibraries: ofs
+
+Executable datakit_config
+  Path: cli
+  CompiledObject: best
+  MainIs: main.ml
+  BuildDepends: cmdliner, ofs, logs.fmt

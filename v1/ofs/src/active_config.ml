@@ -159,7 +159,7 @@ let transport ({ username; proto; address } as t) =
       match t.transport with
         | Some transport -> Lwt.return transport
         | None ->
-          Log.info (fun f -> f "attempting to reconnect to database");
+          Log.info (fun f -> f "attempting to reconnect to database on %s %s" proto address);
           retry_forever (fun () -> Transport.create ?username proto address)
           >>= fun transport ->
           Log.info (fun f -> f "reconnected transport layer");
