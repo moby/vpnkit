@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: ddbb02ccc0fce0fdef7bddbc8dd75e5c)
+# DO NOT EDIT (digest: ae262a71eaa952b738460462c429b523)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -24,4 +24,27 @@ true: annot, bin_annot
 <src/*.ml{,i,y}>: pkg_lwt.unix
 <src/*.ml{,i,y}>: pkg_protocol-9p
 <src/*.ml{,i,y}>: pkg_protocol-9p.unix
+# Executable datakit_config
+<cli/main.{native,byte}>: pkg_cmdliner
+<cli/main.{native,byte}>: pkg_cstruct
+<cli/main.{native,byte}>: pkg_cstruct.lwt
+<cli/main.{native,byte}>: pkg_cstruct.syntax
+<cli/main.{native,byte}>: pkg_io-page.unix
+<cli/main.{native,byte}>: pkg_logs
+<cli/main.{native,byte}>: pkg_logs.fmt
+<cli/main.{native,byte}>: pkg_lwt.unix
+<cli/main.{native,byte}>: pkg_protocol-9p
+<cli/main.{native,byte}>: pkg_protocol-9p.unix
+<cli/main.{native,byte}>: use_ofs
+<cli/*.ml{,i,y}>: pkg_cmdliner
+<cli/*.ml{,i,y}>: pkg_cstruct
+<cli/*.ml{,i,y}>: pkg_cstruct.lwt
+<cli/*.ml{,i,y}>: pkg_cstruct.syntax
+<cli/*.ml{,i,y}>: pkg_io-page.unix
+<cli/*.ml{,i,y}>: pkg_logs
+<cli/*.ml{,i,y}>: pkg_logs.fmt
+<cli/*.ml{,i,y}>: pkg_lwt.unix
+<cli/*.ml{,i,y}>: pkg_protocol-9p
+<cli/*.ml{,i,y}>: pkg_protocol-9p.unix
+<cli/*.ml{,i,y}>: use_ofs
 # OASIS_STOP
