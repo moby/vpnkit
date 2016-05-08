@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 3c0cbe0314b05a3e740ab6d34ebed912)
+# DO NOT EDIT (digest: 430d0585eda73a0e744999643768b846)
 Arp
 Dns_forward
 Filter
@@ -7,5 +7,6 @@ Slirp
 Socket
 Socket_stack
 Tcpip_stack
+Port
 Sig
 # OASIS_STOP

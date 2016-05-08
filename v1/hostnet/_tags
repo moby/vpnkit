@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 9bc519be784653fcb2f4175b4dd496b6)
+# DO NOT EDIT (digest: 6be930448ef296a4791d6fcdeaaf6168)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -23,6 +23,7 @@ true: annot, bin_annot
 "lib/socket.cmx": for-pack(Hostnet)
 "lib/socket_stack.cmx": for-pack(Hostnet)
 "lib/tcpip_stack.cmx": for-pack(Hostnet)
+"lib/port.cmx": for-pack(Hostnet)
 "lib/sig.cmx": for-pack(Hostnet)
 <lib/*.ml{,i,y}>: pkg_charrua-core.server
 <lib/*.ml{,i,y}>: pkg_cstruct
