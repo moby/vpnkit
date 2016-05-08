@@ -24,7 +24,7 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Forward = Forward.Make(Connect)
+module Forward = Forward.Make(Connect)(Bind)
 
 let start_port_forwarding port_control_path vsock_path =
   Log.info (fun f -> f "starting port_forwarding port_control_path:%s vsock_path:%s" port_control_path vsock_path);
