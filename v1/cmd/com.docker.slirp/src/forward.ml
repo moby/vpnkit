@@ -115,6 +115,7 @@ let check_bind_allowed ip = match !allowed_addresses with
     then Lwt.return ()
     else Lwt.fail (Unix.Unix_error(Unix.EPERM, "bind", ""))
 
+(* This implementation is OSX-only *)
 let request_privileged_port local_ip local_port sock_stream =
   let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
   finally
@@ -154,34 +155,11 @@ let bind local =
   | `Tcp (local_ip, local_port) ->
     check_bind_allowed local_ip
     >>= fun () ->
-    let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
-    let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
-    Lwt.catch
-      (fun () ->
-        Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
-        Lwt_unix.bind fd addr;
-        Lwt.return (Result.Ok fd))
-      (fun e ->
-        Lwt_unix.close fd
-        >>= fun () ->
-        Lwt.return (Result.Error (`Msg (Printf.sprintf "Failed to bind TCP %s:%d %s" (Ipaddr.V4.to_string local_ip) local_port (Printexc.to_string e))))
-      )
+    Hostnet.Port.bind local_ip local_port true
   | `Udp (local_ip, local_port) ->
     check_bind_allowed local_ip
     >>= fun () ->
-    Log.info (fun f -> f "binding socket to %s:%d" (Ipaddr.V4.to_string local_ip) local_port);
-    let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
-    let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
-    Lwt.catch
-      (fun () ->
-        Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
-        Lwt_unix.bind fd addr;
-        Lwt.return (Result.Ok fd))
-      (fun e ->
-        Lwt_unix.close fd
-        >>= fun () ->
-        Lwt.return (Result.Error (`Msg (Printf.sprintf "Failed to bind UDP %s:%d %s" (Ipaddr.V4.to_string local_ip) local_port (Printexc.to_string e))))
-      )
+    Hostnet.Port.bind local_ip local_port false
 
 let start_tcp_proxy vsock_path_var local_ip local_port fd t =
   let open Lwt.Infix in
