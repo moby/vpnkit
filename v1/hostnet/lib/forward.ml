@@ -1,5 +1,3 @@
-open Utils
-open Hostnet
 
 let src =
   let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
@@ -12,20 +10,13 @@ let finally f g =
   let open Lwt.Infix in
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
 
-module type Connector = sig
-  module Port: sig
-    type t
-
-    val of_string: string -> (t, [> `Msg of string]) Result.result
-    val to_string: t -> string
-  end
-  val connect: Port.t -> Lwt_unix.file_descr Lwt.t
-end
-
-module type Binder = sig
-
-  val bind: Ipaddr.V4.t -> int -> bool -> (Lwt_unix.file_descr, [> `Msg of string]) Result.result Lwt.t
-end
+let log_exception_continue description f =
+  Lwt.catch
+    (fun () -> f ())
+    (fun e ->
+       Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
+       Lwt.return ()
+    )
 
 module Result = struct
   include Result
@@ -68,7 +59,7 @@ module Local = struct
     | `Udp (addr, port) -> Printf.sprintf "udp:%s:%d" (Ipaddr.V4.to_string addr) port
 end
 
-module Make(Connector: Connector)(Binder: Binder) = struct
+module Make(Connector: Sig.Connector)(Binder: Sig.Binder) = struct
 type t = {
   local: Local.t;
   remote_port: Connector.Port.t;

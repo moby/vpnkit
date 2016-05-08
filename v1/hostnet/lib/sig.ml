@@ -39,3 +39,27 @@ module type RESOLV_CONF = sig
 
   val get : unit -> (Ipaddr.t * int) list Lwt.t
 end
+
+
+module type Connector = sig
+  (** Make connections into the VM *)
+
+  module Port: sig
+    type t
+    (** A protocol-specific port id, e.g. a virtio-vsock int32 *)
+
+    val of_string: string -> (t, [> `Msg of string]) Result.result
+    val to_string: t -> string
+  end
+
+  val connect: Port.t -> Lwt_unix.file_descr Lwt.t
+  (** Connect to the given port on the VM *)
+end
+
+module type Binder = sig
+  (** Bind local ports *)
+
+  val bind: Ipaddr.V4.t -> int -> bool -> (Lwt_unix.file_descr, [> `Msg of string]) Result.result Lwt.t
+  (** [bind local_ip local_port stream] binds [local_ip:local_port] with
+      either a SOCK_STREAM if [stream] is true, or SOCK_DGRAM otherwise *)
+end
