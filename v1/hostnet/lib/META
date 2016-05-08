@@ -1,9 +1,9 @@
 # OASIS_START
-# DO NOT EDIT (digest: c6ecba0196f4bd0ab2d7614a17a16041)
+# DO NOT EDIT (digest: 6f9cf41f0baab59bd48f0a8698491e73)
 version = "0.1"
 description = "a userspace ethernet to socket proxy"
 requires =
-"cstruct lwt.unix logs mirage-types.lwt ipaddr mirage-flow mirage-unix mirage-clock-unix mirage-console.unix tcpip.ethif tcpip.arpv4 tcpip.ipv4 tcpip.udp tcpip.tcp tcpip.stack-direct tcpip.stack-socket charrua-core.server dns dns.lwt"
+"cstruct lwt.unix logs mirage-types.lwt ipaddr mirage-flow mirage-unix mirage-clock-unix mirage-console.unix tcpip.ethif tcpip.arpv4 tcpip.ipv4 tcpip.udp tcpip.tcp tcpip.stack-direct tcpip.stack-socket charrua-core.server dns dns.lwt ofs"
 archive(byte) = "hostnet.cma"
 archive(byte, plugin) = "hostnet.cma"
 archive(native) = "hostnet.cmxa"
