@@ -24,9 +24,12 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+module Forward = Forward.Make(Connect)
+
 let start_port_forwarding port_control_path vsock_path =
   Log.info (fun f -> f "starting port_forwarding port_control_path:%s vsock_path:%s" port_control_path vsock_path);
   (* Start the 9P port forwarding server *)
+  Connect.vsock_path := vsock_path;
   let module Ports = Active_list.Make(Forward) in
   let module Server = Server9p_unix.Make(Log)(Ports) in
   let fs = Ports.make () in

@@ -12,14 +12,15 @@ let finally f g =
   let open Lwt.Infix in
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
 
-let allowed_addresses = ref None
+module type Connector = sig
+  module Port: sig
+    type t
 
-let set_allowed_addresses ips =
-  Log.info (fun f -> f "allowing binds to %s" (match ips with
-    | None -> "any IP addresses"
-    | Some ips -> String.concat ", " (List.map Ipaddr.to_string ips)
-  ));
-  allowed_addresses := ips
+    val of_string: string -> (t, [> `Msg of string]) Result.result
+    val to_string: t -> string
+  end
+  val connect: Port.t -> Lwt_unix.file_descr Lwt.t
+end
 
 module Result = struct
   include Result
@@ -45,16 +46,6 @@ module Port = struct
     | _ -> Result.errorf "port is not an integer: '%s'" x
 end
 
-module VsockPort = struct
-  type t = int32
-
-  let of_string x =
-    try
-      Result.return @@ Int32.of_string ("0x" ^ x)
-    with
-    | _ -> Result.errorf "vchan port is not a hexadecimal int32: '%s'" x
-end
-
 module Local = struct
   module M = struct
     type t = [
@@ -72,9 +63,10 @@ module Local = struct
     | `Udp (addr, port) -> Printf.sprintf "udp:%s:%d" (Ipaddr.V4.to_string addr) port
 end
 
+module Make(Connector: Connector) = struct
 type t = {
   local: Local.t;
-  remote_port: VsockPort.t; (* vsock port *)
+  remote_port: Connector.Port.t;
   mutable fd: Lwt_unix.file_descr option;
 }
 
@@ -86,9 +78,9 @@ module Map = Local.Map
 
 type context = string
 
-let to_string t = Printf.sprintf "%s:%08lx" (Local.to_string t.local) t.remote_port
+let to_string t = Printf.sprintf "%s:%s" (Local.to_string t.local) (Connector.Port.to_string t.remote_port)
 
-let description_of_format = "'<tcp|udp>:local ip:local port:remote vchan port' where the remote vchan port matches %08x"
+let description_of_format = "'<tcp|udp>:local ip:local port:remote vchan port'"
 
 let finally f g =
   let open Lwt.Infix in
@@ -103,6 +95,15 @@ let finally f g =
     >>= fun () ->
     Lwt.fail e
   )
+
+let allowed_addresses = ref None
+
+let set_allowed_addresses ips =
+  Log.info (fun f -> f "allowing binds to %s" (match ips with
+    | None -> "any IP addresses"
+    | Some ips -> String.concat ", " (List.map Ipaddr.to_string ips)
+  ));
+  allowed_addresses := ips
 
 let check_bind_allowed ip = match !allowed_addresses with
   | None -> Lwt.return () (* no restriction *)
@@ -209,7 +210,7 @@ let start_tcp_proxy vsock_path_var local_ip local_port fd t =
         >>= fun vsock_path ->
         let proxy () =
           finally (fun () ->
-            Osx_hyperkit.Vsock.connect ~path:vsock_path ~port:t.remote_port ()
+            Connector.connect t.remote_port
             >>= fun v ->
             let remote = Socket.Stream.of_fd ~description v in
             finally (fun () ->
@@ -256,10 +257,10 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
   let _ =
     Active_list.Var.read vsock_path_var
     >>= fun vsock_path ->
-    Log.debug (fun f -> f "%s: connecting to vsock port %08lx" description t.remote_port);
-    Osx_hyperkit.Vsock.connect ~path:vsock_path ~port:t.remote_port ()
+    Log.debug (fun f -> f "%s: connecting to vsock port %s" description (Connector.Port.to_string t.remote_port));
+    Connector.connect t.remote_port
     >>= fun v ->
-    Log.debug (fun f -> f "%s: connected to vsock port %08lx" description t.remote_port);
+    Log.debug (fun f -> f "%s: connected to vsock port %s" description (Connector.Port.to_string t.remote_port));
     (* Construct the vsock header in a separate buffer but write the payload
        directly from the from_internet_buffer *)
     let write_header_buffer = Cstruct.create max_vsock_header_length in
@@ -401,7 +402,7 @@ let of_string x =
       | Some ip, Result.Ok port ->
         Result.Ok (
           `Tcp (ip, port),
-          VsockPort.of_string remote_port
+          Connector.Port.of_string remote_port
         )
       | _, _ -> Result.Error (`Msg ("Failed to parse local IP and port: " ^ x))
       end
@@ -412,7 +413,7 @@ let of_string x =
       | Some ip, Result.Ok port ->
         Result.Ok (
           `Udp (ip, port),
-          VsockPort.of_string remote_port
+          Connector.Port.of_string remote_port
         )
       | _, _ -> Result.Error (`Msg ("Failed to parse local IP and port: " ^ x))
       end
@@ -424,3 +425,4 @@ let of_string x =
     Result.Ok { local; remote_port; fd = None  }
   | Result.Ok (_, Result.Error (`Msg m)) ->
     Result.Error (`Msg ("Failed to parse remote port: " ^ m))
+end
