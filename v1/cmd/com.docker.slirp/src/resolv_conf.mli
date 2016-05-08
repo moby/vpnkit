@@ -14,22 +14,4 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  *)
-
-let src =
-  let src = Logs.Src.create "slirp" ~doc:"com.docker.slirp" in
-  Logs.Src.set_level src (Some Logs.Debug);
-  src
-
-module Log = (val Logs.src_log src : Logs.LOG)
-
-let log_exception_continue description f =
-  Lwt.catch
-    (fun () -> f ())
-    (fun e ->
-       Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
-       Lwt.return ()
-    )
-
-let or_failwith = function
-  | Result.Error (`Msg m) -> failwith m
-  | Result.Ok x -> x
+include Hostnet.Sig.RESOLV_CONF

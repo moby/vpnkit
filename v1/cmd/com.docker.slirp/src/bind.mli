@@ -15,4 +15,4 @@
  *
  *)
 
-val bind: Ipaddr.V4.t -> int -> bool -> (Lwt_unix.file_descr, [> `Msg of string]) Result.result Lwt.t
+include Hostnet.Sig.Binder

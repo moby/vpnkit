@@ -24,6 +24,18 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+let log_exception_continue description f =
+  Lwt.catch
+    (fun () -> f ())
+    (fun e ->
+       Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
+       Lwt.return ()
+    )
+
+let or_failwith = function
+  | Result.Error (`Msg m) -> failwith m
+  | Result.Ok x -> x
+
 module Forward = Forward.Make(Connect)(Bind)
 
 let start_port_forwarding port_control_path vsock_path =
@@ -45,7 +57,7 @@ let start_port_forwarding port_control_path vsock_path =
   let server = Server.of_fd fs port_s in
   Server.serve_forever server
   >>= fun r ->
-  Lwt.return (Utils.or_failwith r)
+  Lwt.return (or_failwith r)
 
 module Slirp_stack = Slirp.Make(Vmnet)(Resolv_conf)
 
@@ -65,7 +77,7 @@ let main_t socket_path port_control_path vsock_path db_path debug =
   >>= fun s ->
 
   Lwt.async (fun () ->
-    Utils.log_exception_continue "start_port_server"
+    log_exception_continue "start_port_server"
       (fun () ->
         start_port_forwarding port_control_path vsock_path
       )
