@@ -26,6 +26,8 @@ module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF): sig
   (** [connect vmnet peer_ip local_ip] starts a slirp TCP/IP stack on the ethernet
       connection [vmnet}], where the local host has IP [local_ip] and the peer has
       IP [peer_ip]. *)
+
+  val accept_forever: Active_config.t -> Lwt_unix.file_descr -> 'a Lwt.t
 end
 
 val print_pcap: pcap -> string

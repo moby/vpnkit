@@ -32,6 +32,21 @@ let mtu = 1452 (* packets above this size with DNF set will get ICMP errors *)
 let finally f g =
   Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> return r) (fun e -> g () >>= fun () -> fail e)
 
+let log_exception_continue description f =
+  Lwt.catch
+    (fun () -> f ())
+    (fun e ->
+       Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
+       Lwt.return ()
+    )
+
+let restart_on_change name to_string values =
+  Active_config.tl values
+  >>= fun values ->
+  let v = Active_config.hd values in
+  Log.info (fun f -> f "%s changed to %s in the database: restarting" name (to_string v));
+  exit 1
+
 type pcap = (string * int64 option) option
 
 let print_pcap = function
@@ -182,4 +197,123 @@ let connect x peer_ip local_ip =
             Log.info (fun f -> f "TCP/IP ready");
             Lwt.return ()
         end
+
+  let accept_forever config s =
+    let driver = [ "com.docker.driver.amd64-linux" ] in
+
+    let pcap_path = driver @ [ "slirp"; "capture" ] in
+    Active_config.string_option config pcap_path
+    >>= fun string_pcap_settings ->
+    let parse_pcap = function
+      | None -> Lwt.return None
+      | Some x ->
+        begin match Stringext.split (String.trim x) ~on:':' with
+        | [ filename ] ->
+          (** Assume 10MiB limit for safety *)
+          Lwt.return (Some (filename, Some 16777216L))
+        | [ filename; limit ] ->
+          let limit =
+            try
+              Int64.of_string limit
+            with
+            | _ -> 16777216L in
+          let limit = if limit = 0L then None else Some limit in
+          Lwt.return (Some (filename, limit))
+        | _ ->
+          Lwt.return None
+        end in
+    Active_config.map parse_pcap string_pcap_settings
+    >>= fun pcap_settings ->
+
+    let bind_path = driver @ [ "allowed-bind-address" ] in
+    Active_config.string_option config bind_path
+    >>= fun string_allowed_bind_address ->
+    let parse_bind_address = function
+      | None -> Lwt.return None
+      | Some x ->
+        let strings = List.map String.trim @@ Stringext.split x ~on:',' in
+        let ip_opts = List.map
+          (fun x ->
+            try
+              Some (Ipaddr.of_string_exn x)
+            with _ ->
+              Log.err (fun f -> f "Failed to parse IP address in allowed-bind-address: %s" x);
+              None
+          ) strings in
+        let ips = List.fold_left (fun acc x -> match x with None -> acc | Some x -> x :: acc) [] ip_opts in
+        Lwt.return (Some ips) in
+    Active_config.map parse_bind_address string_allowed_bind_address
+    >>= fun allowed_bind_address ->
+
+    let rec monitor_allowed_bind_settings allowed_bind_address =
+      Forward.set_allowed_addresses (Active_config.hd allowed_bind_address);
+      Active_config.tl allowed_bind_address
+      >>= fun allowed_bind_address ->
+      monitor_allowed_bind_settings allowed_bind_address in
+    Lwt.async (fun () -> log_exception_continue "monitor_allowed_bind_settings" (fun () -> monitor_allowed_bind_settings allowed_bind_address));
+
+    let peer_ips_path = driver @ [ "slirp"; "docker" ] in
+    let parse_ipv4 default x = match Ipaddr.V4.of_string @@ String.trim x with
+      | None ->
+        Log.err (fun f -> f "Failed to parse IPv4 address '%s', using default of %s" x (Ipaddr.V4.to_string default));
+        Lwt.return default
+      | Some x -> Lwt.return x in
+    let default_peer = "192.168.65.2" in
+    let default_host = "192.168.65.1" in
+    Active_config.string config ~default:default_peer peer_ips_path
+    >>= fun string_peer_ips ->
+    Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips
+    >>= fun peer_ips ->
+    Lwt.async (fun () -> restart_on_change "slirp/docker" Ipaddr.V4.to_string peer_ips);
+
+    let host_ips_path = driver @ [ "slirp"; "host" ] in
+    Active_config.string config ~default:default_host host_ips_path
+    >>= fun string_host_ips ->
+    Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_host)) string_host_ips
+    >>= fun host_ips ->
+    Lwt.async (fun () -> restart_on_change "slirp/host" Ipaddr.V4.to_string host_ips);
+
+    let peer_ip = Active_config.hd peer_ips in
+    let local_ip = Active_config.hd host_ips in
+
+    Log.info (fun f -> f "Starting slirp server pcap_settings:%s peer_ip:%s local_ip:%s"
+      (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
+    );
+
+    let rec loop () =
+      Lwt_unix.accept s
+      >>= fun (client, _) ->
+      Vmnet.of_fd ~client_macaddr ~server_macaddr client
+      >>= function
+      | `Error (`Msg m) -> failwith m
+      | `Ok x ->
+        Log.debug (fun f -> f "accepted vmnet connection");
+
+        let rec monitor_pcap_settings pcap_settings =
+          Active_config.tl pcap_settings
+          >>= fun pcap_settings ->
+          ( match Active_config.hd pcap_settings with
+            | None ->
+              Log.debug (fun f -> f "Disabling any active packet capture");
+              Vmnet.stop_capture x
+            | Some (filename, size_limit) ->
+              Log.debug (fun f -> f "Capturing packets to %s %s" filename (match size_limit with None -> "with no limit" | Some x -> Printf.sprintf "limited to %Ld bytes" x));
+              Vmnet.start_capture x ?size_limit filename )
+          >>= fun () ->
+          monitor_pcap_settings pcap_settings in
+        Lwt.async (fun () ->
+          log_exception_continue "monitor_pcap_settings"
+            (fun () ->
+              monitor_pcap_settings pcap_settings
+            )
+          );
+        Lwt.async (fun () ->
+          log_exception_continue "Slirp_stack.connect"
+            (fun () ->
+              connect x peer_ip local_ip
+            )
+          );
+        loop () in
+    loop ()
+
 end

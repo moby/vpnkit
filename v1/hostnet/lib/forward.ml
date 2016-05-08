@@ -18,6 +18,15 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
+let allowed_addresses = ref None
+
+let set_allowed_addresses ips =
+  Log.info (fun f -> f "allowing binds to %s" (match ips with
+    | None -> "any IP addresses"
+    | Some ips -> String.concat ", " (List.map Ipaddr.to_string ips)
+  ));
+  allowed_addresses := ips
+
 module Result = struct
   include Result
   let return x = Ok x
@@ -91,15 +100,6 @@ let finally f g =
     >>= fun () ->
     Lwt.fail e
   )
-
-let allowed_addresses = ref None
-
-let set_allowed_addresses ips =
-  Log.info (fun f -> f "allowing binds to %s" (match ips with
-    | None -> "any IP addresses"
-    | Some ips -> String.concat ", " (List.map Ipaddr.to_string ips)
-  ));
-  allowed_addresses := ips
 
 let check_bind_allowed ip = match !allowed_addresses with
   | None -> Lwt.return () (* no restriction *)

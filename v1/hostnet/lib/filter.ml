@@ -112,4 +112,9 @@ module Make(Input: Sig.VMNET) = struct
     t.stats.tx_pkts <- 0l
 
   let get_id _ = ()
+
+  let of_fd ~client_macaddr ~server_macaddr = failwith "Filter.of_fd unimplemented"
+
+  let start_capture _ ?size_limit _ = failwith "Filter.start_capture unimplemented"
+  let stop_capture _ = failwith "Filter.stop_capture unimplemented"
 end
