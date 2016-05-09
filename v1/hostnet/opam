@@ -19,6 +19,7 @@ depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
   "oasis" {build}
+  "ofs"
   "result"
   "ipaddr"
   "lwt"
