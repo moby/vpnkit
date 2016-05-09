@@ -20,3 +20,9 @@ Library hostnet
     mirage-unix, mirage-clock-unix, mirage-console.unix, tcpip.ethif,
     tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct,
     tcpip.stack-socket, charrua-core.server, dns, dns.lwt, ofs
+
+Executable test
+  Path: lib_test
+  CompiledObject: best
+  MainIs: main.ml
+  BuildDepends: hostnet, proto-vmnet, cmdliner, alcotest, lwt.unix, logs.fmt

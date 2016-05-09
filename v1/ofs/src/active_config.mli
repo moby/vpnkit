@@ -4,7 +4,7 @@ val create: ?username:string -> string -> string -> t
 (** [create ?username proto address] creates an active configuration
     system backed by the database at [proto:address]. *)
 
-type 'a values
+type 'a values = Value of ('a * ('a values) Lwt.t)
 (** An infinite stream of values of type ['a] *)
 
 val hd: 'a values -> 'a

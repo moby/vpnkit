@@ -23,7 +23,11 @@ type pcap = (string * int64 option) option
 
 module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF): sig
 
-  type t
+  type t = {
+    peer_ip: Ipaddr.V4.t;
+    local_ip: Ipaddr.V4.t;
+    pcap_settings: pcap Active_config.values;
+  }
   (** A slirp TCP/IP stack ready to accept connections *)
 
   val create: Active_config.t -> t Lwt.t
