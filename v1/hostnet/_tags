@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 499f6ceb4440212017ae879c71e5768a)
+# DO NOT EDIT (digest: 81000446b5aebc2f1b7a0bfccb354d45)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -46,4 +46,55 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_tcpip.stack-socket
 <lib/*.ml{,i,y}>: pkg_tcpip.tcp
 <lib/*.ml{,i,y}>: pkg_tcpip.udp
+# Executable test
+<lib_test/main.{native,byte}>: pkg_alcotest
+<lib_test/main.{native,byte}>: pkg_charrua-core.server
+<lib_test/main.{native,byte}>: pkg_cmdliner
+<lib_test/main.{native,byte}>: pkg_cstruct
+<lib_test/main.{native,byte}>: pkg_dns
+<lib_test/main.{native,byte}>: pkg_dns.lwt
+<lib_test/main.{native,byte}>: pkg_ipaddr
+<lib_test/main.{native,byte}>: pkg_logs
+<lib_test/main.{native,byte}>: pkg_logs.fmt
+<lib_test/main.{native,byte}>: pkg_lwt.unix
+<lib_test/main.{native,byte}>: pkg_mirage-clock-unix
+<lib_test/main.{native,byte}>: pkg_mirage-console.unix
+<lib_test/main.{native,byte}>: pkg_mirage-flow
+<lib_test/main.{native,byte}>: pkg_mirage-types.lwt
+<lib_test/main.{native,byte}>: pkg_mirage-unix
+<lib_test/main.{native,byte}>: pkg_ofs
+<lib_test/main.{native,byte}>: pkg_proto-vmnet
+<lib_test/main.{native,byte}>: pkg_tcpip.arpv4
+<lib_test/main.{native,byte}>: pkg_tcpip.ethif
+<lib_test/main.{native,byte}>: pkg_tcpip.ipv4
+<lib_test/main.{native,byte}>: pkg_tcpip.stack-direct
+<lib_test/main.{native,byte}>: pkg_tcpip.stack-socket
+<lib_test/main.{native,byte}>: pkg_tcpip.tcp
+<lib_test/main.{native,byte}>: pkg_tcpip.udp
+<lib_test/main.{native,byte}>: use_hostnet
+<lib_test/*.ml{,i,y}>: pkg_alcotest
+<lib_test/*.ml{,i,y}>: pkg_charrua-core.server
+<lib_test/*.ml{,i,y}>: pkg_cmdliner
+<lib_test/*.ml{,i,y}>: pkg_cstruct
+<lib_test/*.ml{,i,y}>: pkg_dns
+<lib_test/*.ml{,i,y}>: pkg_dns.lwt
+<lib_test/*.ml{,i,y}>: pkg_ipaddr
+<lib_test/*.ml{,i,y}>: pkg_logs
+<lib_test/*.ml{,i,y}>: pkg_logs.fmt
+<lib_test/*.ml{,i,y}>: pkg_lwt.unix
+<lib_test/*.ml{,i,y}>: pkg_mirage-clock-unix
+<lib_test/*.ml{,i,y}>: pkg_mirage-console.unix
+<lib_test/*.ml{,i,y}>: pkg_mirage-flow
+<lib_test/*.ml{,i,y}>: pkg_mirage-types.lwt
+<lib_test/*.ml{,i,y}>: pkg_mirage-unix
+<lib_test/*.ml{,i,y}>: pkg_ofs
+<lib_test/*.ml{,i,y}>: pkg_proto-vmnet
+<lib_test/*.ml{,i,y}>: pkg_tcpip.arpv4
+<lib_test/*.ml{,i,y}>: pkg_tcpip.ethif
+<lib_test/*.ml{,i,y}>: pkg_tcpip.ipv4
+<lib_test/*.ml{,i,y}>: pkg_tcpip.stack-direct
+<lib_test/*.ml{,i,y}>: pkg_tcpip.stack-socket
+<lib_test/*.ml{,i,y}>: pkg_tcpip.tcp
+<lib_test/*.ml{,i,y}>: pkg_tcpip.udp
+<lib_test/*.ml{,i,y}>: use_hostnet
 # OASIS_STOP

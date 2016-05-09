@@ -1,5 +1,5 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: 610d75db9aa517ecbe448310e808976a) *)
+(* DO NOT EDIT (digest: 31be87de5ed5efdd6914595edb67e225) *)
 module OASISGettext = struct
 (* # 22 "src/oasis/OASISGettext.ml" *)
 
@@ -770,7 +770,7 @@ let package_default =
      MyOCamlbuildBase.lib_ocaml = [("hostnet", ["lib"], [])];
      lib_c = [];
      flags = [];
-     includes = []
+     includes = [("lib_test", ["lib"])]
   }
   ;;
 
