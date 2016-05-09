@@ -94,8 +94,7 @@ let main_t socket_path port_control_path vsock_path db_path debug =
         (fun () ->
           Slirp_stack.connect stack client
         )
-      >>= fun () ->
-      Lwt_unix.close client
+      (* NB: the vmnet layer will call close when it receives EOF *)
     );
     loop () in
   loop ()
