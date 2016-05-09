@@ -182,25 +182,25 @@ let socket =
   let doc =
     Arg.info ~doc:
       "A comma-separated list of URLs to listen on for ethernet of the form \
-      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\foo" ["url"]
+      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\foo" ["ethernet"]
   in
-  Arg.(value & opt (list string) [ "\\\\\\\\.\\\\pipe\\\\slirp" ] doc)
+  Arg.(value & opt (list string) [ "\\\\.\\pipe\\slirp" ] doc)
 
 let port_control_path =
   let doc =
     Arg.info ~doc:
       "A comma-separated list of URLs to listen on for port control of the form \
-      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\foo" ["url"]
+      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\foo" ["port"]
   in
-  Arg.(value & opt (list string) [ "\\\\\\\\.\\\\pipe\\\\port" ] doc)
+  Arg.(value & opt (list string) [ "\\\\.\\pipe\\port" ] doc)
 
 let db_path =
   let doc =
     Arg.info ~doc:
       "A URLs to connect to datakitof the form \
-      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\foo" ["url"]
+      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\foo" ["db"]
   in
-  Arg.(value & opt string "\\\\\\\\.\\\\pipe\\\\datakit" doc)
+  Arg.(value & opt string "\\\\.\\pipe\\datakit" doc)
 
 let debug =
   let doc = "Verbose debug logging to stdout" in
