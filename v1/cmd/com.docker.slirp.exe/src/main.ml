@@ -149,8 +149,6 @@ let main_t socket_urls port_control_urls db_path debug =
     let h = Eventlog.register "Docker.exe" in
     Logs.set_reporter (Log_eventlog.reporter h ());
   end;
-  Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
-  Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   Printexc.record_backtrace true;
 
   Lwt.async_exception_hook := (fun exn ->
