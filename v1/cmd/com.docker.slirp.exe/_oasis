@@ -1,0 +1,18 @@
+OASISFormat: 0.4
+Name: usernet
+Version: 0.1
+Synopsis: a userspace ethernet to socket proxy
+Authors: David Scott (dave@recoil.org)
+License: ISC
+Plugins: META (0.4), DevFiles (0.4)
+AlphaFeatures: pure_interface
+BuildTools: ocamlbuild
+
+Description: proxy ethernet frames to and from sockets
+
+Executable Main
+  CompiledObject: best
+  Path: src
+  MainIs: main.ml
+  BuildDepends: hostnet, win-eventlog, named-pipe.lwt, ofs, protocol-9p,
+    protocol-9p.unix, proto-vmnet, cmdliner, logs.fmt

@@ -1,0 +1,24 @@
+opam-version: "1.2"
+name: "slirp-exe"
+version: "0.0.0"
+maintainer: "David Scott <dave.scott@docker.com>"
+authors: [ "David Scott <dave.scott@docker.com>" ]
+
+depends: [
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "oasis" {build}
+  "result"
+  "ipaddr"
+  "lwt"
+  "ofs"
+  "hostnet"
+  "cmdliner"
+  "logs"
+  "fmt"
+  "proto-vmnet"
+  "named-pipe"
+  "win-eventlog"
+  "ounit" {test}
+  "alcotest" {test}
+]
