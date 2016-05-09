@@ -19,7 +19,7 @@ remove: ["ocamlfind" "remove" "ofs"]
 depends: [
   "ocamlfind" {build}
   "cmdliner"
-  "protocol-9p" {>= "0.5.0"}
+  "protocol-9p" {= "0.5.2"}
   "logs"
   "cstruct"
 ]
