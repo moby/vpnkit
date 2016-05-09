@@ -14,15 +14,10 @@ depends: [
   "ofs"
   "osx-daemon"
   "hostnet"
-  "tcpip" { >= "3.0.0" }
   "dns"
-  "pcap-format" { >= "0.4.0" }
   "cmdliner"
-  "charrua-core" { >= "0.3" }
   "logs"
   "fmt"
-  "mirage-flow" { >= "1.1.0" }
-  "mirage-types-lwt" { >= "3.0.0" }
   "proto-vmnet"
   "ounit" {test}
   "alcotest" {test}
