@@ -198,7 +198,13 @@ let connect x peer_ip local_ip =
             Lwt.return ()
         end
 
-  let accept_forever config s =
+  type t = {
+    peer_ip: Ipaddr.V4.t;
+    local_ip: Ipaddr.V4.t;
+    pcap_settings: pcap Active_config.values;
+  }
+
+  let create config =
     let driver = [ "com.docker.driver.amd64-linux" ] in
 
     let pcap_path = driver @ [ "slirp"; "capture" ] in
@@ -276,13 +282,17 @@ let connect x peer_ip local_ip =
     let peer_ip = Active_config.hd peer_ips in
     let local_ip = Active_config.hd host_ips in
 
-    Log.info (fun f -> f "Starting slirp server pcap_settings:%s peer_ip:%s local_ip:%s"
+    Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s"
       (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
     );
+    let t = {
+      peer_ip;
+      local_ip;
+      pcap_settings;
+    } in
+    Lwt.return t
 
-    let rec loop () =
-      Lwt_unix.accept s
-      >>= fun (client, _) ->
+  let connect t client =
       Vmnet.of_fd ~client_macaddr ~server_macaddr client
       >>= function
       | `Error (`Msg m) -> failwith m
@@ -304,16 +314,9 @@ let connect x peer_ip local_ip =
         Lwt.async (fun () ->
           log_exception_continue "monitor_pcap_settings"
             (fun () ->
-              monitor_pcap_settings pcap_settings
+              monitor_pcap_settings t.pcap_settings
             )
           );
-        Lwt.async (fun () ->
-          log_exception_continue "Slirp_stack.connect"
-            (fun () ->
-              connect x peer_ip local_ip
-            )
-          );
-        loop () in
-    loop ()
+        connect x t.peer_ip t.local_ip
 
 end

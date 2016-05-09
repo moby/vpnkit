@@ -84,8 +84,21 @@ let main_t socket_path port_control_path vsock_path db_path debug =
     );
 
   let config = Active_config.create "unix" db_path in
-
-  Slirp_stack.accept_forever config s
+  Slirp_stack.create config
+  >>= fun stack ->
+  let rec loop () =
+    Lwt_unix.accept s
+    >>= fun (client, _) ->
+    Lwt.async (fun () ->
+      log_exception_continue "slirp_server"
+        (fun () ->
+          Slirp_stack.connect stack client
+        )
+      >>= fun () ->
+      Lwt_unix.close client
+    );
+    loop () in
+  loop ()
 
 let main socket port_control vsock_path db debug = Lwt_main.run @@ main_t socket port_control vsock_path db debug
 

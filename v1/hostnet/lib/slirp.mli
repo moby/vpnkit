@@ -22,12 +22,15 @@ type pcap = (string * int64 option) option
     bigger than the given limit. *)
 
 module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF): sig
-  val connect: Vmnet.t -> Ipaddr.V4.t -> Ipaddr.V4.t -> unit Lwt.t
-  (** [connect vmnet peer_ip local_ip] starts a slirp TCP/IP stack on the ethernet
-      connection [vmnet}], where the local host has IP [local_ip] and the peer has
-      IP [peer_ip]. *)
 
-  val accept_forever: Active_config.t -> Lwt_unix.file_descr -> 'a Lwt.t
+  type t
+  (** A slirp TCP/IP stack ready to accept connections *)
+
+  val create: Active_config.t -> t Lwt.t
+  (** Initialise a TCP/IP stack, taking configuration from the Active_config.t *)
+
+  val connect: t -> Lwt_unix.file_descr -> unit Lwt.t
+  (** Read and write ethernet frames on the given fd *)
 end
 
 val print_pcap: pcap -> string
