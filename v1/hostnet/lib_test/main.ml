@@ -126,6 +126,29 @@ let test_dns_query () =
       ) in
   Lwt_main.run t
 
+let test_http_fetch () =
+  let t =
+    with_stack
+      (fun stack ->
+        let resolver = DNS.create stack in
+        DNS.gethostbyname resolver "www.google.com"
+        >>= function
+        | Ipaddr.V4 ip :: _ ->
+          begin Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
+          >>= function
+          | `Ok flow ->
+            Log.info (fun f -> f "Connected to www.google.com:80");
+            Lwt.return ()
+          | `Error _ ->
+            Log.err (fun f -> f "Failed to connect to www.google.com:80");
+            failwith "http_fetch"
+          end
+        | _ ->
+          Log.err (fun f -> f "Failed to look up an IPv4 address for www.google.com");
+          failwith "http_fetch dns"
+      ) in
+  Lwt_main.run t
+
 let test_dhcp = [
   "Simple query", `Quick, test_dhcp_query;
 ]
@@ -134,10 +157,15 @@ let test_dns = [
   "Use 8.8.8.8 to lookup www.google.com", `Quick, test_dns_query;
 ]
 
+let test_tcp = [
+  "HTTP GET http://www.google.com/", `Quick, test_http_fetch;
+]
+
 (* Run it *)
 let () =
   Logs.set_reporter (Logs_fmt.reporter ());
   Alcotest.run "Hostnet" [
-    "test_dhcp", test_dhcp;
-    "test_dns", test_dns;
+    "DHCP", test_dhcp;
+    "DNS UDP", test_dns;
+    "TCP", test_tcp;
   ]
