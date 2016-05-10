@@ -138,7 +138,35 @@ let test_http_fetch () =
           >>= function
           | `Ok flow ->
             Log.info (fun f -> f "Connected to www.google.com:80");
-            Lwt.return ()
+            let page = Io_page.(to_cstruct (get 1)) in
+            let http_get = "GET / HTTP/1.0\nHost: anil.recoil.org\n\n" in
+            Cstruct.blit_from_string http_get 0 page 0 (String.length http_get);
+            let buf = Cstruct.sub page 0 (String.length http_get) in
+            begin Client.TCPV4.write flow buf >>= function
+            | `Eof     ->
+              Log.err (fun f -> f "EOF writing HTTP request to www.google.com:80");
+              failwith "EOF on writing HTTP GET"
+            | `Error _ ->
+              Log.err (fun f -> f "Failure writing HTTP request to www.google.com:80");
+              failwith "Failure on writing HTTP GET"
+            | `Ok _buf ->
+              let rec loop total_bytes =
+                Client.TCPV4.read flow >>= function
+                | `Eof ->
+                  Lwt.return total_bytes
+                | `Error _ ->
+                  Log.err (fun f -> f "Failure read HTTP response from www.google.com:80");
+                  failwith "Failure on reading HTTP GET"
+                | `Ok buf ->
+                  Log.info (fun f -> f "Read %d bytes from www.google.com:80" (Cstruct.len buf));
+                  Log.info (fun f -> f "%s" (Cstruct.to_string buf));
+                  loop (total_bytes + (Cstruct.len buf)) in
+              loop 0
+              >>= fun total_bytes ->
+              Log.info (fun f -> f "Response had %d total bytes" total_bytes);
+              if total_bytes == 0 then failwith "response was empty";
+              Lwt.return ()
+            end
           | `Error _ ->
             Log.err (fun f -> f "Failed to connect to www.google.com:80");
             failwith "http_fetch"
