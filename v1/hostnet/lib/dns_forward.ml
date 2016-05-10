@@ -59,6 +59,7 @@ let input s ~src ~dst ~src_port buf =
     let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.V4.to_string dst, dst_port) in
 
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+    Lwt_unix.bind fd (Lwt_unix.ADDR_INET(Unix.inet_addr_any, 0));
     Lwt.catch
       (fun () ->
         (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)

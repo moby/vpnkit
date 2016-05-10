@@ -72,6 +72,7 @@ module Datagram = struct
        end else begin
          Log.debug (fun f -> f "Socket.Datagram.input %s: creating UDP NAT rule" description);
          let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+         Lwt_unix.bind fd (Lwt_unix.ADDR_INET(Unix.inet_addr_any, 0));
          let last_use = Unix.gettimeofday () in
          let flow = { description; fd; last_use; reply} in
          Hashtbl.replace table (dst, dst_port) flow;
