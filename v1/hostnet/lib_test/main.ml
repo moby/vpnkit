@@ -53,6 +53,8 @@ module Client = struct
     Lwt.return stack
 end
 
+module DNS = Dns_resolver_mirage.Make(OS.Time)(Client)
+
 let socketpair () =
   let listening = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
   Lwt_unix.bind listening (Unix.ADDR_INET(Unix.inet_addr_of_string "127.0.0.1", 0));
@@ -77,29 +79,59 @@ let config =
     pcap_settings = Active_config.Value(None, never);
   }
 
-let test_dhcp_query () =
-  let t =
-    socketpair ()
-    >>= fun (client, server) ->
-    Log.info (fun f -> f "Made a loopback connection");
-    let stack = Slirp_stack.connect config server in
-    let client_macaddr = Hostnet.Slirp.client_macaddr in
-    let server_macaddr = Hostnet.Slirp.server_macaddr in
-    Vmnet.client_of_fd ~client_macaddr ~server_macaddr client
-    >>= function
-    | `Error (`Msg x ) ->
-      failwith x
-    | `Ok client' ->
+let with_stack f =
+  socketpair ()
+  >>= fun (client, server) ->
+  Log.info (fun f -> f "Made a loopback connection");
+  let stack = Slirp_stack.connect config server in
+  let client_macaddr = Hostnet.Slirp.client_macaddr in
+  let server_macaddr = Hostnet.Slirp.server_macaddr in
+  Vmnet.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr client
+  >>= function
+  | `Error (`Msg x ) ->
+    (* Server will close when it gets EOF *)
+    Lwt_unix.close client
+    >>= fun () ->
+    failwith x
+  | `Ok client' ->
+    Lwt.finalize (fun () ->
       Log.info (fun f -> f "Initialising client TCP/IP stack");
       Client.connect client'
       >>= fun stack ->
-      let ips = List.map Ipaddr.V4.to_string (Client.IPV4.get_ip (Client.ipv4 stack)) in
-      Log.info (fun f -> f "Got an IP: %s" (String.concat ", " ips));
-      Lwt.return () in
+      f stack
+    ) (fun () ->
+      (* Server will close when it gets EOF *)
+      Vmnet.disconnect client'
+    )
+
+let test_dhcp_query () =
+  let t =
+    with_stack
+      (fun stack ->
+        let ips = List.map Ipaddr.V4.to_string (Client.IPV4.get_ip (Client.ipv4 stack)) in
+        Log.info (fun f -> f "Got an IP: %s" (String.concat ", " ips));
+        Lwt.return ()
+      ) in
+  Lwt_main.run t
+
+let test_dns_query () =
+  let t =
+    with_stack
+      (fun stack ->
+        let resolver = DNS.create stack in
+        DNS.gethostbyname resolver "www.google.com"
+        >>= fun ips ->
+        Log.info (fun f -> f "www.google.com has IPs: %s" (String.concat ", " (List.map Ipaddr.to_string ips)));
+        Lwt.return ()
+      ) in
   Lwt_main.run t
 
 let test_dhcp = [
   "Simple query", `Quick, test_dhcp_query;
+]
+
+let test_dns = [
+  "Use 8.8.8.8 to lookup www.google.com", `Quick, test_dns_query;
 ]
 
 (* Run it *)
@@ -107,4 +139,5 @@ let () =
   Logs.set_reporter (Logs_fmt.reporter ());
   Alcotest.run "Hostnet" [
     "test_dhcp", test_dhcp;
+    "test_dns", test_dns;
   ]

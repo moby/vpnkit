@@ -25,4 +25,5 @@ Executable test
   Path: lib_test
   CompiledObject: best
   MainIs: main.ml
-  BuildDepends: hostnet, proto-vmnet, cmdliner, alcotest, lwt.unix, logs.fmt
+  BuildDepends: hostnet, proto-vmnet, cmdliner, alcotest, lwt.unix, logs.fmt,
+    dns.mirage
