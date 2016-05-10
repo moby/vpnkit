@@ -70,13 +70,16 @@ module Make(Input: Sig.VMNET) = struct
           | Some `UDP ->
             let src_port = Wire_structs.get_udp_source_port body in
             let dst_port = Wire_structs.get_udp_dest_port body in
-            Log.warn (fun f -> f "dropping unexpected UDP packet sent from %s:%d to %s:%d" src src_port dst dst_port)
+            Log.warn (fun f -> f "dropping unexpected UDP packet sent from %s:%d to %s:%d (valid sources = %s)"
+              src src_port dst dst_port (String.concat ", " (List.map Ipaddr.V4.to_string valid_sources)))
           | Some `TCP ->
             let src_port = Wire_structs.Tcp_wire.get_tcp_src_port body in
             let dst_port = Wire_structs.Tcp_wire.get_tcp_dst_port body in
-            Log.warn (fun f -> f "dropping unexpected TCP packet sent from %s:%d to %s:%d" src src_port dst dst_port)
+            Log.warn (fun f -> f "dropping unexpected TCP packet sent from %s:%d to %s:%d (valid sources = %s)"
+              src src_port dst dst_port (String.concat ", " (List.map Ipaddr.V4.to_string valid_sources)))
           | _ ->
-            Log.warn (fun f -> f "dropping unknown IP protocol %d sent from %s to %s" (Wire_structs.Ipv4_wire.get_ipv4_proto payload) src dst)
+            Log.warn (fun f -> f "dropping unknown IP protocol %d sent from %s to %s (valid sources = %s)"
+              (Wire_structs.Ipv4_wire.get_ipv4_proto payload) src dst  (String.concat ", " (List.map Ipaddr.V4.to_string valid_sources)))
         end;
         Lwt.return ()
       end
