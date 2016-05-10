@@ -61,7 +61,9 @@ let input s ~src ~dst ~src_port buf =
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
     Lwt.catch
       (fun () ->
-        Lwt_bytes.sendto fd buf.Cstruct.buffer buf.Cstruct.off buf.Cstruct.len [] remote_sockaddr
+        (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
+        let payload = Cstruct.to_string buf in
+        Lwt_unix.sendto fd payload 0 (String.length payload) [] remote_sockaddr
         >>= fun n ->
         if n <> buf.Cstruct.len
         then Log.err (fun f -> f "DNS forwarder: Lwt_bytes.send short: expected %d got %d"  buf.Cstruct.len n);
@@ -72,12 +74,15 @@ let input s ~src ~dst ~src_port buf =
       )
     >>= fun () ->
     let receiver =
-      let buffer = Cstruct.create 4096 in
+      let bytes = Bytes.make 4096 '\000' in
       Lwt.catch
         (fun () ->
-           Lwt_bytes.recvfrom fd buffer.Cstruct.buffer buffer.Cstruct.off buffer.Cstruct.len []
+           (* Lwt on Win32 doesn't support Lwt_bytes.recvfrom *)
+           Lwt_unix.recvfrom fd bytes 0 (String.length bytes) []
            >>= fun (n, _) ->
-           Lwt.return (`Result (Cstruct.sub buffer 0 n))
+           let buffer = Cstruct.create n in
+           Cstruct.blit_from_string bytes 0 buffer 0 n;
+           Lwt.return (`Result buffer)
         ) (fun e ->
            Log.err (fun f -> f "recvfrom failed with %s" (Printexc.to_string e));
            Lwt.return `Error

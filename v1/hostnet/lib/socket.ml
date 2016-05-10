@@ -77,11 +77,14 @@ module Datagram = struct
          Hashtbl.replace table (dst, dst_port) flow;
          (* Start a listener *)
          let buffer = Cstruct.create 1500 in
+         let bytes = Bytes.make 1500 '\000' in
          let rec loop () =
            Lwt.catch
              (fun () ->
-                Lwt_bytes.recvfrom fd buffer.Cstruct.buffer buffer.Cstruct.off buffer.Cstruct.len []
+                (* Lwt on Win32 doesn't support Lwt_bytes.recvfrom *)
+                Lwt_unix.recvfrom fd bytes 0 (String.length bytes) []
                 >>= fun (n, _) ->
+                Cstruct.blit_from_string bytes 0 buffer 0 n;
                 let response = Cstruct.sub buffer 0 n in
                 flow.reply response
                 >>= fun () ->
@@ -107,7 +110,9 @@ module Datagram = struct
       flow.reply <- reply;
       Lwt.catch
         (fun () ->
-           Lwt_bytes.sendto flow.fd payload.Cstruct.buffer payload.Cstruct.off payload.Cstruct.len [] remote_sockaddr
+           (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
+           let payload_string = Cstruct.to_string payload in
+           Lwt_unix.sendto flow.fd payload_string 0 (String.length payload_string) [] remote_sockaddr
            >>= fun n ->
            if n <> payload.Cstruct.len
            then Log.err (fun f -> f "Socket.Datagram.input %s: Lwt_bytes.send short: expected %d got %d" flow.description payload.Cstruct.len n);

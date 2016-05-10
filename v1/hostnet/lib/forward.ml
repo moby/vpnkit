@@ -211,12 +211,11 @@ let max_vsock_header_length = 1024
 let start_udp_proxy vsock_path_var local_ip local_port fd t =
   let open Lwt.Infix in
   let description = to_string t in
-  let from_internet_bytes = Lwt_bytes.create max_udp_length in
-  let from_internet_buffer = Cstruct.of_bigarray from_internet_bytes in
+  let from_internet_string = Bytes.make max_udp_length '\000' in
+  let from_internet_buffer = Cstruct.create max_udp_length in
   (* We write to the internet using the from_vsock_buffer *)
-  let from_vsock_bytes = Lwt_bytes.create max_udp_length in
-  let from_vsock_buffer = Cstruct.of_bigarray from_vsock_bytes in
-
+  let from_vsock_string = Bytes.make max_udp_length '\000' in
+  let from_vsock_buffer = Cstruct.create max_udp_length in
   let _ =
     Active_list.Var.read vsock_path_var
     >>= fun vsock_path ->
@@ -299,8 +298,9 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
       Lwt.return (payload.Cstruct.off, payload_length, Unix.ADDR_INET(ip, port)) in
     let rec from_internet () =
       Lwt.catch (fun () ->
-        Lwt_bytes.recvfrom fd from_internet_bytes 0 (Cstruct.len from_internet_buffer) []
+        Lwt_unix.recvfrom fd from_internet_string 0 (String.length from_internet_string) []
         >>= fun (len, sockaddr) ->
+        Cstruct.blit_from_string from_internet_string 0 from_internet_buffer 0 len;
         write (Cstruct.sub from_internet_buffer 0 len) sockaddr
         >>= fun () ->
         Lwt.return true
@@ -318,7 +318,9 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
         (fun () ->
           read ()
           >>= fun (ofs, len, sockaddr) ->
-          Lwt_bytes.sendto fd from_vsock_bytes ofs len [] sockaddr
+          (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
+          Cstruct.blit_to_bytes from_vsock_buffer ofs from_vsock_string 0 len;
+          Lwt_unix.sendto fd from_vsock_string 0 len [] sockaddr
           >>= fun _ ->
           Lwt.return true
         ) (fun e ->
