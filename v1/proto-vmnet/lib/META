@@ -1,0 +1,13 @@
+# OASIS_START
+# DO NOT EDIT (digest: 7b879f4cebf6a2ac8b010a83f8820498)
+version = "0.1.0"
+description = "The vmnet protocol"
+requires =
+"ipaddr cstruct cstruct.lwt cstruct.syntax lwt.unix io-page.unix logs mirage-types.lwt sexplib.syntax ipaddr ipaddr.unix pcap-format"
+archive(byte) = "proto-vmnet.cma"
+archive(byte, plugin) = "proto-vmnet.cma"
+archive(native) = "proto-vmnet.cmxa"
+archive(native, plugin) = "proto-vmnet.cmxs"
+exists_if = "proto-vmnet.cma"
+# OASIS_STOP
+
