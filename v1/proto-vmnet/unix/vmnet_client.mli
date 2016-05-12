@@ -20,7 +20,4 @@ type t
 
 val of_fd: Lwt_unix.file_descr -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
 
-val install_symlinks: t -> [ `Ok of unit | `Error of [ `Msg of string ]] Lwt.t
-val uninstall: t -> [ `Ok of unit | `Error of [ `Msg of string ]] Lwt.t
-
 val bind_ipv4: t -> (Ipaddr.V4.t * int * bool) -> [ `Ok of Lwt_unix.file_descr | `Error of [ `Msg of string ]] Lwt.t

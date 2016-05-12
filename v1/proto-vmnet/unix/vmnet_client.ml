@@ -79,9 +79,6 @@ let simple_bool_command cmd t =
        | n -> Lwt.return (`Error (`Msg (Printf.sprintf "Command failed with code %d" n)))
     )
 
-let install_symlinks = simple_bool_command Command.Install_symlinks
-let uninstall = simple_bool_command Command.Uninstall
-
 let bind_ipv4 t (ipv4, port, stream) =
   let buf = Cstruct.create Command.sizeof in
   let (_: Cstruct.t) = Command.marshal (Command.Bind_ipv4(ipv4, port, stream)) buf in
