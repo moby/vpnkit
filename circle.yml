@@ -4,6 +4,7 @@ machine:
   environment:
     OPAMYES: "1"
     OPAMVERBOSE: "1"
+    OPAMJOBS: "2"
     MACOSX_DEPLOYMENT_TARGET: "10.10"
 dependencies:
   override:
@@ -15,8 +16,9 @@ dependencies:
   - opam pin add -n ofs v1/ofs
   - opam pin add -n hostnet v1/hostnet
   - opam pin add -n osx-daemon v1/osx-daemon
-  - opam depext -u proto-vmnet ofs hostnet
-  - opam install -j 2 -v hostnet
+  - opam pin add -n osx-hyperkit v1/osx-hyperkit
+  - opam depext -u proto-vmnet ofs hostnet osx-daemon osx-hyperkit
+  - opam install hostnet
   - opam pin add slirp v1/cmd/com.docker.slirp
   - cd v1/cmd/com.docker.slirp && ./build.sh
 test:

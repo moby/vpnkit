@@ -13,6 +13,7 @@ depends: [
   "lwt"
   "ofs"
   "osx-daemon"
+  "osx-hyperkit"
   "hostnet"
   "dns"
   "cmdliner"
