@@ -32,6 +32,8 @@ end
 
 module Make(Input: Sig.VMNET) = struct
 
+  type fd = Input.fd
+
   type stats = {
     mutable rx_bytes: int64;
     mutable rx_pkts: int32;

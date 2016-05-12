@@ -337,6 +337,8 @@ let make ~client_macaddr ~server_macaddr fd =
   let listening = false in
   { fd; stats; client_macaddr; server_macaddr; read_header; write_header; write_m; pcap; pcap_size_limit; pcap_m; listeners; listening }
 
+type fd = C.fd
+
 let of_fd ~client_macaddr ~server_macaddr fd =
   let open Infix in
   let t = make ~client_macaddr ~server_macaddr fd in

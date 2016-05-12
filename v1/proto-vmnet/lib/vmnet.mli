@@ -31,6 +31,8 @@ module Make(C: CONN): sig
 (** Accept connections and talk to clients via the vmnetd protocol, exposing
     the packets as a Mirage NETWORK interface *)
 
+type fd = C.fd
+
 include V1_LWT.NETWORK
   with type buffer = Cstruct.t
 
