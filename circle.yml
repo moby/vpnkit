@@ -17,9 +17,9 @@ dependencies:
   - opam pin add -n hostnet v1/hostnet
   - opam pin add -n osx-daemon v1/osx-daemon
   - opam pin add -n osx-hyperkit v1/osx-hyperkit
-  - opam depext -u proto-vmnet ofs hostnet osx-daemon osx-hyperkit
-  - opam install hostnet
-  - opam pin add slirp v1/cmd/com.docker.slirp
+  - opam pin add -n slirp v1/cmd/com.docker.slirp
+  - opam depext -u slirp
+  - opam install --deps-only slirp
   - cd v1/cmd/com.docker.slirp && ./build.sh
 test:
   override:
