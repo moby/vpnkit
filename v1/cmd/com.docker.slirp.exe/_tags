@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 5279162193d1c291eef86fee342aa96c)
+# DO NOT EDIT (digest: 862a131232cae497d86e93c4ed5ce480)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -17,20 +17,24 @@ true: annot, bin_annot
 # Executable Main
 <src/main.{native,byte}>: pkg_cmdliner
 <src/main.{native,byte}>: pkg_hostnet
+<src/main.{native,byte}>: pkg_hvsock.lwt
 <src/main.{native,byte}>: pkg_logs.fmt
 <src/main.{native,byte}>: pkg_named-pipe.lwt
 <src/main.{native,byte}>: pkg_ofs
 <src/main.{native,byte}>: pkg_proto-vmnet
 <src/main.{native,byte}>: pkg_protocol-9p
 <src/main.{native,byte}>: pkg_protocol-9p.unix
+<src/main.{native,byte}>: pkg_threads
 <src/main.{native,byte}>: pkg_win-eventlog
 <src/*.ml{,i,y}>: pkg_cmdliner
 <src/*.ml{,i,y}>: pkg_hostnet
+<src/*.ml{,i,y}>: pkg_hvsock.lwt
 <src/*.ml{,i,y}>: pkg_logs.fmt
 <src/*.ml{,i,y}>: pkg_named-pipe.lwt
 <src/*.ml{,i,y}>: pkg_ofs
 <src/*.ml{,i,y}>: pkg_proto-vmnet
 <src/*.ml{,i,y}>: pkg_protocol-9p
 <src/*.ml{,i,y}>: pkg_protocol-9p.unix
+<src/*.ml{,i,y}>: pkg_threads
 <src/*.ml{,i,y}>: pkg_win-eventlog
 # OASIS_STOP

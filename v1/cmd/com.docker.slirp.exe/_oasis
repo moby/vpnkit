@@ -15,4 +15,4 @@ Executable Main
   Path: src
   MainIs: main.ml
   BuildDepends: hostnet, win-eventlog, named-pipe.lwt, ofs, protocol-9p,
-    protocol-9p.unix, proto-vmnet, cmdliner, logs.fmt
+    protocol-9p.unix, proto-vmnet, cmdliner, logs.fmt, hvsock.lwt, threads
