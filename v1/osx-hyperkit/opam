@@ -20,5 +20,7 @@ depends: [
   "ocamlfind" {build}
   "asl" {>= "0.8"}
   "logs"
+  "cstruct"
+  "lwt"
 ]
 available: [ocaml-version >= "4.02.0"]
