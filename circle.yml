@@ -1,0 +1,23 @@
+machine:
+  xcode:
+    version: "7.3"
+  environment:
+    OPAMYES: "1"
+    OPAMVERBOSE: "1"
+    MACOSX_DEPLOYMENT_TARGET: "10.10"
+dependencies:
+  override:
+  - brew install wget opam
+  - rm -rf ~/.opam && opam init -a git://github.com/ocaml/opam-repository
+  - opam switch 4.02.3
+  - opam repo add dev repo
+  - opam pin add -n proto-vmnet v1/proto-vmnet
+  - opam pin add -n ofs v1/ofs
+  - opam pin add -n hostnet v1/hostnet
+  - opam depext -u proto-vmnet ofs hostnet
+  - opam install -j 2 -v hostnet
+  - opam pin add slirp v1/cmd/com.docker.slirp
+  - cd v1/cmd/com.docker.slirp && ./build.sh
+test:
+  override:
+  - echo Dummy test
