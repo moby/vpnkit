@@ -31,7 +31,7 @@ depends: [
   "ipaddr" {>="2.5.0"}
   "pcap-format"
 ]
-depopt: [
+depopts: [
   "fd-send-recv"
   "unix-errno"
   "ctypes"
