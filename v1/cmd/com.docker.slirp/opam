@@ -20,6 +20,7 @@ depends: [
   "logs"
   "fmt"
   "proto-vmnet"
+  "fd-send-recv" # to enable vmnet-client
   "ounit" {test}
   "alcotest" {test}
 ]
