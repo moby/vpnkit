@@ -21,6 +21,6 @@ depends: [
   "cmdliner"
   "protocol-9p" {= "0.5.2"}
   "logs"
-  "cstruct"
+  "cstruct" {>="1.6.0"}
 ]
 available: [ocaml-version >= "4.02.0"]
