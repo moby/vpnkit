@@ -14,6 +14,7 @@ dependencies:
   - opam pin add -n proto-vmnet v1/proto-vmnet
   - opam pin add -n ofs v1/ofs
   - opam pin add -n hostnet v1/hostnet
+  - opam pin add -n osx-daemon v1/osx-daemon
   - opam depext -u proto-vmnet ofs hostnet
   - opam install -j 2 -v hostnet
   - opam pin add slirp v1/cmd/com.docker.slirp
