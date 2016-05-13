@@ -18,6 +18,7 @@ depends: [
   "fmt"
   "proto-vmnet"
   "named-pipe"
+  "hvsock"
   "win-eventlog"
   "ounit" {test}
   "alcotest" {test}
