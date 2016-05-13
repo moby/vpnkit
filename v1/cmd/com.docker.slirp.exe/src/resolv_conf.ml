@@ -21,6 +21,11 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+let upstream_dns = ref (Ipaddr.V4.of_string_exn "127.0.0.1")
+
+let set_dns dns =
+  Log.info (fun f -> f "using DNS forwarder on %s:53" dns);
+  upstream_dns := (Ipaddr.V4.of_string_exn dns)
+
 let get () =
-  Log.warn (fun f -> f "assuming there is a DNS forwarder on 127.0.0.1:53");
-  Lwt.return [ Ipaddr.V4 (Ipaddr.V4.of_string_exn "127.0.0.1"), 53 ]
+  Lwt.return [ Ipaddr.V4 !upstream_dns, 53 ]

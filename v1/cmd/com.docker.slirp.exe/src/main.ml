@@ -174,7 +174,7 @@ let start_port_forwarding port_control_url =
 
 module Slirp_stack = Slirp.Make(Vmnet.Make(Conn_lwt_hvsock))(Resolv_conf)
 
-let main_t socket_url port_control_url db_path debug =
+let main_t socket_url port_control_url db_path dns debug =
   if debug
   then Logs.set_reporter (Logs_fmt.reporter ())
   else begin
@@ -182,6 +182,8 @@ let main_t socket_url port_control_url db_path debug =
     Logs.set_reporter (Log_eventlog.reporter h ());
   end;
   Printexc.record_backtrace true;
+
+  Resolv_conf.set_dns dns;
 
   Lwt.async_exception_hook := (fun exn ->
     Log.err (fun f -> f "Lwt.async failure %s: %s"
@@ -216,8 +218,8 @@ let main_t socket_url port_control_url db_path debug =
       Slirp_stack.connect stack conn
     )
 
-let main socket port_control db debug =
-  Lwt_main.run @@ main_t socket port_control db debug
+let main socket port_control db dns debug =
+  Lwt_main.run @@ main_t socket port_control db dns debug
 
 open Cmdliner
 
@@ -245,6 +247,13 @@ let db_path =
   in
   Arg.(value & opt (some string) None doc)
 
+let dns =
+  let doc =
+    Arg.info ~doc:
+      "IP address of upstream DNS server" ["dns"]
+  in
+  Arg.(value & opt string "10.0.75.1" doc)
+
 let debug =
   let doc = "Verbose debug logging to stdout" in
   Arg.(value & flag & info [ "debug" ] ~doc)
@@ -256,7 +265,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ db_path $ debug),
+  Term.(pure main $ socket $ port_control_path $ db_path $ dns $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =
