@@ -83,10 +83,15 @@ let hvsock_connect_forever url sockaddr callback =
           (* the callback will close the connection when it's done *)
           callback socket in
         Lwt.return ()
-      ) (fun _e ->
-        Lwt_hvsock.close socket
-        >>= fun () ->
-        Lwt_unix.sleep 1.
+      ) (function
+        | Unix.Unix_error(Unix.ECONNREFUSED, _, _) ->
+          Lwt_hvsock.close socket
+          >>= fun () ->
+          Log.debug (fun f -> f "hvsock connect got ECONNREFUSED: retrying in 1s");
+          Lwt_unix.sleep 1.
+        | e ->
+          Log.err (fun f -> f "hvsock connect raised %s" (Printexc.to_string e));
+          Lwt.fail e
       )
     >>= fun () ->
     aux () in
