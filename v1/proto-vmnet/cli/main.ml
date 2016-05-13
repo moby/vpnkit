@@ -54,17 +54,6 @@ let bind_main_t socket ip port stream debug =
 
 let bind_main socket ip port stream debug = Lwt_main.run @@ bind_main_t socket ip port stream debug
 
-let uninstall_main_t socket debug =
-  connect_client socket debug
-  >>= fun c ->
-  Vmnet_client.uninstall c
-  >>= fun r ->
-  let () = or_failwith r in
-  Log.debug (fun f -> f "uninstall ok");
-  Lwt.return ()
-
-let uninstall_main socket debug = Lwt_main.run @@ uninstall_main_t socket debug
-
 open Cmdliner
 
 let socket =
@@ -93,15 +82,6 @@ let bind_cmd =
   Term.(pure bind_main $ socket $ ip $ port $ stream $ debug),
   Term.info "bind" ~doc ~man
 
-let uninstall_cmd =
-  let doc = "uninstall vmnetd" in
-  let man =
-    [`S "DESCRIPTION";
-     `P "Ask vmnetd to self-uninstall"]
-  in
-  Term.(pure uninstall_main $ socket $ debug),
-  Term.info "uninstall" ~doc ~man
-
 let help = [
  `S "MORE HELP";
  `P "Use `$(mname) $(i,COMMAND) --help' for help on a single command."; `Noblank;
@@ -116,6 +96,6 @@ let default_cmd =
 
 let () =
   Printexc.record_backtrace true;
-  match Term.eval_choice default_cmd [ bind_cmd; uninstall_cmd ] with
+  match Term.eval_choice default_cmd [ bind_cmd ] with
   | `Error _ -> exit 1
   | _ -> exit 0

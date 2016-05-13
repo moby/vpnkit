@@ -104,6 +104,7 @@ module Command = struct
 
   type t =
     | Ethernet of string (* 36 bytes *)
+    | Bind_ipv4 of Ipaddr.V4.t * int * bool
   with sexp
 
   let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
@@ -116,6 +117,15 @@ module Command = struct
       let rest = Cstruct.shift rest sizeof_msg in
       Cstruct.blit_from_string uuid 0 rest 0 (String.length uuid);
       Cstruct.shift rest (String.length uuid)
+    | Bind_ipv4 (ip, port, stream) ->
+      set_msg_command rest 6;
+      let rest = Cstruct.shift rest sizeof_msg in
+      Cstruct.LE.set_uint32 rest 0 (Ipaddr.V4.to_int32 ip);
+      let rest = Cstruct.shift rest 4 in
+      Cstruct.LE.set_uint16 rest 0 port;
+      let rest = Cstruct.shift rest 2 in
+      Cstruct.set_uint8 rest 0 (if stream then 0 else 1);
+      Cstruct.shift rest 1
 
   let unmarshal rest =
     match get_msg_command rest with

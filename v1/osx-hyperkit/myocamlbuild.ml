@@ -1,5 +1,5 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: c3ba12d5052affd7d087d0054d64efcb) *)
+(* DO NOT EDIT (digest: 0bf7e32ac12fa5208cf813a2b71cb960) *)
 module OASISGettext = struct
 (* # 22 "src/oasis/OASISGettext.ml" *)
 
@@ -607,10 +607,10 @@ end
 open Ocamlbuild_plugin;;
 let package_default =
   {
-     MyOCamlbuildBase.lib_ocaml = [("hostnet", ["lib"], [])];
+     MyOCamlbuildBase.lib_ocaml = [("osx-hyperkit", ["src"], [])];
      lib_c = [];
      flags = [];
-     includes = [("lib_test", ["lib"])]
+     includes = []
   }
   ;;
 

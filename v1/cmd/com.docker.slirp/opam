@@ -13,12 +13,16 @@ depends: [
   "lwt"
   "ofs"
   "osx-daemon"
+  "osx-hyperkit"
   "hostnet"
   "dns"
   "cmdliner"
   "logs"
   "fmt"
   "proto-vmnet"
+  "fd-send-recv" # to enable vmnet-client
+  "unix-errno" # to enable vmnet-client
+  "ctypes" # to enable vmnet-client
   "ounit" {test}
   "alcotest" {test}
 ]

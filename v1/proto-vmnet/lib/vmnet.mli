@@ -56,6 +56,7 @@ module Command : sig
 
   type t =
     | Ethernet of string (* 36 bytes *)
+    | Bind_ipv4 of Ipaddr.V4.t * int * bool
 
     val to_string: t -> string
     val sizeof: int

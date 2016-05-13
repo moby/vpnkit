@@ -15,12 +15,12 @@ build-test: [
   [make "test"]
 ]
 install: [make "install"]
-remove: ["ocamlfind" "remove" "ofs"]
+remove: ["ocamlfind" "remove" "osx-hyperkit"]
 depends: [
   "ocamlfind" {build}
-  "cmdliner"
-  "protocol-9p" {= "0.5.2"}
+  "asl" {>= "0.8"}
   "logs"
-  "cstruct" {>="1.6.0"}
+  "cstruct"
+  "lwt"
 ]
 available: [ocaml-version >= "4.02.0"]
