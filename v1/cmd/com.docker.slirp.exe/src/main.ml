@@ -174,7 +174,7 @@ let start_port_forwarding port_control_url =
 
 module Slirp_stack = Slirp.Make(Vmnet.Make(Conn_lwt_hvsock))(Resolv_conf)
 
-let main_t socket_url port_control_url db_path dns debug =
+let main_t socket_url port_control_url db_path dns pcap debug =
   if debug
   then Logs.set_reporter (Logs_fmt.reporter ())
   else begin
@@ -206,9 +206,10 @@ let main_t socket_url port_control_url db_path dns debug =
     | None ->
       Log.warn (fun f -> f "no database: using hardcoded network configuration values");
       let never, _ = Lwt.task () in
+      let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
       Lwt.return { Slirp_stack.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
         local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
-        pcap_settings = Active_config.Value(None, never) }
+        pcap_settings = Active_config.Value(pcap, never) }
   ) >>= fun stack ->
 
   let sockaddr = hvsock_addr_of_uri (Uri.of_string socket_url) in
@@ -218,8 +219,8 @@ let main_t socket_url port_control_url db_path dns debug =
       Slirp_stack.connect stack conn
     )
 
-let main socket port_control db dns debug =
-  Lwt_main.run @@ main_t socket port_control db dns debug
+let main socket port_control db dns pcap debug =
+  Lwt_main.run @@ main_t socket port_control db dns pcap debug
 
 open Cmdliner
 
@@ -254,6 +255,13 @@ let dns =
   in
   Arg.(value & opt string "10.0.75.1" doc)
 
+let pcap=
+  let doc =
+    Arg.info ~doc:
+      "Filename to write packet capture data to" ["pcap"]
+  in
+  Arg.(value & opt (some string) None doc)
+
 let debug =
   let doc = "Verbose debug logging to stdout" in
   Arg.(value & flag & info [ "debug" ] ~doc)
@@ -265,7 +273,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ db_path $ dns $ debug),
+  Term.(pure main $ socket $ port_control_path $ db_path $ dns $ pcap $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =
