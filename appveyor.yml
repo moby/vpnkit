@@ -5,7 +5,7 @@ environment:
   CYG_ROOT: "C:\\cygwin"
   CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
   EXTRA_REMOTES: "repo"
-  PINS: "hvsock:https://github.com/djs55/ocaml-hvsock.git proto-vmnet:v1/proto-vmnet ofs:v1/ofs hostnet:v1/hostnet osx-daemon:v1/osx-daemon osx-hyperkit:v1/osx-hyperkit slirp:v1/cmd/com.docker.slirp.exe"
+  PINS: "io-page:https://github.com/djs55/io-page.git#fix-windows hvsock:https://github.com/djs55/ocaml-hvsock.git proto-vmnet:v1/proto-vmnet ofs:v1/ofs hostnet:v1/hostnet osx-daemon:v1/osx-daemon osx-hyperkit:v1/osx-hyperkit slirp:v1/cmd/com.docker.slirp.exe"
   PACKAGE: "com-docker-slirp-exe"
   TESTS: "false"
 
@@ -17,4 +17,4 @@ build_script:
   - "%CYG_BASH% '${APPVEYOR_BUILD_FOLDER}/appveyor-opam.sh'"
 
 artifacts:
-  - path: v1\cmd\com.docker.slirp.exe\com.docker.slirp.exe
+  - path: "com.docker.slirp.exe"
