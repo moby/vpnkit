@@ -4,6 +4,18 @@ version: "0.0.0"
 maintainer: "David Scott <dave.scott@docker.com>"
 authors: [ "David Scott <dave.scott@docker.com>" ]
 
+build: [
+  ["cd" "v1/cmd/com.docker.slirp.exe"]
+  ["./configure" "--prefix" prefix]
+  [make]
+]
+build-test: [
+  ["./configure" "--enable-tests"]
+  [make "test"]
+]
+install: [make "install"]
+remove: [make "uninstall"]
+
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
