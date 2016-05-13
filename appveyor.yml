@@ -15,3 +15,6 @@ install:
 
 build_script:
   - "%CYG_BASH% '${APPVEYOR_BUILD_FOLDER}/appveyor-opam.sh'"
+
+artifacts:
+  - path: v1\cmd\com.docker.slirp.exe\com.docker.slirp.exe
