@@ -45,7 +45,9 @@ module TCPV4_half_close = struct
   (* Workaround [mirage/mirage-tcpip#183] *)
   let handle_epipe f = Lwt.catch f (function
     | Unix.Unix_error(Unix.EPIPE, _, _) -> Lwt.return `Eof
-    | e -> Lwt.fail e
+    | e ->
+      Log.err (fun f -> f "Socket_stack.TCPV4: unexpected I/O error %s returning Eof" (Printexc.to_string e));
+      Lwt.return `Eof
   )
 
   let write fd buf = handle_epipe (fun () -> write fd buf)
