@@ -8,7 +8,7 @@ machine:
     MACOSX_DEPLOYMENT_TARGET: "10.10"
 dependencies:
   override:
-  - brew install wget opam
+  - brew install wget opam dylibbundler
   - rm -rf ~/.opam && opam init -a git://github.com/ocaml/opam-repository
   - opam switch 4.02.3
   - opam repo add dev repo
