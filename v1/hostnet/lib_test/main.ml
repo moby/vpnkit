@@ -84,11 +84,12 @@ let with_stack f =
   socketpair ()
   >>= fun (client, server) ->
   Log.info (fun f -> f "Made a loopback connection");
-  let conn = Conn_lwt_unix.connect server in
-  let stack = Slirp_stack.connect config conn in
+  let server_conn = Conn_lwt_unix.connect server in
+  let client_conn = Conn_lwt_unix.connect client in
+  let stack = Slirp_stack.connect config server_conn in
   let client_macaddr = Hostnet.Slirp.client_macaddr in
   let server_macaddr = Hostnet.Slirp.server_macaddr in
-  VMNET.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr conn
+  VMNET.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr client_conn
   >>= function
   | `Error (`Msg x ) ->
     (* Server will close when it gets EOF *)
