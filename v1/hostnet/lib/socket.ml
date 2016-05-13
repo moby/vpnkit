@@ -52,7 +52,14 @@ module Datagram = struct
       Hashtbl.iter (fun k flow ->
           if now -. flow.last_use > 60. then begin
             Log.debug (fun f -> f "Socket.Datagram %s: expiring UDP NAT rule" flow.description);
-            Lwt.async (fun () -> Lwt_unix.close flow.fd);
+            Lwt.async (fun () ->
+              Lwt.catch (fun () ->
+                Lwt_unix.close flow.fd
+              ) (fun e ->
+                Log.err (fun f -> f "Socket.Datagram %s: caught %s while closing UDP socket" flow.description (Printexc.to_string e));
+                Lwt.return ()
+              )
+            );
             Hashtbl.remove table k
           end
         ) snapshot;
