@@ -5,12 +5,9 @@ maintainer: "David Scott <dave.scott@docker.com>"
 authors: [ "David Scott <dave.scott@docker.com>" ]
 
 build: [
-  ["cd" "v1/cmd/com.docker.slirp.exe"]
-  ["./configure" "--prefix" prefix]
-  [make]
+  [make "com.docker.slirp.exe"]
 ]
 build-test: [
-  ["./configure" "--enable-tests"]
   [make "test"]
 ]
 install: [make "install"]
