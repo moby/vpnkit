@@ -79,10 +79,8 @@ let hvsock_connect_forever url sockaddr callback =
       (fun () ->
         Lwt_hvsock.connect socket sockaddr
         >>= fun () ->
-        let _ = (* background thread *)
-          (* the callback will close the connection when it's done *)
-          callback socket in
-        Lwt.return ()
+        Log.info (fun f -> f "hvsock connected successfully");
+        callback socket
       ) (function
         | Unix.Unix_error(Unix.ECONNREFUSED, _, _) ->
           Lwt_hvsock.close socket
