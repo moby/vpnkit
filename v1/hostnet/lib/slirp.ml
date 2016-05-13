@@ -300,8 +300,6 @@ let connect x peer_ip local_ip =
         Log.debug (fun f -> f "accepted vmnet connection");
 
         let rec monitor_pcap_settings pcap_settings =
-          Active_config.tl pcap_settings
-          >>= fun pcap_settings ->
           ( match Active_config.hd pcap_settings with
             | None ->
               Log.debug (fun f -> f "Disabling any active packet capture");
@@ -310,6 +308,8 @@ let connect x peer_ip local_ip =
               Log.debug (fun f -> f "Capturing packets to %s %s" filename (match size_limit with None -> "with no limit" | Some x -> Printf.sprintf "limited to %Ld bytes" x));
               Vmnet.start_capture x ?size_limit filename )
           >>= fun () ->
+          Active_config.tl pcap_settings
+          >>= fun pcap_settings ->
           monitor_pcap_settings pcap_settings in
         Lwt.async (fun () ->
           log_exception_continue "monitor_pcap_settings"

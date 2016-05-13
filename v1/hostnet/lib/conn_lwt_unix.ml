@@ -1,5 +1,5 @@
 (*
- * Copyright (C) 2016 David Scott <dave.scott@docker.com>
+ * Copyright (C) 2015 David Scott <dave.scott@unikernel.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,18 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  *)
-let src =
-  let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
-  Logs.Src.set_level src (Some Logs.Debug);
-  src
 
-module Log = (val Logs.src_log src : Logs.LOG)
+open Lwt.Infix
 
-let upstream_dns = ref (Ipaddr.V4.of_string_exn "127.0.0.1")
+type fd = Lwt_unix.file_descr
+let connect fd = fd
+let close = Lwt_unix.close
 
-let set_dns dns =
-  Log.info (fun f -> f "using DNS forwarder on %s:53" dns);
-  upstream_dns := (Ipaddr.V4.of_string_exn dns)
-
-let get () =
-  Lwt.return [ Ipaddr.V4 !upstream_dns, 53 ]
+let read fd buf = Lwt_cstruct.(complete (read fd) buf)
+let write fd buf = Lwt_cstruct.(complete (write fd) buf)

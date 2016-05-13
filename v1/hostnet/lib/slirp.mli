@@ -33,7 +33,7 @@ module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF): sig
   val create: Active_config.t -> t Lwt.t
   (** Initialise a TCP/IP stack, taking configuration from the Active_config.t *)
 
-  val connect: t -> Lwt_unix.file_descr -> unit Lwt.t
+  val connect: t -> Vmnet.fd -> unit Lwt.t
   (** Read and write ethernet frames on the given fd *)
 end
 

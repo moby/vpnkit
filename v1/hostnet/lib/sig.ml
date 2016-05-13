@@ -15,6 +15,18 @@
  *
  *)
 
+ module type CONN = sig
+   type fd
+
+   val read: fd -> Cstruct.t -> unit Lwt.t
+   (** Completely fills the given buffer with data from [fd] *)
+
+   val write: fd -> Cstruct.t -> unit Lwt.t
+   (** Completely writes the contents of the buffer to [fd] *)
+
+   val close: fd -> unit Lwt.t
+ end
+
 module type VMNET = sig
   (** A virtual ethernet link to the VM *)
 
@@ -23,8 +35,10 @@ module type VMNET = sig
   val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
   (** Add a callback which will be invoked in parallel with all received packets *)
 
+  type fd
+
   val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t
-    -> Lwt_unix.file_descr -> [ `Ok of t | `Error of [ `Msg of string]] Lwt.t
+    -> fd -> [ `Ok of t | `Error of [ `Msg of string]] Lwt.t
 
   val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 

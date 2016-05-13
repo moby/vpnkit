@@ -12,10 +12,11 @@ module Resolv_conf = struct
   let get () = Lwt.return [ Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.8.8"), 53 ]
 end
 
-module Slirp_stack = Slirp.Make(Vmnet)(Resolv_conf)
+module VMNET = Vmnet.Make(Conn_lwt_unix)
+module Slirp_stack = Slirp.Make(VMNET)(Resolv_conf)
 
 module Client = struct
-  module Netif = Vmnet
+  module Netif = VMNET
   module Ethif1 = Ethif.Make(Netif)
   module Arpv41 = Arpv4.Make(Ethif1)(Clock)(OS.Time)
   module Ipv41 = Ipv4.Make(Ethif1)(Arpv41)
@@ -28,7 +29,7 @@ module Client = struct
     m >>= function
     | `Error _ -> failwith (Printf.sprintf "Failed to connect %s device" name)
     | `Ok x -> Lwt.return x
-  let connect (interface: Vmnet.t) =
+  let connect (interface: VMNET.t) =
     let open Lwt.Infix in
     or_error "console" @@ Console_unix.connect "0"
     >>= fun console ->
@@ -83,10 +84,12 @@ let with_stack f =
   socketpair ()
   >>= fun (client, server) ->
   Log.info (fun f -> f "Made a loopback connection");
-  let stack = Slirp_stack.connect config server in
+  let server_conn = Conn_lwt_unix.connect server in
+  let client_conn = Conn_lwt_unix.connect client in
+  let stack = Slirp_stack.connect config server_conn in
   let client_macaddr = Hostnet.Slirp.client_macaddr in
   let server_macaddr = Hostnet.Slirp.server_macaddr in
-  Vmnet.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr client
+  VMNET.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr client_conn
   >>= function
   | `Error (`Msg x ) ->
     (* Server will close when it gets EOF *)
@@ -101,7 +104,7 @@ let with_stack f =
       f stack
     ) (fun () ->
       (* Server will close when it gets EOF *)
-      Vmnet.disconnect client'
+      VMNET.disconnect client'
     )
 
 let test_dhcp_query () =

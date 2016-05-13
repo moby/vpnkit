@@ -59,7 +59,7 @@ let start_port_forwarding port_control_path vsock_path =
   >>= fun r ->
   Lwt.return (or_failwith r)
 
-module Slirp_stack = Slirp.Make(Vmnet)(Resolv_conf)
+module Slirp_stack = Slirp.Make(Vmnet.Make(Hostnet.Conn_lwt_unix))(Resolv_conf)
 
 let main_t socket_path port_control_path vsock_path db_path debug =
   Osx_reporter.install ~stdout:debug;
@@ -92,7 +92,8 @@ let main_t socket_path port_control_path vsock_path db_path debug =
     Lwt.async (fun () ->
       log_exception_continue "slirp_server"
         (fun () ->
-          Slirp_stack.connect stack client
+          let conn = Hostnet.Conn_lwt_unix.connect client in
+          Slirp_stack.connect stack conn
         )
       (* NB: the vmnet layer will call close when it receives EOF *)
     );

@@ -4,6 +4,15 @@ version: "0.0.0"
 maintainer: "David Scott <dave.scott@docker.com>"
 authors: [ "David Scott <dave.scott@docker.com>" ]
 
+build: [
+  [make "com.docker.slirp.exe"]
+]
+build-test: [
+  [make "test"]
+]
+install: [make "install"]
+remove: [make "uninstall"]
+
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
@@ -18,6 +27,7 @@ depends: [
   "fmt"
   "proto-vmnet"
   "named-pipe"
+  "hvsock"
   "win-eventlog"
   "ounit" {test}
   "alcotest" {test}

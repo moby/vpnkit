@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 954054655cf720defbbeabc2636c8945)
+# DO NOT EDIT (digest: 69a0f8a31698d2b5db99f676b4c61a63)
 Arp
 Dns_forward
 Filter
@@ -9,5 +9,6 @@ Socket_stack
 Tcpip_stack
 Port
 Forward
+Conn_lwt_unix
 Sig
 # OASIS_STOP

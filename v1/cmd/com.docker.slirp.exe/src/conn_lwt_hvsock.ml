@@ -1,5 +1,5 @@
 (*
- * Copyright (C) 2016 David Scott <dave.scott@docker.com>
+ * Copyright (C) 2015 David Scott <dave.scott@unikernel.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,18 +14,34 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  *)
-let src =
-  let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
-  Logs.Src.set_level src (Some Logs.Debug);
-  src
 
-module Log = (val Logs.src_log src : Logs.LOG)
+open Lwt.Infix
 
-let upstream_dns = ref (Ipaddr.V4.of_string_exn "127.0.0.1")
+type fd = Lwt_hvsock.t
+let connect fd = fd
+let close = Lwt_hvsock.close
 
-let set_dns dns =
-  Log.info (fun f -> f "using DNS forwarder on %s:53" dns);
-  upstream_dns := (Ipaddr.V4.of_string_exn dns)
+let read fd buf =
+  let len = Cstruct.len buf in
+  let bytes = Bytes.make len '\000' in
+  let rec loop ofs =
+    if ofs >= len then Lwt.return ()
+    else
+      Lwt_hvsock.read fd bytes ofs (len - ofs)
+      >>= fun n ->
+      loop (ofs + n) in
+  loop 0
+  >>= fun () ->
+  Cstruct.blit_from_string bytes 0 buf 0 len;
+  Lwt.return ()
 
-let get () =
-  Lwt.return [ Ipaddr.V4 !upstream_dns, 53 ]
+let write fd buf =
+  let len = Cstruct.len buf in
+  let bytes = Cstruct.to_string buf in
+  let rec loop ofs =
+    if ofs >= len then Lwt.return ()
+    else
+      Lwt_hvsock.write fd bytes ofs (len - ofs)
+      >>= fun n ->
+      loop (ofs + n) in
+  loop 0

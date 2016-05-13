@@ -32,31 +32,21 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
+module type CONN = sig
+  type fd
+
+  val read: fd -> Cstruct.t -> unit Lwt.t
+  (** Completely fills the given buffer with data from [fd] *)
+
+  val write: fd -> Cstruct.t -> unit Lwt.t
+  (** Completely writes the contents of the buffer to [fd] *)
+
+  val close: fd -> unit Lwt.t
+end
+
 let default_mtu = 1500
 
 let ethernet_header_length = 14 (* no VLAN *)
-
-type stats = {
-  mutable rx_bytes: int64;
-  mutable rx_pkts: int32;
-  mutable tx_bytes: int64;
-  mutable tx_pkts: int32;
-}
-
-type t = {
-  mutable fd: Lwt_unix.file_descr option;
-  stats: stats;
-  client_macaddr: Macaddr.t;
-  server_macaddr: Macaddr.t;
-  read_header: Cstruct.t;
-  write_header: Cstruct.t;
-  write_m: Lwt_mutex.t;
-  mutable pcap: Lwt_unix.file_descr option;
-  mutable pcap_size_limit: int64 option;
-  pcap_m: Lwt_mutex.t;
-  mutable listeners: (Cstruct.t -> unit Lwt.t) list;
-  mutable listening: bool;
-}
 
 module Init = struct
 
@@ -198,6 +188,30 @@ module Infix = struct
     | `Error x -> Lwt.return (`Error x)
 end
 
+module Make(C: CONN) = struct
+type stats = {
+  mutable rx_bytes: int64;
+  mutable rx_pkts: int32;
+  mutable tx_bytes: int64;
+  mutable tx_pkts: int32;
+}
+
+type t = {
+  mutable fd: C.fd option;
+  stats: stats;
+  client_macaddr: Macaddr.t;
+  server_macaddr: Macaddr.t;
+  read_header: Cstruct.t;
+  write_header: Cstruct.t;
+  write_m: Lwt_mutex.t;
+  mutable pcap: Lwt_unix.file_descr option;
+  mutable pcap_size_limit: int64 option;
+  pcap_m: Lwt_mutex.t;
+  mutable listeners: (Cstruct.t -> unit Lwt.t) list;
+  mutable listening: bool;
+}
+
+
 let error_of_failure f = Lwt.catch f (fun e -> Lwt.return (`Error (`Msg (Printexc.to_string e))))
 
 let get_fd t = match t.fd with
@@ -209,7 +223,7 @@ let server_negotiate t =
     (fun () ->
       let fd = get_fd t in
       let buf = Cstruct.create Init.sizeof in
-      Lwt_cstruct.(complete (read fd) buf)
+      C.read fd buf
       >>= fun () ->
       let open Infix in
       Lwt.return (Init.unmarshal buf)
@@ -217,10 +231,10 @@ let server_negotiate t =
       Log.info (fun f -> f "PPP.negotiate: received %s" (Init.to_string init));
       let (_: Cstruct.t) = Init.marshal Init.default buf in
       let open Lwt.Infix in
-      Lwt_cstruct.(complete (write fd) buf)
+      C.write fd buf
       >>= fun () ->
       let buf = Cstruct.create Command.sizeof in
-      Lwt_cstruct.(complete (read fd) buf)
+      C.read fd buf
       >>= fun () ->
       let open Infix in
       Lwt.return (Command.unmarshal buf)
@@ -231,7 +245,7 @@ let server_negotiate t =
       let (_: Cstruct.t) = Vif.marshal vif buf in
       let open Lwt.Infix in
       Log.info (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
-      Lwt_cstruct.(complete (write fd) buf)
+      C.write fd buf
       >>= fun () ->
       Lwt.return (`Ok ())
     )
@@ -243,9 +257,9 @@ let client_negotiate t =
       let fd = get_fd t in
       let buf = Cstruct.create Init.sizeof in
       let (_: Cstruct.t) = Init.marshal Init.default buf in
-      Lwt_cstruct.(complete (write fd) buf)
+      C.write fd buf
       >>= fun () ->
-      Lwt_cstruct.(complete (read fd) buf)
+      C.read fd buf
       >>= fun () ->
       let open Infix in
       Lwt.return (Init.unmarshal buf)
@@ -255,10 +269,10 @@ let client_negotiate t =
       let uuid = String.make 36 'X' in
       let (_: Cstruct.t) = Command.marshal (Command.Ethernet uuid) buf in
       let open Lwt.Infix in
-      Lwt_cstruct.(complete (write fd) buf)
+      C.write fd buf
       >>= fun () ->
       let buf = Cstruct.create Vif.sizeof in
-      Lwt_cstruct.(complete (read fd) buf)
+      C.read fd buf
       >>= fun () ->
       let open Infix in
       Lwt.return (Vif.unmarshal buf)
@@ -323,6 +337,8 @@ let make ~client_macaddr ~server_macaddr fd =
   let listening = false in
   { fd; stats; client_macaddr; server_macaddr; read_header; write_header; write_m; pcap; pcap_size_limit; pcap_m; listeners; listening }
 
+type fd = C.fd
+
 let of_fd ~client_macaddr ~server_macaddr fd =
   let open Infix in
   let t = make ~client_macaddr ~server_macaddr fd in
@@ -342,7 +358,7 @@ let disconnect t = match t.fd with
   | Some fd ->
     t.fd <- None;
     Log.info (fun f -> f "Vmnet.disconnect closing fd");
-    Lwt_unix.close fd
+    C.close fd
 
 let capture t bufs =
   match t.pcap with
@@ -399,14 +415,14 @@ let write t buf =
            end else begin
              Packet.marshal len t.write_header;
              let fd = get_fd t in
-             Lwt_cstruct.(complete (write fd) t.write_header)
+             C.write fd t.write_header
              >>= fun () ->
              Log.debug (fun f ->
                  let b = Buffer.create 128 in
                  Cstruct.hexdump_to_buffer b buf;
                  f "sending\n%s" (Buffer.contents b)
                );
-             Lwt_cstruct.(complete (write fd) buf)
+             C.write fd buf
            end
         )
     )
@@ -427,7 +443,7 @@ let writev t bufs =
            end else begin
              Packet.marshal len t.write_header;
              let fd = get_fd t in
-             Lwt_cstruct.(complete (write fd) t.write_header)
+             C.write fd t.write_header
              >>= fun () ->
              Log.debug (fun f ->
                  let b = Buffer.create 128 in
@@ -437,7 +453,7 @@ let writev t bufs =
              let rec loop = function
                | [] -> Lwt.return ()
                | buf :: bufs ->
-                 Lwt_cstruct.(complete (write fd) buf)
+                 C.write fd buf
                  >>= fun () ->
                  loop bufs in
              loop bufs
@@ -457,14 +473,14 @@ let listen t callback =
         (fun () ->
            let open Lwt.Infix in
            let fd = get_fd t in
-           Lwt_cstruct.(complete (read fd) t.read_header)
+           C.read fd t.read_header
            >>= fun () ->
            let open Infix in
            Lwt.return (Packet.unmarshal t.read_header)
            >>= fun (len, _) ->
            let buf = Cstruct.create len in
            let open Lwt.Infix in
-           Lwt_cstruct.(complete (read fd) buf)
+           C.read fd buf
            >>= fun () ->
            capture t [ buf ]
            >>= fun () ->
@@ -524,3 +540,4 @@ let reset_stats_counters t =
   t.stats.tx_pkts <- 0l
 
 let get_id _ = ()
+end
