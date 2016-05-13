@@ -194,10 +194,17 @@ let main_t socket_url port_control_url db_path debug =
       )
     );
 
-  let config = Active_config.create "named-pipe" db_path in
-
-  Slirp_stack.create config
-  >>= fun stack ->
+  ( match db_path with
+    | Some db_path ->
+      let db = Active_config.create "named-pipe" db_path in
+      Slirp_stack.create db
+    | None ->
+      Log.warn (fun f -> f "no database: using hardcoded network configuration values");
+      let never, _ = Lwt.task () in
+      Lwt.return { Slirp_stack.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
+        local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
+        pcap_settings = Active_config.Value(None, never) }
+  ) >>= fun stack ->
 
   let sockaddr = hvsock_addr_of_uri (Uri.of_string socket_url) in
   hvsock_connect_forever socket_url sockaddr
@@ -231,9 +238,9 @@ let db_path =
   let doc =
     Arg.info ~doc:
       "A URLs to connect to datakitof the form \
-      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\foo" ["db"]
+      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\irmin" ["db"]
   in
-  Arg.(value & opt string "\\\\.\\pipe\\datakit" doc)
+  Arg.(value & opt (some string) None doc)
 
 let debug =
   let doc = "Verbose debug logging to stdout" in
