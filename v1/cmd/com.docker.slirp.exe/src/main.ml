@@ -86,10 +86,10 @@ let hvsock_connect_forever url sockaddr callback =
         Log.info (fun f -> f "hvsock connected successfully");
         callback socket
       ) (function
-        | Unix.Unix_error(Unix.ECONNREFUSED, _, _) ->
+        | Unix.Unix_error(e, _, _) ->
           Lwt_hvsock.close socket
           >>= fun () ->
-          Log.debug (fun f -> f "hvsock connect got ECONNREFUSED: retrying in 1s");
+          Log.debug (fun f -> f "hvsock connect got %s: retrying in 1s" (Win_error.error_message e));
           Lwt_unix.sleep 1.
         | e ->
           Log.err (fun f -> f "hvsock connect raised %s" (Printexc.to_string e));
