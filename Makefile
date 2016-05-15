@@ -10,7 +10,7 @@ com.docker.slirp.exe:
 
 install:
 	cp v1/cmd/com.docker.slirp.exe/com.docker.slirp.exe '$(EXEDIR)'
+	cp v1/cmd/com.docker.slirp.exe/register.ps1 '$(EXEDIR)'
 
 uninstall:
 	echo uninstall
-

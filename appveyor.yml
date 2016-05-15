@@ -5,7 +5,7 @@ environment:
   CYG_ROOT: "C:\\cygwin"
   CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
   EXTRA_REMOTES: "repo"
-  PINS: "io-page:https://github.com/djs55/io-page.git#fix-windows hvsock:https://github.com/djs55/ocaml-hvsock.git proto-vmnet:v1/proto-vmnet ofs:v1/ofs hostnet:v1/hostnet osx-daemon:v1/osx-daemon osx-hyperkit:v1/osx-hyperkit slirp:v1/cmd/com.docker.slirp.exe"
+  PINS: "io-page:https://github.com/mirage/io-page.git hvsock:https://github.com/djs55/ocaml-hvsock.git proto-vmnet:v1/proto-vmnet ofs:v1/ofs hostnet:v1/hostnet osx-daemon:v1/osx-daemon osx-hyperkit:v1/osx-hyperkit slirp:v1/cmd/com.docker.slirp.exe"
   PACKAGE: "com-docker-slirp-exe"
   TESTS: "false"
 
@@ -18,3 +18,6 @@ build_script:
 
 artifacts:
   - path: "com.docker.slirp.exe"
+    name: Hyperkit-net server
+  - path: "register.ps1"
+    name: Script to register service names in the registry
