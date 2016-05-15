@@ -34,6 +34,9 @@ let log_exception_continue description f =
 
 let default d = function None -> d | Some x -> x
 
+let ethernet_serviceid = "30D48B34-7D27-4B0B-AAAF-BBBED334DD59"
+let ports_serviceid = "0B95756A-9985-48AD-9470-78E060895BE7"
+
 (* These could be shared with datakit. Perhaps they should live in mirage/conduit? *)
 
 let make_unix_socket path =
@@ -73,6 +76,7 @@ let rec named_pipe_accept_forever path callback =
     named_pipe_accept_forever path callback
 
 let hvsock_connect_forever url sockaddr callback =
+  Log.info (fun f -> f "connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid) sockaddr.Hvsock.serviceid);
   let rec aux () =
     let socket = Lwt_hvsock.create () in
     Lwt.catch
@@ -96,13 +100,15 @@ let hvsock_connect_forever url sockaddr callback =
   Log.debug (fun f -> f "Waiting for connections on socket %s" url);
   aux ()
 
-let hvsock_addr_of_uri uri =
+let hvsock_addr_of_uri ~default_serviceid uri =
   (* hyperv://vmid/serviceid *)
   let vmid = match Uri.host uri with None -> Hvsock.Loopback | Some x -> Hvsock.Id x in
   let serviceid =
     let p = Uri.path uri in
+    if p = ""
+    then default_serviceid
     (* trim leading / *)
-    if String.length p > 0 then String.sub p 1 (String.length p - 1) else p in
+    else if String.length p > 0 then String.sub p 1 (String.length p - 1) else p in
     { Hvsock.vmid; serviceid }
 
 let accept_forever urls callback =
@@ -156,7 +162,7 @@ let start_port_forwarding port_control_url =
     exit 1
   | `Ok s ->
   Ports.set_context fs "";
-  let sockaddr = hvsock_addr_of_uri (Uri.of_string port_control_url) in
+  let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid (Uri.of_string port_control_url) in
   hvsock_connect_forever port_control_url sockaddr
     (fun fd ->
       let flow = Flow_lwt_hvsock.connect fd in
@@ -212,7 +218,7 @@ let main_t socket_url port_control_url db_path dns pcap debug =
         pcap_settings = Active_config.Value(pcap, never) }
   ) >>= fun stack ->
 
-  let sockaddr = hvsock_addr_of_uri (Uri.of_string socket_url) in
+  let sockaddr = hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid (Uri.of_string socket_url) in
   hvsock_connect_forever socket_url sockaddr
     (fun fd ->
       let conn = Conn_lwt_hvsock.connect fd in
@@ -228,17 +234,17 @@ let socket =
   let doc =
     Arg.info ~doc:
       "A URLs to connect to for ethernet of the form \
-      hyperv-connect:///vmid/serviceid" ["ethernet"]
+      hyperv-connect://vmid/serviceid or hyperv-connect://vmid for the default serviceid" ["ethernet"]
   in
-  Arg.(value & opt string "hyperv-connect:///vmid/serviceid" doc)
+  Arg.(value & opt string "hyperv-connect://vmid/serviceid" doc)
 
 let port_control_path =
   let doc =
     Arg.info ~doc:
       "A URL to connect to for port control of the form \
-      hyperv-connect:///vmid/serviceid" ["port"]
+      hyperv-connect://vmid/serviceid" ["port"]
   in
-  Arg.(value & opt string "hyperv-connect:///vmid/serviceid" doc)
+  Arg.(value & opt string "hyperv-connect://vmid/serviceid" doc)
 
 let db_path =
   let doc =
