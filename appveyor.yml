@@ -18,6 +18,4 @@ build_script:
 
 artifacts:
   - path: "com.docker.slirp.exe"
-    name: Hyperkit-net server
   - path: "register.ps1"
-    name: Script to register service names in the registry
