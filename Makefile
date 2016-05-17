@@ -10,7 +10,11 @@ com.docker.slirp:
 	cp _build/src/main.native com.docker.slirp
 
 com.docker.slirp.exe:
-	cd src/com.docker.slirp.exe && ./configure && make && cp _build/src/main.native com.docker.slirp.exe
+	cd src/com.docker.slirp.exe && \
+	oasis setup && \
+	./configure && \
+	make && \
+	cp _build/src/main.native com.docker.slirp.exe
 
 install:
 	cp src/com.docker.slirp.exe/com.docker.slirp.exe '$(EXEDIR)'
