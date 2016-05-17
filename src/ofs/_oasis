@@ -22,7 +22,7 @@ Document ofs
   XOCamlbuildLibraries: ofs
 
 Executable datakit_config
-  Path: cli
+  Path: bin
   CompiledObject: best
   MainIs: main.ml
   BuildDepends: cmdliner, ofs, logs.fmt

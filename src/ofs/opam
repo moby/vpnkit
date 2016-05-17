@@ -7,6 +7,7 @@ bug-reports:  "https://github.com/docker/pinata"
 dev-repo:     "https://github.com/docker/pinata.git"
 
 build: [
+  ["oasis" "setup"]
   ["./configure" "--prefix" prefix]
   [make]
 ]
@@ -18,6 +19,7 @@ install: [make "install"]
 remove: ["ocamlfind" "remove" "ofs"]
 depends: [
   "ocamlfind" {build}
+  "oasis" {build}
   "cmdliner"
   "protocol-9p" {= "0.5.2"}
   "logs"
