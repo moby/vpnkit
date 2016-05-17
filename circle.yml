@@ -20,7 +20,7 @@ dependencies:
   - opam pin add -n slirp src/com.docker.slirp
   - opam depext -u slirp
   - opam install --deps-only slirp
-  - cd src/com.docker.slirp && ./build.sh
+  - cd src/com.docker.slirp && make bundle
 test:
   override:
   - echo Dummy test

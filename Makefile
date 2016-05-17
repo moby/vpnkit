@@ -3,7 +3,11 @@
 EXEDIR=C:\projects\vpnkit
 
 com.docker.slirp:
-	cd src/com.docker.slirp && ./configure && make && cp _build/src/main.native com.docker.slirp
+	cd src/com.docker.slirp && \
+	oasis setup && \
+	./configure && \
+	make && \
+	cp _build/src/main.native com.docker.slirp
 
 com.docker.slirp.exe:
 	cd src/com.docker.slirp.exe && ./configure && make && cp _build/src/main.native com.docker.slirp.exe

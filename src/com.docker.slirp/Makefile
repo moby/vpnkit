@@ -1,5 +1,8 @@
 SETUP = ocaml setup.ml
 
+setup.ml:
+	oasis setup
+
 build: setup.data
 	$(SETUP) -build $(BUILDFLAGS)
 
@@ -21,7 +24,7 @@ uninstall: setup.data
 reinstall: setup.data
 	$(SETUP) -reinstall $(REINSTALLFLAGS)
 
-setup.data:
+setup.data: setup.ml
 	$(SETUP) -configure $(CONFIGUREFLAGS)
 
 configure:
@@ -32,3 +35,12 @@ configure:
 clean:
 	rm -rf _build setup.data
 	rm -f com.docker.slirp
+
+bundle: build
+	mkdir -p _build/root/Contents/MacOS
+	mv main.native com.docker.slirp
+	cp com.docker.slirp _build/root/Contents/MacOS/com.docker.slirp
+	dylibbundler -od -b \
+	  -x _build/root/Contents/MacOS/com.docker.slirp \
+	  -d _build/root/Contents/Resources/lib \
+	  -p @executable_path/../Resources/lib

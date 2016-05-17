@@ -1,6 +1,4 @@
 opam-version: "1.2"
-name: "slirp"
-version: "0.0.0"
 maintainer: "David Scott <dave.scott@docker.com>"
 authors: [ "David Scott <dave.scott@docker.com>" ]
 
