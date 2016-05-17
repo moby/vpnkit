@@ -1,6 +1,6 @@
 .PHONY: com.docker.slirp.exe install uninstall
 
-EXEDIR=C:\projects\hyperkit-net
+EXEDIR=C:\projects\vpnkit
 
 com.docker.slirp:
 	cd v1/cmd/com.docker.slirp && ./configure && make && cp _build/src/main.native com.docker.slirp
