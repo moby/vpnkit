@@ -7,6 +7,7 @@ bug-reports:  "https://github.com/docker/pinata"
 dev-repo:     "https://github.com/docker/pinata.git"
 
 build: [
+  ["oasis" "setup"]
   ["./configure" "--prefix" prefix "--%{fd-send-recv:enable}%-unix"]
   [make]
 ]
@@ -22,6 +23,7 @@ remove: [
 depends: [
   "ocamlbuild" {build}
   "ocamlfind" {build}
+  "oasis" {build}
   "base-unix"
   "logs"
   "cstruct"

@@ -45,6 +45,6 @@ Executable "vmnet-cli"
   Build$: flag(unix)
   Install$: flag(unix)
   CompiledObject: best
-  Path: cli
+  Path: bin
   MainIs: main.ml
   BuildDepends: cmdliner, proto-vmnet, vmnet-client, lwt.unix
