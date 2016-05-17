@@ -4,8 +4,8 @@ platform:
 environment:
   CYG_ROOT: "C:\\cygwin"
   CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
-  EXTRA_REMOTES: "repo"
-  PINS: "io-page:https://github.com/mirage/io-page.git hvsock:https://github.com/djs55/ocaml-hvsock.git proto-vmnet:v1/proto-vmnet ofs:v1/ofs hostnet:v1/hostnet osx-daemon:v1/osx-daemon osx-hyperkit:v1/osx-hyperkit slirp:v1/cmd/com.docker.slirp.exe"
+  EXTRA_REMOTES: "."
+  PINS: "io-page:https://github.com/mirage/io-page.git hvsock:https://github.com/djs55/ocaml-hvsock.git proto-vmnet:src/proto-vmnet ofs:src/ofs hostnet:src/hostnet osx-daemon:src/osx-daemon osx-hyperkit:src/osx-hyperkit slirp:src/com.docker.slirp.exe"
   PACKAGE: "com-docker-slirp-exe"
   TESTS: "false"
 
