@@ -1,25 +1,22 @@
-Networking devices for [hyperkit](https://github.com/docker/hyperkit)
+VPN-friendly networking devices for [hyperkit](https://github.com/docker/hyperkit)
 ===============================
 
-Notes
------
+![VPNkit diagram](http://docker.github.io/vpnkit/vpnkit.png)
 
-On Windows we depend on Hyper-V sockets (`AF_HYPERV`). There are two services
-with the following GUIDs:
+VPNkit is a set of tools and services for helping [hyperkit](https://github.com/docker/hyperkit)
+VMs interoperate with host VPN configurations.
 
-- ethernet: `30D48B34-7D27-4B0B-AAAF-BBBED334DD59`
-- port forwarding: `0B95756A-9985-48AD-9470-78E060895BE7`
+Why is this needed?
+-------------------
 
-These services must be registered in the registry, see the powershell script
-[register.ps1](https://github.com/docker/vpnkit/blob/master/src/com.docker.slirp.exe/register.ps1).
+Running a VM usually involves modifying the network configuration on the host, for example
+by activating ethernet bridges, new routing table entries, DNS and firewall/NAT configurations.
+Activating a VPN involves modifying the same routing tables, DNS and firewall/NAT configurations
+and therefore there can be a clash-- this often results in the network connection to the VM
+being disconnected.
 
-To start the service, first discover the VM Id with:
+VPNkit, part of [hyperkit](https://github.com/docker/hyperkit)
+attempts to work nicely with VPN software by intercepting the VM traffic at the ethernet level,
+parsing and understanding protocols like NTP, DNS, UDP, TCP and doing the "right thing" with
+respect to the host's VPN configuration.
 
-```powershell
-(Get-VM -Name myvmname).Id
-```
-
-and then:
-```bash
-./com.docker.slirp.exe --ethernet hyperv-connect://<VM UUID> --debug
-```
