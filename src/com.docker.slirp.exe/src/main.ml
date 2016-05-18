@@ -77,7 +77,7 @@ let hvsock_connect_forever url sockaddr callback =
           Lwt_unix.sleep 1.
         | e ->
           Log.err (fun f -> f "hvsock connect raised %s" (Printexc.to_string e));
-          Lwt.fail e
+          Lwt_unix.sleep 1.
       )
     >>= fun () ->
     aux () in
