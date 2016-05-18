@@ -3,14 +3,22 @@
 EXEDIR=C:\projects\vpnkit
 
 com.docker.slirp:
-	cd v1/cmd/com.docker.slirp && ./configure && make && cp _build/src/main.native com.docker.slirp
+	cd src/com.docker.slirp && \
+	oasis setup && \
+	./configure && \
+	make && \
+	cp _build/src/main.native com.docker.slirp
 
 com.docker.slirp.exe:
-	cd v1/cmd/com.docker.slirp.exe && ./configure && make && cp _build/src/main.native com.docker.slirp.exe
+	cd src/com.docker.slirp.exe && \
+	oasis setup && \
+	./configure && \
+	make && \
+	cp _build/src/main.native com.docker.slirp.exe
 
 install:
-	cp v1/cmd/com.docker.slirp.exe/com.docker.slirp.exe '$(EXEDIR)'
-	cp v1/cmd/com.docker.slirp.exe/register.ps1 '$(EXEDIR)'
+	cp src/com.docker.slirp.exe/com.docker.slirp.exe '$(EXEDIR)'
+	cp src/com.docker.slirp.exe/register.ps1 '$(EXEDIR)'
 
 uninstall:
 	echo uninstall

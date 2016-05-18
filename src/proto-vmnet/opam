@@ -1,0 +1,41 @@
+opam-version: "1.2"
+maintainer:   "dave@recoil.org"
+authors:      ["David Scott"]
+license:      "None"
+homepage:     "https://github.com/docker/pinata"
+bug-reports:  "https://github.com/docker/pinata"
+dev-repo:     "https://github.com/docker/pinata.git"
+
+build: [
+  ["oasis" "setup"]
+  ["./configure" "--prefix" prefix "--%{fd-send-recv:enable}%-unix"]
+  [make]
+]
+build-test: [
+  ["./configure" "--enable-tests"]
+  [make "test"]
+]
+install: [make "install"]
+remove: [
+  ["ocamlfind" "remove" "proto-vmnet"]
+  ["ocamlfind" "remove" "vmnet-client"]
+]
+depends: [
+  "ocamlbuild" {build}
+  "ocamlfind" {build}
+  "oasis" {build}
+  "base-unix"
+  "logs"
+  "cstruct"
+  "mirage-types-lwt"
+  "sexplib" {< "113.24.00"}
+  "type_conv" {build}
+  "ipaddr" {>="2.5.0"}
+  "pcap-format"
+]
+depopts: [
+  "fd-send-recv"
+  "unix-errno"
+  "ctypes"
+]
+available: [ocaml-version >= "4.02.0"]
