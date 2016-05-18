@@ -1,7 +1,7 @@
 opam-version: "1.2"
 maintainer:   "dave@recoil.org"
 authors:      ["David Scott"]
-license:      "None"
+license:      "Apache-2.0"
 homepage:     "https://github.com/docker/pinata"
 bug-reports:  "https://github.com/docker/pinata"
 dev-repo:     "https://github.com/docker/pinata.git"
