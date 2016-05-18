@@ -1,4 +1,3 @@
-
 let src =
   let src = Logs.Src.create "osx-hyperkit" ~doc:"Hyperkit interface" in
   Logs.Src.set_level src (Some Logs.Debug);
