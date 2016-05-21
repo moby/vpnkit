@@ -1,4 +1,7 @@
-let vsock_path = ref "/var/tmp/com.docker.vsock/connect"
+
+let (/) = Filename.concat
+let home = try Sys.getenv "HOME" with Not_found -> "/Users/root"
+let vsock_path = ref (home / "Library/Containers/com.docker.docker/Data/@connect")
 
 module Port = struct
   type t = int32
