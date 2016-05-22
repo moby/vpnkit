@@ -76,6 +76,8 @@ let hvsock_connect_forever url sockaddr callback =
           Log.debug (fun f -> f "hvsock connect got %s: retrying in 1s" (Win_error.error_message e));
           Lwt_unix.sleep 1.
         | e ->
+          Lwt_hvsock.close socket
+          >>= fun () ->
           Log.err (fun f -> f "hvsock connect raised %s" (Printexc.to_string e));
           Lwt_unix.sleep 1.
       )
