@@ -49,6 +49,9 @@ depends: [
 ]
 depopts: [
   "mirage-xen"
-  "mirage-net-unix" {>= "1.1.0"}
+  "mirage-net-unix"
+]
+conflicts: [
+  "mirage-net-unix" {< "1.1.0"}
 ]
 available: [ocaml-version >= "4.01.0"]
