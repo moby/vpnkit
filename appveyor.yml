@@ -14,7 +14,7 @@ install:
   - "%CYG_ROOT%\\setup-x86.exe -qnNdO -R %CYG_ROOT% -s http://cygwin.mirror.constant.com -l C:/cygwin/var/cache/setup -P rsync -P patch -P diffutils -P curl -P make -P unzip -P git -P m4 -P perl -P mingw64-x86_64-gcc-core"
 
 build_script:
-  - "%CYG_BASH% 'tar xf opam32.tar.xz'"
+  - "%CYG_BASH% 'tar xf ${APPVEYOR_BUILD_FOLDER}/opam32.tar.xz'"
   - "%CYG_BASH% 'opam32/install.sh'"
   - "%CYG_BASH% 'opam init -a default https://github.com/fdopen/opam-repository-mingw.git --comp=4.02.3 --switch=4.02.3+mingw64c'"
   - "%CYG_BASH% 'opam install depext-cygwinports depext ocamlfind'"
