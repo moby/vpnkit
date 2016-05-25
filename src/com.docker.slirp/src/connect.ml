@@ -37,6 +37,8 @@ module Port = struct
     proto ^ ":" ^ (Ipaddr.V4.to_string ip) ^ ":" ^ (string_of_int port)
 end
 
+include Hostnet.Conn_lwt_unix
+
 let connect { Port.proto; ip; port } =
   let open Lwt.Infix in
   Osx_hyperkit.Vsock.connect ~path:!vsock_path ~port:vsock_port ()
@@ -50,4 +52,4 @@ let connect { Port.proto; ip; port } =
   Cstruct.LE.set_uint16 header 7 port;
   Lwt_cstruct.(complete (write fd) header)
   >>= fun () ->
-  Lwt.return fd
+  Lwt.return (connect fd)

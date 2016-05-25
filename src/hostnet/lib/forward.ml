@@ -168,12 +168,11 @@ let start_tcp_proxy vsock_path_var _local_ip _local_port fd t =
         let proxy () =
           finally (fun () ->
             Connector.connect t.remote_port
-            >>= fun v ->
-            let remote = Socket.Stream.of_fd ~description v in
+            >>= fun remote ->
             finally (fun () ->
               (* proxy between local and remote *)
               Log.debug (fun f -> f "%s: connected" description);
-              Mirage_flow.proxy (module Clock) (module Socket.Stream) remote (module Socket.Stream) local ()
+              Mirage_flow.proxy (module Clock) (module Connector) remote (module Socket.Stream) local ()
               >>= function
               | `Error (`Msg m) ->
                 Log.err (fun f -> f "%s proxy failed with %s" description m);
@@ -185,7 +184,7 @@ let start_tcp_proxy vsock_path_var _local_ip _local_port fd t =
                   );
                 Lwt.return ()
             ) (fun () ->
-              Socket.Stream.close remote
+              Connector.close remote
             )
           ) (fun () ->
             Socket.Stream.close local
@@ -202,7 +201,23 @@ let max_udp_length = 2048 (* > 1500 the MTU of our link + header *)
 
 let max_vsock_header_length = 1024
 
+let conn_read flow buf =
+  let open Lwt.Infix in
+  Connector.read_into flow buf
+  >>= function
+  | `Eof -> Lwt.fail End_of_file
+  | `Ok () -> Lwt.return ()
+
+let conn_write flow buf =
+  let open Lwt.Infix in
+  Connector.write flow buf
+  >>= function
+  | `Eof -> Lwt.fail End_of_file
+  | `Error e -> Lwt.fail (Failure (Connector.error_message e))
+  | `Ok () -> Lwt.return ()
+
 let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
+  let open Lwt.Infix in
   let description = to_string t in
   let from_internet_string = Bytes.make max_udp_length '\000' in
   let from_internet_buffer = Cstruct.create max_udp_length in
@@ -255,17 +270,17 @@ let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
         let header = Cstruct.sub write_header_buffer 0 header_len in
         (* Add an overall frame length at the start *)
         Cstruct.LE.set_uint16 header 0 frame_len;
-        Lwt_cstruct.(complete (write v)) header
+        conn_write v header
         >>= fun () ->
-        Lwt_cstruct.(complete (write v)) buf in
+        conn_write v buf in
     (* Read the vsock header and payload into the same buffer, and write it
        to the internet from there. *)
     let read () =
-      Lwt_cstruct.(complete (read v)) (Cstruct.sub from_vsock_buffer 0 2)
+      conn_read v (Cstruct.sub from_vsock_buffer 0 2)
       >>= fun () ->
       let frame_length = Cstruct.LE.get_uint16 from_vsock_buffer 0 in
       let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in
-      Lwt_cstruct.(complete (read v)) rest
+      conn_read v rest
       >>= fun () ->
       (* uint16 IP address length *)
       let ip_bytes_len = Cstruct.LE.get_uint16 rest 0 in
@@ -325,7 +340,7 @@ let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
     let _ = from_vsock () in
     from_internet ()
     >>= fun () ->
-    Lwt_unix.close v in
+    Connector.close v in
   Lwt.return (Result.Ok t)
 
 let start vsock_path_var t =

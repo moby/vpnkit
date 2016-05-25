@@ -44,6 +44,8 @@ end
 module type Connector = sig
   (** Make connections into the VM *)
 
+  include CONN
+
   module Port: sig
     type t
     (** A protocol-specific port id, e.g. a virtio-vsock int32 *)
@@ -52,7 +54,7 @@ module type Connector = sig
     val to_string: t -> string
   end
 
-  val connect: Port.t -> Lwt_unix.file_descr Lwt.t
+  val connect: Port.t -> flow Lwt.t
   (** Connect to the given port on the VM *)
 end
 
