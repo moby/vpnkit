@@ -40,15 +40,14 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
   Resolv_conf.get ()
   >>= function
   | (Ipaddr.V4 dst, dst_port) :: _ -> begin
-    let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.V4.to_string dst, dst_port) in
+    let remote_sockaddr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.V4.to_string dst, dst_port) in
 
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
-    Lwt_unix.bind fd (Lwt_unix.ADDR_INET(Unix.inet_addr_any, 0));
+    Lwt_unix.connect fd remote_sockaddr;
     Lwt.catch
       (fun () ->
-        (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
         let payload = Cstruct.to_string buf in
-        Lwt_unix.sendto fd payload 0 (String.length payload) [] remote_sockaddr
+        Lwt_unix.send fd payload 0 (String.length payload) []
         >>= fun n ->
         if n <> buf.Cstruct.len
         then Log.err (fun f -> f "DNS forwarder: Lwt_bytes.send short: expected %d got %d"  buf.Cstruct.len n);
@@ -62,9 +61,8 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
       let bytes = Bytes.make 4096 '\000' in
       Lwt.catch
         (fun () ->
-           (* Lwt on Win32 doesn't support Lwt_bytes.recvfrom *)
-           Lwt_unix.recvfrom fd bytes 0 (String.length bytes) []
-           >>= fun (n, _) ->
+          Lwt_unix.recv fd bytes 0 (String.length bytes) []
+           >>= fun n ->
            let buffer = Cstruct.create n in
            Cstruct.blit_from_string bytes 0 buffer 0 n;
            Lwt.return (`Result buffer)
