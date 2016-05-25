@@ -2,7 +2,7 @@ TARGETS := build
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-	TARGETS += bundle
+	TARGETS += bundle.tgz
 endif
 
 all: $(TARGETS)
@@ -43,6 +43,10 @@ clean:
 	rm -rf _build setup.data
 	rm -f com.docker.slirp
 
+bundle.tgz: bundle
+	tar -cvzf bundle.tgz _build/root
+
+.PHONY: bundle
 bundle: build
 	mkdir -p _build/root/Contents/MacOS
 	mv main.native com.docker.slirp
