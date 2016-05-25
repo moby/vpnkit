@@ -6,6 +6,9 @@ machine:
     OPAMVERBOSE: "1"
     OPAMJOBS: "2"
     MACOSX_DEPLOYMENT_TARGET: "10.10"
+general:
+  artifacts:
+  - src/com.docker.slirp/bundle.tgz
 dependencies:
   override:
   - brew install wget opam dylibbundler
