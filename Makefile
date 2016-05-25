@@ -22,7 +22,11 @@ depends:
 	opam pin add -n hostnet src/hostnet -y
 	opam pin add -n osx-daemon src/osx-daemon -y
 	opam pin add -n osx-hyperkit src/osx-hyperkit -y
+ifeq ($(OS),Windows_NT)
+	opam pin add -n slirp src/com.docker.slirp.exe -y
+else
 	opam pin add -n slirp src/com.docker.slirp -y
+endif
 	opam depext -u slirp
 	opam install --deps-only slirp -y
 
