@@ -1,3 +1,13 @@
+TARGETS := build
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+	TARGETS += bundle
+endif
+
+all: $(TARGETS)
+
+
 SETUP = ocaml setup.ml
 
 setup.ml:
@@ -11,9 +21,6 @@ doc: setup.data build
 
 test: setup.data build
 	$(SETUP) -test $(TESTFLAGS)
-
-all:
-	$(SETUP) -all $(ALLFLAGS)
 
 install: setup.data
 	$(SETUP) -install $(INSTALLFLAGS)
