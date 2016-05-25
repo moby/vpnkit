@@ -14,14 +14,22 @@ module OptionThread = struct
     | Some x -> f x
 end
 
-let string_of_dns buf =
+let parse_dns buf =
   let len = Cstruct.len buf in
   let buf = Dns.Buf.of_cstruct buf in
-  match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
-  | None ->
+  (len, Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len))
+
+let string_of_dns dns =
+  match dns with
+  | (len, None) ->
     Printf.sprintf "Unparsable DNS packet length %d" len
-  | Some request ->
+  | (_, Some request) ->
     Dns.Packet.to_string request
+
+let tidstr_of_dns dns =
+  match dns with
+  | (_, None) -> "----"
+  | (_, Some { Dns.Packet.id }) -> Printf.sprintf "%04x" id
 
 module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) = struct
 
@@ -31,7 +39,9 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
   let src_str = Ipaddr.V4.to_string src in
   let dst_str = Ipaddr.V4.to_string dst in
 
-  Log.debug (fun f -> f "DNS %s:%d -> %s %s" src_str src_port dst_str (string_of_dns buf));
+  let dns = parse_dns buf in
+
+  Log.debug (fun f -> f "DNS[%s] %s:%d -> %s %s" (tidstr_of_dns dns) src_str src_port dst_str (string_of_dns dns));
 
   (* Re-read /etc/resolv.conf on every request. This ensures that
      changes to DNS on sleep/resume or switching networks are reflected
@@ -50,10 +60,10 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
         Lwt_unix.send fd payload 0 (String.length payload) []
         >>= fun n ->
         if n <> buf.Cstruct.len
-        then Log.err (fun f -> f "DNS forwarder: Lwt_bytes.send short: expected %d got %d"  buf.Cstruct.len n);
+        then Log.err (fun f -> f "DNS[%s] forwarder: Lwt_bytes.send short: expected %d got %d" (tidstr_of_dns dns) buf.Cstruct.len n);
         Lwt.return ()
       ) (fun e ->
-        Log.err (fun f -> f "sendto failed with %s" (Printexc.to_string e));
+        Log.err (fun f -> f "DNS[%s] send failed with %s" (tidstr_of_dns dns) (Printexc.to_string e));
         Lwt.return ()
       )
     >>= fun () ->
@@ -67,7 +77,7 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
            Cstruct.blit_from_string bytes 0 buffer 0 n;
            Lwt.return (`Result buffer)
         ) (fun e ->
-           Log.err (fun f -> f "recvfrom failed with %s" (Printexc.to_string e));
+           Log.err (fun f -> f "DNS[%s] recv failed with %s" (tidstr_of_dns dns) (Printexc.to_string e));
            Lwt.return `Error
         ) in
     let timeout = Lwt_unix.sleep 5. >>= fun () -> Lwt.return `Timeout in
@@ -79,14 +89,14 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
     | `Error ->
       Lwt.return_unit
     | `Timeout ->
-      Log.err (fun f -> f "DNS response timed out after 5s");
+      Log.err (fun f -> f "DNS[%s] timed out after 5s" (tidstr_of_dns dns));
       Lwt.return_unit
     | `Result buffer ->
-      Log.debug (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (string_of_dns buffer));
+      Log.debug (fun f -> f "DNS[%s] %s:%d <- %s %s" (tidstr_of_dns dns) src_str src_port dst_str (string_of_dns (parse_dns buffer)));
       Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer
     end
   | _ ->
-    Log.err (fun f -> f "No upstream DNS server configured: dropping request");
+    Log.err (fun f -> f "DNS[%s] No upstream DNS server configured: dropping request" (tidstr_of_dns dns));
     Lwt.return_unit
   end else Lwt.return_unit
 end
