@@ -1,14 +1,9 @@
- module type CONN = sig
-   type fd
+module type CONN = sig
+  include Mirage_flow_s.SHUTDOWNABLE
 
-   val read: fd -> Cstruct.t -> unit Lwt.t
-   (** Completely fills the given buffer with data from [fd] *)
-
-   val write: fd -> Cstruct.t -> unit Lwt.t
-   (** Completely writes the contents of the buffer to [fd] *)
-
-   val close: fd -> unit Lwt.t
- end
+  val read_into: flow -> Cstruct.t -> [ `Eof | `Ok of unit ] Lwt.t
+  (** Completely fills the given buffer with data from [fd] *)
+end
 
 module type VMNET = sig
   (** A virtual ethernet link to the VM *)

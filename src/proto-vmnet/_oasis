@@ -15,7 +15,9 @@ Library "proto-vmnet"
   Path: lib
   Findlibname: proto-vmnet
   Modules: Vmnet
-  BuildDepends: ipaddr, cstruct, cstruct.lwt, cstruct.syntax, lwt.unix, io-page.unix, logs, mirage-types.lwt, sexplib.syntax, ipaddr.unix, pcap-format
+  BuildDepends: ipaddr, cstruct, cstruct.lwt, cstruct.syntax, lwt.unix,
+    io-page.unix, logs, mirage-types.lwt, sexplib.syntax, ipaddr.unix,
+    pcap-format, mirage-flow
 
 Library "vmnet-client"
   Build$: flag(unix)

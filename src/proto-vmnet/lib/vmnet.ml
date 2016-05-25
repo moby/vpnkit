@@ -17,15 +17,10 @@ let log_exception_continue description f =
     )
 
 module type CONN = sig
-  type fd
+  include Mirage_flow_s.SHUTDOWNABLE
 
-  val read: fd -> Cstruct.t -> unit Lwt.t
+  val read_into: flow -> Cstruct.t -> [ `Eof | `Ok of unit ] Lwt.t
   (** Completely fills the given buffer with data from [fd] *)
-
-  val write: fd -> Cstruct.t -> unit Lwt.t
-  (** Completely writes the contents of the buffer to [fd] *)
-
-  val close: fd -> unit Lwt.t
 end
 
 let default_mtu = 1500
@@ -179,7 +174,7 @@ type stats = {
 }
 
 type t = {
-  mutable fd: C.fd option;
+  mutable fd: C.flow option;
   stats: stats;
   client_macaddr: Macaddr.t;
   server_macaddr: Macaddr.t;
@@ -200,12 +195,25 @@ let get_fd t = match t.fd with
   | Some fd -> fd
   | None -> failwith "Vmnet connection is disconnected"
 
+let read fd buf =
+  C.read_into fd buf
+  >>= function
+  | `Eof -> Lwt.fail End_of_file
+  | `Ok () -> Lwt.return ()
+
+let write fd buf =
+  C.write fd buf
+  >>= function
+  | `Eof -> Lwt.fail End_of_file
+  | `Error e -> Lwt.fail (Failure (C.error_message e))
+  | `Ok () -> Lwt.return ()
+
 let server_negotiate t =
   error_of_failure
     (fun () ->
       let fd = get_fd t in
       let buf = Cstruct.create Init.sizeof in
-      C.read fd buf
+      read fd buf
       >>= fun () ->
       let open Infix in
       Lwt.return (Init.unmarshal buf)
@@ -213,10 +221,10 @@ let server_negotiate t =
       Log.info (fun f -> f "PPP.negotiate: received %s" (Init.to_string init));
       let (_: Cstruct.t) = Init.marshal Init.default buf in
       let open Lwt.Infix in
-      C.write fd buf
+      write fd buf
       >>= fun () ->
       let buf = Cstruct.create Command.sizeof in
-      C.read fd buf
+      read fd buf
       >>= fun () ->
       let open Infix in
       Lwt.return (Command.unmarshal buf)
@@ -227,7 +235,7 @@ let server_negotiate t =
       let (_: Cstruct.t) = Vif.marshal vif buf in
       let open Lwt.Infix in
       Log.info (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
-      C.write fd buf
+      write fd buf
       >>= fun () ->
       Lwt.return (`Ok ())
     )
@@ -239,9 +247,9 @@ let client_negotiate t =
       let fd = get_fd t in
       let buf = Cstruct.create Init.sizeof in
       let (_: Cstruct.t) = Init.marshal Init.default buf in
-      C.write fd buf
+      write fd buf
       >>= fun () ->
-      C.read fd buf
+      read fd buf
       >>= fun () ->
       let open Infix in
       Lwt.return (Init.unmarshal buf)
@@ -251,10 +259,10 @@ let client_negotiate t =
       let uuid = String.make 36 'X' in
       let (_: Cstruct.t) = Command.marshal (Command.Ethernet uuid) buf in
       let open Lwt.Infix in
-      C.write fd buf
+      write fd buf
       >>= fun () ->
       let buf = Cstruct.create Vif.sizeof in
-      C.read fd buf
+      read fd buf
       >>= fun () ->
       let open Infix in
       Lwt.return (Vif.unmarshal buf)
@@ -318,7 +326,7 @@ let make ~client_macaddr ~server_macaddr fd =
   let listening = false in
   { fd; stats; client_macaddr; server_macaddr; read_header; write_header; write_m; pcap; pcap_size_limit; pcap_m; listeners; listening }
 
-type fd = C.fd
+type fd = C.flow
 
 let of_fd ~client_macaddr ~server_macaddr fd =
   let open Infix in
@@ -379,33 +387,6 @@ let capture t bufs =
 
 let drop_on_error f = Lwt.catch f (fun _ -> Lwt.return ())
 
-let write t buf =
-  Lwt_mutex.with_lock t.write_m
-    (fun () ->
-      drop_on_error
-        (fun () ->
-           capture t [ buf ]
-           >>= fun () ->
-           let len = Cstruct.len buf in
-           if len > (default_mtu + ethernet_header_length) then begin
-             Log.err (fun f ->
-               f "Dropping over-large ethernet frame, length = %d, mtu = %d" len default_mtu
-             );
-             Lwt.return_unit
-           end else begin
-             Packet.marshal len t.write_header;
-             let fd = get_fd t in
-             C.write fd t.write_header
-             >>= fun () ->
-             Log.debug (fun f ->
-                 let b = Buffer.create 128 in
-                 Cstruct.hexdump_to_buffer b buf;
-                 f "sending\n%s" (Buffer.contents b)
-               );
-             C.write fd buf
-           end
-        )
-    )
 
 let writev t bufs =
   Lwt_mutex.with_lock t.write_m
@@ -423,7 +404,7 @@ let writev t bufs =
            end else begin
              Packet.marshal len t.write_header;
              let fd = get_fd t in
-             C.write fd t.write_header
+             write fd t.write_header
              >>= fun () ->
              Log.debug (fun f ->
                  let b = Buffer.create 128 in
@@ -433,7 +414,7 @@ let writev t bufs =
              let rec loop = function
                | [] -> Lwt.return ()
                | buf :: bufs ->
-                 C.write fd buf
+                 write fd buf
                  >>= fun () ->
                  loop bufs in
              loop bufs
@@ -453,14 +434,14 @@ let listen t callback =
         (fun () ->
            let open Lwt.Infix in
            let fd = get_fd t in
-           C.read fd t.read_header
+           read fd t.read_header
            >>= fun () ->
            let open Infix in
            Lwt.return (Packet.unmarshal t.read_header)
            >>= fun (len, _) ->
            let buf = Cstruct.create len in
            let open Lwt.Infix in
-           C.read fd buf
+           read fd buf
            >>= fun () ->
            capture t [ buf ]
            >>= fun () ->
@@ -489,6 +470,35 @@ let listen t callback =
     Lwt.async @@ loop;
     Lwt.return ();
   end
+
+
+let write t buf =
+  Lwt_mutex.with_lock t.write_m
+    (fun () ->
+      drop_on_error
+        (fun () ->
+           capture t [ buf ]
+           >>= fun () ->
+           let len = Cstruct.len buf in
+           if len > (default_mtu + ethernet_header_length) then begin
+             Log.err (fun f ->
+               f "Dropping over-large ethernet frame, length = %d, mtu = %d" len default_mtu
+             );
+             Lwt.return_unit
+           end else begin
+             Packet.marshal len t.write_header;
+             let fd = get_fd t in
+             write fd t.write_header
+             >>= fun () ->
+             Log.debug (fun f ->
+                 let b = Buffer.create 128 in
+                 Cstruct.hexdump_to_buffer b buf;
+                 f "sending\n%s" (Buffer.contents b)
+               );
+             write fd buf
+           end
+        )
+    )
 
 let add_listener t callback =
   t.listeners <- callback :: t.listeners
