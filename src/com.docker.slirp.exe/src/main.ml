@@ -162,7 +162,7 @@ let start_port_forwarding port_control_url =
         Lwt_hvsock.close fd
     )
 
-module Slirp_stack = Slirp.Make(Vmnet.Make(Conn_lwt_hvsock))(Resolv_conf)
+module Slirp_stack = Slirp.Make(Vmnet.Make(Flow_lwt_hvsock))(Resolv_conf)
 
 let main_t socket_url port_control_url db_path dns pcap debug =
   if debug
@@ -205,7 +205,7 @@ let main_t socket_url port_control_url db_path dns pcap debug =
   let sockaddr = hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid (Uri.of_string socket_url) in
   hvsock_connect_forever socket_url sockaddr
     (fun fd ->
-      let conn = Conn_lwt_hvsock.connect fd in
+      let conn = Flow_lwt_hvsock.connect fd in
       Slirp_stack.connect stack conn
     )
 
