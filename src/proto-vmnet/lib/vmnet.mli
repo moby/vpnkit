@@ -1,7 +1,7 @@
 module type CONN = sig
   include V1_LWT.FLOW
 
-  val read_into: flow -> Cstruct.t -> [ `Eof | `Ok of unit ] Lwt.t
+  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
   (** Completely fills the given buffer with data from [fd] *)
 end
 
