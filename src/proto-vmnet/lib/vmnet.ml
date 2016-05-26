@@ -17,7 +17,7 @@ let log_exception_continue description f =
     )
 
 module type CONN = sig
-  include Mirage_flow_s.SHUTDOWNABLE
+  include V1_LWT.FLOW
 
   val read_into: flow -> Cstruct.t -> [ `Eof | `Ok of unit ] Lwt.t
   (** Completely fills the given buffer with data from [fd] *)
