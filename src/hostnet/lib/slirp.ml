@@ -40,7 +40,7 @@ let print_pcap = function
 
 module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)
-  module Dns_forward = Dns_forward.Make(Tcpip_stack)(Resolv_conv)
+  module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conv)
 
 let connect x peer_ip local_ip =
   let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in
@@ -48,7 +48,8 @@ let connect x peer_ip local_ip =
         >>= function
         | `Error (`Msg m) -> failwith m
         | `Ok s ->
-            Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input s);
+          let (ip, udp) = Tcpip_stack.ipv4 s, Tcpip_stack.udpv4 s in
+            Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input ~ip ~udp);
             Vmnet.add_listener x (
               fun buf ->
                 match (Wire_structs.parse_ethernet_frame buf) with
