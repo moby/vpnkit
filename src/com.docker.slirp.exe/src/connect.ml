@@ -7,6 +7,8 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 let hvsockaddr = ref None
 
+let set_port_forward_addr x = hvsockaddr := Some x
+
 type port = Hostnet.Forward.Port.t
 
 include Flow_lwt_hvsock_shutdown

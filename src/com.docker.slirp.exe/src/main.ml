@@ -147,6 +147,7 @@ let start_port_forwarding port_control_url =
   | `Ok _ ->
   Ports.set_context fs "";
   let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid (Uri.of_string port_control_url) in
+  Connect.set_port_forward_addr sockaddr;
   hvsock_connect_forever port_control_url sockaddr
     (fun fd ->
       let flow = Flow_lwt_hvsock.connect fd in
