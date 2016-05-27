@@ -23,10 +23,10 @@ let string_of_dns buf =
   | Some request ->
     Dns.Packet.to_string request
 
-module Make(Tcpip_stack: Sig.TCPIP)(Resolv_conf: Sig.RESOLV_CONF) = struct
+module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) = struct
 
-let input s ~src ~dst ~src_port buf =
-  if List.mem dst (Tcpip_stack.IPV4.get_ip (Tcpip_stack.ipv4 s)) then begin
+let input ~ip ~udp ~src ~dst ~src_port buf =
+  if List.mem dst (Ip.get_ip ip) then begin
 
   let src_str = Ipaddr.V4.to_string src in
   let dst_str = Ipaddr.V4.to_string dst in
@@ -85,7 +85,7 @@ let input s ~src ~dst ~src_port buf =
       Lwt.return_unit
     | `Result buffer ->
       Log.debug (fun f -> f "DNS %s:%d <- %s %s" src_str src_port dst_str (string_of_dns buffer));
-      Tcpip_stack.UDPV4.write ~source_port:53 ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) buffer
+      Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer
     end
   | _ ->
     Log.err (fun f -> f "No upstream DNS server configured: dropping request");
