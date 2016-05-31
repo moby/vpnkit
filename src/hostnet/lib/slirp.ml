@@ -285,6 +285,7 @@ let connect x peer_ip local_ip =
       local_ip;
       pcap_settings;
     } in
+    Lwt.async (fun () -> Dns_forward.start_reaper ());
     Lwt.return t
 
   let connect t client =
