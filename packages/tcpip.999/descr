@@ -1,5 +1,0 @@
-Userlevel TCP/IP stack
-
-The library provides a networking stack for the MirageOS
-library operating system that supports IPv4, IPv6, ARPv4,
-DHCPv4 and TCP/IP.
