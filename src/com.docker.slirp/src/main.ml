@@ -45,10 +45,19 @@ let start_port_forwarding port_control_path vsock_path =
 
 module Slirp_stack = Slirp.Make(Vmnet.Make(Hostnet.Conn_lwt_unix))(Resolv_conf)
 
-let main_t socket_path port_control_path vsock_path db_path debug =
+let set_nofile nofile =
+  let open Sys_resource.Resource in
+  let soft = Limit.Limit nofile in
+  let (_, hard) = Sys_resource_unix.getrlimit NOFILE in
+  Log.info (fun f -> f "Setting soft fd limit to %d" nofile);
+  try Sys_resource_unix.setrlimit NOFILE ~soft ~hard with
+  | Errno.Error ex -> Log.warn (fun f -> f "setrlimit failed: %s" (Errno.string_of_error ex))
+
+let main_t socket_path port_control_path vsock_path db_path nofile debug =
   Osx_reporter.install ~stdout:debug;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
+  set_nofile nofile;
   Printexc.record_backtrace true;
 
   Lwt.async_exception_hook := (fun exn ->
@@ -84,7 +93,7 @@ let main_t socket_path port_control_path vsock_path db_path debug =
     loop () in
   loop ()
 
-let main socket port_control vsock_path db debug = Lwt_main.run @@ main_t socket port_control vsock_path db debug
+let main socket port_control vsock_path db nofile debug = Lwt_main.run @@ main_t socket port_control vsock_path db nofile debug
 
 open Cmdliner
 
@@ -112,6 +121,8 @@ make it fail instead? In case no argument is supplied? *)
 let db_path =
   Arg.(value & opt string "/var/tmp/com.docker.db.socket" & info [ "db" ] ~docv:"DB")
 
+let nofile = Arg.(value & opt int 10240 & info [ "nofile" ] ~docv:"nofile rlimit")
+
 let debug =
   let doc = "Verbose debug logging to stdout" in
   Arg.(value & flag & info [ "debug" ] ~doc)
@@ -123,7 +134,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
 		     flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ debug),
+  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =
