@@ -22,16 +22,17 @@ depends:
 	opam pin add -n osx-hyperkit src/osx-hyperkit -y
 	opam pin add -n osx-hyperkit src/osx-hyperkit -y
 	opam pin add -n lwt "https://github.com/dsheets/lwt.git#bad-library-search-path-pthread-2.5.1" -y
-	opam pin add -n charrua-core "git://github.com/djs55/charrua-core#0.3-beta" -y
+	opam pin add -n charrua-core.999 "git://github.com/djs55/charrua-core#0.3-beta" -y
 	opam pin add -n mirage "git://github.com/djs55/mirage#3.0.0-beta" -y
 	opam pin add -n mirage-types "git://github.com/djs55/mirage#3.0.0-beta" -y
-	opam pin add -n mirage-types-lwt "git://github.com/djs55/mirage#3.0.0-beta" -y
-	opam pin add -n tcpip "git://github.com/djs55/mirage-tcpip#3.0.0-beta3" -y
+	opam pin add -n mirage-types-lwt.999 "git://github.com/djs55/mirage#3.0.0-beta" -y
+	opam pin add -n tcpip.999 "git://github.com/djs55/mirage-tcpip#3.0.0-beta3" -y
 ifeq ($(OS),Windows_NT)
 	opam pin add -n slirp src/com.docker.slirp.exe -y
 else
 	opam pin add -n slirp src/com.docker.slirp -y
 endif
+	opam install depext -y
 	opam depext -u slirp
 	opam install --deps-only slirp -y
 
