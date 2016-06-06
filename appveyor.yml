@@ -4,21 +4,12 @@ platform:
 environment:
   CYG_ROOT: "C:\\cygwin"
   CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
-  EXTRA_REMOTES: "."
-  PINS: "io-page:https://github.com/mirage/io-page.git hvsock:https://github.com/djs55/ocaml-hvsock.git proto-vmnet:src/proto-vmnet ofs:src/ofs hostnet:src/hostnet osx-daemon:src/osx-daemon osx-hyperkit:src/osx-hyperkit slirp:src/com.docker.slirp.exe"
-  PACKAGE: "com-docker-slirp-exe"
-  TESTS: "false"
 
 install:
-  - appveyor DownloadFile https://dl.dropboxusercontent.com/s/eo4igttab8ipyle/opam32.tar.xz
   - "%CYG_ROOT%\\setup-x86.exe -qnNdO -R %CYG_ROOT% -s http://cygwin.mirror.constant.com -l C:/cygwin/var/cache/setup -P rsync -P patch -P diffutils -P curl -P make -P unzip -P git -P m4 -P perl -P mingw64-x86_64-gcc-core"
 
 build_script:
-  - "%CYG_BASH% 'cd ${APPVEYOR_BUILD_FOLDER} && tar xf opam32.tar.xz && opam32/install.sh'"
-  - "%CYG_BASH% 'opam init -a default https://github.com/fdopen/opam-repository-mingw.git --comp=4.02.3 --switch=4.02.3+mingw64c'"
-  - "%CYG_BASH% 'opam install depext-cygwinports depext ocamlfind'"
-  - "%CYG_BASH% 'make depends'"
-  - "%CYG_BASH% 'make'"
+  - "%CYG_BASH% '${APPVEYOR_BUILD_FOLDER}/appveyor.sh'"
 
 artifacts:
   - path: "com.docker.slirp.exe"
