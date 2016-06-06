@@ -98,7 +98,7 @@ module Make(Instance: Instance) = struct
     fids: resource Types.Fid.Map.t ref;
   }
 
-  let connect t info = {
+  let connect t _ = {
     t;
     fids = ref (Types.Fid.Map.empty);
   }
@@ -147,11 +147,11 @@ The directory will be deleted and replaced with a file of the same name.
 
   let return x = Lwt.return (Result.Ok x)
 
-  let attach connection ~cancel { Request.Attach.fid } =
+  let attach connection ~cancel:_ { Request.Attach.fid; _ } =
     connection.fids := Types.Fid.Map.add fid Root !(connection.fids);
     return { Response.Attach.qid = root_qid }
 
-  let walk connection ~cancel { Request.Walk.fid; newfid; wnames } =
+  let walk connection ~cancel:_ { Request.Walk.fid; newfid; wnames } =
     try
       let from = Types.Fid.Map.find fid !(connection.fids) in
       let from, wqids = List.fold_left (fun (from,qids) x -> match x, fst from with
@@ -196,7 +196,7 @@ The directory will be deleted and replaced with a file of the same name.
     | _ ->
       Lwt.return ()
 
-  let clunk connection ~cancel { Request.Clunk.fid } =
+  let clunk connection ~cancel:_ { Request.Clunk.fid } =
     let open Lwt.Infix in
     ( if Types.Fid.Map.mem fid !(connection.fids) then begin
         let resource = Types.Fid.Map.find fid !(connection.fids) in
@@ -206,12 +206,12 @@ The directory will be deleted and replaced with a file of the same name.
     connection.fids := Types.Fid.Map.remove fid !(connection.fids);
     return ()
 
-  let disconnect connection info =
+  let disconnect connection _ =
     Log.debug (fun f -> f "disconnecting 9P client");
     let resources = Types.Fid.Map.fold (fun _ resource acc -> resource :: acc) !(connection.fids) [] in
     Lwt_list.iter_s free_resource resources
 
-  let open_ connection ~cancel { Request.Open.fid; mode } =
+  let open_ _connection ~cancel:_ _ =
     try
       let qid = next_qid [] in
       let iounit = 32768_l in
@@ -276,7 +276,7 @@ The directory will be deleted and replaced with a file of the same name.
     let data = Cstruct.sub data offset len in
     return { Response.Read.data }
 
-  let read connection ~cancel { Request.Read.fid; offset; count } =
+  let read connection ~cancel:_ { Request.Read.fid; offset; count } =
     let count = Int32.to_int count in
     let offset = Int64.to_int offset in
     try
@@ -291,10 +291,10 @@ The directory will be deleted and replaced with a file of the same name.
         let len = min count Cstruct.(len readme - offset) in
         let data = Cstruct.sub readme offset len in
         return { Response.Read.data }
-      | Entry { instance = Some i } ->
+      | Entry { instance = Some i; _ } ->
         let i' = Instance.to_string i in
         read_string count offset (i' ^ "\n")
-      | Entry { instance = None } ->
+      | Entry { instance = None; _ } ->
         let children =
           dot
           :: dotdot
@@ -314,19 +314,19 @@ The directory will be deleted and replaced with a file of the same name.
         read_children count offset children
     with Not_found -> Error.badfid
 
-  let stat connection ~cancel { Request.Stat.fid } =
+  let stat connection ~cancel:_ { Request.Stat.fid } =
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       let stat = match resource with
         | Root -> make_stat ~is_directory:true ~writable:true ~name:""
         | README -> make_stat ~is_directory:false ~writable:false ~name:"README"
         | ControlFile _ -> make_stat ~is_directory:false ~writable:true ~name:"ctl"
-        | Entry { name; instance = None } -> make_stat ~is_directory:true ~writable:false ~name
-        | Entry { name; instance = Some _ } -> make_stat ~is_directory:false ~writable:false ~name in
+        | Entry { name; instance = None; _ } -> make_stat ~is_directory:true ~writable:false ~name
+        | Entry { name; instance = Some _; _ } -> make_stat ~is_directory:false ~writable:false ~name in
       return { Response.Stat.stat }
     with Not_found -> Error.badfid
 
-  let create connection ~cancel { Request.Create.fid; name; perm; mode } =
+  let create connection ~cancel:_ { Request.Create.fid; name; perm; _ } =
     let resource = Types.Fid.Map.find fid !(connection.fids) in
     match resource with
     | Root when perm.Types.FileMode.is_directory ->
@@ -342,7 +342,7 @@ The directory will be deleted and replaced with a file of the same name.
         (string_of_resource resource));
       Error.eperm
 
-  let write connection ~cancel { Request.Write.fid; offset; data } =
+  let write connection ~cancel:_ { Request.Write.fid; offset; data } =
     Log.info (fun f -> f "Write offset=%Ld data=[%s] to file" offset (Cstruct.to_string data));
     let ok = { Response.Write.count = Int32.of_int @@ Cstruct.len data } in
     try
@@ -382,8 +382,7 @@ The directory will be deleted and replaced with a file of the same name.
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with
-      | Entry entry
-      | ControlFile entry ->
+      | Entry _ | ControlFile _ ->
         clunk connection ~cancel { Request.Clunk.fid }
       | _ ->
         Log.err (fun f -> f "EPERM removing resource %s" (string_of_resource resource));
@@ -392,5 +391,5 @@ The directory will be deleted and replaced with a file of the same name.
       Log.err (fun f -> f "Fid not bound, returning badfid");
       Error.badfid
 
-  let wstat _info ~cancel _ = Error.eperm
+  let wstat _info ~cancel:_ _ = Error.eperm
 end

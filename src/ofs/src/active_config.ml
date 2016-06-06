@@ -1,4 +1,3 @@
-open Protocol_9p
 open Lwt
 open Result
 
@@ -153,7 +152,7 @@ let rec retry_forever f =
   | Error (`Msg _) -> retry_forever f
 
 (* Will retry forever to create a connected transport *)
-let transport ({ username; proto; address } as t) =
+let transport ({ username; proto; address; _ } as t) =
   Lwt_mutex.with_lock t.transport_m
     (fun () ->
       match t.transport with
@@ -169,7 +168,7 @@ let transport ({ username; proto; address } as t) =
 
 let rec values t path =
   transport t
-  >>= fun { Transport.conn; shas } ->
+  >>= fun { Transport.conn; shas; _ } ->
   let rec loop = function
   | Value(hd, tl_t) ->
     Transport.read conn ("trees" :: hd :: path)
@@ -177,7 +176,7 @@ let rec values t path =
     let next =
       Lwt.catch
         (fun () -> tl_t >>= fun tl -> loop tl)
-        (fun e ->
+        (fun _e ->
           if Lwt.state (Client.after_disconnect conn) <> Lwt.Sleep && t.transport <> None then begin
             t.transport <- None;
             Log.info (fun f -> f "transport layer has disconnected");
@@ -200,7 +199,7 @@ type path = string list
 
 let string_option t path =
   changes @@ values t path
-  
+
 let string t ~default path =
   values t path
   >>= fun vs ->
