@@ -11,7 +11,7 @@ let or_failwith = function
   | `Error (`Msg x) -> failwith x
   | `Ok x -> x
 
-let connect_client socket debug =
+let connect_client socket =
   let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
   Lwt_unix.connect s (Unix.ADDR_UNIX socket)
   >>= fun () ->
@@ -20,9 +20,9 @@ let connect_client socket debug =
   let c = or_failwith r in
   Lwt.return c
 
-let bind_main_t socket ip port stream debug =
+let bind_main_t socket ip port stream =
   let ip = Ipaddr.V4.of_string_exn ip in
-  connect_client socket debug
+  connect_client socket
   >>= fun c ->
   Vmnet_client.bind_ipv4 c (ip, port, stream)
   >>= fun r ->
@@ -36,7 +36,9 @@ let bind_main_t socket ip port stream debug =
   >>= fun _ ->
   Lwt_unix.close fd
 
-let bind_main socket ip port stream debug = Lwt_main.run @@ bind_main_t socket ip port stream debug
+let bind_main socket ip port stream level =
+  Logs.set_level level;
+  Lwt_main.run @@ bind_main_t socket ip port stream
 
 open Cmdliner
 
@@ -53,9 +55,7 @@ let stream =
   let doc = "Bind a SOCK_STREAM, else a SOCK_DGRAM" in
   Arg.(value & flag & info [ "stream" ] ~doc)
 
-let debug =
-  let doc = "Verbose debug logging to stdout" in
-  Arg.(value & flag & info [ "debug" ] ~doc)
+let level = Logs_cli.level ()
 
 let bind_cmd =
   let doc = "talk to vmnetd" in
@@ -63,7 +63,7 @@ let bind_cmd =
     [`S "DESCRIPTION";
      `P "Ask vmnetd to bind a socket"]
   in
-  Term.(pure bind_main $ socket $ ip $ port $ stream $ debug),
+  Term.(pure bind_main $ socket $ ip $ port $ stream $ level),
   Term.info "bind" ~doc ~man
 
 let help = [

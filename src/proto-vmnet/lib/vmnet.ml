@@ -154,8 +154,6 @@ module Packet = struct
       uint16_t len;
     } as little_endian
 
-  type t = int
-
   let sizeof = sizeof_msg
 
   let marshal t rest =
@@ -277,7 +275,6 @@ let start_capture t ?size_limit filename =
       Lwt_unix.openfile filename [ Unix.O_WRONLY; Unix.O_TRUNC; Unix.O_CREAT ] 0o0644
       >>= fun fd ->
       let buf = Cstruct.create Pcap.LE.sizeof_pcap_header in
-      let open Pcap in
       let open Pcap.LE in
       set_pcap_header_magic_number buf Pcap.magic_number;
       set_pcap_header_version_major buf Pcap.major_version;
@@ -355,7 +352,6 @@ let capture t bufs =
          let secs = Int32.of_float time in
          let usecs = Int32.of_float (1e6 *. (time -. (floor time))) in
          let buf = Cstruct.create Pcap.sizeof_pcap_packet in
-         let open Pcap in
          let open Pcap.LE in
          set_pcap_packet_ts_sec buf secs;
          set_pcap_packet_ts_usec buf usecs;

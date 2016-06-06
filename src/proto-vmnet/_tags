@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a1e220d74350bdd26d365f929ddfc9c2)
+# DO NOT EDIT (digest: 54af61c6eb19ce0c9fa7596db1e0290f)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -37,6 +37,7 @@ true: annot, bin_annot
 <unix/*.ml{,i,y}>: pkg_ipaddr
 <unix/*.ml{,i,y}>: pkg_ipaddr.unix
 <unix/*.ml{,i,y}>: pkg_logs
+<unix/*.ml{,i,y}>: pkg_logs.cli
 <unix/*.ml{,i,y}>: pkg_lwt.unix
 <unix/*.ml{,i,y}>: pkg_mirage-types.lwt
 <unix/*.ml{,i,y}>: pkg_pcap-format
@@ -54,6 +55,7 @@ true: annot, bin_annot
 <bin/main.{native,byte}>: pkg_ipaddr
 <bin/main.{native,byte}>: pkg_ipaddr.unix
 <bin/main.{native,byte}>: pkg_logs
+<bin/main.{native,byte}>: pkg_logs.cli
 <bin/main.{native,byte}>: pkg_lwt.unix
 <bin/main.{native,byte}>: pkg_mirage-types.lwt
 <bin/main.{native,byte}>: pkg_pcap-format
@@ -71,6 +73,7 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: pkg_ipaddr
 <bin/*.ml{,i,y}>: pkg_ipaddr.unix
 <bin/*.ml{,i,y}>: pkg_logs
+<bin/*.ml{,i,y}>: pkg_logs.cli
 <bin/*.ml{,i,y}>: pkg_lwt.unix
 <bin/*.ml{,i,y}>: pkg_mirage-types.lwt
 <bin/*.ml{,i,y}>: pkg_pcap-format

@@ -23,7 +23,7 @@ Library "vmnet-client"
   Path: unix
   Findlibname: vmnet-client
   Modules: Vmnet_client
-  BuildDepends: proto-vmnet, fd-send-recv, ipaddr, unix-errno, unix-errno.unix,cstruct, cstruct.lwt, lwt.unix, logs
+  BuildDepends: proto-vmnet, fd-send-recv, ipaddr, unix-errno, unix-errno.unix,cstruct, cstruct.lwt, lwt.unix, logs, logs.cli
 
 Document "proto-vmnet"
   Title:                Vmnet docs
