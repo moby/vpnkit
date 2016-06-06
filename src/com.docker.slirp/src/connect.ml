@@ -24,7 +24,7 @@ module Port = struct
           let proto = match String.lowercase proto with
           | "tcp" -> TCP
           | "udp" -> UDP
-          | x -> raise Not_found in
+          | _     -> raise Not_found in
           let ip = Ipaddr.V4.of_string_exn ip in
           let port = int_of_string port in
           Result.return { proto; ip; port }
