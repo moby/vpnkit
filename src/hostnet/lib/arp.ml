@@ -23,8 +23,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  *)
-open Lwt
-open Sexplib.Std
 
 let src =
   let src = Logs.Src.create "arp" ~doc:"fixed ARP table" in
@@ -32,12 +30,6 @@ let src =
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
-
-module Infix = struct
-  let ( >>= ) m f = m >>= function
-    | `Ok x -> f x
-    | `Error x -> Lwt.return (`Error x)
-end
 
 module Make(Ethif: V1_LWT.ETHIF) = struct
   type 'a io = 'a Lwt.t
@@ -67,7 +59,7 @@ module Make(Ethif: V1_LWT.ETHIF) = struct
     then Log.err (fun f -> f "ARP cannot add IP %s" (Ipaddr.V4.to_string ip));
     Lwt.return_unit
   let set_ips t ips = Lwt_list.iter_s (add_ip t) ips
-  let remove_ip t ip =
+  let remove_ip _t ip =
     Log.err (fun f -> f "ARP ignoring request to remove IP %s" (Ipaddr.V4.to_string ip));
     Lwt.return_unit
   let query t ip =
@@ -142,5 +134,5 @@ module Make(Ethif: V1_LWT.ETHIF) = struct
   type ethif = Ethif.t
 
   let connect ~table ethif = Lwt.return (`Ok { table; ethif })
-  let disconnect t = Lwt.return_unit
+  let disconnect _t = Lwt.return_unit
 end

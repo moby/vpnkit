@@ -1,3 +1,5 @@
+open Lwt.Infix
+
 let src =
   let src = Logs.Src.create "socket" ~doc:"Unix socket connections" in
   Logs.Src.set_level src (Some Logs.Debug);
@@ -19,15 +21,11 @@ module Datagram = struct
     mutable reply: reply;
   }
 
-  (* If we spot one older than this then we'll delete it *)
-  let max_age = 60.
-
   (* Look up by dst * dst_port *)
   let table = Hashtbl.create 7
 
   let _ =
     let rec loop () =
-      let open Lwt.Infix in
       Lwt_unix.sleep 60.
       >>= fun () ->
       let snapshot = Hashtbl.copy table in
@@ -49,8 +47,7 @@ module Datagram = struct
       loop () in
     loop ()
 
-  let input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload =
-    let open Lwt.Infix in
+  let input ~reply ~src:_ ~dst:(dst, dst_port) ~payload =
     let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.V4.to_string dst, dst_port) in
     (if Hashtbl.mem table (dst, dst_port) then begin
         Lwt.return (Some (Hashtbl.find table (dst, dst_port)))
@@ -141,7 +138,6 @@ module Stream = struct
     { description; fd; read_buffer; read_buffer_size; closed }
 
   let connect_v4 ?(read_buffer_size = 65536) ip port =
-    let open Lwt.Infix in
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
     let description = Ipaddr.V4.to_string ip ^ ":" ^ (string_of_int port) in
     Lwt.catch
@@ -157,7 +153,7 @@ module Stream = struct
          errorf "Socket.TCPV4.connect_v4 %s: Lwt_unix.connect: caught %s" description (Printexc.to_string e)
       )
 
-  let shutdown_read { description; fd; closed } =
+  let shutdown_read { description; fd; closed; _ } =
     try
       if not closed then Lwt_unix.shutdown fd Unix.SHUTDOWN_RECEIVE;
       Lwt.return ()
@@ -167,7 +163,7 @@ module Stream = struct
       Log.err (fun f -> f "Socket.TCPV4.shutdown_read %s: caught %s returning Eof" description (Printexc.to_string e));
       Lwt.return ()
 
-  let shutdown_write { description; fd; closed } =
+  let shutdown_write { description; fd; closed; _ } =
     try
       if not closed then Lwt_unix.shutdown fd Unix.SHUTDOWN_SEND;
       Lwt.return ()
@@ -178,7 +174,6 @@ module Stream = struct
       Lwt.return ()
 
   let read t =
-    let open Lwt.Infix in
     (if Cstruct.len t.read_buffer = 0 then t.read_buffer <- Cstruct.create t.read_buffer_size);
     Lwt.catch
       (fun () ->
@@ -195,7 +190,6 @@ module Stream = struct
         )
 
   let write t buf =
-    let open Lwt.Infix in
     Lwt.catch
       (fun () ->
          Lwt_cstruct.(complete (write t.fd) buf)
@@ -209,7 +203,6 @@ module Stream = struct
   let writev t bufs =
     Lwt.catch
       (fun () ->
-         let open Lwt.Infix in
          let rec loop = function
            | [] -> Lwt.return (`Ok ())
            | buf :: bufs ->

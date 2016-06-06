@@ -1,18 +1,9 @@
-open Lwt
-open Sexplib.Std
-
 let src =
   let src = Logs.Src.create "ppp" ~doc:"point-to-point network link" in
   Logs.Src.set_level src (Some Logs.Debug);
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
-
-module Infix = struct
-  let ( >>= ) m f = m >>= function
-    | `Ok x -> f x
-    | `Error x -> Lwt.return (`Error x)
-end
 
 module Make(Input: Sig.VMNET) = struct
 
@@ -100,10 +91,12 @@ module Make(Input: Sig.VMNET) = struct
     t.stats.rx_pkts <- 0l;
     t.stats.tx_pkts <- 0l
 
-  let get_id _ = ()
+  let of_fd ~client_macaddr:_ ~server_macaddr:_ =
+    failwith "Filter.of_fd unimplemented"
 
-  let of_fd ~client_macaddr ~server_macaddr = failwith "Filter.of_fd unimplemented"
+  let start_capture _ ?size_limit:_ _ =
+    failwith "Filter.start_capture unimplemented"
 
-  let start_capture _ ?size_limit _ = failwith "Filter.start_capture unimplemented"
-  let stop_capture _ = failwith "Filter.stop_capture unimplemented"
+  let stop_capture _ =
+    failwith "Filter.stop_capture unimplemented"
 end
