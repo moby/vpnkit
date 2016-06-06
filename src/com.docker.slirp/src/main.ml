@@ -34,7 +34,7 @@ let start_port_forwarding port_control_path vsock_path =
   | `Error (`Msg m) ->
     Log.err (fun f -> f "Failed to create a socket stack: %s" m);
     exit 1
-  | `Ok s ->
+  | `Ok _ ->
   Ports.set_context fs vsock_path;
   Osx_socket.listen port_control_path
   >>= fun port_s ->
@@ -131,8 +131,8 @@ let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
     [`S "DESCRIPTION";
-     `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
-		     flows via userspace sockets"]
+     `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
+         flows via userspace sockets"]
   in
   Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ debug),
   Term.info "proxy" ~doc ~man

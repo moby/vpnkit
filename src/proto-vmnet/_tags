@@ -1,0 +1,85 @@
+# OASIS_START
+# DO NOT EDIT (digest: 54af61c6eb19ce0c9fa7596db1e0290f)
+# Ignore VCS directories, you can use the same kind of rule outside
+# OASIS_START/STOP if you want to exclude directories that contains
+# useless stuff for the build process
+true: annot, bin_annot
+<**/.svn>: -traverse
+<**/.svn>: not_hygienic
+".bzr": -traverse
+".bzr": not_hygienic
+".hg": -traverse
+".hg": not_hygienic
+".git": -traverse
+".git": not_hygienic
+"_darcs": -traverse
+"_darcs": not_hygienic
+# Library proto-vmnet
+"lib/proto-vmnet.cmxs": use_proto-vmnet
+<lib/*.ml{,i,y}>: pkg_cstruct
+<lib/*.ml{,i,y}>: pkg_cstruct.lwt
+<lib/*.ml{,i,y}>: pkg_cstruct.syntax
+<lib/*.ml{,i,y}>: pkg_io-page.unix
+<lib/*.ml{,i,y}>: pkg_ipaddr
+<lib/*.ml{,i,y}>: pkg_ipaddr.unix
+<lib/*.ml{,i,y}>: pkg_logs
+<lib/*.ml{,i,y}>: pkg_lwt.unix
+<lib/*.ml{,i,y}>: pkg_mirage-types.lwt
+<lib/*.ml{,i,y}>: pkg_pcap-format
+<lib/*.ml{,i,y}>: pkg_sexplib.syntax
+# Library vmnet-client
+"unix/vmnet-client.cmxs": use_vmnet-client
+<unix/*.ml{,i,y}>: pkg_cstruct
+<unix/*.ml{,i,y}>: pkg_cstruct.lwt
+<unix/*.ml{,i,y}>: pkg_cstruct.syntax
+<unix/*.ml{,i,y}>: pkg_fd-send-recv
+<unix/*.ml{,i,y}>: pkg_io-page.unix
+<unix/*.ml{,i,y}>: pkg_ipaddr
+<unix/*.ml{,i,y}>: pkg_ipaddr.unix
+<unix/*.ml{,i,y}>: pkg_logs
+<unix/*.ml{,i,y}>: pkg_logs.cli
+<unix/*.ml{,i,y}>: pkg_lwt.unix
+<unix/*.ml{,i,y}>: pkg_mirage-types.lwt
+<unix/*.ml{,i,y}>: pkg_pcap-format
+<unix/*.ml{,i,y}>: pkg_sexplib.syntax
+<unix/*.ml{,i,y}>: pkg_unix-errno
+<unix/*.ml{,i,y}>: pkg_unix-errno.unix
+<unix/*.ml{,i,y}>: use_proto-vmnet
+# Executable vmnet-cli
+<bin/main.{native,byte}>: pkg_cmdliner
+<bin/main.{native,byte}>: pkg_cstruct
+<bin/main.{native,byte}>: pkg_cstruct.lwt
+<bin/main.{native,byte}>: pkg_cstruct.syntax
+<bin/main.{native,byte}>: pkg_fd-send-recv
+<bin/main.{native,byte}>: pkg_io-page.unix
+<bin/main.{native,byte}>: pkg_ipaddr
+<bin/main.{native,byte}>: pkg_ipaddr.unix
+<bin/main.{native,byte}>: pkg_logs
+<bin/main.{native,byte}>: pkg_logs.cli
+<bin/main.{native,byte}>: pkg_lwt.unix
+<bin/main.{native,byte}>: pkg_mirage-types.lwt
+<bin/main.{native,byte}>: pkg_pcap-format
+<bin/main.{native,byte}>: pkg_sexplib.syntax
+<bin/main.{native,byte}>: pkg_unix-errno
+<bin/main.{native,byte}>: pkg_unix-errno.unix
+<bin/main.{native,byte}>: use_proto-vmnet
+<bin/main.{native,byte}>: use_vmnet-client
+<bin/*.ml{,i,y}>: pkg_cmdliner
+<bin/*.ml{,i,y}>: pkg_cstruct
+<bin/*.ml{,i,y}>: pkg_cstruct.lwt
+<bin/*.ml{,i,y}>: pkg_cstruct.syntax
+<bin/*.ml{,i,y}>: pkg_fd-send-recv
+<bin/*.ml{,i,y}>: pkg_io-page.unix
+<bin/*.ml{,i,y}>: pkg_ipaddr
+<bin/*.ml{,i,y}>: pkg_ipaddr.unix
+<bin/*.ml{,i,y}>: pkg_logs
+<bin/*.ml{,i,y}>: pkg_logs.cli
+<bin/*.ml{,i,y}>: pkg_lwt.unix
+<bin/*.ml{,i,y}>: pkg_mirage-types.lwt
+<bin/*.ml{,i,y}>: pkg_pcap-format
+<bin/*.ml{,i,y}>: pkg_sexplib.syntax
+<bin/*.ml{,i,y}>: pkg_unix-errno
+<bin/*.ml{,i,y}>: pkg_unix-errno.unix
+<bin/*.ml{,i,y}>: use_proto-vmnet
+<bin/*.ml{,i,y}>: use_vmnet-client
+# OASIS_STOP

@@ -1,3 +1,5 @@
+open Lwt.Infix
+
 let src =
   let src = Logs.Src.create "tcpip" ~doc:"Mirage TCP/IP" in
   Logs.Src.set_level src (Some Logs.Debug);
@@ -45,17 +47,17 @@ let dhcp_conf ~config =
   let low_ip = Ipaddr.V4.to_string config.low_ip in
   let high_ip = Ipaddr.V4.to_string config.high_ip in
 
-  Printf.sprintf "
-  option domain-name \"local\";
-  subnet %s netmask %s {
-    option routers %s;
-    option domain-name-servers %s;
-    range %s %s;
-    host xhyve {
-      hardware ethernet %s;
-      fixed-address %s;
-    }
-  }
+  Printf.sprintf "\n\
+  option domain-name \"local\";\n\
+  subnet %s netmask %s {\n\
+    option routers %s;\n\
+    option domain-name-servers %s;\n\
+    range %s %s;\n\
+    host xhyve {\n\
+      hardware ethernet %s;\n\
+      fixed-address %s;\n\
+    }\n\
+  }\n\
   " network netmask local_ip local_ip low_ip high_ip
   (Macaddr.to_string config.client_macaddr) peer_ip
 
@@ -79,7 +81,6 @@ module Dhcp = struct
     Macaddr.compare dest mac = 0 || not (Macaddr.is_unicast dest)
 
   let input net config subnet buf =
-    let open Lwt.Infix in
     let open Dhcp_server.Input in
     match (Dhcp_wire.pkt_of_buf buf (Cstruct.len buf)) with
     | `Error e ->
@@ -121,7 +122,7 @@ module Dhcp = struct
   let listen mac config net buf =
     let subnet = List.hd config.Dhcp_server.Config.subnets in
     match (Wire_structs.parse_ethernet_frame buf) with
-    | Some (proto, dst, payload) when of_interest mac dst ->
+    | Some (proto, dst, _payload) when of_interest mac dst ->
       (match proto with
        | Some Wire_structs.IPv4 ->
          if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then
@@ -133,14 +134,12 @@ module Dhcp = struct
 end
 
 module Infix = struct
-  open Lwt.Infix
   let ( >>= ) m f = m >>= function
     | `Ok x -> f x
     | `Error x -> Lwt.return (`Error x)
 end
 
 let or_error name m =
-  let open Lwt.Infix in
   m >>= function
   | `Error _ -> Lwt.return (`Error (`Msg (Printf.sprintf "Failed to connect %s device" name)))
   | `Ok x -> Lwt.return (`Ok x)
@@ -176,7 +175,6 @@ let connect ~config (ppp: Vmnet.t) =
   or_error "stack" @@ connect cfg ethif arp ipv4 udp4 tcp4
   >>= fun stack ->
   (* Hook in the DHCP server too *)
-  let open Lwt.Infix in
   let dhcp_config = Dhcp.config ~config in
   Netif.add_listener interface (Dhcp.listen config.server_macaddr dhcp_config interface);
   Lwt.return (`Ok stack)
@@ -184,7 +182,7 @@ let connect ~config (ppp: Vmnet.t) =
 (* FIXME: this is unnecessary, mirage-flow should be changed *)
 module TCPV4_half_close = struct
   include TCPV4
-  let shutdown_read flow =
+  let shutdown_read _flow =
     (* No change to the TCP PCB: all this means is that I've
        got my finders in my ears and am nolonger listening to
        what you say. *)

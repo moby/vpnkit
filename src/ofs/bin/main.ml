@@ -16,8 +16,7 @@ let watch address key =
       loop remaining in
     loop string_options in
   try
-    Lwt_main.run t;
-    `Ok ()
+    Lwt_main.run (t >|= fun () -> `Ok ())
   with e ->
     Printf.fprintf stderr "Caught: %s\n%!" (Printexc.to_string e);
     `Error(false, Printexc.to_string e)

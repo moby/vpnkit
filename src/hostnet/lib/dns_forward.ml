@@ -1,5 +1,4 @@
-open Lwt
-open Dns
+open Lwt.Infix
 
 let src =
   let src = Logs.Src.create "dns" ~doc:"Resolve DNS queries on the host" in
@@ -7,12 +6,6 @@ let src =
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
-
-module OptionThread = struct
-  let (>>=) m f = m >>= function
-    | None -> Lwt.return_none
-    | Some x -> f x
-end
 
 let parse_dns buf =
   let len = Cstruct.len buf in
@@ -29,7 +22,7 @@ let string_of_dns dns =
 let tidstr_of_dns dns =
   match dns with
   | (_, None) -> "----"
-  | (_, Some { Dns.Packet.id }) -> Printf.sprintf "%04x" id
+  | (_, Some { Dns.Packet.id; _ }) -> Printf.sprintf "%04x" id
 
 module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) = struct
 
@@ -43,7 +36,6 @@ let table = Hashtbl.create 7
 
 let start_reaper () =
   let rec loop () =
-    let open Lwt.Infix in
     Lwt_unix.sleep 60.
     >>= fun () ->
     let snapshot = Hashtbl.copy table in
@@ -68,7 +60,7 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
   let remove_tid dns =
     match dns with
     | (_, None) -> ()
-    | (_, Some { Dns.Packet.id }) -> Hashtbl.remove table id in
+    | (_, Some { Dns.Packet.id; _ }) -> Hashtbl.remove table id in
 
   Log.debug (fun f -> f "DNS[%s] %s:%d -> %s %s" (tidstr_of_dns dns) src_str src_port dst_str (string_of_dns dns));
 
@@ -79,7 +71,7 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
     | r::_ -> Lwt.return_some r
     | _ -> Lwt.return_none
   end
-  | (_, Some { Dns.Packet.id = tid }) -> begin
+  | (_, Some { Dns.Packet.id = tid; _ }) -> begin
     Lwt.catch
       (fun () ->
         let trec = Hashtbl.find table tid in
@@ -120,7 +112,7 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
 
     let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
     Log.debug (fun f -> f "DNS[%s] Forwarding to %s" (tidstr_of_dns dns) (Ipaddr.to_string dst));
-    Lwt_unix.connect fd remote_sockaddr;
+    Lwt_unix.connect fd remote_sockaddr >>= fun () ->
     Lwt.catch
       (fun () ->
         let payload = Cstruct.to_string buf in

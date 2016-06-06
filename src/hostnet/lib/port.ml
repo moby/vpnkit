@@ -1,5 +1,6 @@
+open Lwt.Infix
+
 let bind local_ip local_port sock_stream =
-  let open Lwt.Infix in
     let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string (Ipaddr.V4.to_string local_ip), local_port) in
     let fd = Lwt_unix.socket Lwt_unix.PF_INET (if sock_stream then Lwt_unix.SOCK_STREAM else Lwt_unix.SOCK_DGRAM) 0 in
     Lwt.catch

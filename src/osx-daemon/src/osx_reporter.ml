@@ -23,10 +23,8 @@ let get_trace_dir () =
   List.fold_left (/) home log_dir
 
 let asl_install () =
-  let (/) = Filename.concat in
   let facility = Filename.basename Sys.executable_name in
   let client = Asl.Client.create ~ident:"Docker" ~facility () in
-  let time_fmt = "$((Time)(utc))" in
   Logs.set_reporter (Log_asl.reporter ~client ());
   (* Replace stdout and stderr with /dev/null to avoid 2 overlapping logging
      streams (possibly leading to corruption if the App writes to the same

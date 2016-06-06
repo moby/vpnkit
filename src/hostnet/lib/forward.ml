@@ -1,3 +1,4 @@
+open Lwt.Infix
 
 let src =
   let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
@@ -5,10 +6,6 @@ let src =
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
-
-let finally f g =
-  let open Lwt.Infix in
-  Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
 
 let log_exception_continue description f =
   Lwt.catch
@@ -88,7 +85,6 @@ let to_string t = Printf.sprintf "%s:%s" (Local.to_string t.local) (Connector.Po
 let description_of_format = "'<tcp|udp>:local ip:local port:remote vchan port'"
 
 let finally f g =
-  let open Lwt.Infix in
   Lwt.catch (fun () ->
     f ()
     >>= fun r ->
@@ -114,7 +110,6 @@ let check_bind_allowed ip = match !allowed_addresses with
 
 
 let bind local =
-  let open Lwt.Infix in
   match local with
   | `Tcp (local_ip, local_port)  ->
     check_bind_allowed local_ip
@@ -125,8 +120,7 @@ let bind local =
     >>= fun () ->
     Binder.bind local_ip local_port false
 
-let start_tcp_proxy vsock_path_var local_ip local_port fd t =
-  let open Lwt.Infix in
+let start_tcp_proxy vsock_path_var _local_ip _local_port fd t =
   (* On failure here, we must close the fd *)
   Lwt.catch
     (fun () ->
@@ -170,7 +164,7 @@ let start_tcp_proxy vsock_path_var local_ip local_port fd t =
       | Some local_fd ->
         let local = Socket.Stream.of_fd ~description local_fd in
         Active_list.Var.read vsock_path_var
-        >>= fun vsock_path ->
+        >>= fun _vsock_path ->
         let proxy () =
           finally (fun () ->
             Connector.connect t.remote_port
@@ -208,8 +202,7 @@ let max_udp_length = 2048 (* > 1500 the MTU of our link + header *)
 
 let max_vsock_header_length = 1024
 
-let start_udp_proxy vsock_path_var local_ip local_port fd t =
-  let open Lwt.Infix in
+let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
   let description = to_string t in
   let from_internet_string = Bytes.make max_udp_length '\000' in
   let from_internet_buffer = Cstruct.create max_udp_length in
@@ -218,7 +211,7 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
   let from_vsock_buffer = Cstruct.create max_udp_length in
   let _ =
     Active_list.Var.read vsock_path_var
-    >>= fun vsock_path ->
+    >>= fun _vsock_path ->
     Log.debug (fun f -> f "%s: connecting to vsock port %s" description (Connector.Port.to_string t.remote_port));
     Connector.connect t.remote_port
     >>= fun v ->
@@ -282,8 +275,8 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
       let ip =
         Unix.inet_addr_of_string (
           if String.length ip_bytes_string = 4
-          then Ipaddr.V4.to_string @@ Ipaddr.V4.of_bytes_exn ip_bytes_string
-          else Ipaddr.V6.to_string @@ Ipaddr.V6.of_bytes_exn ip_bytes_string
+          then Ipaddr.V4.to_string (Ipaddr.V4.of_bytes_exn ip_bytes_string)
+          else Ipaddr.V6.to_string (Ipaddr.V6.of_bytes_exn ip_bytes_string)
         ) in
       (* uint16 Port *)
       let port = Cstruct.LE.get_uint16 rest 0 in
@@ -336,7 +329,6 @@ let start_udp_proxy vsock_path_var local_ip local_port fd t =
   Lwt.return (Result.Ok t)
 
 let start vsock_path_var t =
-  let open Lwt.Infix in
   bind t.local
   >>= function
   | Result.Error (`Msg m) ->
@@ -352,7 +344,6 @@ let start vsock_path_var t =
 let stop t = match t.fd with
   | None -> Lwt.return ()
   | Some fd ->
-    let open Lwt.Infix in
     t.fd <- None;
     Log.debug (fun f -> f "%s: closing listening socket" (to_string t));
     Lwt_unix.close fd

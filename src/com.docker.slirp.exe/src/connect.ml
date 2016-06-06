@@ -17,6 +17,6 @@ module Port = struct
 
 end
 
-let connect port =
+let connect _port =
   Log.err (fun f -> f "Hyper-V socket connect() not yet implemented");
   failwith "Hyper-V socket connect() not yet implemented"

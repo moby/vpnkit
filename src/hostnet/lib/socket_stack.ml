@@ -1,3 +1,4 @@
+open Lwt.Infix
 
 let src =
   let src = Logs.Src.create "usernet" ~doc:"Mirage TCP/IP <-> socket proxy" in
@@ -9,14 +10,12 @@ module Log = (val Logs.src_log src : Logs.LOG)
 include Tcpip_stack_socket.Make(Console_unix)
 
 module Infix = struct
-  open Lwt.Infix
   let ( >>= ) m f = m >>= function
     | `Ok x -> f x
     | `Error x -> Lwt.return (`Error x)
 end
 
 let or_error name m =
-  let open Lwt.Infix in
   m >>= function
   | `Error _ -> Lwt.return (`Error (`Msg (Printf.sprintf "Failed to connect %s device" name)))
   | `Ok x -> Lwt.return (`Ok x)

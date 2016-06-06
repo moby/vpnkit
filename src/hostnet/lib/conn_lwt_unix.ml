@@ -1,5 +1,3 @@
-open Lwt.Infix
-
 type fd = Lwt_unix.file_descr
 let connect fd = fd
 let close = Lwt_unix.close

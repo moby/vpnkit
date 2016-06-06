@@ -49,7 +49,7 @@ let connect x peer_ip local_ip =
         | `Error (`Msg m) -> failwith m
         | `Ok s ->
           let (ip, udp) = Tcpip_stack.ipv4 s, Tcpip_stack.udpv4 s in
-            Tcpip_stack.listen_udpv4 s 53 (Dns_forward.input ~ip ~udp);
+            Tcpip_stack.listen_udpv4 s ~port:53 (Dns_forward.input ~ip ~udp);
             Vmnet.add_listener x (
               fun buf ->
                 match (Wire_structs.parse_ethernet_frame buf) with
@@ -142,7 +142,7 @@ let connect x peer_ip local_ip =
                   end
                 | _ -> Lwt.return_unit
             );
-            Tcpip_stack.listen_tcpv4_flow s (
+            Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
                 let description =
                   Printf.sprintf "TCP %s:%d > %s:%d"
@@ -152,7 +152,7 @@ let connect x peer_ip local_ip =
                 ( if Ipaddr.V4.compare src_ip local_ip == 0 && src_port = 53 then begin
                     Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
                     >>= function
-                    | { Dns_resolver_unix.servers = (Ipaddr.V4 ip, port) :: _ } -> Lwt.return (ip, port)
+                    | { Dns_resolver_unix.servers = (Ipaddr.V4 ip, port) :: _; _ } -> Lwt.return (ip, port)
                     | _ ->
                       Log.err (fun f -> f "Failed to discover DNS server: assuming 127.0.01");
                       Lwt.return (Ipaddr.V4.of_string_exn "127.0.0.1", 53)
@@ -210,7 +210,7 @@ let connect x peer_ip local_ip =
       | Some x ->
         begin match Stringext.split (String.trim x) ~on:':' with
         | [ filename ] ->
-          (** Assume 10MiB limit for safety *)
+          (* Assume 10MiB limit for safety *)
           Lwt.return (Some (filename, Some 16777216L))
         | [ filename; limit ] ->
           let limit =

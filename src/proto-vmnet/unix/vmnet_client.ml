@@ -8,17 +8,6 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let log_exception_continue description f =
-  Lwt.catch
-    (fun () -> f ())
-    (fun e ->
-       Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
-       Lwt.return ()
-    )
-
-let default_mtu = 1500
-
-let ethernet_header_length = 14 (* no VLAN *)
 let error_of_failure f = Lwt.catch f (fun e -> Lwt.return (`Error (`Msg (Printexc.to_string e))))
 
 type t = {
@@ -46,21 +35,6 @@ let of_fd fd =
        >>= fun (init, _) ->
        Log.info (fun f -> f "Client.negotiate: received %s" (Init.to_string init));
        Lwt.return (`Ok { fd })
-    )
-
-let simple_bool_command cmd t =
-  error_of_failure
-    (fun () ->
-       let buf = Cstruct.create Command.sizeof in
-       let (_: Cstruct.t) = Command.marshal cmd buf in
-       Lwt_cstruct.(complete (write t.fd) buf)
-       >>= fun () ->
-       let result = Cstruct.create 1 in
-       Lwt_cstruct.(complete (read t.fd) result)
-       >>= fun () ->
-       match Cstruct.get_uint8 result 0 with
-       | 0 -> Lwt.return (`Ok ())
-       | n -> Lwt.return (`Error (`Msg (Printf.sprintf "Command failed with code %d" n)))
     )
 
 let bind_ipv4 t (ipv4, port, stream) =

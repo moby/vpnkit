@@ -70,11 +70,11 @@ let hvsock_connect_forever url sockaddr callback =
         Log.info (fun f -> f "hvsock connected successfully");
         callback socket
       ) (function
-        | Unix.Unix_error(e, _, _) ->
+        | Unix.Unix_error(_, _, _) ->
           Lwt_hvsock.close socket
           >>= fun () ->
           Lwt_unix.sleep 1.
-        | e ->
+        | _ ->
           Lwt_hvsock.close socket
           >>= fun () ->
           Lwt_unix.sleep 1.
@@ -144,7 +144,7 @@ let start_port_forwarding port_control_url =
   | `Error (`Msg m) ->
     Log.err (fun f -> f "Failed to create a socket stack: %s" m);
     exit 1
-  | `Ok s ->
+  | `Ok _ ->
   Ports.set_context fs "";
   let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid (Uri.of_string port_control_url) in
   hvsock_connect_forever port_control_url sockaddr
@@ -152,7 +152,7 @@ let start_port_forwarding port_control_url =
       let flow = Flow_lwt_hvsock.connect fd in
       Server.connect fs flow ()
       >>= function
-      | Result.Error (`Msg x) ->
+      | Result.Error (`Msg _) ->
         Log.err (fun f -> f "Failed to negotiate 9P connection on port control server");
         Lwt_hvsock.close fd
       | Result.Ok t ->
@@ -169,7 +169,7 @@ let main_t socket_url port_control_url db_path dns pcap debug =
   then Logs.set_reporter (Logs_fmt.reporter ())
   else begin
     let h = Eventlog.register "Docker.exe" in
-    Logs.set_reporter (Log_eventlog.reporter h ());
+    Logs.set_reporter (Log_eventlog.reporter ~eventlog:h ());
   end;
   Printexc.record_backtrace true;
 
@@ -260,8 +260,8 @@ let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
     [`S "DESCRIPTION";
-     `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the
-		     flows via userspace sockets"]
+     `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
+         flows via userspace sockets"]
   in
   Term.(pure main $ socket $ port_control_path $ db_path $ dns $ pcap $ debug),
   Term.info "proxy" ~doc ~man

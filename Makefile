@@ -22,3 +22,8 @@ install:
 
 uninstall:
 	echo uninstall
+
+clean:
+	for pkg in `ls src/`; do \
+	  (cd src/$$pkg && ocamlbuild -clean); \
+	done
