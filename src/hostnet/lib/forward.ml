@@ -359,7 +359,7 @@ let stop t = match t.fd with
 
 let of_string x =
   match (
-    match Stringext.split ~on:':' x with
+    match Stringext.split ~on:':' ~max:4 x with
     | [ "tcp"; local_ip; local_port; remote_port ] ->
       let local_ip = Ipaddr.V4.of_string local_ip in
       let local_port = Port.of_string local_port in
