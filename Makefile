@@ -30,7 +30,10 @@ else
 	OPAMROOT=$(REPO_ROOT)/_build/opam
 endif
 
-
+DEPEXT = depext
+ifeq ($(OS),Windows_NT)
+	DEPEXT += depext-cygwinports
+endif
 
 OPAMFLAGS=MACOSX_DEPLOYMENT_TARGET=$(MACOSX_DEPLOYMENT_TARGET) \
 	  OPAMROOT="$(OPAMROOT)" \
@@ -43,7 +46,7 @@ depends:
 	$(OPAMFLAGS) opam init -n --comp=$(OPAM_COMP) --switch=$(OPAM_COMP) \
 	  local "$(OPAM_REPO)"
 	$(OPAMFLAGS) opam update -u -y
-	$(OPAMFLAGS) opam install depext -y
+	$(OPAMFLAGS) opam install $(DEPEXT) -y
 	$(OPAMFLAGS) opam depext -u slirp
 	$(OPAMFLAGS) opam install --deps-only slirp -y
 
