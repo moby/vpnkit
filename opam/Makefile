@@ -5,7 +5,7 @@ update-osx:
 	./update-upstream.sh $(PKGS)
 
 update-win:
-	OPAM_OS="win32" OPAM_SWITH="4.02.3+mingw32c" \
+	OPAM_OS="win32" OPAM_SWITH="4.02.3+mingw64c" \
 	OPAM_REPO="https://github.com/fdopen/opam-repository-mingw.git" \
 	./update-upstream.sh $(PKGS) depext-cygwinports
 

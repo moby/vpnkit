@@ -13,10 +13,6 @@ if [ "$PROCESSOR_ARCHITECTURE" != "AMD64" ] && \
     OPAM_ARCH=opam32
 fi
 
-# default setttings
-SWITCH='4.02.3+mingw64c'
-OPAM_URL='https://dl.dropboxusercontent.com/s/b2q2vjau7if1c1b/opam64.tar.xz'
-
 export OPAM_LINT="false"
 export OPAMYES=1
 
