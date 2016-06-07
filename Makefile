@@ -40,7 +40,8 @@ all: $(TARGETS)
 
 depends:
 	mkdir -p $(OPAMROOT)
-	$(OPAMFLAGS) opam init -n --comp=$(OPAM_COMP) local "$(OPAM_REPO)"
+	$(OPAMFLAGS) opam init -n --comp=$(OPAM_COMP) --switch=$(OPAM_COMP) \
+	  local "$(OPAM_REPO)"
 	$(OPAMFLAGS) opam update -u -y
 	$(OPAMFLAGS) opam install depext -y
 	$(OPAMFLAGS) opam depext -u slirp
