@@ -69,7 +69,7 @@ let bind_cmd =
 let help = [
  `S "MORE HELP";
  `P "Use `$(mname) $(i,COMMAND) --help' for help on a single command."; `Noblank;
- `S "BUGS"; `P (Printf.sprintf "Check bug reports at docker/pinata");
+ `S "BUGS"; `P (Printf.sprintf "Check bug reports at docker/vpnkit");
 ]
 
 let default_cmd =
