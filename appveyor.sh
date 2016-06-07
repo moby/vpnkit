@@ -25,6 +25,9 @@ curl -fsSL -o "${OPAM_ARCH}.tar.xz" "${OPAM_URL}"
 tar -xf "${OPAM_ARCH}.tar.xz"
 "${OPAM_ARCH}/install.sh"
 
+PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin:${PATH}"
+export PATH
+
 ### Custom
 
 cd "${APPVEYOR_BUILD_FOLDER}"
