@@ -73,7 +73,7 @@ OSS-LICENSES:
 	mkdir -p $(LICENSEDIRS)
 	cd $(LICENSEDIRS) && \
 	  $(OPAMFLAGS) $(REPO_ROOT)/opam/opam-licenses.sh slirp
-	$(REPO_ROOT)/opam/list-licenses.sh $(OPAMROOT) > OSS-LICENSES
+	$(REPO_ROOT)/opam/list-licenses.sh $(LICENSEDIRS) > OSS-LICENSES
 
 clean:
 	for pkg in `ls src/`; do \
