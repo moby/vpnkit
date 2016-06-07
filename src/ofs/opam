@@ -2,9 +2,9 @@ opam-version: "1.2"
 maintainer:   "dave@recoil.org"
 authors:      ["David Scott"]
 license:      "Apache-2.0"
-homepage:     "https://github.com/docker/pinata"
-bug-reports:  "https://github.com/docker/pinata"
-dev-repo:     "https://github.com/docker/pinata.git"
+homepage:     "https://github.com/docker/vpnkit"
+bug-reports:  "https://github.com/docker/vpnkit/issues"
+dev-repo:     "https://github.com/docker/vpnkit.git"
 
 build: [
   ["oasis" "setup"]
