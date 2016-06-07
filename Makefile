@@ -1,10 +1,6 @@
 REPO_ROOT=$(shell git rev-parse --show-toplevel)
 MACOSX_DEPLOYMENT_TARGET?=10.10
 EXEDIR=C:\projects\vpnkit
-OPAMROOT=$(REPO_ROOT)/_build/opam
-OPAMFLAGS=MACOSX_DEPLOYMENT_TARGET=$(MACOSX_DEPLOYMENT_TARGET) \
-	  OPAMROOT=$(OPAMROOT) \
-	  OPAMYES=1 OPAMCOLORS=1
 LICENSEDIRS=$(REPO_ROOT)/opam/licenses
 
 .PHONY: com.docker.slirp.exe com.docker.slirp install uninstall OSS-LICENSES
@@ -17,7 +13,7 @@ else
 endif
 
 ifeq ($(OS),Windows_NT)
-	OPAM_REPO=$(REPO_ROOT)/opam/win32
+	OPAM_REPO=$(shell cygpath.exe -w "$(REPO_ROOT)/opam/win32")
 else
 	OPAM_REPO=$(REPO_ROOT)/opam/darwin
 endif
@@ -28,11 +24,23 @@ else
 	OPAM_COMP="4.02.3"
 endif
 
+ifeq ($(OS),Windows_NT)
+	OPAMROOT=$(shell cygpath.exe -w "$(REPO_ROOT)/_build/opam")
+else
+	OPAMROOT=$(REPO_ROOT)/_build/opam
+endif
+
+
+
+OPAMFLAGS=MACOSX_DEPLOYMENT_TARGET=$(MACOSX_DEPLOYMENT_TARGET) \
+	  OPAMROOT="$(OPAMROOT)" \
+	  OPAMYES=1 OPAMCOLORS=1
+
 all: $(TARGETS)
 
 depends:
 	mkdir -p $(OPAMROOT)
-	$(OPAMFLAGS) opam init -n --comp=$(OPAM_COMP) local $(OPAM_REPO)
+	$(OPAMFLAGS) opam init -n --comp=$(OPAM_COMP) local "$(OPAM_REPO)"
 	$(OPAMFLAGS) opam update -u -y
 	$(OPAMFLAGS) opam install depext -y
 	$(OPAMFLAGS) opam depext -u slirp
