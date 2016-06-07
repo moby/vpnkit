@@ -27,7 +27,7 @@ depends: [
   "hashcons" {= "1.0.1"}
   "pcap-format" { >= "0.4.0" }
   "cmdliner"
-  "charrua-core" { = "999" }
+  "charrua-core" { >= "0.3" }
   "logs"
   "fmt"
   "mirage-flow" { >= "1.1.0" }
