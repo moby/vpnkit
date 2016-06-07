@@ -1,0 +1,26 @@
+opam-version: "1.2"
+maintainer:   "dave@recoil.org"
+authors:      ["Anil Madhavapeddy" "David Scott"]
+homepage:     "https://github.com/mirage/shared-memory-ring"
+bug-reports:  "https://github.com/mirage/shared-memory-ring/issues"
+dev-repo:     "https://github.com/mirage/shared-memory-ring.git"
+license:      "ISC"
+tags:         [ "org:mirage" "org:xapi-project"]
+
+build:      [make "CONFIGUREFLAGS=--disable-tests" "all"]
+build-test: [
+  [make "clean"]
+  [make "CONFIGUREFLAGS=--enable-tests" "test"]
+]
+install: [make "install"]
+remove:  ["ocamlfind" "remove" "shared-memory-ring"]
+
+depends: [
+  "cstruct" {>= "1.9.0"}
+  "ppx_tools"
+  "lwt"
+  "ocamlfind"
+  "mirage-profile"
+  "ounit" {test}
+]
+available: [ ocaml-version >= "4.02.0" ]

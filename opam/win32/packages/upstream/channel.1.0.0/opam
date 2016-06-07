@@ -1,0 +1,31 @@
+opam-version: "1.2"
+maintainer:   "Thomas Gazagnaire <thomas@gazagnaire.org>"
+authors:      "Thomas Gazagnaire <thomas@gazagnaire.org>"
+homepage:     "https://github.com/mirage/mirage-channel"
+bug-reports:  "https://github.com/mirage/mirage-channel/issues"
+license:      "ISC"
+dev-repo:     "https://github.com/mirage/mirage-channel.git"
+
+build: [
+  ["./configure" "--prefix" prefix]
+  [make]
+]
+build-test: [
+  ["./configure" "--enable-tests"]
+  [make "test"]
+]
+install: [make "install"]
+remove: ["ocamlfind" "remove" "channel"]
+
+depends: [
+  "ocamlfind" {build}
+  "mirage-types-lwt"
+  "io-page"
+  "lwt" {>= "2.4.7"}
+  "cstruct"
+  "alcotest" {test}
+  "ounit" {test}
+  "mirage-flow" {test}
+  "ocamlbuild" {build}
+]
+conflicts: [ "tcpip" {<"2.5.0"} ]

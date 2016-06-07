@@ -1,0 +1,126 @@
+--- ./camlp4/Camlp4Bin.ml
++++ ./camlp4/Camlp4Bin.ml
+@@ -159,14 +159,23 @@
+           (new CleanAst.clean_ast)#str_item
+           AstFilters.fold_implem_filters gimd;
+ 
++value set_output_binary () =
++  match Sys.os_type with
++  [ "Win32" ->
++    do {
++      try set_binary_mode_out stdout True with _ -> ();
++      try set_binary_mode_out stderr True with _ -> ();
++    }
++  | _ -> () ];
++
+ value just_print_the_version () =
+-  do { printf "%s@." Camlp4_config.version; exit 0 };
++  do { set_output_binary (); printf "%s@." Camlp4_config.version; exit 0 };
+ 
+ value print_version () =
+-  do { eprintf "Camlp4 version %s@." Camlp4_config.version; exit 0 };
++  do { set_output_binary (); eprintf "Camlp4 version %s@." Camlp4_config.version; exit 0 };
+ 
+ value print_stdlib () =
+-  do { printf "%s@." Camlp4_config.camlp4_standard_library; exit 0 };
++  do { set_output_binary (); printf "%s@." Camlp4_config.camlp4_standard_library; exit 0 };
+ 
+ value usage ini_sl ext_sl =
+   do {
+--- ./camlp4/config/Camlp4_config.ml
++++ ./camlp4/config/Camlp4_config.ml
+@@ -17,12 +17,32 @@
+  * - Nicolas Pouillard: refactoring
+  *)
+ 
+-let ocaml_standard_library = Camlp4_import.standard_library;;
++let slashify p =
++  match Sys.os_type with
++  | "Win32" ->
++    let len = String.length p in
++    let b = Bytes.create len in
++    for i = 0 to len - 1 do
++      Bytes.set b i (match p.[i] with
++      | '\\' ->  '/'
++      | x -> x )
++    done;
++    Bytes.to_string b
++  | _ -> p
++
++let ocaml_standard_library = Camlp4_import.standard_library |> slashify ;;
+ 
+ let camlp4_standard_library =
+-  try Sys.getenv "CAMLP4LIB"
+-  with Not_found ->
+-    Camlp4_import.camlp4_standard_library;;
++  slashify (
++    try
++      let d = Sys.getenv "CAMLP4LIB" in
++      if Sys.is_directory d then
++        d
++      else
++        raise Not_found
++    with
++    | Not_found | Sys_error _ ->
++      Camlp4_import.camlp4_standard_library);;
+ 
+ let version = Sys.ocaml_version;;
+ let program_name = ref "camlp4";;
+--- ./camlp4/config/gen_import.ml
++++ ./camlp4/config/gen_import.ml
+@@ -4,7 +4,23 @@
+ let () =
+   let oc = open_out "camlp4/config/Camlp4_import.ml" in
+   Printf.fprintf oc "\
+-let standard_library = %S
++let standard_library = 
++  let help var =
++    try
++      let d = Sys.getenv var in
++      if Sys.is_directory d then
++        d
++      else
++        \"\"
++    with
++    | _ -> \"\"
++  in
++  let camllib = help \"OCAMLLIB\" in
++  let camllib = if camllib <> \"\" then camllib else help \"CAMLLIB\" in
++  if camllib = \"\" then
++    %S
++  else
++    camllib
+ let ast_intf_magic_number = %S
+ let ast_impl_magic_number = %S
+ let camlp4_standard_library = %S
+--- ./myocamlbuild.ml
++++ ./myocamlbuild.ml
+@@ -90,6 +90,19 @@
+         in
+         (Some dep, cmd)
+     in
++    let hot_camlp4boot_cmd =
++      if not windows then
++        hot_camlp4boot_cmd
++      else
++        let buf = Buffer.create (String.length hot_camlp4boot_cmd + 5) in
++        for i = 0 to String.length hot_camlp4boot_cmd - 1 do
++          match hot_camlp4boot_cmd.[i] with
++          | '/' ->
++            Buffer.add_string buf "\\";
++          | x -> Buffer.add_char buf x;
++        done;
++        Buffer.contents buf          
++    in
+ 
+     flag ["ocaml"; "ocamlyacc"] (A"-v");
+ 
+@@ -107,7 +120,7 @@
+      | Some fn ->
+        dep ["camlp4boot"] [fn]
+      | None -> ());
+-    flag ["ocaml"; "pp"; "camlp4boot"] (P hot_camlp4boot_cmd);
++    flag ["ocaml"; "pp"; "camlp4boot"] (if windows then Sh hot_camlp4boot_cmd else P hot_camlp4boot_cmd);
+     flag ["ocaml"; "pp"; "camlp4boot"; "native"] (S[A"-D"; A"OPT"]);
+     flag ["ocaml"; "pp"; "camlp4boot"; "pp:dep"] (S[A"-D"; A"OPT"]);
+     flag ["ocaml"; "pp"; "camlp4boot"; "pp:doc"] (S[A"-printer"; A"o"]);

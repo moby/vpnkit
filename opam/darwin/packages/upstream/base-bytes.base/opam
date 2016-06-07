@@ -1,0 +1,4 @@
+opam-version: "1"
+maintainer: "contact@ocamlpro.com"
+depends: ["ocamlfind" {>= "1.5.1"}]
+ocaml-version: [>= "4.02.0"]

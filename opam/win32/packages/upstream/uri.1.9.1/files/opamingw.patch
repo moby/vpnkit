@@ -1,0 +1,22 @@
+*** a/etc/gen.sh	Fri Jun 26 23:45:09 2015
+--- b/etc/gen.sh	Mon Oct  5 17:17:01 2015
+***************
+*** 1,7 ****
+  #!/bin/sh -e
+  
+! BYTES=`ocamlfind query bytes`
+! STRINGEXT=`ocamlfind query stringext`
+  if [ -e ${BYTES}/bytes.cma ]
+  then
+      DEPS="-I ${BYTES} bytes.cma -I ${STRINGEXT} stringext.cma"
+--- 1,10 ----
+  #!/bin/sh -e
+  
+! # MinGW build in Cygwin: ocamlfind prints ^M at the end and it causes a problem
+! # BYTES=`ocamlfind query bytes`
+! # STRINGEXT=`ocamlfind query stringext`
+! BYTES=`cygpath -m \`ocamlfind query bytes\``
+! STRINGEXT=`cygpath -m \`ocamlfind query stringext\``
+  if [ -e ${BYTES}/bytes.cma ]
+  then
+      DEPS="-I ${BYTES} bytes.cma -I ${STRINGEXT} stringext.cma"

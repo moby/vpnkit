@@ -1,0 +1,2559 @@
+--- ./myocamlbuild.ml
++++ ./myocamlbuild.ml
+@@ -114,7 +114,7 @@
+ ;;
+ 
+ (* OASIS_START *)
+-(* DO NOT EDIT (digest: fc56bf7043c69f9e9c1bc3fd9b72936f) *)
++(* DO NOT EDIT (digest: 9d5d3849469d0a4232692eab8dddcbde) *)
+ module OASISGettext = struct
+ # 22 "src/oasis/OASISGettext.ml"
+ 
+@@ -144,6 +144,188 @@
+ 
+ end
+ 
++module OASISString = struct
++# 22 "src/oasis/OASISString.ml"
++
++
++  (** Various string utilities.
++
++      Mostly inspired by extlib and batteries ExtString and BatString libraries.
++
++      @author Sylvain Le Gall
++    *)
++
++
++  let nsplitf str f =
++    if str = "" then
++      []
++    else
++      let buf = Buffer.create 13 in
++      let lst = ref [] in
++      let push () =
++        lst := Buffer.contents buf :: !lst;
++        Buffer.clear buf
++      in
++      let str_len = String.length str in
++        for i = 0 to str_len - 1 do
++          if f str.[i] then
++            push ()
++          else
++            Buffer.add_char buf str.[i]
++        done;
++        push ();
++        List.rev !lst
++
++
++  (** [nsplit c s] Split the string [s] at char [c]. It doesn't include the
++      separator.
++    *)
++  let nsplit str c =
++    nsplitf str ((=) c)
++
++
++  let find ~what ?(offset=0) str =
++    let what_idx = ref 0 in
++    let str_idx = ref offset in
++      while !str_idx < String.length str &&
++            !what_idx < String.length what do
++        if str.[!str_idx] = what.[!what_idx] then
++          incr what_idx
++        else
++          what_idx := 0;
++        incr str_idx
++      done;
++      if !what_idx <> String.length what then
++        raise Not_found
++      else
++        !str_idx - !what_idx
++
++
++  let sub_start str len =
++    let str_len = String.length str in
++    if len >= str_len then
++      ""
++    else
++      String.sub str len (str_len - len)
++
++
++  let sub_end ?(offset=0) str len =
++    let str_len = String.length str in
++    if len >= str_len then
++      ""
++    else
++      String.sub str 0 (str_len - len)
++
++
++  let starts_with ~what ?(offset=0) str =
++    let what_idx = ref 0 in
++    let str_idx = ref offset in
++    let ok = ref true in
++      while !ok &&
++            !str_idx < String.length str &&
++            !what_idx < String.length what do
++        if str.[!str_idx] = what.[!what_idx] then
++          incr what_idx
++        else
++          ok := false;
++        incr str_idx
++      done;
++      if !what_idx = String.length what then
++        true
++      else
++        false
++
++
++  let strip_starts_with ~what str =
++    if starts_with ~what str then
++      sub_start str (String.length what)
++    else
++      raise Not_found
++
++
++  let ends_with ~what ?(offset=0) str =
++    let what_idx = ref ((String.length what) - 1) in
++    let str_idx = ref ((String.length str) - 1) in
++    let ok = ref true in
++      while !ok &&
++            offset <= !str_idx &&
++            0 <= !what_idx do
++        if str.[!str_idx] = what.[!what_idx] then
++          decr what_idx
++        else
++          ok := false;
++        decr str_idx
++      done;
++      if !what_idx = -1 then
++        true
++      else
++        false
++
++
++  let strip_ends_with ~what str =
++    if ends_with ~what str then
++      sub_end str (String.length what)
++    else
++      raise Not_found
++
++
++  let replace_chars f s =
++    let buf = Buffer.create (String.length s) in
++    String.iter (fun c -> Buffer.add_char buf (f c)) s;
++    Buffer.contents buf
++
++  let lowercase_ascii =
++    replace_chars
++      (fun c ->
++         if (c >= 'A' && c <= 'Z') then
++           Char.chr (Char.code c + 32)
++         else
++           c)
++
++  let uncapitalize_ascii s =
++    if s <> "" then
++      (lowercase_ascii (String.sub s 0 1)) ^ (String.sub s 1 ((String.length s) - 1))
++    else
++      s
++
++  let uppercase_ascii =
++    replace_chars
++      (fun c ->
++         if (c >= 'a' && c <= 'z') then
++           Char.chr (Char.code c - 32)
++         else
++           c)
++
++  let capitalize_ascii s =
++    if s <> "" then
++      (uppercase_ascii (String.sub s 0 1)) ^ (String.sub s 1 ((String.length s) - 1))
++    else
++      s
++
++  let exists f str =
++    let rec iter i =
++      if i < 0 then
++        false
++      else if f str.[i] then
++        true
++      else
++        iter (pred i)
++    in
++      iter (String.length str - 1)
++
++  let is_digit c =
++    '0' <= c && c <= '9'
++   
++  let is_alpha c =
++    ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
++
++  let is_whitespace =
++    function
++      | ' ' | '\r' | '\n' | '\t' -> true
++      |  _  -> false
++
++end
++
+ module OASISExpr = struct
+ # 22 "src/oasis/OASISExpr.ml"
+ 
+@@ -244,7 +426,7 @@
+ end
+ 
+ 
+-# 132 "myocamlbuild.ml"
++# 314 "myocamlbuild.ml"
+ module BaseEnvLight = struct
+ # 22 "src/base/BaseEnvLight.ml"
+ 
+@@ -349,7 +531,7 @@
+ end
+ 
+ 
+-# 237 "myocamlbuild.ml"
++# 419 "myocamlbuild.ml"
+ module MyOCamlbuildFindlib = struct
+ # 22 "src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml"
+ 
+@@ -429,7 +611,9 @@
+     with Not_found -> s
+ 
+   (* ocamlfind command *)
+-  let ocamlfind x = S[Sh (exec_from_conf "ocamlfind"); x]
++  let ocamlfind x = S[Sh (
++    Ocamlbuild_pack.Shell.quote_filename_if_needed
++      (exec_from_conf "ocamlfind") ); x]
+ 
+   (* This lists all supported packages. *)
+   let find_packages () =
+@@ -631,7 +815,7 @@
+                  | nm, [], intf_modules ->
+                      ocaml_lib nm;
+                      let cmis =
+-                       List.map (fun m -> (String.uncapitalize m) ^ ".cmi")
++                       List.map (fun m -> (OASISString.uncapitalize_ascii m) ^ ".cmi")
+                                 intf_modules in
+                      dep ["ocaml"; "link"; "library"; "file:"^nm^".cma"] cmis
+                  | nm, dir :: tl, intf_modules ->
+@@ -644,7 +828,7 @@
+                             ["compile"; "infer_interface"; "doc"])
+                        tl;
+                      let cmis =
+-                       List.map (fun m -> dir^"/"^(String.uncapitalize m)^".cmi")
++                       List.map (fun m -> dir^"/"^(OASISString.uncapitalize_ascii m)^".cmi")
+                                 intf_modules in
+                      dep ["ocaml"; "link"; "library"; "file:"^dir^"/"^nm^".cma"]
+                          cmis)
+@@ -718,7 +902,7 @@
+ end
+ 
+ 
+-# 606 "myocamlbuild.ml"
++# 790 "myocamlbuild.ml"
+ open Ocamlbuild_plugin;;
+ let package_default =
+   {
+@@ -919,7 +1103,7 @@
+ 
+ let dispatch_default = MyOCamlbuildBase.dispatch_default conf package_default;;
+ 
+-# 808 "myocamlbuild.ml"
++# 992 "myocamlbuild.ml"
+ (* OASIS_STOP *)
+ 
+ open Ocamlbuild_plugin;;
+--- ./setup.ml
++++ ./setup.ml
+@@ -21,9 +21,9 @@
+ (******************************************************************************)
+ 
+ (* OASIS_START *)
+-(* DO NOT EDIT (digest: 16a9637c705c065169a471f111e9d683) *)
++(* DO NOT EDIT (digest: 86e3eaecb51c9a6cdca3b5bddd244f4e) *)
+ (*
+-   Regenerated by OASIS v0.4.5
++   Regenerated by OASIS v0.4.6
+    Visit http://oasis.forge.ocamlcore.org for more information and
+    documentation about functions used in this file.
+ *)
+@@ -266,6 +266,55 @@
+     String.iter (fun c -> Buffer.add_char buf (f c)) s;
+     Buffer.contents buf
+ 
++  let lowercase_ascii =
++    replace_chars
++      (fun c ->
++         if (c >= 'A' && c <= 'Z') then
++           Char.chr (Char.code c + 32)
++         else
++           c)
++
++  let uncapitalize_ascii s =
++    if s <> "" then
++      (lowercase_ascii (String.sub s 0 1)) ^ (String.sub s 1 ((String.length s) - 1))
++    else
++      s
++
++  let uppercase_ascii =
++    replace_chars
++      (fun c ->
++         if (c >= 'a' && c <= 'z') then
++           Char.chr (Char.code c - 32)
++         else
++           c)
++
++  let capitalize_ascii s =
++    if s <> "" then
++      (uppercase_ascii (String.sub s 0 1)) ^ (String.sub s 1 ((String.length s) - 1))
++    else
++      s
++
++  let exists f str =
++    let rec iter i =
++      if i < 0 then
++        false
++      else if f str.[i] then
++        true
++      else
++        iter (pred i)
++    in
++      iter (String.length str - 1)
++
++  let is_digit c =
++    '0' <= c && c <= '9'
++   
++  let is_alpha c =
++    ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
++
++  let is_whitespace =
++    function
++      | ' ' | '\r' | '\n' | '\t' -> true
++      |  _  -> false
+ 
+ end
+ 
+@@ -335,19 +384,15 @@
+ 
+ 
+   let compare_csl s1 s2 =
+-    String.compare (String.lowercase s1) (String.lowercase s2)
++    String.compare (OASISString.lowercase_ascii s1) (OASISString.lowercase_ascii s2)
+ 
+ 
+   module HashStringCsl =
+     Hashtbl.Make
+       (struct
+          type t = string
+-
+-         let equal s1 s2 =
+-             (String.lowercase s1) = (String.lowercase s2)
+-
+-         let hash s =
+-           Hashtbl.hash (String.lowercase s)
++         let equal s1 s2 = (compare_csl s1 s2) = 0
++         let hash s = Hashtbl.hash (OASISString.lowercase_ascii s)
+        end)
+ 
+   module SetStringCsl =
+@@ -385,7 +430,7 @@
+           else
+             buf
+         in
+-          String.lowercase buf
++          OASISString.lowercase_ascii buf
+       end
+ 
+ 
+@@ -491,7 +536,7 @@
+         order     = Queue.create ();
+         name_norm =
+           (if case_insensitive then
+-             String.lowercase
++             OASISString.lowercase_ascii
+            else
+              fun s -> s);
+       }
+@@ -772,12 +817,10 @@
+ 
+ 
+   (* Range of allowed characters *)
+-  let is_digit c =
+-    '0' <= c && c <= '9'
++  let is_digit = OASISString.is_digit
+ 
+ 
+-  let is_alpha c =
+-    ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
++  let is_alpha = OASISString.is_alpha
+ 
+ 
+   let is_special =
+@@ -1842,13 +1885,13 @@
+   let capitalize_file f =
+     let dir = dirname f in
+     let base = basename f in
+-    concat dir (String.capitalize base)
++    concat dir (OASISString.capitalize_ascii base)
+ 
+ 
+   let uncapitalize_file f =
+     let dir = dirname f in
+     let base = basename f in
+-    concat dir (String.uncapitalize base)
++    concat dir (OASISString.uncapitalize_ascii base)
+ 
+ 
+ end
+@@ -1862,6 +1905,118 @@
+ 
+   module Unix = OASISUnixPath
+ 
++  let bash_cmd = ref ( fun () -> "" )
++
++  let use_bash () = ( !bash_cmd () ) <> ""
++
++
++  (* generic quote and unixquote are taken from ocaml source *)
++  let generic_quote quotequote s =
++    let l = String.length s in
++    let b = Buffer.create (l + 20) in
++      Buffer.add_char b '\'';
++      for i = 0 to l - 1 do
++        if s.[i] = '\'' then
++          Buffer.add_string b quotequote
++        else
++          Buffer.add_char b  s.[i]
++      done;
++      Buffer.add_char b '\'';
++      Buffer.contents b
++
++  let unixquote = generic_quote "'\\''"
++
++  let win = Sys.os_type = "Win32"
++
++  let quote str =
++    if win && use_bash () then
++      unixquote str
++    else
++      quote str
++
++  (* uniform_path (only called, if Sys.os_type = "Win32")
++   * - enforces uniform path seperators
++   * - strips trailing slashes (exceptions in case of C:\ and / )
++   * - removes (some) unnecessary file components like ./././
++   *)
++
++  let get_naccu accu str first pos =
++    (* I assume c//d is identic to c/d
++     * the only exception (Network devices \\xyz\asdf)
++     * is covered in uniform_path
++     *)
++    if first = pos then
++      accu
++    else
++      let nlen = pos - first in
++      let nstr = String.sub str first nlen in
++        (* test/././ is the same as test *)
++        if nlen = 1 && nstr = "." then
++          accu
++        (* a/b/../ is the same as a *)
++        else if nlen = 2 && nstr = ".." then
++          match accu with
++            | []      -> [ nstr ]
++            | ".."::_ -> nstr::accu
++            | hd::tl  -> tl
++        else
++          nstr::accu
++
++  let is_path_sep = function
++    | '\\' | '/' -> true
++    | _ -> false
++
++
++  let uniform_path path_sep = function
++    | "" -> "" (* Raise an exception? Or an possible intermediate result?
++               * Filename.basename and dirname also don't raise exceptions *)
++    | str ->
++        let rec iter accu str len first pos =
++          if pos >= len then
++            List.rev (get_naccu accu str first pos)
++          else
++            let next = succ pos in
++              match is_path_sep str.[pos] with
++                | true -> iter (get_naccu accu str first pos) str len next next
++                | false -> iter accu str len first next
++        in
++          let is_unix_root = is_path_sep str.[0] in
++          let len = String.length str in
++          let next_sep = len > 1 && is_path_sep str.[1] in
++          let is_network_root = is_unix_root && next_sep in
++          let is_currel = str.[0] = '.' && ( next_sep || len = 1 ) in
++          let l = iter [] str len 0 0 in
++          (* Trailing slashes are normally stripped.
++           * This is not possible in case of root folders
++           * Sys.file_exists "C:" is false, Sys.file_exists "C:\\" true
++           *)
++          let l_min =
++            match l with
++              | [] -> [ "" ]
++              | _ -> l
++          in
++          let l =
++            if is_network_root then
++              ""::""::l_min
++            else if is_unix_root then
++              ""::l_min
++            else if is_currel then
++              "."::l
++            else
++              match l with
++                | s :: [] ->
++                    (* root folders like C:\ *)
++                    if String.length s = 2 && s.[1] = ':' &&
++                      len > 2 && is_path_sep str.[2]
++                    then
++                      s :: [ "" ]
++                    else
++                      l
++                | _ -> l
++          in
++            String.concat path_sep l
++
++
+ 
+   let make =
+     function
+@@ -1871,20 +2026,32 @@
+           List.fold_left Filename.concat hd tl
+ 
+ 
+-  let of_unix ufn =
+-    if Sys.os_type = "Unix" then
+-      ufn
++  let of_unix str =
++    if win = false then
++      str
+     else
+-      make
+-        (List.map
+-           (fun p ->
+-              if p = Unix.current_dir_name then
+-                current_dir_name
+-              else if p = Unix.parent_dir_name then
+-                parent_dir_name
++      let path_sep =
++        if use_bash () then
++          "/"
+               else
+-                p)
+-           (OASISString.nsplit ufn '/'))
++          "\\"
++      in
++        uniform_path path_sep str
++
++
++
++  (* see findlib's src/findlib/frontend.ml for details *)
++  let ocamlfind_unquote dir =
++    match Sys.os_type with
++      | "Cygwin"
++      | "Win32" ->
++        let len = String.length dir in
++          if len < 3 || dir.[0] <> '"' || dir.[len - 1] <> '"' ||
++            String.contains dir ' ' = false then
++            dir
++              else
++            String.sub dir 1 (len - 2)
++      | _ -> dir
+ 
+ 
+ end
+@@ -2626,25 +2793,221 @@
+   open OASISMessage
+ 
+ 
++
++
++  (* In general, there is no chance to quote properly with the current
++   * settings. ( This is only a problem, if BaseCustom.run is used (e.g
++   * test commands, PreConfigure,....). Most of the time, OASISExec.run
++   * is used with enabled quoting.)
++   *
++   * "$rm" should ideally expand to 'rm -f' (no quotes), but "$test_exec"
++   * should ideally expand to '"C:\Program Files\dir\test.exe"' (with
++   * quotes). Paths with spaces are common on Windows, so this problem
++   * can't be ignored.
++   *
++   * Using a command with additional parameters is quite useful, not only
++   * for trivial cases like $rm. You could add an additional parameter
++   * for $make in order to use a special compatibility mode, on windows
++   * you can use it to inform ocaml that a certain program is a shell
++   * script ('sh.exe pcre-config').
++   *
++   * An additional parameter (e.g. $rm_switches) would be ugly,
++   * especially for *nix users, who don't use space characters in their
++   * installation paths anyway.
++   *
++   * I use the following workaround, which should work most of the time:
++   *
++   * - if cmd doesn't contains spaces or other suspicious characters, it
++   * can be quoted in the usual way (not ambigous, I think)
++   *
++   * - if cmd does contain spaces, a file with this name exists, and the
++   * beginning of cmd looks like a absolute pathname
++   * ('\\test\dir\foo.exe' or "C:\\sa df\\foo.exe" - not "foo.exe" ), I
++   * will also quote it. (ambigous, there could be "C:\bin\rm.exe" and
++   * "C:\bin\rm -f.exe").  Relative filenames are not considered, because
++   * I assume the source code folder contains only well named files and
++   * relative paths like "../../make.exe" are uncommon (autoconf even
++   * rejects them) *)
++
++
++  (* stricter settings as for regular windows batch lines
++   * necessary because of shell comannds like:
++   *   LC_ALL=C make ....
++   *)
++  let is_dubious_char = function
++    | '+' | '~' | ':' | '.' | '-' | '_' | '/' | '\\' -> false
++    | c ->
++      OASISString.is_digit c = false &&
++      OASISString.is_alpha c = false
++
++
++  let win_quote_needed str =
++    let f = function
++      (* this list is not exhaustive. Feel free to added common chars, that
++       * can be passed to cmd.exe without quoting *)
++      | 'a' .. 'z'  | 'A' .. 'Z' | '0' .. '9'
++      | '_' | '-' | '~' | '.' | ':' | ',' | '\\' -> false
++      | _ -> true
++    in
++      str = "" || OASISString.exists f str
++
++  let is_simple_command str =
++    String.length str > 0 &&
++    not (OASISString.exists is_dubious_char str)
++
++  let is_path_sep = function
++    | '/' | '\\' -> true
++    | _ -> false
++
++  let starts_with_absolute_path cmd =
++    let len = String.length cmd in
++      if len < 3 then
++        false
++      else
++        let c0 = cmd.[0] in
++        let c1 = cmd.[1] in
++          if is_path_sep c0 && is_path_sep c1 then (* network devices: "//" *)
++            true
++          else if len = 3 then
++            false
++          else  (* C:\.... *)
++            OASISString.is_alpha c0 && c1 = ':' && is_path_sep cmd.[2]
++
++  let exe_exts = lazy
++    begin
++      let exts =
++        try
++          OASISString.nsplit
++            (Sys.getenv "PATHEXT")
++            ';'
++        with
++          | Not_found -> []
++      in
++      let exts' =
++        List.filter
++          ( fun a -> a <> "" && a.[0] = '.' && a <> ".exe" )
++          (List.map String.lowercase exts) (* windows file system doesn't care *)
++      in
++        ".exe"::exts' (* .exe first, most common *)
++    end
++
++  let exe_file_exists fln =
++    Sys.file_exists fln ||
++    List.exists
++      (fun a -> Sys.file_exists ( fln ^ a ) )
++      (Lazy.force exe_exts)
++
++
++  let quote_anyway cmd =
++    if Sys.os_type <> "Win32" then (* workaround for windows only *)
++      false
++    else if is_simple_command cmd then
++      true
++    else
++      OASISString.exists OASISString.is_whitespace cmd &&
++        starts_with_absolute_path cmd &&
++        exe_file_exists cmd
++
++
++  let run_bash ~ctxt ?f_exit_code ?(quote=true) cmd args =
++    let fn = Filename.temp_file "oasis-" ".sh" in
++    let fn_deleted = ref false in
++      try
++        begin
++          let ch = open_out_bin fn in
++          let ch_closed = ref false in
++            try
++              begin
++                let cmd =
++                  if quote || quote_anyway cmd then
++                    OASISHostPath.quote (OASISHostPath.of_unix cmd)
++                  else
++                    cmd
++                in
++                  output_string ch cmd;
++                  List.iter
++                    ( fun s -> output_char ch ' '; output_string ch s )
++                    args ;
++                  output_char ch '\n';
++                  ch_closed:=true ;
++                  close_out ch;
++                  let bash = !OASISHostPath.bash_cmd () in
++                  let add_quotes = ref false in
++                  let shell_cmd =
++                    if Sys.os_type <> "Win32" then
++                      Filename.quote bash
++                    else
++                      if win_quote_needed bash = false then
++                        bash
++                      else
++                        begin
++                          add_quotes := true;
++                          Filename.quote bash
++                        end
++                  in
++                  let cmdline_orig = String.concat " " (cmd :: args) in
++                  let cmdline =
++                    let s = shell_cmd ^ " " ^ (Filename.quote fn) in
++                      if !add_quotes then
++                        "\"" ^ s ^ "\""
++                      else
++                        s
++                  in
++                    info ~ctxt (f_ "Running command '%s'") cmdline_orig;
++                    let ret = Sys.command cmdline in
++                      fn_deleted := true;
++                      Sys.remove fn;
++                      match f_exit_code, ret with
++                        | None, 0 -> ()
++                        | None, i ->
++                            failwithf
++                              (f_ "Command '%s' terminated with error code %d")
++                              cmdline_orig i
++                        | Some f, i ->
++                            f i
++              end
++            with
++              | x when !ch_closed = false ->
++                  close_out_noerr ch;
++                  raise x
++        end
++      with
++        | x when !fn_deleted = false ->
++            (try Sys.remove fn with _ -> () ) ;
++            raise x
++
+   (* TODO: I don't like this quote, it is there because $(rm) foo expands to
+    * 'rm -f' foo...
+    *)
+-  let run ~ctxt ?f_exit_code ?(quote=true) cmd args =
++
++  let run_default ~ctxt ?f_exit_code ?(quote=true) cmd args =
++    let add_quotes = ref false in
+     let cmd =
+-      if quote then
++      if quote || quote_anyway cmd then
+         if Sys.os_type = "Win32" then
+-          if String.contains cmd ' ' then
+-            (* Double the 1st double quote... win32... sigh *)
+-            "\""^(Filename.quote cmd)
+-          else
++          begin
++            if win_quote_needed cmd = false then
+             cmd
+         else
++              begin
++                (* Double the 1st double quote... win32... sigh *)
++                (* Above comment ist false. The whole string must be quoted.
++                 * However, an error is only triggered, if args contains also
++                 * quoted parameters *)
++                add_quotes := true;
++                Filename.quote cmd
++              end
++          end
++        else
+           Filename.quote cmd
+       else
+         cmd
+     in
+     let cmdline =
+-      String.concat " " (cmd :: args)
++      let s = String.concat " " (cmd :: args) in
++        match !add_quotes with
++          | true -> "\"" ^ s ^ "\""
++          | false -> s
+     in
+       info ~ctxt (f_ "Running command '%s'") cmdline;
+       match f_exit_code, Sys.command cmdline with
+@@ -2657,6 +3020,13 @@
+             f i
+ 
+ 
++
++  let run ~ctxt ?f_exit_code ?quote cmd args =
++    if OASISHostPath.use_bash () then
++      run_bash ~ctxt ?f_exit_code ?quote cmd args
++    else
++      run_default ~ctxt ?f_exit_code ?quote cmd args
++
+   let run_read_output ~ctxt ?f_exit_code cmd args =
+     let fn =
+       Filename.temp_file "oasis-" ".txt"
+@@ -2766,7 +3136,7 @@
+       ) alternatives
+ 
+ 
+-  let which ~ctxt prg =
++  let which ?(plain=false) ?ctxt prg =
+     let path_sep =
+       match Sys.os_type with
+         | "Win32" ->
+@@ -2778,11 +3148,17 @@
+     let exec_ext =
+       match Sys.os_type with
+         | "Win32" ->
+-            "" :: (OASISString.nsplit (Sys.getenv "PATHEXT") path_sep)
++            "" :: (List.map OASISString.lowercase_ascii (OASISString.nsplit (Sys.getenv "PATHEXT") path_sep))
+         | _ ->
+             [""]
+     in
++    let p =
+       find_file ~case_sensitive:false [path_lst; [prg]] exec_ext
++    in
++    if plain then
++      p
++    else
++      OASISHostPath.of_unix p
+ 
+ 
+   (**/**)
+@@ -2799,32 +3175,55 @@
+         dn
+ 
+ 
+-  let q = Filename.quote
++  let q s = OASISHostPath.quote (OASISHostPath.of_unix s)
+   (**/**)
+ 
+ 
+   let cp ~ctxt ?(recurse=false) src tgt =
+     if recurse then
+-      match Sys.os_type with
+-        | "Win32" ->
+-            OASISExec.run ~ctxt
+-              "xcopy" [q src; q tgt; "/E"]
+-        | _ ->
+-            OASISExec.run ~ctxt
+-              "cp" ["-r"; q src; q tgt]
++      (*
++        'xcopy /E' and 'cp -r' don't have the same semantic!
++        -dir2 does exist:
++          xcopy dir dir2 /E -> copys content of dir into dir2 (dir2/dir doesn't exist!)
++          cp -r dir dir2    -> copys dir to dir2 (dir2/dir does exist!)
++        -dir2 doesn't exist:
++          xcopy dir dir2 /E -> request on command line, if dir2 is an directory or file.
++          cp -r dir dir2    -> dir and dir2 have the same content (dir2/dir doesn't exist)
++        Probably, there are even more differences,....
++      *)
++      if Sys.os_type = "Win32" && OASISHostPath.use_bash () = false then
++        let tgt_real =
++          if Sys.file_exists tgt = false then
++            begin
++              OASISExec.run ~ctxt "md" [q tgt];
++              tgt
++            end
+     else
+-      OASISExec.run ~ctxt
+-        (match Sys.os_type with
+-         | "Win32" -> "copy"
+-         | _ -> "cp")
+-        [q src; q tgt]
++            let base = Filename.basename src in
++            if base = "." then
++              tgt
++            else
++              let tgt_real = Filename.concat tgt base in
++                if Sys.file_exists tgt_real = false then
++                  OASISExec.run ~ctxt "md" [q tgt_real];
++              tgt_real
++        in
++        OASISExec.run ~ctxt "xcopy" [q src; q tgt_real; "/E" ; "/Q" ; "/Y"]
++      else
++        OASISExec.run ~ctxt "cp" ["-r"; q src; q tgt]
++    else
++      if Sys.os_type = "Win32" && OASISHostPath.use_bash () = false then
++        OASISExec.run ~ctxt "copy" [q src; q tgt ; "/Y"]
++      else
++        OASISExec.run ~ctxt "cp" [q src; q tgt]
+ 
+ 
+   let mkdir ~ctxt tgt =
+     OASISExec.run ~ctxt
+-      (match Sys.os_type with
+-         | "Win32" -> "md"
+-         | _ -> "mkdir")
++      ( if Sys.os_type = "Win32" && not (OASISHostPath.use_bash ()) then
++          "md"
++        else
++          "mkdir" )
+       [q tgt]
+ 
+ 
+@@ -2853,10 +3252,9 @@
+ 
+   let rmdir ~ctxt tgt =
+     if Sys.readdir tgt = [||] then begin
+-      match Sys.os_type with
+-        | "Win32" ->
++      if Sys.os_type = "Win32" && OASISHostPath.use_bash () = false then
+             OASISExec.run ~ctxt "rd" [q tgt]
+-        | _ ->
++      else
+             OASISExec.run ~ctxt "rm" ["-r"; q tgt]
+     end else begin
+       OASISMessage.error ~ctxt
+@@ -2910,7 +3308,7 @@
+ end
+ 
+ 
+-# 2893 "setup.ml"
++# 3291 "setup.ml"
+ module BaseEnvLight = struct
+ # 22 "src/base/BaseEnvLight.ml"
+ 
+@@ -3015,7 +3413,7 @@
+ end
+ 
+ 
+-# 2998 "setup.ml"
++# 3396 "setup.ml"
+ module BaseContext = struct
+ # 22 "src/base/BaseContext.ml"
+ 
+@@ -3109,7 +3507,7 @@
+     Genlex.make_lexer []
+ 
+ 
+-  let rec var_expand str =
++  let rec var_expand ?(quoted=false) str =
+     let buff =
+       Buffer.create ((String.length str) * 2)
+     in
+@@ -3137,7 +3535,11 @@
+                  | [Genlex.Ident "ocaml_escaped"; Genlex.String s] ->
+                      String.escaped s
+                  | [Genlex.Ident nm] ->
+-                     var_get nm
++                     let s = var_get nm in
++                     if quoted then
++                       OASISHostPath.quote s
++                     else
++                       s
+                  | _ ->
+                      failwithf
+                        (f_ "Unknown expression '%s' in variable expansion of %s.")
+@@ -3667,9 +4069,11 @@
+     in
+     let findlib_dir pkg =
+       let dir =
++        OASISHostPath.of_unix (
++          OASISHostPath.ocamlfind_unquote (
+         OASISExec.run_read_one_line ~ctxt:!BaseContext.default
+           (ocamlfind ())
+-          ["query"; "-format"; "%d"; pkg]
++              ["query"; "-format"; "%d"; pkg] ) )
+       in
+         if Sys.file_exists dir && Sys.is_directory dir then
+           dir
+@@ -3799,6 +4203,9 @@
+       match nm with
+         | "ocaml_version" ->
+             "version", chop_version_suffix
++        | "standard_library"
++        | "standard_library_default" ->
++            nm, ( fun x -> OASISHostPath.of_unix x)
+         | _ -> nm, (fun x -> x)
+     in
+       var_redefine
+@@ -3939,14 +4346,43 @@
+ 
+ 
+   let (/) a b =
+-    if os_type () = Sys.os_type then
++    let os = os_type () in
++      if os = Sys.os_type then
++        if Sys.os_type = "Win32" && OASISHostPath.use_bash () then
++          OASISUnixPath.concat a b
++        else
+       Filename.concat a b
+-    else if os_type () = "Unix" then
++      else if os = "Unix" then
+       OASISUnixPath.concat a b
+     else
+       OASISUtils.failwithf (f_ "Cannot handle os_type %s filename concat")
+         (os_type ())
+   (**/**)
++  let auto_bash =
++    lazy (
++      try
++        OASISFileUtil.which ~plain:true "dash"
++      with
++      | Not_found | Sys_error _ ->
++        try
++          OASISFileUtil.which ~plain:true "bash"
++        with
++        | Not_found | Sys_error _ -> "" )
++
++  let auto_bash () =
++    if Sys.os_type <> "Win32" then
++      ""
++    else
++      Lazy.force auto_bash
++
++
++  let bash_cmd =
++    var_define
++      ~short_desc:(fun () -> s_ "Enforced bash shell:")
++      ~cli:CLIAuto
++      ~arg_help:"program"
++      "use_bash"
++      auto_bash
+ 
+ 
+   let prefix =
+@@ -3955,10 +4391,30 @@
+       (fun () ->
+          match os_type () with
+            | "Win32" ->
++               let getenv w =
++                 try
++                   Some(Sys.getenv w)
++                 with
++                   | Not_found -> None
++               in
++               let s =
++                 if Sys.word_size = 64 then
++                   getenv "ProgramW6432"
++                 else
++                   None
++               in
++               let s =
++                 if s = None then
++                   getenv "PROGRAMFILES"
++                 else
++                   s
++               in
+                let program_files =
+-                 Sys.getenv "PROGRAMFILES"
++                 match s with
++                   | None -> "C:\\Program Files"
++                   | Some x -> x
+                in
+-                 program_files/(pkg_name ())
++                 OASISHostPath.of_unix (program_files/(pkg_name ()))
+            | _ ->
+                "/usr/local")
+ 
+@@ -4044,7 +4500,15 @@
+   let docdir =
+     p "docdir"
+       (fun () -> s_ "Documentation root")
+-      (fun () -> "$datarootdir"/"doc"/"$pkg_name")
++      (fun () ->
++        (* TODO: (Windows only?) "$pkg_name" is not always substituted
++         * (at least if datarootdir contains spaces or other garbage)
++         * I haven't looked up why.
++         *)
++        match os_type () with
++          | "Win32" -> "$datarootdir"/"doc"/ ( pkg_name () )
++          | _ -> "$datarootdir"/"doc"/"$pkg_name"
++      )
+ 
+ 
+   let htmldir =
+@@ -4118,9 +4582,10 @@
+       ~short_desc:(fun () -> s_ "Remove a file.")
+       "rm"
+       (fun () ->
+-         match os_type () with
+-           | "Win32" -> "del"
+-           | _ -> "rm -f")
++         if not (OASISHostPath.use_bash ()) && os_type () = "Win32" then
++           "del"
++         else
++           "rm -f" )
+ 
+ 
+   let rmdir =
+@@ -4128,9 +4593,10 @@
+       ~short_desc:(fun () -> s_ "Remove a directory.")
+       "rmdir"
+       (fun () ->
+-         match os_type () with
+-           | "Win32" -> "rd"
+-           | _ -> "rm -rf")
++         if not (OASISHostPath.use_bash ()) && os_type () = "Win32" then
++           "rd"
++         else
++           "rm -rf")
+ 
+ 
+   let debug =
+@@ -4194,14 +4660,29 @@
+            let has_native_dynlink =
+              let ocamlfind = ocamlfind () in
+                try
+-                 let fn =
++                 (* -format %d/%a doesn't work, because ocamlfind quotes %d
++                  * and %a separatly *)
++                 let fn1 =
++                   OASISHostPath.ocamlfind_unquote (
+                    OASISExec.run_read_one_line
+                      ~ctxt:!BaseContext.default
+                      ocamlfind
+                      ["query"; "-predicates"; "native"; "dynlink";
+-                      "-format"; "%d/%a"]
++                        "-format"; "%d"] )
+                  in
+-                   Sys.file_exists fn
++                 let fn2 =
++                   OASISHostPath.ocamlfind_unquote (
++                   OASISExec.run_read_one_line
++                     ~ctxt:!BaseContext.default
++                     ocamlfind
++                     ["query"; "-predicates"; "native"; "dynlink";
++                        "-format"; "%a"] )
++                 in
++                   if fn1 <> "" && fn2 <> "" &&
++                     Sys.file_exists (Filename.concat fn1 fn2) then
++                     true
++                   else
++                     false
+                with _ ->
+                  false
+            in
+@@ -4228,6 +4709,8 @@
+     rpkg := Some pkg;
+     List.iter (fun f -> f pkg.oasis_version) !var_cond
+ 
++  let () =
++    OASISHostPath.bash_cmd := bash_cmd
+ end
+ 
+ module BaseFileAB = struct
+@@ -4600,7 +5083,7 @@
+     OASISExec.run ~ctxt:!BaseContext.default ~quote:false
+       (var_expand cmd)
+       (List.map
+-         var_expand
++         (var_expand ~quoted:true)
+          (args @ (Array.to_list extra_args)))
+ 
+ 
+@@ -4887,9 +5370,27 @@
+ 
+   let configure t args =
+     (* Run configure *)
++
++    (* use-bash is an exception. It's already needed to run the
++       pre-configure script. *)
++    let rec f = function
++      | [] ->
++        begin
++          try
++            let x = Sys.getenv "USE_BASH" in
++              OASISHostPath.bash_cmd := (fun () -> x);
++          with
++            _ -> ()
++        end
++      | "--use-bash"::x::_ ->
++          OASISHostPath.bash_cmd := (fun () -> x);
++      | _::tl -> f tl
++    in
++      f (Array.to_list args);
+     BaseCustom.hook
+       t.package.conf_custom
+       (fun () ->
++           OASISHostPath.bash_cmd := BaseStandardVar.bash_cmd;
+          (* Reload if preconf has changed it *)
+          begin
+            try
+@@ -5426,7 +5927,7 @@
+ end
+ 
+ 
+-# 5409 "setup.ml"
++# 5910 "setup.ml"
+ module InternalConfigurePlugin = struct
+ # 22 "src/plugins/internal/InternalConfigurePlugin.ml"
+ 
+@@ -5722,11 +6223,19 @@
+     "install-findlib"
+ 
+ 
+-  let win32_max_command_line_length = 8000
+-
+-
+   let split_install_command ocamlfind findlib_name meta files =
+     if Sys.os_type = "Win32" then
++      let f s =
++        OASISHostPath.quote ( OASISHostPath.of_unix s )
++      in
++      let files = List.map f files in
++      let meta = f meta  in
++      let win32_max_command_line_length =
++        if OASISHostPath.use_bash () = false then
++          8000
++        else
++          30000
++      in
+       (* Arguments for the first command: *)
+       let first_args = ["install"; findlib_name; meta] in
+       (* Arguments for remaining commands: *)
+@@ -5865,8 +6374,8 @@
+     let make_fnames modul sufx =
+       List.fold_right
+         begin fun sufx accu ->
+-          (String.capitalize modul ^ sufx) ::
+-          (String.uncapitalize modul ^ sufx) ::
++          (OASISString.capitalize_ascii modul ^ sufx) ::
++          (OASISString.uncapitalize_ascii modul ^ sufx) ::
+           accu
+         end
+         sufx
+@@ -6290,7 +6799,7 @@
+ end
+ 
+ 
+-# 6273 "setup.ml"
++# 6782 "setup.ml"
+ module OCamlbuildCommon = struct
+ # 22 "src/plugins/ocamlbuild/OCamlbuildCommon.ml"
+ 
+@@ -6329,8 +6838,11 @@
+             "-classic-display";
+             "-no-log";
+             "-no-links";
+-            "-install-lib-dir";
+-            (Filename.concat (standard_library ()) "ocamlbuild")
++            (* Fix not longer necassary since at least OCaml 3.11, see #4379.
++               In the future, it's the wrong location, because of the split of
++               ocamlbuild from the main distribution *)
++            (* "-install-lib-dir";
++               (OASISHostPath.quote (OASISHostPath.of_unix (Filename.concat (standard_library ()) "ocamlbuild"))) *)
+           ]
+         else
+           [];
+@@ -6668,7 +7180,7 @@
+ end
+ 
+ 
+-# 6651 "setup.ml"
++# 7163 "setup.ml"
+ module CustomPlugin = struct
+ # 22 "src/plugins/custom/CustomPlugin.ml"
+ 
+@@ -6816,7 +7328,7 @@
+ end
+ 
+ 
+-# 6799 "setup.ml"
++# 7311 "setup.ml"
+ open OASISTypes;;
+ 
+ let setup_t =
+@@ -8137,7 +8649,7 @@
+           plugin_data = []
+        };
+      oasis_fn = Some "_oasis";
+-     oasis_version = "0.4.5";
++     oasis_version = "0.4.6";
+      oasis_digest = Some "\131\229\017Nym\175`\152\158,\238\211;\131*";
+      oasis_exec = None;
+      oasis_setup_args = [];
+@@ -8146,7 +8658,7 @@
+ 
+ let setup () = BaseSetup.setup setup_t;;
+ 
+-# 8130 "setup.ml"
++# 8642 "setup.ml"
+ (* OASIS_STOP *)
+ 
+ #use "deps.ml";;
+--- ./src/base/BaseCheck.ml
++++ ./src/base/BaseCheck.ml
+@@ -118,9 +118,11 @@
+   in
+   let findlib_dir pkg =
+     let dir =
++      OASISHostPath.of_unix (
++        OASISHostPath.ocamlfind_unquote (
+       OASISExec.run_read_one_line ~ctxt:!BaseContext.default
+         (ocamlfind ())
+-        ["query"; "-format"; "%d"; pkg]
++            ["query"; "-format"; "%d"; pkg] ) )
+     in
+       if Sys.file_exists dir && Sys.is_directory dir then
+         dir
+--- ./src/base/BaseCustom.ml
++++ ./src/base/BaseCustom.ml
+@@ -31,7 +31,7 @@
+   OASISExec.run ~ctxt:!BaseContext.default ~quote:false
+     (var_expand cmd)
+     (List.map
+-       var_expand
++       (var_expand ~quoted:true)
+        (args @ (Array.to_list extra_args)))
+ 
+ 
+--- ./src/base/BaseEnv.ml
++++ ./src/base/BaseEnv.ml
+@@ -72,7 +72,7 @@
+   Genlex.make_lexer []
+ 
+ 
+-let rec var_expand str =
++let rec var_expand ?(quoted=false) str =
+   let buff =
+     Buffer.create ((String.length str) * 2)
+   in
+@@ -100,7 +100,11 @@
+                | [Genlex.Ident "ocaml_escaped"; Genlex.String s] ->
+                    String.escaped s
+                | [Genlex.Ident nm] ->
+-                   var_get nm
++                   let s = var_get nm in
++                   if quoted then
++                     OASISHostPath.quote s
++                   else
++                     s
+                | _ ->
+                    failwithf
+                      (f_ "Unknown expression '%s' in variable expansion of %s.")
+--- ./src/base/BaseEnv.mli
++++ ./src/base/BaseEnv.mli
+@@ -78,9 +78,9 @@
+ 
+ (** Expand variable that can be found in string. Variable follow definition of
+   * variable for [Buffer.add_substitute].
++  * quoted is false by default
+   *)
+-val var_expand: string -> string
+-
++val var_expand: ?quoted:bool -> string -> string
+ 
+ (** Get variable.
+   *)
+--- ./src/base/BaseOCamlcConfig.ml
++++ ./src/base/BaseOCamlcConfig.ml
+@@ -116,6 +116,9 @@
+     match nm with
+       | "ocaml_version" ->
+           "version", chop_version_suffix
++      | "standard_library"
++      | "standard_library_default" ->
++          nm, ( fun x -> OASISHostPath.of_unix x)
+       | _ -> nm, (fun x -> x)
+   in
+     var_redefine
+--- ./src/base/BaseSetup.ml
++++ ./src/base/BaseSetup.ml
+@@ -88,9 +88,27 @@
+ 
+ let configure t args =
+   (* Run configure *)
++
++  (* use-bash is an exception. It's already needed to run the
++     pre-configure script. *)
++  let rec f = function
++    | [] ->
++      begin
++        try
++          let x = Sys.getenv "USE_BASH" in
++            OASISHostPath.bash_cmd := (fun () -> x);
++        with
++          _ -> ()
++      end
++    | "--use-bash"::x::_ ->
++        OASISHostPath.bash_cmd := (fun () -> x);
++    | _::tl -> f tl
++  in
++    f (Array.to_list args);
+   BaseCustom.hook
+     t.package.conf_custom
+     (fun () ->
++         OASISHostPath.bash_cmd := BaseStandardVar.bash_cmd;
+        (* Reload if preconf has changed it *)
+        begin
+          try
+--- ./src/base/BaseStandardVar.ml
++++ ./src/base/BaseStandardVar.ml
+@@ -136,14 +136,43 @@
+ 
+ 
+ let (/) a b =
+-  if os_type () = Sys.os_type then
++  let os = os_type () in
++    if os = Sys.os_type then
++      if Sys.os_type = "Win32" && OASISHostPath.use_bash () then
++        OASISUnixPath.concat a b
++      else
+     Filename.concat a b
+-  else if os_type () = "Unix" then
++    else if os = "Unix" then
+     OASISUnixPath.concat a b
+   else
+     OASISUtils.failwithf (f_ "Cannot handle os_type %s filename concat")
+       (os_type ())
+ (**/**)
++let auto_bash =
++  lazy (
++    try
++      OASISFileUtil.which ~plain:true "dash"
++    with
++    | Not_found | Sys_error _ ->
++      try
++        OASISFileUtil.which ~plain:true "bash"
++      with
++      | Not_found | Sys_error _ -> "" )
++
++let auto_bash () =
++  if Sys.os_type <> "Win32" then
++    ""
++  else
++    Lazy.force auto_bash
++
++
++let bash_cmd =
++  var_define
++    ~short_desc:(fun () -> s_ "Enforced bash shell:")
++    ~cli:CLIAuto
++    ~arg_help:"program"
++    "use_bash"
++    auto_bash
+ 
+ 
+ let prefix =
+@@ -152,10 +181,30 @@
+     (fun () ->
+        match os_type () with
+          | "Win32" ->
++             let getenv w =
++               try
++                 Some(Sys.getenv w)
++               with
++                 | Not_found -> None
++             in
++             let s =
++               if Sys.word_size = 64 then
++                 getenv "ProgramW6432"
++               else
++                 None
++             in
++             let s =
++               if s = None then
++                 getenv "PROGRAMFILES"
++               else
++                 s
++             in
+              let program_files =
+-               Sys.getenv "PROGRAMFILES"
++               match s with
++                 | None -> "C:\\Program Files"
++                 | Some x -> x
+              in
+-               program_files/(pkg_name ())
++               OASISHostPath.of_unix (program_files/(pkg_name ()))
+          | _ ->
+              "/usr/local")
+ 
+@@ -241,7 +290,15 @@
+ let docdir =
+   p "docdir"
+     (fun () -> s_ "Documentation root")
+-    (fun () -> "$datarootdir"/"doc"/"$pkg_name")
++    (fun () ->
++      (* TODO: (Windows only?) "$pkg_name" is not always substituted
++       * (at least if datarootdir contains spaces or other garbage)
++       * I haven't looked up why.
++       *)
++      match os_type () with
++        | "Win32" -> "$datarootdir"/"doc"/ ( pkg_name () )
++        | _ -> "$datarootdir"/"doc"/"$pkg_name"
++    )
+ 
+ 
+ let htmldir =
+@@ -315,9 +372,10 @@
+     ~short_desc:(fun () -> s_ "Remove a file.")
+     "rm"
+     (fun () ->
+-       match os_type () with
+-         | "Win32" -> "del"
+-         | _ -> "rm -f")
++       if not (OASISHostPath.use_bash ()) && os_type () = "Win32" then
++         "del"
++       else
++         "rm -f" )
+ 
+ 
+ let rmdir =
+@@ -325,9 +383,10 @@
+     ~short_desc:(fun () -> s_ "Remove a directory.")
+     "rmdir"
+     (fun () ->
+-       match os_type () with
+-         | "Win32" -> "rd"
+-         | _ -> "rm -rf")
++       if not (OASISHostPath.use_bash ()) && os_type () = "Win32" then
++         "rd"
++       else
++         "rm -rf")
+ 
+ 
+ let debug =
+@@ -391,14 +450,29 @@
+          let has_native_dynlink =
+            let ocamlfind = ocamlfind () in
+              try
+-               let fn =
++               (* -format %d/%a doesn't work, because ocamlfind quotes %d
++                * and %a separatly *)
++               let fn1 =
++                 OASISHostPath.ocamlfind_unquote (
++                   OASISExec.run_read_one_line
++                     ~ctxt:!BaseContext.default
++                     ocamlfind
++                     ["query"; "-predicates"; "native"; "dynlink";
++                      "-format"; "%d"] )
++               in
++               let fn2 =
++                 OASISHostPath.ocamlfind_unquote (
+                  OASISExec.run_read_one_line
+                    ~ctxt:!BaseContext.default
+                    ocamlfind
+                    ["query"; "-predicates"; "native"; "dynlink";
+-                    "-format"; "%d/%a"]
++                      "-format"; "%a"] )
+                in
+-                 Sys.file_exists fn
++                 if fn1 <> "" && fn2 <> "" &&
++                   Sys.file_exists (Filename.concat fn1 fn2) then
++                   true
++                 else
++                   false
+              with _ ->
+                false
+          in
+@@ -425,3 +499,5 @@
+   rpkg := Some pkg;
+   List.iter (fun f -> f pkg.oasis_version) !var_cond
+ 
++let () =
++  OASISHostPath.bash_cmd := bash_cmd
+--- ./src/base/BaseStandardVar.mli
++++ ./src/base/BaseStandardVar.mli
+@@ -73,6 +73,9 @@
+ val systhread_supported:      unit -> string
+ 
+ 
++
++val bash_cmd:                 unit -> string
++
+ (** {2 Paths}
+ 
+     See {{:http://www.gnu.org/prep/standards/html_node/Directory-Variables.html} GNU standards}.
+--- ./src/dynrun/OASISDynRun.ml
++++ ./src/dynrun/OASISDynRun.ml
+@@ -50,7 +50,12 @@
+ 
+   let setup setup_t =
+     let tmp_setup_fn =
+-      Filename.temp_file (setup_t.package.name^"-setup") ".ml" in
++      if Sys.os_type <> "Win32" then
++        Filename.temp_file (setup_t.package.name^"-setup") ".ml"
++      else
++        (* dirty hack, because otherwise to_unix will fail *)
++        Filename.temp_file ~temp_dir:"." ("tmp-"^setup_t.package.name^"-setup") ".ml"
++    in
+     let restored = ref false in
+     let cleanup () =
+       if not !restored then begin
+--- ./src/oasis/OASISCustom.ml
++++ ./src/oasis/OASISCustom.ml
+@@ -38,14 +38,14 @@
+   let pre_command =
+     new_field_conditional schm ("Pre"^nm^"Command")
+       ~default:None
+-      (opt command_line)
++      (opt command_line_warn)
+       hlp_pre
+       (fun pkg -> (sync pkg).pre_command)
+   in
+   let post_command =
+     new_field_conditional schm ("Post"^nm^"Command")
+       ~default:None
+-      (opt command_line)
++      (opt command_line_warn)
+       hlp_post
+       (fun pkg -> (sync pkg).post_command)
+   in
+--- ./src/oasis/OASISExec.ml
++++ ./src/oasis/OASISExec.ml
+@@ -26,25 +26,221 @@
+ open OASISMessage
+ 
+ 
++
++
++(* In general, there is no chance to quote properly with the current
++ * settings. ( This is only a problem, if BaseCustom.run is used (e.g
++ * test commands, PreConfigure,....). Most of the time, OASISExec.run
++ * is used with enabled quoting.)
++ *
++ * "$rm" should ideally expand to 'rm -f' (no quotes), but "$test_exec"
++ * should ideally expand to '"C:\Program Files\dir\test.exe"' (with
++ * quotes). Paths with spaces are common on Windows, so this problem
++ * can't be ignored.
++ *
++ * Using a command with additional parameters is quite useful, not only
++ * for trivial cases like $rm. You could add an additional parameter
++ * for $make in order to use a special compatibility mode, on windows
++ * you can use it to inform ocaml that a certain program is a shell
++ * script ('sh.exe pcre-config').
++ *
++ * An additional parameter (e.g. $rm_switches) would be ugly,
++ * especially for *nix users, who don't use space characters in their
++ * installation paths anyway.
++ *
++ * I use the following workaround, which should work most of the time:
++ *
++ * - if cmd doesn't contains spaces or other suspicious characters, it
++ * can be quoted in the usual way (not ambigous, I think)
++ *
++ * - if cmd does contain spaces, a file with this name exists, and the
++ * beginning of cmd looks like a absolute pathname
++ * ('\\test\dir\foo.exe' or "C:\\sa df\\foo.exe" - not "foo.exe" ), I
++ * will also quote it. (ambigous, there could be "C:\bin\rm.exe" and
++ * "C:\bin\rm -f.exe").  Relative filenames are not considered, because
++ * I assume the source code folder contains only well named files and
++ * relative paths like "../../make.exe" are uncommon (autoconf even
++ * rejects them) *)
++
++
++(* stricter settings as for regular windows batch lines
++ * necessary because of shell comannds like:
++ *   LC_ALL=C make ....
++ *)
++let is_dubious_char = function
++  | '+' | '~' | ':' | '.' | '-' | '_' | '/' | '\\' -> false
++  | c ->
++    OASISString.is_digit c = false &&
++    OASISString.is_alpha c = false
++
++
++let win_quote_needed str =
++  let f = function
++    (* this list is not exhaustive. Feel free to added common chars, that
++     * can be passed to cmd.exe without quoting *)
++    | 'a' .. 'z'  | 'A' .. 'Z' | '0' .. '9'
++    | '_' | '-' | '~' | '.' | ':' | ',' | '\\' -> false
++    | _ -> true
++  in
++    str = "" || OASISString.exists f str
++
++let is_simple_command str =
++  String.length str > 0 &&
++  not (OASISString.exists is_dubious_char str)
++
++let is_path_sep = function
++  | '/' | '\\' -> true
++  | _ -> false
++
++let starts_with_absolute_path cmd =
++  let len = String.length cmd in
++    if len < 3 then
++      false
++    else
++      let c0 = cmd.[0] in
++      let c1 = cmd.[1] in
++        if is_path_sep c0 && is_path_sep c1 then (* network devices: "//" *)
++          true
++        else if len = 3 then
++          false
++        else  (* C:\.... *)
++          OASISString.is_alpha c0 && c1 = ':' && is_path_sep cmd.[2]
++
++let exe_exts = lazy
++  begin
++    let exts =
++      try
++        OASISString.nsplit
++          (Sys.getenv "PATHEXT")
++          ';'
++      with
++        | Not_found -> []
++    in
++    let exts' =
++      List.filter
++        ( fun a -> a <> "" && a.[0] = '.' && a <> ".exe" )
++        (List.map OASISString.lowercase_ascii exts) (* windows file system doesn't care *)
++    in
++      ".exe"::exts' (* .exe first, most common *)
++  end
++
++let exe_file_exists fln =
++  Sys.file_exists fln ||
++  List.exists
++    (fun a -> Sys.file_exists ( fln ^ a ) )
++    (Lazy.force exe_exts)
++
++
++let quote_anyway cmd =
++  if Sys.os_type <> "Win32" then (* workaround for windows only *)
++    false
++  else if is_simple_command cmd then
++    true
++  else
++    OASISString.exists OASISString.is_whitespace cmd &&
++      starts_with_absolute_path cmd &&
++      exe_file_exists cmd
++
++
++let run_bash ~ctxt ?f_exit_code ?(quote=true) cmd args =
++  let fn = Filename.temp_file "oasis-" ".sh" in
++  let fn_deleted = ref false in
++    try
++      begin
++        let ch = open_out_bin fn in
++        let ch_closed = ref false in
++          try
++            begin
++              let cmd =
++                if quote || quote_anyway cmd then
++                  OASISHostPath.quote (OASISHostPath.of_unix cmd)
++                else
++                  cmd
++              in
++                output_string ch cmd;
++                List.iter
++                  ( fun s -> output_char ch ' '; output_string ch s )
++                  args ;
++                output_char ch '\n';
++                ch_closed:=true ;
++                close_out ch;
++                let bash = !OASISHostPath.bash_cmd () in
++                let add_quotes = ref false in
++                let shell_cmd =
++                  if Sys.os_type <> "Win32" then
++                    Filename.quote bash
++                  else
++                    if win_quote_needed bash = false then
++                      bash
++                    else
++                      begin
++                        add_quotes := true;
++                        Filename.quote bash
++                      end
++                in
++                let cmdline_orig = String.concat " " (cmd :: args) in
++                let cmdline =
++                  let s = shell_cmd ^ " " ^ (Filename.quote fn) in
++                    if !add_quotes then
++                      "\"" ^ s ^ "\""
++                    else
++                      s
++                in
++                  info ~ctxt (f_ "Running command '%s'") cmdline_orig;
++                  let ret = Sys.command cmdline in
++                    fn_deleted := true;
++                    Sys.remove fn;
++                    match f_exit_code, ret with
++                      | None, 0 -> ()
++                      | None, i ->
++                          failwithf
++                            (f_ "Command '%s' terminated with error code %d")
++                            cmdline_orig i
++                      | Some f, i ->
++                          f i
++            end
++          with
++            | x when !ch_closed = false ->
++                close_out_noerr ch;
++                raise x
++      end
++    with
++      | x when !fn_deleted = false ->
++          (try Sys.remove fn with _ -> () ) ;
++          raise x
++
+ (* TODO: I don't like this quote, it is there because $(rm) foo expands to
+  * 'rm -f' foo...
+  *)
+-let run ~ctxt ?f_exit_code ?(quote=true) cmd args =
++
++let run_default ~ctxt ?f_exit_code ?(quote=true) cmd args =
++  let add_quotes = ref false in
+   let cmd =
+-    if quote then
++    if quote || quote_anyway cmd then
+       if Sys.os_type = "Win32" then
+-        if String.contains cmd ' ' then
+-          (* Double the 1st double quote... win32... sigh *)
+-          "\""^(Filename.quote cmd)
+-        else
++        begin
++          if win_quote_needed cmd = false then
+           cmd
+       else
++            begin
++              (* Double the 1st double quote... win32... sigh *)
++              (* Above comment ist false. The whole string must be quoted.
++               * However, an error is only triggered, if args contains also
++               * quoted parameters *)
++              add_quotes := true;
++              Filename.quote cmd
++            end
++        end
++      else
+         Filename.quote cmd
+     else
+       cmd
+   in
+   let cmdline =
+-    String.concat " " (cmd :: args)
++    let s = String.concat " " (cmd :: args) in
++      match !add_quotes with
++        | true -> "\"" ^ s ^ "\""
++        | false -> s
+   in
+     info ~ctxt (f_ "Running command '%s'") cmdline;
+     match f_exit_code, Sys.command cmdline with
+@@ -57,6 +253,13 @@
+           f i
+ 
+ 
++
++let run ~ctxt ?f_exit_code ?quote cmd args =
++  if OASISHostPath.use_bash () then
++    run_bash ~ctxt ?f_exit_code ?quote cmd args
++  else
++    run_default ~ctxt ?f_exit_code ?quote cmd args
++
+ let run_read_output ~ctxt ?f_exit_code cmd args =
+   let fn =
+     Filename.temp_file "oasis-" ".txt"
+--- ./src/oasis/OASISFileTemplate.ml
++++ ./src/oasis/OASISFileTemplate.ml
+@@ -496,6 +496,12 @@
+         if Sys.file_exists bak then begin
+           info ~ctxt (f_ "Restore file '%s' with backup file '%s'.")
+             fn bak;
++          if Sys.os_type = "Win32" then (
++            try
++              Sys.remove fn
++            with
++            | Sys_error _ -> ()
++          );
+           Sys.rename bak fn
+         end else begin
+           warning ~ctxt
+--- ./src/oasis/OASISFileUtil.ml
++++ ./src/oasis/OASISFileUtil.ml
+@@ -84,7 +84,7 @@
+     ) alternatives
+ 
+ 
+-let which ~ctxt prg =
++let which ?(plain=false) ?ctxt prg =
+   let path_sep =
+     match Sys.os_type with
+       | "Win32" ->
+@@ -96,11 +96,17 @@
+   let exec_ext =
+     match Sys.os_type with
+       | "Win32" ->
+-          "" :: (OASISString.nsplit (Sys.getenv "PATHEXT") path_sep)
++          "" :: (List.map OASISString.lowercase_ascii (OASISString.nsplit (Sys.getenv "PATHEXT") path_sep))
+       | _ ->
+           [""]
+   in
++  let p =
+     find_file ~case_sensitive:false [path_lst; [prg]] exec_ext
++  in
++  if plain then
++    p
++  else
++    OASISHostPath.of_unix p
+ 
+ 
+ (**/**)
+@@ -117,32 +123,55 @@
+       dn
+ 
+ 
+-let q = Filename.quote
++let q s = OASISHostPath.quote (OASISHostPath.of_unix s)
+ (**/**)
+ 
+ 
+ let cp ~ctxt ?(recurse=false) src tgt =
+   if recurse then
+-    match Sys.os_type with
+-      | "Win32" ->
+-          OASISExec.run ~ctxt
+-            "xcopy" [q src; q tgt; "/E"]
+-      | _ ->
+-          OASISExec.run ~ctxt
+-            "cp" ["-r"; q src; q tgt]
++    (*
++      'xcopy /E' and 'cp -r' don't have the same semantic!
++      -dir2 does exist:
++        xcopy dir dir2 /E -> copys content of dir into dir2 (dir2/dir doesn't exist!)
++        cp -r dir dir2    -> copys dir to dir2 (dir2/dir does exist!)
++      -dir2 doesn't exist:
++        xcopy dir dir2 /E -> request on command line, if dir2 is an directory or file.
++        cp -r dir dir2    -> dir and dir2 have the same content (dir2/dir doesn't exist)
++      Probably, there are even more differences,....
++    *)
++    if Sys.os_type = "Win32" && OASISHostPath.use_bash () = false then
++      let tgt_real =
++        if Sys.file_exists tgt = false then
++          begin
++            OASISExec.run ~ctxt "md" [q tgt];
++            tgt
++          end
+   else
+-    OASISExec.run ~ctxt
+-      (match Sys.os_type with
+-       | "Win32" -> "copy"
+-       | _ -> "cp")
+-      [q src; q tgt]
++          let base = Filename.basename src in
++          if base = "." then
++            tgt
++          else
++            let tgt_real = Filename.concat tgt base in
++              if Sys.file_exists tgt_real = false then
++                OASISExec.run ~ctxt "md" [q tgt_real];
++            tgt_real
++      in
++      OASISExec.run ~ctxt "xcopy" [q src; q tgt_real; "/E" ; "/Q" ; "/Y"]
++    else
++      OASISExec.run ~ctxt "cp" ["-r"; q src; q tgt]
++  else
++    if Sys.os_type = "Win32" && OASISHostPath.use_bash () = false then
++      OASISExec.run ~ctxt "copy" [q src; q tgt ; "/Y"]
++    else
++      OASISExec.run ~ctxt "cp" [q src; q tgt]
+ 
+ 
+ let mkdir ~ctxt tgt =
+   OASISExec.run ~ctxt
+-    (match Sys.os_type with
+-       | "Win32" -> "md"
+-       | _ -> "mkdir")
++    ( if Sys.os_type = "Win32" && not (OASISHostPath.use_bash ()) then
++        "md"
++      else
++        "mkdir" )
+     [q tgt]
+ 
+ 
+@@ -171,10 +200,9 @@
+ 
+ let rmdir ~ctxt tgt =
+   if Sys.readdir tgt = [||] then begin
+-    match Sys.os_type with
+-      | "Win32" ->
++    if Sys.os_type = "Win32" && OASISHostPath.use_bash () = false then
+           OASISExec.run ~ctxt "rd" [q tgt]
+-      | _ ->
++    else
+           OASISExec.run ~ctxt "rm" ["-r"; q tgt]
+   end else begin
+     OASISMessage.error ~ctxt
+--- ./src/oasis/OASISFileUtil.mli
++++ ./src/oasis/OASISFileUtil.mli
+@@ -42,7 +42,7 @@
+ 
+ (** Find real filename of an executable.
+   *)
+-val which: ctxt:OASISContext.t -> host_filename -> host_filename
++val which: ?plain:bool -> ?ctxt:OASISContext.t -> host_filename -> host_filename
+ 
+ 
+ (** Copy a file.
+--- ./src/oasis/OASISHostPath.ml
++++ ./src/oasis/OASISHostPath.ml
+@@ -26,6 +26,118 @@
+ 
+ module Unix = OASISUnixPath
+ 
++let bash_cmd = ref ( fun () -> "" )
++
++let use_bash () = ( !bash_cmd () ) <> ""
++
++
++(* generic quote and unixquote are taken from ocaml source *)
++let generic_quote quotequote s =
++  let l = String.length s in
++  let b = Buffer.create (l + 20) in
++    Buffer.add_char b '\'';
++    for i = 0 to l - 1 do
++      if s.[i] = '\'' then
++        Buffer.add_string b quotequote
++      else
++        Buffer.add_char b  s.[i]
++    done;
++    Buffer.add_char b '\'';
++    Buffer.contents b
++
++let unixquote = generic_quote "'\\''"
++
++let win = Sys.os_type = "Win32"
++
++let quote str =
++  if win && use_bash () then
++    unixquote str
++  else
++    quote str
++
++(* uniform_path (only called, if Sys.os_type = "Win32")
++ * - enforces uniform path seperators
++ * - strips trailing slashes (exceptions in case of C:\ and / )
++ * - removes (some) unnecessary file components like ./././
++ *)
++
++let get_naccu accu str first pos =
++  (* I assume c//d is identic to c/d
++   * the only exception (Network devices \\xyz\asdf)
++   * is covered in uniform_path
++   *)
++  if first = pos then
++    accu
++  else
++    let nlen = pos - first in
++    let nstr = String.sub str first nlen in
++      (* test/././ is the same as test *)
++      if nlen = 1 && nstr = "." then
++        accu
++      (* a/b/../ is the same as a *)
++      else if nlen = 2 && nstr = ".." then
++        match accu with
++          | []      -> [ nstr ]
++          | ".."::_ -> nstr::accu
++          | hd::tl  -> tl
++      else
++        nstr::accu
++
++let is_path_sep = function
++  | '\\' | '/' -> true
++  | _ -> false
++
++
++let uniform_path path_sep = function
++  | "" -> "" (* Raise an exception? Or an possible intermediate result?
++             * Filename.basename and dirname also don't raise exceptions *)
++  | str ->
++      let rec iter accu str len first pos =
++        if pos >= len then
++          List.rev (get_naccu accu str first pos)
++        else
++          let next = succ pos in
++            match is_path_sep str.[pos] with
++              | true -> iter (get_naccu accu str first pos) str len next next
++              | false -> iter accu str len first next
++      in
++        let is_unix_root = is_path_sep str.[0] in
++        let len = String.length str in
++        let next_sep = len > 1 && is_path_sep str.[1] in
++        let is_network_root = is_unix_root && next_sep in
++        let is_currel = str.[0] = '.' && ( next_sep || len = 1 ) in
++        let l = iter [] str len 0 0 in
++        (* Trailing slashes are normally stripped.
++         * This is not possible in case of root folders
++         * Sys.file_exists "C:" is false, Sys.file_exists "C:\\" true
++         *)
++        let l_min =
++          match l with
++            | [] -> [ "" ]
++            | _ -> l
++        in
++        let l =
++          if is_network_root then
++            ""::""::l_min
++          else if is_unix_root then
++            ""::l_min
++          else if is_currel then
++            "."::l
++          else
++            match l with
++              | s :: [] ->
++                  (* root folders like C:\ *)
++                  if String.length s = 2 && s.[1] = ':' &&
++                    len > 2 && is_path_sep str.[2]
++                  then
++                    s :: [ "" ]
++                  else
++                    l
++              | _ -> l
++        in
++          String.concat path_sep l
++
++
+ 
+ let make =
+   function
+@@ -35,20 +147,32 @@
+         List.fold_left Filename.concat hd tl
+ 
+ 
+-let of_unix ufn =
+-  if Sys.os_type = "Unix" then
+-    ufn
+-  else
+-    make
+-      (List.map
+-         (fun p ->
+-            if p = Unix.current_dir_name then
+-              current_dir_name
+-            else if p = Unix.parent_dir_name then
+-              parent_dir_name
++let of_unix str =
++  if win = false then
++    str
++  else
++    let path_sep =
++      if use_bash () then
++        "/"
++            else
++        "\\"
++    in
++      uniform_path path_sep str
++
++
++
++(* see findlib's src/findlib/frontend.ml for details *)
++let ocamlfind_unquote dir =
++  match Sys.os_type with
++    | "Cygwin"
++    | "Win32" ->
++      let len = String.length dir in
++        if len < 3 || dir.[0] <> '"' || dir.[len - 1] <> '"' ||
++          String.contains dir ' ' = false then
++          dir
+             else
+-              p)
+-         (OASISString.nsplit ufn '/'))
++          String.sub dir 1 (len - 2)
++    | _ -> dir
+ 
+ 
+ (* END EXPORT *)
+--- ./src/oasis/OASISHostPath.mli
++++ ./src/oasis/OASISHostPath.mli
+@@ -29,6 +29,27 @@
+ open OASISTypes
+ 
+ 
++(**
++    The function should return an unix like shell,
++    that will be used to execute external commands.
++
++    The default function returns an empty string.
++    (system default will be used)
++*)
++val bash_cmd : (unit -> host_filename) ref
++
++(** True, if bash_cmd_program will return a non-empty
++    host_filename *)
++val use_bash: unit -> bool
++
++
++(**
++   On windows, the Unix quote function
++   will be used, if use_base () is true.
++   Otherwise identic to Filename.quote
++*)
++val quote: string -> string
++
+ (** Create a filename out of its components.
+   *)
+ val make: host_filename list -> host_filename
+@@ -57,5 +78,9 @@
+ val add_extension: host_filename -> string -> host_filename
+ 
+ 
++(** Unquote functions for filenames from 'ocamlfind query ...' *)
++val ocamlfind_unquote: string -> string
++
++
+ (** Map for host filename. {b Not exported.} *)
+ module Map: OASISUtils.MapExt.S with type key = host_filename
+--- ./src/oasis/OASISString.ml
++++ ./src/oasis/OASISString.ml
+@@ -175,18 +175,34 @@
+   else
+     s
+ 
+-(* END EXPORT *)
++let exists f str =
++  let rec iter i =
++    if i < 0 then
++      false
++    else if f str.[i] then
++      true
++    else
++      iter (pred i)
++  in
++    iter (String.length str - 1)
+ 
+-(*  TODO: replace lowercase_ascii, capitalize_ascii and uncapitalize_ascii
+-    functions by String.*_ascii function when OCaml minimal version will be
+-    4.03.0.
+- *)
++let is_digit c =
++  '0' <= c && c <= '9'
++ 
++let is_alpha c =
++  ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
+ 
+ let is_whitespace =
+   function
+     | ' ' | '\r' | '\n' | '\t' -> true
+     |  _  -> false
+ 
++(* END EXPORT *)
++
++(*  TODO: replace lowercase_ascii, capitalize_ascii and uncapitalize_ascii
++    functions by String.*_ascii function when OCaml minimal version will be
++    4.03.0.
++ *)
+ 
+ let tokenize ?(is_whitespace=is_whitespace) ?(tokens=[]) str =
+   let lst = ref [] in
+--- ./src/oasis/OASISValues.ml
++++ ./src/oasis/OASISValues.ml
+@@ -484,6 +484,38 @@
+            space_separated.print (cmd :: args))
+     }
+ 
++let command_line_warn =
++  let c = command_line in
++  let is_unix_centric_operator = function
++    | "&&" | ";" | "||" -> true
++    | _ -> false
++  in
++
++  let parse = ( fun ~ctxt s ->
++                let (cmd,args) as cmd_args = c.parse ~ctxt s in
++                  if String.length cmd > 0 && cmd.[0] <> '$' then
++                    begin
++                      OASISMessage.warning
++                        ~ctxt
++                        "External commands may differ from platform to platform (%s)"
++                        cmd
++                    end;
++                  if List.exists is_unix_centric_operator args then
++                    begin
++                      OASISMessage.warning
++                        ~ctxt
++                        "Command line '%s' seems to be *nix specific"
++                        (String.concat "" (cmd::args))
++                    end;
++                  cmd_args )
++  in
++    {
++      parse ;
++      update = c.update;
++      print = c.print;
++    }
++
++
+ 
+ let command_line_options =
+   { parse = (fun ~ctxt s -> POSIXShell.split s);
+--- ./src/oasis/OASISValues.mli
++++ ./src/oasis/OASISValues.mli
+@@ -183,6 +183,9 @@
+ val command_line: (string * string list) t
+ 
+ 
++(** As above, but emmit warnings by dubious constructs *)
++val command_line_warn : (string * string list) t
++
+ (** Arguments of command line programs.  See {!OASISUtils.POSIX.split}
+     for more information. *)
+ val command_line_options: string list t
+--- ./src/oasis/OASISVersion.ml
++++ ./src/oasis/OASISVersion.ml
+@@ -45,12 +45,10 @@
+ 
+ 
+ (* Range of allowed characters *)
+-let is_digit c =
+-  '0' <= c && c <= '9'
++let is_digit = OASISString.is_digit
+ 
+ 
+-let is_alpha c =
+-  ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
++let is_alpha = OASISString.is_alpha
+ 
+ 
+ let is_special =
+--- ./src/plugins/custom/CustomPlugin.ml
++++ ./src/plugins/custom/CustomPlugin.ml
+@@ -217,7 +217,7 @@
+       schema
+       id
+       nm
+-      command_line
++      command_line_warn
+       (* TODO: remove when fun () -> s_ be replaced *)
+       (fun () -> s_ hlp)
+       data (fun _ t -> t.cmd_main)
+@@ -228,7 +228,7 @@
+       id
+       (nm^"Clean")
+       ~default:None
+-      (opt command_line)
++      (opt command_line_warn)
+       (* TODO: remove when fun () -> s_ be replaced *)
+       (fun () -> s_ hlp_clean)
+       data (fun _ t -> t.cmd_clean)
+@@ -239,7 +239,7 @@
+       id
+       (nm^"Distclean")
+       ~default:None
+-      (opt command_line)
++      (opt command_line_warn)
+       (* TODO: remove when fun () -> s_ be replaced *)
+       (fun () -> s_ hlp_distclean)
+       data (fun _ t -> t.cmd_distclean)
+@@ -441,7 +441,7 @@
+       id
+       "Clean"
+       ~default:None
+-      (opt command_line)
++      (opt command_line_warn)
+       (fun () ->
+          s_ "Run command to clean test step.")
+       test_data (fun _ t -> t.cmd_clean)
+@@ -452,7 +452,7 @@
+       id
+       "Distclean"
+       ~default:None
+-      (opt command_line)
++      (opt command_line_warn)
+       (fun () ->
+          s_ "Run command to distclean test step.")
+       test_data (fun _ t -> t.cmd_distclean)
+--- ./src/plugins/internal/InternalInstallPlugin.ml
++++ ./src/plugins/internal/InternalInstallPlugin.ml
+@@ -63,11 +63,19 @@
+   "install-findlib"
+ 
+ 
+-let win32_max_command_line_length = 8000
+-
+-
+ let split_install_command ocamlfind findlib_name meta files =
+   if Sys.os_type = "Win32" then
++    let f s =
++      OASISHostPath.quote ( OASISHostPath.of_unix s )
++    in
++    let files = List.map f files in
++    let meta = f meta  in
++    let win32_max_command_line_length =
++      if OASISHostPath.use_bash () = false then
++        8000
++      else
++        30000
++    in
+     (* Arguments for the first command: *)
+     let first_args = ["install"; findlib_name; meta] in
+     (* Arguments for remaining commands: *)
+--- ./src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml
++++ ./src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml
+@@ -96,7 +96,9 @@
+   with Not_found -> s
+ 
+ (* ocamlfind command *)
+-let ocamlfind x = S[Sh (exec_from_conf "ocamlfind"); x]
++let ocamlfind x = S[Sh (
++  Ocamlbuild_pack.Shell.quote_filename_if_needed
++    (exec_from_conf "ocamlfind") ); x]
+ 
+ (* This lists all supported packages. *)
+ let find_packages () =
+--- ./src/plugins/ocamlbuild/OCamlbuildCommon.ml
++++ ./src/plugins/ocamlbuild/OCamlbuildCommon.ml
+@@ -55,8 +55,11 @@
+           "-classic-display";
+           "-no-log";
+           "-no-links";
+-          "-install-lib-dir";
+-          (Filename.concat (standard_library ()) "ocamlbuild")
++          (* Fix not longer necassary since at least OCaml 3.11, see #4379.
++             In the future, it's the wrong location, because of the split of
++             ocamlbuild from the main distribution *)
++          (* "-install-lib-dir";
++             (OASISHostPath.quote (OASISHostPath.of_unix (Filename.concat (standard_library ()) "ocamlbuild"))) *)
+         ]
+       else
+         [];
+@@ -251,7 +254,7 @@
+       t.extra_args
+     end else begin
+       match t.plugin_tags with
+-        | Some tags -> "-plugin-tags" :: ("'" ^ tags ^ "'") :: t.extra_args
++        | Some tags -> "-plugin-tags" :: ("\"" ^ tags ^ "\"") :: t.extra_args
+         | None -> t.extra_args
+     end
+   in
+--- ./test/TestFull.ml
++++ ./test/TestFull.ml
+@@ -39,8 +39,8 @@
+     else
+       false
+   in
+-  let setup_test_directories test_ctxt fpath path =
+-    setup_test_directories test_ctxt ~is_native
++  let setup_test_directories ?tmpdir_prefix test_ctxt fpath path =
++    setup_test_directories ?tmpdir_prefix test_ctxt ~is_native
+       ~native_dynlink:(native_dynlink test_ctxt)
+       (fpath test_ctxt path)
+   in
+@@ -334,6 +334,23 @@
+          register_generated_files t oasis_ocamlbuild_files;
+          (* Run standard test. *)
+          standard_test test_ctxt t);
++    "examples/with test space" >::
++    (fun test_ctxt ->
++       let () =
++         skip_long_test test_ctxt;
++         skip_if (Sys.os_type <> "Win32") "Win32 only test"
++       in
++       let t =
++         setup_test_directories ~tmpdir_prefix:"s p a c e" test_ctxt
++          in_example_dir ["with test space"]
++       in
++         oasis_setup test_ctxt t;
++         run_ocaml_setup_ml test_ctxt t
++           ["-configure"; "--enable-tests"];
++         run_ocaml_setup_ml test_ctxt t
++           ["-build"];
++         run_ocaml_setup_ml test_ctxt t
++           ["-test"]; );
+    (* TODO: reactivate *)
+ (*
+     (* Use sub-packages *)
+--- ./test/TestFullUtils.ml
++++ ./test/TestFullUtils.ml
+@@ -190,9 +190,14 @@
+ 
+ 
+ (* Create tree structure for a test project and copy it there. *)
+-let setup_test_directories test_ctxt ~is_native ~native_dynlink dn =
++let setup_test_directories ?tmpdir_prefix test_ctxt ~is_native ~native_dynlink dn =
+   (* Create a temporary directory. *)
+-  let tmpdir = bracket_tmpdir test_ctxt in
++  let prefix =
++    match tmpdir_prefix with
++      | None -> "ounit-"
++      | Some x -> x
++  in
++  let tmpdir = bracket_tmpdir ~prefix test_ctxt in
+ 
+   (* Copy sources in this temporary directory. *)
+   let src_dir =
+@@ -253,7 +258,8 @@
+ (* Precompile setup.ml to speedup the tests, if possible. *)
+ let rec precompile_setup_ml test_ctxt t =
+   let setup_exe =
+-    Filename.concat t.precompile_dir (Filename.chop_extension setup_ml)
++    exec (Filename.concat t.precompile_dir
++            (Filename.chop_extension setup_ml))
+   in
+   let full_setup_ml = in_src_dir t setup_ml in
+ 
+@@ -277,16 +283,17 @@
+     let timer = timer_start "precompile_setup_ml" in
+     let exit_code =
+       FileUtil.cp ~force:FileUtil.Force [full_setup_ml] t.precompile_dir;
+-      Sys.command ("ocamlfind ocamlc -o "^setup_exe^" "
+-                   ^(Filename.concat t.precompile_dir setup_ml))
++      let f1 = Filename.quote setup_exe in
++      let f2 = Filename.quote (Filename.concat t.precompile_dir setup_ml) in
++        Sys.command ("ocamlfind ocamlc -o "^f1^" "^f2)
+     in
+     timer_stop test_ctxt timer;
+     if exit_code = 0 then begin
+       (* Compilation succeed, update the digest *)
+-      logf test_ctxt `Info "Compilation of setup.ml succeeds.";
++      logf test_ctxt `Info "Compilation of setup.ml (%S) succeeds." setup_exe;
+       `Done_for (Digest.file full_setup_ml)
+     end else begin
+-      logf test_ctxt `Warning "Compilation of setup.ml doesn't succeed.";
++      logf test_ctxt `Warning "Compilation of setup.ml (%S) doesn't succeed." setup_exe;
+       `Not_possible
+     end
+   in
+@@ -305,7 +312,7 @@
+ 
+       | `Done_for digest ->
+           if (Digest.file full_setup_ml) = digest then begin
+-            Some (exec setup_exe)
++            Some setup_exe
+           end else begin
+             t.setup_ml_precompiled <- compile ();
+             precompile_setup_ml test_ctxt t
+@@ -523,6 +530,10 @@
+   | InstalledBin of filename list
+ 
+ 
++
++let system =
++  (BaseOCamlcConfig.var_define "system") ()
++
+ (* Register a set of files expected to be built. *)
+ let register_installed_files test_ctxt t installed_files_lst =
+   let rec file_list =
+@@ -589,7 +600,12 @@
+                acc
+            | "a" ->
+                let fn =
+-                 if is_win32 then FilePath.replace_extension fn "lib" else fn
++                 if not is_win32 then
++                   fn
++                 else
++                   match system with
++                     | "mingw" | "mingw64" -> fn
++                     | _ -> FilePath.replace_extension fn "lib"
+                in
+                  if (* library matching the .cmxa *)
+                    t.is_native ||
+@@ -601,7 +617,7 @@
+                    (* no .a matching bytecode only library. *)
+                    acc
+            | "so" when is_win32 ->
+-               (FilePath.replace_extension fn ".dll") :: acc
++               (FilePath.replace_extension fn "dll") :: acc
+            | _ ->
+                fn :: acc)
+       [] lst

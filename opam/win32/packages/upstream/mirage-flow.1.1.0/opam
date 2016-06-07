@@ -1,0 +1,27 @@
+opam-version: "1.2"
+maintainer: "Thomas Gazagnaire <thomas@gazagnaire.org>"
+authors: [ "Thomas Gazagnaire <thomas@gazagnaire.org>" "David Scott <dave@recoil.org>" ]
+version: "1.1.0"
+homepage: "https://github.com/mirage/mirage-flow"
+bug-reports: "https://github.com/mirage/mirage-flow/issues/"
+license: "ISC"
+dev-repo: "https://github.com/mirage/mirage-flow.git"
+build: [
+  ["./configure" "--prefix=%{prefix}%"]
+  [make]
+]
+build-test: [
+  ["./configure" "--prefix=%{prefix}%" "--enable-tests"]
+  [make "test"]
+]
+install: [make "install"]
+remove: ["ocamlfind" "remove" "mirage-flow"]
+depends: [
+  "ocamlbuild" {build}
+  "ocamlfind"  {build}
+  "mirage-types-lwt"
+  "cstruct"
+  "lwt" {>= "2.5.0"}
+  "alcotest" {test}
+  "ounit"    {test}
+]
