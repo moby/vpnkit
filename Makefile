@@ -1,11 +1,13 @@
+REPO_ROOT=$(shell git rev-parse --show-toplevel)
 MACOSX_DEPLOYMENT_TARGET?=10.10
 EXEDIR=C:\projects\vpnkit
-OPAMROOT=$(shell pwd)/_build/opam
+OPAMROOT=$(REPO_ROOT)/_build/opam
 OPAMFLAGS=MACOSX_DEPLOYMENT_TARGET=$(MACOSX_DEPLOYMENT_TARGET) \
 	  OPAMROOT=$(OPAMROOT) \
 	  OPAMYES=1 OPAMCOLORS=1
+LICENSEDIRS=$(REPO_ROOT)/opam/licenses
 
-.PHONY: com.docker.slirp.exe com.docker.slirp install uninstall
+.PHONY: com.docker.slirp.exe com.docker.slirp install uninstall OSS-LICENSES
 
 TARGETS :=
 ifeq ($(OS),Windows_NT)
@@ -54,6 +56,12 @@ install:
 
 uninstall:
 	echo uninstall not implemented
+
+OSS-LICENSES:
+	mkdir -p $(LICENSEDIRS)
+	cd $(LICENSEDIRS) && \
+	  $(OPAMFLAGS) $(REPO_ROOT)/opam/opam-licenses.sh slirp
+	$(REPO_ROOT)/opam/list-licenses.sh $(OPAMROOT) > OSS-LICENSES
 
 clean:
 	for pkg in `ls src/`; do \

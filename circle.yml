@@ -9,6 +9,7 @@ machine:
 general:
   artifacts:
   - src/com.docker.slirp/bundle.tgz
+  - OSS-LICENSES
 dependencies:
   override:
   - brew install wget opam dylibbundler
@@ -16,6 +17,7 @@ dependencies:
   - opam switch 4.02.3
   - make depends
   - make
+  - make OSS-LICENSES
 test:
   override:
   - echo Dummy test

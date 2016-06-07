@@ -14,3 +14,4 @@ build_script:
 artifacts:
   - path: "com.docker.slirp.exe"
   - path: "register.ps1"
+  - path: "OSS-LICENSES"

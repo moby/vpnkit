@@ -49,3 +49,4 @@ cd "${APPVEYOR_BUILD_FOLDER}"
 
 make depends
 make
+make OSS-LICENSES
