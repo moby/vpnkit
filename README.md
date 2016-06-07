@@ -10,11 +10,6 @@ Building on Unix
 ----------------
 
 First install `wget`, `opam` using your package manager of choice.
-Make sure you have OCaml 4.02.3, for example by running:
-```
-opam switch 4.02.3
-eval `opam config env`
-```
 Install the OCaml library dependencies with:
 ```
 make depends
