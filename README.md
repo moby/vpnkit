@@ -1,9 +1,9 @@
 VPN-friendly networking devices for [HyperKit](https://github.com/docker/hyperkit)
 ===============================
 
-![VPNkit diagram](http://docker.github.io/vpnkit/vpnkit.png)
+![VPNKit diagram](http://docker.github.io/vpnkit/vpnkit.png)
 
-VPNkit is a set of tools and services for helping [HyperKit](https://github.com/docker/hyperkit)
+VPNKit is a set of tools and services for helping [HyperKit](https://github.com/docker/hyperkit)
 VMs interoperate with host VPN configurations.
 
 Why is this needed?
