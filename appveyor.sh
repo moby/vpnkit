@@ -18,7 +18,6 @@ SWITCH='4.02.3+mingw64c'
 OPAM_URL='https://dl.dropboxusercontent.com/s/b2q2vjau7if1c1b/opam64.tar.xz'
 
 export OPAM_LINT="false"
-export CYGWIN='winsymlinks:native'
 export OPAMYES=1
 
 curl -fsSL -o "${OPAM_ARCH}.tar.xz" "${OPAM_URL}"

@@ -4,8 +4,11 @@ platform:
 environment:
   CYG_ROOT: "C:\\cygwin"
   CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
+  CYGWIN: "winsymlinks:native"
 
 install:
+  - cmd: git config core.symlinks true
+  - cmd: git reset --hard
   - "%CYG_ROOT%\\setup-x86.exe -qnNdO -R %CYG_ROOT% -s http://cygwin.mirror.constant.com -l C:/cygwin/var/cache/setup -P rsync -P patch -P diffutils -P curl -P make -P unzip -P git -P m4 -P perl -P mingw64-x86_64-gcc-core"
 
 build_script:
