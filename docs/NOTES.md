@@ -20,3 +20,19 @@ and then:
 ```bash
 ./com.docker.slirp.exe --ethernet hyperv-connect://<VM UUID> --debug
 ```
+
+Since Hyper-V sockets don't currently support graceful shutdown, the port
+forwarding code uses a simple message-based protocol where messages can
+be
+
+- data
+- a shutdown read request
+- a shutdown write request
+- a close request
+
+Once a peer has received an acknowledgement of a close request it is free
+to actually close the socket (which will discard any remaining in-flight
+data).
+
+See
+https://github.com/rneugeba/virtsock/tree/master/go/hvsock

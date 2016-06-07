@@ -30,7 +30,7 @@ module Result = struct
   let errorf fmt = Printf.ksprintf (fun s -> Error (`Msg s)) fmt
 end
 
-module Port = struct
+module Int16 = struct
   module M = struct
     type t = int
     let compare (a: t) (b: t) = Pervasives.compare a b
@@ -38,21 +38,13 @@ module Port = struct
   include M
   module Map = Map.Make(M)
   module Set = Set.Make(M)
-  let of_string x =
-    try
-      let x = int_of_string x in
-      if x < 0 || x > 65535
-      then Result.errorf "port out of range: 0 <= %d <= 65536" x
-      else Result.return x
-    with
-    | _ -> Result.errorf "port is not an integer: '%s'" x
 end
 
-module Local = struct
+module Port = struct
   module M = struct
     type t = [
-      | `Tcp of Ipaddr.V4.t * Port.t
-      | `Udp of Ipaddr.V4.t * Port.t
+      | `Tcp of Ipaddr.V4.t * Int16.t
+      | `Udp of Ipaddr.V4.t * Int16.t
     ]
     let compare = compare
   end
@@ -63,24 +55,41 @@ module Local = struct
   let to_string = function
     | `Tcp (addr, port) -> Printf.sprintf "tcp:%s:%d" (Ipaddr.V4.to_string addr) port
     | `Udp (addr, port) -> Printf.sprintf "udp:%s:%d" (Ipaddr.V4.to_string addr) port
+
+  let of_string x =
+    try
+        match Stringext.split ~on:':' x with
+        | [ proto; ip; port ] ->
+          let ip = Ipaddr.V4.of_string_exn ip in
+          let port = int_of_string port in
+          begin match String.lowercase proto with
+            | "tcp" -> Result.return (`Tcp (ip, port))
+            | "udp" -> Result.return (`Udp (ip, port))
+            | _ -> Result.errorf "unknown protocol: should be tcp or udp"
+          end
+        | _ ->
+        Result.errorf "port should be of the form proto:IP:port"
+    with
+      | _ -> Result.Error (`Msg (Printf.sprintf "port is not a proto:IP:port: '%s'" x))
+
 end
 
-module Make(Connector: Sig.Connector)(Binder: Sig.Binder) = struct
+module Make(Connector: Sig.Connector with type port = Port.t)(Binder: Sig.Binder) = struct
 type t = {
-  local: Local.t;
-  remote_port: Connector.Port.t;
+  local: Port.t;
+  remote_port: Port.t;
   mutable fd: Lwt_unix.file_descr option;
 }
 
-type key = Local.t
+type key = Port.t
 
 let get_key t = t.local
 
-module Map = Local.Map
+module Map = Port.Map
 
 type context = string
 
-let to_string t = Printf.sprintf "%s:%s" (Local.to_string t.local) (Connector.Port.to_string t.remote_port)
+let to_string t = Printf.sprintf "%s:%s" (Port.to_string t.local) (Port.to_string t.remote_port)
 
 let description_of_format = "'<tcp|udp>:local ip:local port:remote vchan port'"
 
@@ -168,12 +177,11 @@ let start_tcp_proxy vsock_path_var _local_ip _local_port fd t =
         let proxy () =
           finally (fun () ->
             Connector.connect t.remote_port
-            >>= fun v ->
-            let remote = Socket.Stream.of_fd ~description v in
+            >>= fun remote ->
             finally (fun () ->
               (* proxy between local and remote *)
               Log.debug (fun f -> f "%s: connected" description);
-              Mirage_flow.proxy (module Clock) (module Socket.Stream) remote (module Socket.Stream) local ()
+              Mirage_flow.proxy (module Clock) (module Connector) remote (module Socket.Stream) local ()
               >>= function
               | `Error (`Msg m) ->
                 Log.err (fun f -> f "%s proxy failed with %s" description m);
@@ -185,7 +193,7 @@ let start_tcp_proxy vsock_path_var _local_ip _local_port fd t =
                   );
                 Lwt.return ()
             ) (fun () ->
-              Socket.Stream.close remote
+              Connector.close remote
             )
           ) (fun () ->
             Socket.Stream.close local
@@ -202,7 +210,24 @@ let max_udp_length = 2048 (* > 1500 the MTU of our link + header *)
 
 let max_vsock_header_length = 1024
 
+let conn_read flow buf =
+  let open Lwt.Infix in
+  Connector.read_into flow buf
+  >>= function
+  | `Eof -> Lwt.fail End_of_file
+  | `Error e -> Lwt.fail (Failure (Connector.error_message e))
+  | `Ok () -> Lwt.return ()
+
+let conn_write flow buf =
+  let open Lwt.Infix in
+  Connector.write flow buf
+  >>= function
+  | `Eof -> Lwt.fail End_of_file
+  | `Error e -> Lwt.fail (Failure (Connector.error_message e))
+  | `Ok () -> Lwt.return ()
+
 let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
+  let open Lwt.Infix in
   let description = to_string t in
   let from_internet_string = Bytes.make max_udp_length '\000' in
   let from_internet_buffer = Cstruct.create max_udp_length in
@@ -212,10 +237,10 @@ let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
   let _ =
     Active_list.Var.read vsock_path_var
     >>= fun _vsock_path ->
-    Log.debug (fun f -> f "%s: connecting to vsock port %s" description (Connector.Port.to_string t.remote_port));
+    Log.debug (fun f -> f "%s: connecting to vsock port %s" description (Port.to_string t.remote_port));
     Connector.connect t.remote_port
     >>= fun v ->
-    Log.debug (fun f -> f "%s: connected to vsock port %s" description (Connector.Port.to_string t.remote_port));
+    Log.debug (fun f -> f "%s: connected to vsock port %s" description (Port.to_string t.remote_port));
     (* Construct the vsock header in a separate buffer but write the payload
        directly from the from_internet_buffer *)
     let write_header_buffer = Cstruct.create max_vsock_header_length in
@@ -255,17 +280,17 @@ let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
         let header = Cstruct.sub write_header_buffer 0 header_len in
         (* Add an overall frame length at the start *)
         Cstruct.LE.set_uint16 header 0 frame_len;
-        Lwt_cstruct.(complete (write v)) header
+        conn_write v header
         >>= fun () ->
-        Lwt_cstruct.(complete (write v)) buf in
+        conn_write v buf in
     (* Read the vsock header and payload into the same buffer, and write it
        to the internet from there. *)
     let read () =
-      Lwt_cstruct.(complete (read v)) (Cstruct.sub from_vsock_buffer 0 2)
+      conn_read v (Cstruct.sub from_vsock_buffer 0 2)
       >>= fun () ->
       let frame_length = Cstruct.LE.get_uint16 from_vsock_buffer 0 in
       let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in
-      Lwt_cstruct.(complete (read v)) rest
+      conn_read v rest
       >>= fun () ->
       (* uint16 IP address length *)
       let ip_bytes_len = Cstruct.LE.get_uint16 rest 0 in
@@ -325,7 +350,7 @@ let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
     let _ = from_vsock () in
     from_internet ()
     >>= fun () ->
-    Lwt_unix.close v in
+    Connector.close v in
   Lwt.return (Result.Ok t)
 
 let start vsock_path_var t =
@@ -349,36 +374,18 @@ let stop t = match t.fd with
     Lwt_unix.close fd
 
 let of_string x =
-  match (
-    match Stringext.split ~on:':' ~max:4 x with
-    | [ "tcp"; local_ip; local_port; remote_port ] ->
-      let local_ip = Ipaddr.V4.of_string local_ip in
-      let local_port = Port.of_string local_port in
-      begin match local_ip, local_port with
-      | Some ip, Result.Ok port ->
-        Result.Ok (
-          `Tcp (ip, port),
-          Connector.Port.of_string remote_port
-        )
-      | _, _ -> Result.Error (`Msg ("Failed to parse local IP and port: " ^ x))
-      end
-    | [ "udp"; local_ip; local_port; remote_port ] ->
-      let local_ip = Ipaddr.V4.of_string local_ip in
-      let local_port = Port.of_string local_port in
-      begin match local_ip, local_port with
-      | Some ip, Result.Ok port ->
-        Result.Ok (
-          `Udp (ip, port),
-          Connector.Port.of_string remote_port
-        )
-      | _, _ -> Result.Error (`Msg ("Failed to parse local IP and port: " ^ x))
-      end
-    | _ ->
-      Result.Error (`Msg ("Failed to parse request, expected " ^ description_of_format))
-  ) with
-  | Result.Error x -> Result.Error x
-  | Result.Ok (local, Result.Ok remote_port) ->
-    Result.Ok { local; remote_port; fd = None  }
-  | Result.Ok (_, Result.Error (`Msg m)) ->
-    Result.Error (`Msg ("Failed to parse remote port: " ^ m))
+  match Stringext.split ~on:':' ~max:6 x with
+  | [ proto1; ip1; port1; proto2; ip2; port2 ] ->
+    begin
+      match
+        Port.of_string (proto1 ^ ":" ^ ip1 ^ ":" ^ port1),
+        Port.of_string (proto2 ^ ":" ^ ip2 ^ ":" ^ port2)
+      with
+      | Result.Error x, _ -> Result.Error x
+      | _, Result.Error x -> Result.Error x
+      | Result.Ok local, Result.Ok remote_port ->
+        Result.Ok { local; remote_port; fd = None }
+    end
+  | _ ->
+    Result.errorf "Failed to parse request [%s], expected %s" x description_of_format
 end

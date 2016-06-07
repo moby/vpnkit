@@ -1,14 +1,9 @@
- module type CONN = sig
-   type fd
+module type CONN = sig
+  include Mirage_flow_s.SHUTDOWNABLE
 
-   val read: fd -> Cstruct.t -> unit Lwt.t
-   (** Completely fills the given buffer with data from [fd] *)
-
-   val write: fd -> Cstruct.t -> unit Lwt.t
-   (** Completely writes the contents of the buffer to [fd] *)
-
-   val close: fd -> unit Lwt.t
- end
+  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
+  (** Completely fills the given buffer with data from [fd] *)
+end
 
 module type VMNET = sig
   (** A virtual ethernet link to the VM *)
@@ -49,15 +44,11 @@ end
 module type Connector = sig
   (** Make connections into the VM *)
 
-  module Port: sig
-    type t
-    (** A protocol-specific port id, e.g. a virtio-vsock int32 *)
+  include CONN
 
-    val of_string: string -> (t, [> `Msg of string]) Result.result
-    val to_string: t -> string
-  end
+  type port
 
-  val connect: Port.t -> Lwt_unix.file_descr Lwt.t
+  val connect: port -> flow Lwt.t
   (** Connect to the given port on the VM *)
 end
 

@@ -1,33 +1,28 @@
 module type CONN = sig
-  type fd
+  include V1_LWT.FLOW
 
-  val read: fd -> Cstruct.t -> unit Lwt.t
+  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
   (** Completely fills the given buffer with data from [fd] *)
-
-  val write: fd -> Cstruct.t -> unit Lwt.t
-  (** Completely writes the contents of the buffer to [fd] *)
-
-  val close: fd -> unit Lwt.t
 end
 
 module Make(C: CONN): sig
 (** Accept connections and talk to clients via the vmnetd protocol, exposing
     the packets as a Mirage NETWORK interface *)
 
-type fd = C.fd
+type fd = C.flow
 
 include V1_LWT.NETWORK
   with type buffer = Cstruct.t
 
 val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
 
-val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.fd -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
+val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.flow -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
 (** [of_fd ~client_macaddr ~server_macaddr fd] negotiates with the client over
     [fd]. The client uses [client_macaddr] as the source address of all its ethernet
     frames. The server uses [server_macaddr] as the source address of all its
     ethernet frames. *)
 
-val client_of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.fd -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
+val client_of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.flow -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
 
 val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 (** [start_capture t ?size_limit filename] closes any existing pcap capture
