@@ -49,6 +49,7 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
     Dhcp_wire.Domain_name "local";
     Dhcp_wire.Routers [ local_ip ];
     Dhcp_wire.Name_servers [ local_ip ];
+    Dhcp_wire.Time_servers [ local_ip ];
   ] in
   let xhyve : host = {
     hostname = "xhyve";
