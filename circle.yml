@@ -13,8 +13,6 @@ general:
 dependencies:
   override:
   - brew install wget opam dylibbundler
-  - rm -rf ~/.opam && opam init -a git://github.com/ocaml/opam-repository
-  - opam switch 4.02.3
   - make depends
   - make
   - make OSS-LICENSES
