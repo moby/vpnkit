@@ -12,11 +12,10 @@ module Make(Vmnet: Sig.VMNET) = struct
 type configuration = {
   local_ip: Ipaddr.V4.t;
   peer_ip: Ipaddr.V4.t;
-  low_ip: Ipaddr.V4.t; (* FIXME: this is needed by the DHCP server for no good reason *)
-  high_ip: Ipaddr.V4.t; (* FIXME: this is needed by the DHCP server for no good reason *)
   prefix: Ipaddr.V4.Prefix.t;
   client_macaddr: Macaddr.t;
   server_macaddr: Macaddr.t;
+  dhcp_configuration : Dhcp_server.Config.t;
 }
 
 (* Compute the smallest IPv4 network which includes both [a_ip]
@@ -29,37 +28,46 @@ let rec smallest_prefix a_ip other_ips = function
     then prefix
     else smallest_prefix a_ip other_ips (bits - 1)
 
+(* given some MACs and IPs, construct a usable DHCP configuration *)
 let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
-  (* FIXME: We need a third IP just to make the DHCP server happy *)
+  let open Dhcp_server.Config in
+  (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
+     intend only to serve IPs to one downstream host.
+     see https://github.com/haesbaert/charrua-core/issues/27 - this may be
+     resolved in the future *)
   let low_ip, high_ip =
     let open Ipaddr.V4 in
     let highest = if compare local_ip peer_ip < 0 then peer_ip else local_ip in
     let i32 = to_int32 highest in
     of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
   let prefix = smallest_prefix peer_ip [ local_ip; low_ip; high_ip ] 32 in
-  { local_ip; peer_ip; low_ip; high_ip; prefix; client_macaddr; server_macaddr }
-
-let dhcp_conf ~config =
-  let network = Ipaddr.V4.(to_string (Prefix.network config.prefix)) in
-  let netmask = Ipaddr.V4.(to_string (Prefix.netmask config.prefix)) in
-  let local_ip = Ipaddr.V4.to_string config.local_ip in
-  let peer_ip = Ipaddr.V4.to_string config.peer_ip in
-  let low_ip = Ipaddr.V4.to_string config.low_ip in
-  let high_ip = Ipaddr.V4.to_string config.high_ip in
-
-  Printf.sprintf "\n\
-  option domain-name \"local\";\n\
-  subnet %s netmask %s {\n\
-    option routers %s;\n\
-    option domain-name-servers %s;\n\
-    range %s %s;\n\
-    host xhyve {\n\
-      hardware ethernet %s;\n\
-      fixed-address %s;\n\
-    }\n\
-  }\n\
-  " network netmask local_ip local_ip low_ip high_ip
-  (Macaddr.to_string config.client_macaddr) peer_ip
+  (* 
+  let config ~config =
+    Dhcp_server.Config.parse (dhcp_conf ~config) [(config.local_ip,
+    config.server_macaddr)] *)
+  let options = [
+    Dhcp_wire.Domain_name "local";
+    Dhcp_wire.Routers [ local_ip ];
+    Dhcp_wire.Name_servers [ local_ip ];
+  ] in
+  let xhyve : host = {
+    hostname = "xhyve";
+    options = [];
+    hw_addr = Some client_macaddr;
+    fixed_addr = Some peer_ip;
+  } in
+  let dhcp_configuration : Dhcp_server.Config.t = {
+    options = options;
+    hostname = "vpnkit"; (* it's us! *)
+    hosts = [ xhyve ];
+    default_lease_time = Int32.of_int (60 * 60 * 2); (* 2 hours, from charrua defaults *)
+    max_lease_time = Int32.of_int (60 * 60 * 24) ; (* 24 hours, from charrua defaults *)
+    ip_addr = local_ip;
+    mac_addr = server_macaddr;
+    network = prefix;
+    range = (low_ip, high_ip);
+  } in
+  { peer_ip; local_ip; prefix; server_macaddr; client_macaddr; dhcp_configuration }
 
 module Netif = Filter.Make(Vmnet)
 
@@ -80,22 +88,25 @@ module Dhcp = struct
   let of_interest mac dest =
     Macaddr.compare dest mac = 0 || not (Macaddr.is_unicast dest)
 
-  let input net config subnet buf =
+  let input net (config : Dhcp_server.Config.t) database buf =
     let open Dhcp_server.Input in
     match (Dhcp_wire.pkt_of_buf buf (Cstruct.len buf)) with
     | `Error e ->
       Log.err (fun f -> f "failed to parse DHCP packet: %s" e);
-      Lwt.return ()
+      Lwt.return database
     | `Ok pkt ->
-      match (input_pkt config subnet pkt (Clock.time ())) with
-      | Silence -> Lwt.return_unit
+      match (input_pkt config database pkt (Clock.time ())) with
+      | Silence -> Lwt.return database
+      | Update database ->
+        Log.debug (fun f -> f "lease database updated");
+        Lwt.return database
       | Warning w ->
         Log.warn (fun f -> f "%s" w);
-        Lwt.return ()
+        Lwt.return database
       | Error e ->
         Log.err (fun f -> f "%s" e);
-        Lwt.return ()
-      | Reply reply ->
+        Lwt.return database
+      | Reply (reply, database) ->
         let open Dhcp_wire in
         Log.debug (fun f -> f "%s from %s" (op_to_string pkt.op) (Macaddr.to_string (pkt.srcmac)));
         Netif.write net (Dhcp_wire.buf_of_pkt reply)
@@ -113,20 +124,25 @@ module Dhcp = struct
           (op_to_string reply.op) (Macaddr.to_string (reply.dstmac))
           (Ipaddr.V4.to_string reply.yiaddr) (Ipaddr.V4.to_string reply.siaddr)
           dns routers domain
-        );
-        Lwt.return ()
-
-  let config ~config =
-    Dhcp_server.Config.parse (dhcp_conf ~config) [(config.local_ip, config.server_macaddr)]
+                  );
+        Log.debug (fun f -> f "lease database updated");
+        Lwt.return database
 
   let listen mac config net buf =
-    let subnet = List.hd config.Dhcp_server.Config.subnets in
+    (* TODO: the scope of this reference ensures that the database won't
+       actually remain updated after any particular transaction.  In our case
+       that's OK, because we only really want to serve one pre-allocated IP
+       anyway, but this will present a problem if that assumption ever changes.  *)
+    let database = ref (Dhcp_server.Lease.make_db ()) in
     match (Wire_structs.parse_ethernet_frame buf) with
     | Some (proto, dst, _payload) when of_interest mac dst ->
       (match proto with
        | Some Wire_structs.IPv4 ->
-         if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then
-           input net config subnet buf
+         if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then begin
+           input net config.dhcp_configuration !database buf >>= fun db ->
+           database := db;
+           Lwt.return_unit
+         end
          else
            Lwt.return_unit
        | _ -> Lwt.return_unit)
@@ -175,8 +191,7 @@ let connect ~config (ppp: Vmnet.t) =
   or_error "stack" @@ connect cfg ethif arp ipv4 udp4 tcp4
   >>= fun stack ->
   (* Hook in the DHCP server too *)
-  let dhcp_config = Dhcp.config ~config in
-  Netif.add_listener interface (Dhcp.listen config.server_macaddr dhcp_config interface);
+  Netif.add_listener interface (Dhcp.listen config.server_macaddr config interface);
   Lwt.return (`Ok stack)
 
 (* FIXME: this is unnecessary, mirage-flow should be changed *)
