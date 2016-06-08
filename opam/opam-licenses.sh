@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/usr/bin/env sh
+
 set -e
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
