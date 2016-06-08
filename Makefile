@@ -59,7 +59,7 @@ com.docker.slirp:
 
 com.docker.slirp.exe:
 	cd src/com.docker.slirp.exe && \
-	$(OPAMLFAGS) opam config exec -- \
+	$(OPAMFLAGS) opam config exec -- \
 	sh -c "oasis setup && ./configure && make"
 	cp src/com.docker.slirp.exe/_build/src/main.native com.docker.slirp.exe
 
