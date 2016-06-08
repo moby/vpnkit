@@ -51,8 +51,8 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
     Dhcp_wire.Name_servers [ local_ip ];
     Dhcp_wire.Time_servers [ local_ip ];
   ] in
-  let xhyve : host = {
-    hostname = "xhyve";
+  let hyperkit : host = {
+    hostname = "hyperkit";
     options = [];
     hw_addr = Some client_macaddr;
     fixed_addr = Some peer_ip;
@@ -60,7 +60,7 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
   let dhcp_configuration : Dhcp_server.Config.t = {
     options = options;
     hostname = "vpnkit"; (* it's us! *)
-    hosts = [ xhyve ];
+    hosts = [ hyperkit ];
     default_lease_time = Int32.of_int (60 * 60 * 2); (* 2 hours, from charrua defaults *)
     max_lease_time = Int32.of_int (60 * 60 * 24) ; (* 24 hours, from charrua defaults *)
     ip_addr = local_ip;
