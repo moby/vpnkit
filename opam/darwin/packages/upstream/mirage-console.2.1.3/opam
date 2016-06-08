@@ -1,0 +1,39 @@
+opam-version: "1.2"
+maintainer:    "anil@recoil.org"
+homepage:      "https://github.com/mirage/mirage-console"
+bug-reports:   "https://github.com/mirage/mirage-console/issues"
+dev-repo:      "https://github.com/mirage/mirage-console.git"
+authors: [
+  "Anil Madhavapeddy"
+  "David Scott"
+]
+tags: [
+  "org:mirage"
+  "org:xapi-project"
+]
+build: [make
+         "PREFIX=%{prefix}%"
+         "ENABLE_MIRAGE_XEN=--%{mirage-xen+xenstore+xen-gnt+xen-evtchn:enable}%-miragexen"
+         "ENABLE_XEN=--%{shared-memory-ring+xen-gnt+xen-evtchn+xenstore+xenstore_transport:enable}%-xen" 
+         "ENABLE_XENCTRL=--%{xenctrl+xen-evtchn+xen-gnt:enable}%-xenctrl" ]
+install: [make "install" "PREFIX=%{prefix}%"]
+remove: ["ocamlfind" "remove" "mirage-console"]
+depends: [
+  "ocamlfind" {build}
+  "mirage-types-lwt"
+  "cmdliner"
+  "mirage-unix" {>= "1.1.0"}
+  "ocamlbuild" {build}
+]
+depopts: [
+  "mirage-xen"
+  "xenstore"
+  "xen-gnt"
+  "xen-evtchn"
+  "shared-memory-ring"
+  "xenstore"
+  "xenstore_transport"
+]
+conflicts: [
+  "mirage-xen" { <"1.1.0" }
+]

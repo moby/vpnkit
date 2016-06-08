@@ -1,0 +1,13 @@
+opam-version: "1.2"
+maintainer: "contact@ocamlpro.com"
+homepage: "http://ounit.forge.ocamlcore.org"
+doc: ["http://ounit.forge.ocamlcore.org/api-ounit/index.html"]
+build: [
+  [make "build"]
+  [make "install"]
+]
+remove: [["ocamlfind" "remove" "oUnit"]]
+depends: [
+  "ocamlfind"
+  "ocamlbuild" {build}
+]

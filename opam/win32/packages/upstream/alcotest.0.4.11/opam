@@ -1,0 +1,22 @@
+opam-version: "1.2"
+maintainer: "thomas@gazagnaire.org"
+authors:     "Thomas Gazagnaire"
+homepage:    "https://github.com/mirage/alcotest/"
+dev-repo:    "https://github.com/mirage/alcotest.git"
+bug-reports: "https://github.com/mirage/alcotest/issues/"
+
+license: "ISC"
+build: [make "PREFIX=%{prefix}%"]
+build-test: [make "test"]
+install: [make "install"]
+remove: ["ocamlfind" "remove" "alcotest"]
+depends: [
+  "ocamlfind"  {build}
+  "ocamlbuild" {build}
+  "oasis"      {build}
+  "fmt"
+  "astring"
+  "result"
+  "cmdliner"
+]
+available: [ocaml-version >= "4.01.0"]

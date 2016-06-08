@@ -1,0 +1,22 @@
+opam-version: "1.2"
+maintainer: "andreashauptmann@t-online.de"
+authors: [ "andreashauptmann@t-online.de" ]
+license: "Boost Software License"
+homepage: "https://github.com/fdopen/depext-cygwinports"
+dev-repo: "https://github.com/fdopen/depext-cygwinports.git"
+bug-reports: "https://github.com/fdopen/depext-cygwinports/issues"
+build: [
+ [ "./configure" ]
+ [ make "-j%{jobs}%" "all" ]
+ [ make "-j%{jobs}%" "wrappers" ] {depext-cygwinports-install-wrappers}
+]
+depends: [
+  "config-file" {build}
+  "base-bytes" {build}
+]
+post-messages: [
+ "Don't forget to add either /usr/x86_64-w64-mingw32/sys-root/mingw/bin (or
+ /usr/i686-w64-mingw32/sys-root/mingw/bin for 32-bit builds) to your PATH.
+ Otherwise many packages can't be built." {success & os = "win32" }
+]
+available: [ os = "win32" ]

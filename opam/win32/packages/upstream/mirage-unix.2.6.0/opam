@@ -1,0 +1,23 @@
+opam-version: "1.2"
+maintainer:   "anil@recoil.org"
+authors:      "The MirageOS team"
+homepage:     "https://github.com/mirage/mirage-platform"
+bug-reports:  "https://github.com/mirage/mirage-platform/issues/"
+dev-repo:     "https://github.com/mirage/mirage-platform.git"
+license:      "part ISC, part LGPL-2.1 with OCaml linking ecxeption, part 3-clause BSD"
+build:   [make "unix-build"]
+install: [make "unix-install"   "PREFIX=%{prefix}%"]
+remove:  [make "unix-uninstall" "PREFIX=%{prefix}%"]
+
+depends: [
+  "conf-which" {build}
+  "cstruct" {>= "1.0.1"}
+  "ocamlfind"
+  "lwt" {>= "2.4.3"}
+  "io-page" {>= "1.5.0"}
+  "mirage-clock-unix" {>= "1.0.0"}
+  "shared-memory-ring" {>= "1.0.0"}
+  "mirage-profile" {>= "0.3"}
+  "ocamlbuild" {build}
+]
+available: [ocaml-version >= "4.01.0"]

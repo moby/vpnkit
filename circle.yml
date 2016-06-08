@@ -6,21 +6,16 @@ machine:
     OPAMVERBOSE: "1"
     OPAMJOBS: "2"
     MACOSX_DEPLOYMENT_TARGET: "10.10"
+general:
+  artifacts:
+  - src/com.docker.slirp/bundle.tgz
+  - OSS-LICENSES
 dependencies:
   override:
   - brew install wget opam dylibbundler
-  - rm -rf ~/.opam && opam init -a git://github.com/ocaml/opam-repository
-  - opam switch 4.02.3
-  - opam repo add dev .
-  - opam pin add -n proto-vmnet src/proto-vmnet
-  - opam pin add -n ofs src/ofs
-  - opam pin add -n hostnet src/hostnet
-  - opam pin add -n osx-daemon src/osx-daemon
-  - opam pin add -n osx-hyperkit src/osx-hyperkit
-  - opam pin add -n slirp src/com.docker.slirp
-  - opam depext -u slirp
-  - opam install --deps-only slirp
-  - cd src/com.docker.slirp && make bundle
+  - make depends
+  - make
+  - make OSS-LICENSES
 test:
   override:
   - echo Dummy test

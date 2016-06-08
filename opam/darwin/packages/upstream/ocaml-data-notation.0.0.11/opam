@@ -1,0 +1,12 @@
+opam-version: "1.2"
+maintainer: "contact@ocamlpro.com"
+build: [
+  [make]
+  [make "install"]
+]
+remove: [["ocamlfind" "remove" "odn"]]
+depends: [
+  "ocamlfind"
+  "type_conv" {>= "108.07.01"}
+  "ocamlbuild" {build}
+]

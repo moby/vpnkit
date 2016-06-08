@@ -1,0 +1,30 @@
+*** a/_tags	Tue Aug 18 19:17:27 2015
+--- b/_tags	Wed Sep 23 17:22:32 2015
+***************
+*** 74,80 ****
+  <syntax_test/*.ml{,i,y}>: use_sexplib
+  <syntax_test/*.ml{,i,y}>: use_sexplib_num
+  # OASIS_STOP
+! <lib/pre_sexp.ml>: pp(cpp -undef -traditional -Isyntax -w)
+  <syntax_test/*.ml{,i}>: syntax_camlp4o
+  <syntax/pa_sexp_conv.ml>: syntax_camlp4o
+  "top/sexplib_install_printers.ml": I(+compiler-libs)
+--- 74,80 ----
+  <syntax_test/*.ml{,i,y}>: use_sexplib
+  <syntax_test/*.ml{,i,y}>: use_sexplib_num
+  # OASIS_STOP
+! # <lib/pre_sexp.ml>: pp(cpp -undef -traditional -Isyntax -w)
+  <syntax_test/*.ml{,i}>: syntax_camlp4o
+  <syntax/pa_sexp_conv.ml>: syntax_camlp4o
+  "top/sexplib_install_printers.ml": I(+compiler-libs)
+*** a/Makefile	Tue Aug 18 19:17:27 2015
+--- b/Makefile	Wed Sep 23 17:26:05 2015
+***************
+*** 51,53 ****
+--- 51,56 ----
+  	./$(SETUP) -configure $(CONFIGUREFLAGS)
+  
+  .PHONY: default build doc test all install uninstall reinstall clean distclean configure
++ 
++ lib/pre_sexp.ml: lib/pre_sexp.ml.in
++ 	`ocamlc -config | grep bytecomp_c_compiler: | sed -e 's/.*: //'` -E -undef -traditional -Isyntax -w - < $< > $@

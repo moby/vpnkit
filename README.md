@@ -6,6 +6,19 @@ VPN-friendly networking devices for [HyperKit](https://github.com/docker/hyperki
 VPNKit is a set of tools and services for helping [HyperKit](https://github.com/docker/hyperkit)
 VMs interoperate with host VPN configurations.
 
+Building on Unix
+----------------
+
+First install `wget`, `opam` using your package manager of choice.
+Install the OCaml library dependencies with:
+```
+make depends
+```
+Build the application using:
+```
+make
+```
+
 Why is this needed?
 -------------------
 

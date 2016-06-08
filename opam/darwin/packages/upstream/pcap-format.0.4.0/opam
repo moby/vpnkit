@@ -1,0 +1,33 @@
+opam-version: "1.2"
+maintainer: "dave@recoil.org"
+authors: [ "Anil Madhavapeddy" "Dave Scott" "Richard Mortier" ]
+license: "ISC"
+version: "0.4.0"
+homepage: "https://github.com/mirage/ocaml-pcap"
+dev-repo: "https://github.com/mirage/ocaml-pcap.git"
+bug-reports: "https://github.com/mirage/ocaml-pcap/issues"
+tags: [
+  "org:mirage"
+  "org:xapi-project"
+]
+build: [
+  ["./configure" "--prefix" prefix]
+  [make]
+]
+install: [
+  [make "install"]
+]
+remove: [["ocamlfind" "remove" "pcap-format"]]
+depends: [
+  "ocamlfind"
+  "cstruct" {>= "1.9.0"}
+  "ppx_tools" {build}
+  "lwt" {test & >= "2.4.0"}
+  "ipaddr"
+  "ocamlbuild" {build}
+]
+depopts: ["mirage-net"]
+conflicts: [
+  "mirage-net-socket"
+  "mirage" {< "0.9.2"}
+]

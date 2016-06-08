@@ -1,0 +1,30 @@
+opam-version: "1.2"
+maintainer: "sheets@alum.mit.edu"
+authors: ["David Sheets" "Anil Madhavapeddy" "Hugo Heuzard"]
+homepage: "https://github.com/mirage/ocaml-ipaddr"
+bug-reports: "https://github.com/mirage/ocaml-ipaddr/issues"
+license: "ISC"
+tags: ["org:mirage" "org:xapi-project"]
+dev-repo: "https://github.com/mirage/ocaml-ipaddr.git"
+build: [
+  [
+    "ocaml"
+    "setup.ml"
+    "-configure"
+    "--prefix"
+    prefix
+    "--%{ounit:enable}%-tests"
+  ]
+  [make "build"]
+]
+install: [make "install"]
+build-test: [make "test"]
+remove: ["ocamlfind" "remove" "ipaddr"]
+depends: [
+  "ocamlfind" {build}
+  "base-bytes"
+  "sexplib" {< "113.01.00"}
+  "type_conv"
+  "ounit" {test}
+  "ocamlbuild" {build}
+]

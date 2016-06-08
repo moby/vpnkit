@@ -1,0 +1,31 @@
+--- ./src/unix/lwt_unix.ml
++++ ./src/unix/lwt_unix.ml
+@@ -768,10 +768,12 @@
+ 
+ external isatty_job : Unix.file_descr -> bool job = "lwt_unix_isatty_job"
+ 
++external lwt_unix_isatty_win : Unix.file_descr -> bool = "lwt_unix_isatty_win"
++
+ let isatty ch =
+   check_descriptor ch;
+   if Sys.win32 then
+-    Lwt.return (Unix.isatty ch.fd)
++    Lwt.return (lwt_unix_isatty_win ch.fd)
+   else
+     run_job (isatty_job ch.fd)
+ 
+--- ./src/unix/lwt_unix_windows.c
++++ ./src/unix/lwt_unix_windows.c
+@@ -569,3 +569,12 @@
+ LWT_NOT_AVAILABLE1(unix_getgrgid_job)
+ LWT_NOT_AVAILABLE4(unix_wait4)
+ LWT_NOT_AVAILABLE5(unix_bytes_recvfrom)
++
++CAMLprim value lwt_unix_isatty_win(value ufd)
++{
++  HANDLE h = Handle_val(ufd);
++  if ( ((struct filedescr *) Data_custom_val(ufd))->kind != KIND_HANDLE ){
++    return (Val_bool(0));
++  }
++  return (Val_bool( GetFileType(h) == FILE_TYPE_CHAR));
++}
