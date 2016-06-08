@@ -28,18 +28,20 @@ let default_mtu = 1500
 let ethernet_header_length = 14 (* no VLAN *)
 
 module Init = struct
-
-  cstruct msg {
-      uint8_t magic[5];   (* VMN3T *)
-      uint32_t version;   (* 1 *)
-      uint8_t commit[40];
-    } as little_endian
+  
+  [%%cstruct
+  type msg = {
+    magic : uint8_t [@len 5];   (* VMN3T *)
+    version : uint32_t ;   (* 1 *)
+    commit : uint8_t [@len 40];
+  } [@@little_endian]
+  ]
 
   type t = {
     magic: string;
     version: int32;
     commit: string;
-  } with sexp
+  } [@@deriving sexp]
 
   let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
 
@@ -67,14 +69,16 @@ end
 
 module Command = struct
 
-  cstruct msg {
-      uint8_t command;
-    } as little_endian
+  [%%cstruct
+  type msg = {
+    command : uint8_t;
+  } [@@little_endian]
+  ]
 
   type t =
     | Ethernet of string (* 36 bytes *)
     | Bind_ipv4 of Ipaddr.V4.t * int * bool
-  with sexp
+  [@@deriving sexp]
 
   let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
 
@@ -106,17 +110,19 @@ module Command = struct
 end
 
 module Vif = struct
-  cstruct msg {
-      uint16_t mtu;
-      uint16_t max_packet_size;
-      uint8_t macaddr[6];
-    } as little_endian
+  [%%cstruct
+  type msg = {
+    mtu : uint16_t;
+    max_packet_size : uint16_t;
+    macaddr : uint8_t [@len 6];
+  } [@@little_endian]
+  ]
 
   type t = {
     mtu: int;
     max_packet_size: int;
     client_macaddr: Macaddr.t;
-  } with sexp
+  } [@@deriving sexp]
 
   let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
 
@@ -145,9 +151,11 @@ module Vif = struct
 end
 
 module Packet = struct
-  cstruct msg {
-      uint16_t len;
-    } as little_endian
+  [%%cstruct
+  type msg = {
+    len : uint16_t;
+  } [@@little_endian]
+  ]
 
   let sizeof = sizeof_msg
 
