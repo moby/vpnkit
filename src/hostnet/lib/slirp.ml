@@ -149,7 +149,8 @@ let connect x peer_ip local_ip =
                     (Ipaddr.V4.to_string src_ip) src_port
                     (Ipaddr.V4.to_string dst_ip) dst_port in
                 Log.debug (fun f -> f "%s connecting" description);
-                ( if Ipaddr.V4.compare src_ip local_ip == 0 && src_port = 53 then begin
+                let for_us = Ipaddr.V4.compare src_ip local_ip == 0 in
+                ( if for_us && src_port = 53 then begin
                     Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
                     >>= function
                     | { Dns_resolver_unix.servers = (Ipaddr.V4 ip, port) :: _; _ } -> Lwt.return (ip, port)
