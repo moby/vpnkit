@@ -12,7 +12,6 @@ depends: [
   "ofs"
   "asl"
   "unix-type-representations"
-  "osx-daemon"
   "osx-hyperkit"
   "hostnet"
   "dns"
