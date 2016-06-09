@@ -10,8 +10,8 @@ servers.
 [charrua-unix](http://www.github.com/haesbaert/charrua-unix) is a Unix DHCP
 server based on charrua-core.
 
-[charrua-mirage](http://www.github.com/haesbaert/charrua-mirage) is a Mirage
-DHCP server based on charrua-core.
+[mirage](https://github.com/mirage/mirage-skeleton/tree/master/dhcp) is a Mirage
+DHCP unikernel server based on charrua-core.
 
 You can browse the API for [charrua-core] at
 http://haesbaert.github.io/charrua-core/api
@@ -19,14 +19,14 @@ http://haesbaert.github.io/charrua-core/api
 Features
 
 * Dhcp_server supports a stripped down ISC dhcpd.conf, so you can probably just
-  use your old dhcpd.conf.
-* Support for multiple interfaces/subnets.
+  use your old dhcpd.conf, it also supports manual configuration building in
+  ocaml.
 * Logic/sequencing is agnostic of IO and platform, so it can run on Unix as a
-  process, as a Mirage VM or anything else.
-* Functorizes over Logging functions.
-* Code is purely functional with the exception of Dhcp Leases.
-* With `charrua-mirage` you can run a server directly on top of Xen, without a
-  full operating system.
+  process, as a Mirage unikernel or anything else.
+* Dhcp_wire provides marshalling and unmarshalling utilities for DHCP, it is the
+  base for Dhcp_server.
+* All DHCP options are supported at the time of this writing.
+* Code is purely applicative.
 * It's in ocaml, so it's pretty cool.
 
 The name `charrua` is a reference to the, now extinct, semi-nomadic people of
