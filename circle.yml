@@ -10,6 +10,9 @@ general:
   artifacts:
   - src/com.docker.slirp/bundle.tgz
   - OSS-LICENSES
+checkout:
+  post:
+  - opam/check-upstream.sh
 dependencies:
   override:
   - brew install wget opam dylibbundler
