@@ -21,7 +21,7 @@ depends: [
   "ocamlfind" {build}
   "oasis" {build}
   "cmdliner"
-  "protocol-9p" {= "0.5.2"}
+  "protocol-9p" {= "0.6.0"}
   "logs"
   "cstruct" {>="1.6.0"}
 ]
