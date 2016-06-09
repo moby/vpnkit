@@ -1,6 +1,11 @@
 # The exact list is `ls packages/local` + $PKGS
 PKGS = alcotest depext
 
+.PHONY: commit update-win update-osx
+
+all: commit
+	@
+
 update-osx:
 	./update-upstream.sh $(PKGS)
 
