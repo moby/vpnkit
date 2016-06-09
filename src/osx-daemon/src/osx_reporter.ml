@@ -5,23 +5,6 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let get_trace_dir () =
-  let home = try Unix.getenv "HOME" with Not_found -> failwith "No $HOME environment variable defined" in
-  let (/) = Filename.concat in
-  let localtime = Unix.localtime @@ Unix.gettimeofday () in
-  let dir = Printf.sprintf "%04d-%02d-%02d"
-    (localtime.Unix.tm_year + 1900)
-    (localtime.Unix.tm_mon + 1)
-    localtime.Unix.tm_mday in
-  let log_dir = [ "Library"; "Containers"; "com.docker.docker"; "Data"; "logs"; dir ] in
-  (* mkdir -p *)
-  ignore @@ List.fold_left (fun cwd dir ->
-    let path = cwd / dir in
-    ( try Unix.mkdir (home / path) 0o0755 with | Unix.Unix_error(Unix.EEXIST, _, _) -> () );
-    path
-  ) "" log_dir;
-  List.fold_left (/) home log_dir
-
 let asl_install () =
   let facility = Filename.basename Sys.executable_name in
   let client = Asl.Client.create ~ident:"Docker" ~facility () in
