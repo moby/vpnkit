@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 54af61c6eb19ce0c9fa7596db1e0290f)
+# DO NOT EDIT (digest: d5c413aa3c9d5f11902fc2efc9b0b409)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -18,7 +18,6 @@ true: annot, bin_annot
 "lib/proto-vmnet.cmxs": use_proto-vmnet
 <lib/*.ml{,i,y}>: pkg_cstruct
 <lib/*.ml{,i,y}>: pkg_cstruct.lwt
-<lib/*.ml{,i,y}>: pkg_cstruct.syntax
 <lib/*.ml{,i,y}>: pkg_io-page.unix
 <lib/*.ml{,i,y}>: pkg_ipaddr
 <lib/*.ml{,i,y}>: pkg_ipaddr.unix
@@ -26,12 +25,14 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_lwt.unix
 <lib/*.ml{,i,y}>: pkg_mirage-types.lwt
 <lib/*.ml{,i,y}>: pkg_pcap-format
-<lib/*.ml{,i,y}>: pkg_sexplib.syntax
+<lib/*.ml{,i,y}>: pkg_ppx_sexp_conv
+<lib/*.ml{,i,y}>: pkg_ppx_tools
+<lib/*.ml{,i,y}>: pkg_ppx_type_conv
+<lib/*.ml{,i,y}>: pkg_sexplib
 # Library vmnet-client
 "unix/vmnet-client.cmxs": use_vmnet-client
 <unix/*.ml{,i,y}>: pkg_cstruct
 <unix/*.ml{,i,y}>: pkg_cstruct.lwt
-<unix/*.ml{,i,y}>: pkg_cstruct.syntax
 <unix/*.ml{,i,y}>: pkg_fd-send-recv
 <unix/*.ml{,i,y}>: pkg_io-page.unix
 <unix/*.ml{,i,y}>: pkg_ipaddr
@@ -41,7 +42,10 @@ true: annot, bin_annot
 <unix/*.ml{,i,y}>: pkg_lwt.unix
 <unix/*.ml{,i,y}>: pkg_mirage-types.lwt
 <unix/*.ml{,i,y}>: pkg_pcap-format
-<unix/*.ml{,i,y}>: pkg_sexplib.syntax
+<unix/*.ml{,i,y}>: pkg_ppx_sexp_conv
+<unix/*.ml{,i,y}>: pkg_ppx_tools
+<unix/*.ml{,i,y}>: pkg_ppx_type_conv
+<unix/*.ml{,i,y}>: pkg_sexplib
 <unix/*.ml{,i,y}>: pkg_unix-errno
 <unix/*.ml{,i,y}>: pkg_unix-errno.unix
 <unix/*.ml{,i,y}>: use_proto-vmnet
@@ -49,7 +53,6 @@ true: annot, bin_annot
 <bin/main.{native,byte}>: pkg_cmdliner
 <bin/main.{native,byte}>: pkg_cstruct
 <bin/main.{native,byte}>: pkg_cstruct.lwt
-<bin/main.{native,byte}>: pkg_cstruct.syntax
 <bin/main.{native,byte}>: pkg_fd-send-recv
 <bin/main.{native,byte}>: pkg_io-page.unix
 <bin/main.{native,byte}>: pkg_ipaddr
@@ -59,7 +62,10 @@ true: annot, bin_annot
 <bin/main.{native,byte}>: pkg_lwt.unix
 <bin/main.{native,byte}>: pkg_mirage-types.lwt
 <bin/main.{native,byte}>: pkg_pcap-format
-<bin/main.{native,byte}>: pkg_sexplib.syntax
+<bin/main.{native,byte}>: pkg_ppx_sexp_conv
+<bin/main.{native,byte}>: pkg_ppx_tools
+<bin/main.{native,byte}>: pkg_ppx_type_conv
+<bin/main.{native,byte}>: pkg_sexplib
 <bin/main.{native,byte}>: pkg_unix-errno
 <bin/main.{native,byte}>: pkg_unix-errno.unix
 <bin/main.{native,byte}>: use_proto-vmnet
@@ -67,7 +73,6 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: pkg_cmdliner
 <bin/*.ml{,i,y}>: pkg_cstruct
 <bin/*.ml{,i,y}>: pkg_cstruct.lwt
-<bin/*.ml{,i,y}>: pkg_cstruct.syntax
 <bin/*.ml{,i,y}>: pkg_fd-send-recv
 <bin/*.ml{,i,y}>: pkg_io-page.unix
 <bin/*.ml{,i,y}>: pkg_ipaddr
@@ -77,7 +82,10 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: pkg_lwt.unix
 <bin/*.ml{,i,y}>: pkg_mirage-types.lwt
 <bin/*.ml{,i,y}>: pkg_pcap-format
-<bin/*.ml{,i,y}>: pkg_sexplib.syntax
+<bin/*.ml{,i,y}>: pkg_ppx_sexp_conv
+<bin/*.ml{,i,y}>: pkg_ppx_tools
+<bin/*.ml{,i,y}>: pkg_ppx_type_conv
+<bin/*.ml{,i,y}>: pkg_sexplib
 <bin/*.ml{,i,y}>: pkg_unix-errno
 <bin/*.ml{,i,y}>: pkg_unix-errno.unix
 <bin/*.ml{,i,y}>: use_proto-vmnet

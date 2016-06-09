@@ -28,9 +28,11 @@ depends: [
   "logs"
   "cstruct"
   "mirage-types-lwt"
-  "sexplib" {< "113.24.00"}
-  "type_conv" {build}
-  "ipaddr" {>="2.5.0"}
+  "sexplib"
+  "ppx_type_conv" {build}
+  "ppx_tools" {build}
+  "ppx_sexp_conv" {build}
+  "ipaddr" {>="2.7.0"}
   "pcap-format"
 ]
 depopts: [
@@ -38,4 +40,4 @@ depopts: [
   "unix-errno"
   "ctypes"
 ]
-available: [ocaml-version >= "4.02.0"]
+available: [ocaml-version >= "4.02.3"]

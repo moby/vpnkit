@@ -1,0 +1,24 @@
+opam-version: "1.2"
+name: "charrua-core"
+version: "0.3"
+maintainer: "Christiano F. Haesbaert <haesbaert@haesbaert.org>"
+authors: "Christiano F. Haesbaert <haesbaert@haesbaert.org>"
+homepage: "https://github.com/haesbaert/charrua-core"
+bug-reports: "https://github.com/haesbaert/charrua-core/issues"
+license: "ISC"
+dev-repo: "https://github.com/haesbaert/charrua-core.git"
+available: [ocaml-version >= "4.01" & opam-version >= "1.2"]
+build: [
+  ["sh" "build.sh"]
+]
+depends: [
+  "ocamlfind"
+  {build}
+  "ppx_sexp_conv"
+  "ppx_type_conv"
+  "cstruct"
+  "sexplib"
+  "menhir"
+  "ipaddr"
+  "tcpip"
+]
