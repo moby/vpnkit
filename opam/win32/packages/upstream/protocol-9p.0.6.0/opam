@@ -1,7 +1,7 @@
 opam-version: "1.2"
 name: "protocol-9p"
 maintainer: "dave@recoil.org"
-version: "0.5.2"
+version: "0.6.0"
 authors: [ "David Scott" "David Sheets" "Thomas Leonard" ]
 license: "ISC"
 homepage: "https://github.com/mirage/ocaml-9p"
@@ -20,22 +20,21 @@ remove: ["ocamlfind" "remove" "protocol-9p"]
 
 depends: [
   "base-bytes"
-  "cstruct" {>="1.7.0" & <= "1.9.0"}
-  "sexplib" {<= "113.00.00" }
+  "cstruct" {>= "1.9.0"}
+  "sexplib" {> "113.00.00" }
   "result"
   "mirage-types-lwt"
   "lwt" {>= "2.4.7"}
   "base-unix"
   "cmdliner"
   "stringext"
-  "astring"
-  "named-pipe"
   "fmt"
   "logs" {>= "0.5.0"}
-  "type_conv" {build}
-  "win-error"
+  "ppx_deriving" {build}
+  "ppx_sexp_conv" {build}
   "ocamlfind" {build}
   "ocamlbuild" {build}
+  "ppx_tools" {build}
   "alcotest" {test & >= "0.4.0"}
 ]
 depopts: [

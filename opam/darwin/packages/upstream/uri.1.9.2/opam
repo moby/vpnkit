@@ -34,13 +34,11 @@ remove: [
 depends: [
   "ocamlfind" {build}
   "re"
-  "sexplib" {>= "109.53.00" & < "113.01.00"}
+  "sexplib" {>= "109.53.00"}
+  "ppx_sexp_conv"
   "base-bytes"
-  "type_conv"
   "stringext" {>= "1.4.0"}
   "ounit" {test & >= "1.0.2"}
   "ocamlbuild" {build}
 ]
-patches: [
-  "opamingw.patch"
-]
+available: [ ocaml-version >= "4.02.2" ]
