@@ -10,6 +10,7 @@ depends: [
   "ipaddr"
   "lwt"
   "ofs"
+  "asl"
   "osx-daemon"
   "osx-hyperkit"
   "hostnet"
