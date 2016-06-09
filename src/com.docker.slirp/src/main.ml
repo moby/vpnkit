@@ -22,6 +22,29 @@ let or_failwith = function
 
 module Forward = Forward.Make(Connect)(Bind)
 
+let listen path =
+  let startswith prefix x =
+    let prefix' = String.length prefix in
+    let x' = String.length x in
+    prefix' <= x' && (String.sub x 0 prefix' = prefix) in
+  if startswith "fd:" path then begin
+    let i = String.sub path 3 (String.length path - 3) in
+    let x = try int_of_string i with _ -> failwith (Printf.sprintf "Failed to parse command-line argument [%s]" path) in
+    let fd = Unix_representations.file_descr_of_int x in
+    Lwt.return (Lwt_unix.of_unix_file_descr fd)
+  end else begin
+    Lwt.catch
+      (fun () -> Lwt_unix.unlink path)
+      (function
+        | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
+        | e -> Lwt.fail e)
+    >>= fun () ->
+    let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
+    Lwt_unix.bind s (Lwt_unix.ADDR_UNIX path);
+    Lwt_unix.listen s 5;
+    Lwt.return s
+  end
+
 let start_port_forwarding port_control_path vsock_path =
   Log.info (fun f -> f "starting port_forwarding port_control_path:%s vsock_path:%s" port_control_path vsock_path);
   (* Start the 9P port forwarding server *)
@@ -36,7 +59,7 @@ let start_port_forwarding port_control_path vsock_path =
     exit 1
   | `Ok _ ->
   Ports.set_context fs vsock_path;
-  Osx_socket.listen port_control_path
+  listen port_control_path
   >>= fun port_s ->
   let server = Server.of_fd fs port_s in
   Server.serve_forever server
@@ -85,7 +108,7 @@ let main_t socket_path port_control_path vsock_path db_path nofile debug =
       (Printexc.get_backtrace ())
     )
   );
-  Osx_socket.listen socket_path
+  listen socket_path
   >>= fun s ->
 
   Lwt.async (fun () ->

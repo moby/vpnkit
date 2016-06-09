@@ -11,6 +11,7 @@ depends: [
   "lwt"
   "ofs"
   "asl"
+  "unix-type-representations"
   "osx-daemon"
   "osx-hyperkit"
   "hostnet"
