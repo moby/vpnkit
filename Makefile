@@ -1,9 +1,10 @@
 REPO_ROOT=$(shell git rev-parse --show-toplevel)
+COMMIT_ID=$(shell git rev-parse HEAD)
 MACOSX_DEPLOYMENT_TARGET?=10.10
 EXEDIR=C:\projects\vpnkit
 LICENSEDIRS=$(REPO_ROOT)/opam/licenses
 
-.PHONY: com.docker.slirp.exe com.docker.slirp install uninstall OSS-LICENSES
+.PHONY: com.docker.slirp.exe com.docker.slirp install uninstall OSS-LICENSES COMMIT
 
 TARGETS :=
 ifeq ($(OS),Windows_NT)
@@ -56,6 +57,7 @@ depends:
 
 com.docker.slirp:
 	$(OPAMFLAGS) opam config exec -- $(MAKE) -C src/com.docker.slirp
+	cp src/com.docker.slirp/_build/src/main.native com.docker.slirp
 
 com.docker.slirp.exe:
 	cd src/com.docker.slirp.exe && \
@@ -68,13 +70,16 @@ install:
 	cp src/com.docker.slirp.exe/register.ps1 '$(EXEDIR)'
 
 uninstall:
-	echo uninstall not implemented
+	@echo uninstall not implemented
 
 OSS-LICENSES:
 	mkdir -p $(LICENSEDIRS)
 	cd $(LICENSEDIRS) && \
 	  $(OPAMFLAGS) $(REPO_ROOT)/opam/opam-licenses.sh slirp
 	$(REPO_ROOT)/opam/list-licenses.sh $(LICENSEDIRS) > OSS-LICENSES
+
+COMMIT:
+	@echo $(COMMIT_ID) > COMMIT
 
 clean:
 	for pkg in `ls src/`; do \
