@@ -4,7 +4,6 @@ compiler-libs
 dynlink
 findlib
 graphics
-labltk
 num
 num-top
 stdlib

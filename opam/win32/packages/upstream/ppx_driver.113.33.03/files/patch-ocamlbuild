@@ -1,0 +1,10 @@
+--- ocamlbuild_plugin/ppx_driver_ocamlbuild.ml
++++ ocamlbuild_plugin/ppx_driver_ocamlbuild.ml
+@@ -53,6 +53,7 @@
+            let pkgs = split (env "%") ~on:'+' in
+            Cmd (S [ if native then !Options.ocamlopt else !Options.ocamlc
+                   ; A "-predicates"; A "ppx_driver"
++                  ; A "-g"
+                   ; A "-linkpkg"
+                   ; A "-o"; A (env target)
+                   ; A "-package"; A (String.concat "," pkgs)

@@ -1,0 +1,19 @@
+*** a/pkg/topkg.ml	Fri Oct 30 16:21:58 2015
+--- b/pkg/topkg.ml	Fri Oct 30 16:29:35 2015
+***************
+*** 258,264 ****
+      let src, dst =
+        if not auto then src, dst else
+        let dst = match dst with
+!       | None -> Some (Filename.basename src)
+        | Some _ as dst -> dst
+        in
+        let src = if Env.native then src ^ ".native" else src ^ ".byte" in
+--- 258,264 ----
+      let src, dst =
+        if not auto then src, dst else
+        let dst = match dst with
+!       | None -> Some (Filename.basename src ^ ".exe")
+        | Some _ as dst -> dst
+        in
+        let src = if Env.native then src ^ ".native" else src ^ ".byte" in

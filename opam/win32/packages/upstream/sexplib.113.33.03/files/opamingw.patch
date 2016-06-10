@@ -1,0 +1,20 @@
+--- ./Makefile
++++ ./Makefile
+@@ -65,3 +65,6 @@
+ 	./$(SETUP) -configure $(CONFIGUREFLAGS)
+ 
+ .PHONY: default build doc test all install uninstall reinstall clean distclean configure
++
++src/pre_sexp.ml: src/pre_sexp.ml.in
++	`ocamlc -config | grep bytecomp_c_compiler: | sed -e 's/.*: //'` -E -undef -traditional -Isyntax -w - < $< > $@
+--- ./_tags
++++ ./_tags
+@@ -5,7 +5,7 @@
+ <src/*.ml>: for-pack(Sexplib)
+ <num/lib/*.ml>: for-pack(Sexplib_num)
+ <unix/lib/*.ml>: for-pack(Sexplib_unix)
+-<src/pre_sexp.ml>: pp(cpp -undef -traditional -Isyntax -w)
++#<src/pre_sexp.ml>: pp(cpp -undef -traditional -Isyntax -w)
+ # OASIS_START
+ # DO NOT EDIT (digest: d1691c6135ef6e5a8fa5e7c454631c67)
+ # Ignore VCS directories, you can use the same kind of rule outside
