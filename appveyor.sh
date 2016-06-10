@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
 
+set -eu
+
 ### From ocaml-ci-scripts
 
 # default setttings
@@ -30,3 +32,4 @@ cd "${APPVEYOR_BUILD_FOLDER}"
 make depends
 make
 make OSS-LICENSES
+make COMMIT

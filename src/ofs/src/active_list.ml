@@ -120,7 +120,7 @@ module Make(Instance: Instance) = struct
 
   let root_qid = next_qid [ Types.Qid.Directory ]
 
-  let readme = Cstruct.of_string (Printf.sprintf "
+  let readme = Cstruct.of_string (Printf.sprintf {|
 Directory of active Instances
 -----------------------------
 
@@ -143,7 +143,7 @@ Immediately read the file contents and check whether it says:
   some needed resource is still in use.
 
 The directory will be deleted and replaced with a file of the same name.
-" Instance.description_of_format)
+|} Instance.description_of_format)
 
   let return x = Lwt.return (Result.Ok x)
 

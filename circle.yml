@@ -3,12 +3,12 @@ machine:
     version: "7.3"
   environment:
     OPAMYES: "1"
-    OPAMVERBOSE: "1"
     OPAMJOBS: "2"
     MACOSX_DEPLOYMENT_TARGET: "10.10"
 general:
   artifacts:
-  - src/com.docker.slirp/bundle.tgz
+  - com.docker.slirp
+  - COMMIT
   - OSS-LICENSES
 checkout:
   post:
@@ -19,6 +19,7 @@ dependencies:
   - make depends
   - make
   - make OSS-LICENSES
+  - make COMMIT
 test:
   override:
   - echo Dummy test

@@ -33,6 +33,7 @@ depends: [
   "ppx_tools" {build}
   "ppx_sexp_conv" {build}
   "ipaddr" {>="2.7.0"}
+  "mirage-flow"
   "pcap-format"
 ]
 depopts: [
