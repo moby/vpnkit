@@ -8,7 +8,8 @@ machine:
     MACOSX_DEPLOYMENT_TARGET: "10.10"
 general:
   artifacts:
-  - src/com.docker.slirp/bundle.tgz
+  - com.docker.slirp
+  - COMMIT
   - OSS-LICENSES
 checkout:
   post:
@@ -19,6 +20,7 @@ dependencies:
   - make depends
   - make
   - make OSS-LICENSES
+  - make COMMIT
 test:
   override:
   - echo Dummy test
