@@ -1,0 +1,19 @@
+commit 8a6370302b40748a7326e0b79d551e407f76ff8c
+Author: Jun FURUSE <jun.furuse@sc.com>
+Date:   Mon Sep 14 17:25:11 2015 +0800
+
+    quick fix for mingw
+
+diff --git a/pkg/topkg.ml b/pkg/topkg.ml
+index 9e2ba47..2f826dd 100644
+--- a/pkg/topkg.ml
++++ b/pkg/topkg.ml
+@@ -152,7 +152,7 @@ end
+ module Exts : Exts = struct
+   let interface = [".mli"; ".cmi"; ".cmti"]
+   let interface_opt = ".cmx" :: interface
+-  let c_library = if Sys.win32 then [".lib"] else [".a"]
++  let c_library = [".a"]
+   let c_dll_library = if Sys.win32 then [".dll"] else [".so"]
+   let library = [".cma"; ".cmxa"; ".cmxs"] @ c_library
+   let module_library = (interface_opt @ library)
