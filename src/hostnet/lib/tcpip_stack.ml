@@ -53,7 +53,7 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
   ] in
   let hyperkit : host = {
     hostname = "hyperkit";
-    options = [];
+    options = [ Dhcp_wire.Subnet_mask (Ipaddr.V4.of_string_exn "255.255.255.0") ];
     hw_addr = Some client_macaddr;
     fixed_addr = Some peer_ip;
   } in
