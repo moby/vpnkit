@@ -48,12 +48,14 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
   let options = [
     Dhcp_wire.Domain_name "local";
     Dhcp_wire.Routers [ local_ip ];
-    Dhcp_wire.Name_servers [ local_ip ];
-    Dhcp_wire.Time_servers [ local_ip ];
+    Dhcp_wire.Dns_servers [ local_ip ];
+    Dhcp_wire.Ntp_servers [ local_ip ];
+    Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
+    Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix)
   ] in
   let hyperkit : host = {
     hostname = "hyperkit";
-    options = [];
+    options = options;
     hw_addr = Some client_macaddr;
     fixed_addr = Some peer_ip;
   } in
