@@ -1,0 +1,21 @@
+opam-version: "1.2"
+maintainer: "opensource@janestreet.com"
+authors: ["Jane Street Group, LLC <opensource@janestreet.com>"]
+homepage: "https://github.com/janestreet/ppx_sexp_conv"
+bug-reports: "https://github.com/janestreet/ppx_sexp_conv/issues"
+dev-repo: "https://github.com/janestreet/ppx_sexp_conv.git"
+license: "Apache-2.0"
+build: [
+  ["./configure" "--prefix" prefix]
+  [make]
+]
+depends: [
+  "ocamlbuild"     {build}
+  "ocamlfind"      {build & >= "1.3.2"}
+  "js-build-tools" {build & >= "113.33.04" & < "113.34.00"}
+  "ppx_core"       {>= "113.33.03" & < "113.34.00"}
+  "ppx_tools"      {>= "0.99.3"}
+  "ppx_type_conv"  {>= "113.33.03" & < "113.34.00"}
+  "sexplib"        {>= "113.33.03" & < "113.34.00"}
+]
+available: [ ocaml-version = "4.02.3" ]

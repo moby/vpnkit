@@ -1,0 +1,24 @@
+--- ./src/findlib/fl_split.ml
++++ ./src/findlib/fl_split.ml
+@@ -126,10 +126,17 @@
+     | '/' | '\\' -> true
+     | _ -> false in
+   let norm_dir_win() =
+-    if l >= 1 && s.[0] = '/' then
+-      Buffer.add_char b '\\' else Buffer.add_char b s.[0];
+-    if l >= 2 && s.[1] = '/' then
+-      Buffer.add_char b '\\' else Buffer.add_char b s.[1];
++    if l >= 1 then (
++      if s.[0] = '/' then
++        Buffer.add_char b '\\'
++      else
++        Buffer.add_char b s.[0] ;
++      if l >= 2 then
++        if s.[1] = '/' then
++          Buffer.add_char b '\\'
++        else
++          Buffer.add_char b s.[1];
++    );
+     for k = 2 to l - 1 do
+       let c = s.[k] in
+       if is_slash c then (
