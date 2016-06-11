@@ -53,7 +53,10 @@ depends:
 	$(OPAMFLAGS) opam update -u -y
 	$(OPAMFLAGS) opam install $(DEPEXT) -y
 	$(OPAMFLAGS) opam depext -u slirp
-	$(OPAMFLAGS) opam install --deps-only slirp -y
+	# Don't run all the unit tests of all upstream packages in the universe for speed
+	$(OPAMFLAGS) opam install $(shell ls -1 $(OPAM_REPO)/packages/upstream) -y
+	# Please do run the unit tests for our packages
+	$(OPAMFLAGS) opam install --deps-only slirp -y -t
 
 com.docker.slirp:
 	$(OPAMFLAGS) opam config exec -- $(MAKE) -C src/com.docker.slirp
