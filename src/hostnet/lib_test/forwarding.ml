@@ -75,7 +75,29 @@ module LocalServer = struct
   let accept { listening_socket } =
     Lwt_unix.accept listening_socket
     >>= fun (fd, _) ->
-    Lwt.return fd
+    let server_ic = Lwt_io.of_fd ~close:Lwt.return ~mode:Lwt_io.input fd in
+    let server_oc = Lwt_io.of_fd ~close:Lwt.return ~mode:Lwt_io.output fd in
+    let rec read_request acc =
+      Lwt_io.read_line server_ic
+      >>= fun line ->
+      if line = ""
+      then Lwt.return acc
+    else read_request (acc ^ line) in
+    read_request ""
+    >>= fun request ->
+    if not(Astring.String.is_prefix ~affix:"GET" request)
+    then failwith (Printf.sprintf "unrecognised HTTP GET: [%s]" request);
+    let response = "HTTP/1.0 404 Not found\r\ncontent-length: 0\r\n\r\n" in
+    Lwt_io.write server_oc response
+    >>= fun () ->
+    Lwt_io.flush server_oc
+    >>= fun () ->
+    Lwt_io.close server_oc
+    >>= fun () ->
+    Lwt_io.close server_ic
+    >>= fun () ->
+    Lwt_unix.close fd
+
   let to_string t =
     Printf.sprintf "tcp:%s:%d" localhost t.local_port
   let destroy t = Lwt_unix.close t.listening_socket
@@ -153,22 +175,17 @@ module ForwardControl = struct
     Lwt.finalize (fun () -> f forward.ip forward.port) (fun () -> destroy forward)
 end
 
-let send_and_receive client server =
-  let ic = Lwt_io.of_fd ~mode:Lwt_io.input client in
-  let oc = Lwt_io.of_fd ~mode:Lwt_io.output server in
-  let message = "hello" in
-  Lwt_io.write_line oc message
+let http_get client =
+  let client_ic = Lwt_io.of_fd ~close:Lwt.return ~mode:Lwt_io.input client in
+  let client_oc = Lwt_io.of_fd ~close:Lwt.return ~mode:Lwt_io.output client in
+  let message = "GET / HTTP/1.0\r\nconnection: close\r\n\r\n" in
+  Lwt_io.write client_oc message
   >>= fun () ->
-  Lwt_io.flush oc
+  Lwt_io.flush client_oc
   >>= fun () ->
-  Lwt_io.read_line ic
-  >>= fun output ->
-  if output <> message then failwith (Printf.sprintf "wrote [%s] but read [%s]" message output);
-  Lwt_io.close ic
+  Lwt_io.close client_oc
   >>= fun () ->
-  Lwt_io.close oc
-  >>= fun () ->
-  Lwt.return ()
+  Lwt_io.close client_ic
 
 let test_one_forward () =
   let t =
@@ -183,11 +200,14 @@ let test_one_forward () =
                  connection
                   name
                   (fun ip port ->
-                    let client = LocalClient.connect ip port in
-                    LocalServer.accept server
-                    >>= fun server ->
-                    client >>= fun client ->
-                    send_and_receive client server
+                    let server = LocalServer.accept server in
+                    LocalClient.connect ip port
+                    >>= fun client ->
+                    http_get client
+                    >>= fun () ->
+                    server 
+                    >>= fun () ->
+                    Lwt_unix.close client
                   )
               )
           )
@@ -210,11 +230,14 @@ let test_10_connections () =
                     let rec loop = function
                       | 0 -> Lwt.return ()
                       | n ->
-                        let client = LocalClient.connect ip port in
-                        LocalServer.accept server
-                        >>= fun server ->
-                        client >>= fun client ->
-                        send_and_receive client server
+                        let server = LocalServer.accept server in
+                        LocalClient.connect ip port
+                        >>= fun client ->
+                        http_get client
+                        >>= fun () ->
+                        server
+                        >>= fun () ->
+                        Lwt_unix.close client
                         >>= fun () ->
                         loop (n - 1) in
                     let start = Unix.gettimeofday () in
