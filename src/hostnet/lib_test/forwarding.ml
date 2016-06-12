@@ -194,6 +194,43 @@ let test_one_forward () =
       ) in
   Lwt_main.run t
 
+let test_10_connections () =
+  let t =
+    LocalServer.with_server
+      (fun server ->
+        PortsServer.with_server
+          (fun () ->
+            ForwardControl.with_connection
+              (fun connection ->
+                let name = "tcp:" ^ localhost ^ ":0:" ^ (LocalServer.to_string server) in
+                ForwardControl.with_forward
+                 connection
+                  name
+                  (fun ip port ->
+                    let rec loop = function
+                      | 0 -> Lwt.return ()
+                      | n ->
+                        let client = LocalClient.connect ip port in
+                        LocalServer.accept server
+                        >>= fun server ->
+                        client >>= fun client ->
+                        send_and_receive client server
+                        >>= fun () ->
+                        loop (n - 1) in
+                    let start = Unix.gettimeofday () in
+                    loop 10
+                    >>= fun () ->
+                    let time = Unix.gettimeofday () -. start in
+                    (* NOTE(djs55): on my MBP this is almost immediate *)
+                    if time > 1. then failwith (Printf.sprintf "10 connections took %.02f (> 1) seconds" time);
+                    Lwt.return ()
+                  )
+              )
+          )
+      ) in
+  Lwt_main.run t
+
 let test = [
   "Test one port forward", `Quick, test_one_forward;
+  "Check speed of 10 forwarded connections", `Quick, test_10_connections;
 ]
