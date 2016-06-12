@@ -199,4 +199,5 @@ let () =
     "DHCP", test_dhcp;
     "DNS UDP", test_dns;
     "TCP", test_tcp;
+    "Forwarding", Forwarding.test;
   ]
