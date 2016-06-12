@@ -30,7 +30,9 @@ module Forward = Forward.Make(struct
     | `Udp(_ip, _port) -> failwith "unimplemented"
 end)(Hostnet.Port)
 
-let ports_path = "/tmp/ports.socket"
+let ports_port = 1234
+
+let localhost = Ipaddr.V4.(to_string localhost)
 
 module PortsServer = struct
   module Ports = Active_list.Make(Forward)
@@ -39,15 +41,13 @@ module PortsServer = struct
   let with_server f =
     let ports = Ports.make () in
     Ports.set_context ports "";
-    Server.listen ports "unix" ports_path
+    Server.listen ports "tcp" (localhost ^ ":" ^ (string_of_int ports_port))
     >>*= fun server ->
     let _ = Server.serve_forever server in
     f ()
     >>= fun () ->
     Server.shutdown server
 end
-
-let localhost = Ipaddr.V4.(to_string localhost)
 
 module LocalClient = struct
   let connect ip port =
@@ -98,7 +98,7 @@ module ForwardControl = struct
   }
 
   let connect () =
-    Client.connect "unix" ports_path ()
+    Client.connect "tcp" (localhost ^ ":" ^ (string_of_int ports_port)) ()
     >>*= fun ninep ->
     Lwt.return { ninep }
 
