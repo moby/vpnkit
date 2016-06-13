@@ -1,5 +1,0 @@
-Bindings to Hyper-V AF_HVSOCK
-
-AF_HVSOCK sockets allow host <-> VM communication on Hyper-V hosts. A typical
-use is to run some kind of agent in a VM, and connect to it from software
-running on the host. AF_HVSOCK is similar to AF_VSOCK as used by virtio-vsock.
