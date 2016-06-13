@@ -76,7 +76,7 @@ echo "preinstalled=$(opam config var preinstalled)"
 echo "os=$(opam config var os)"
 
 OUTPUT=${WORK_DIR}/pkgs.json
-opam install --root=${OPAMROOT} ${PACKAGES} --dry-run --json=${OUTPUT}
+opam install --root=${OPAMROOT} ${PACKAGES} --build-test --dry-run --json=${OUTPUT}
 ALL_PACKAGES=$(jq '.[] | map(select(.install)) | map( [.install.name, .install.version] | join(".")) | join(" ")' ${OUTPUT})
 
 ## Copy the package metadata that are needed in packages/upstream

@@ -52,17 +52,20 @@ depends:
 	  local "$(OPAM_REPO)"
 	$(OPAMFLAGS) opam update -u -y
 	$(OPAMFLAGS) opam install $(DEPEXT) -y
-	$(OPAMFLAGS) opam depext -u slirp
-	$(OPAMFLAGS) opam install --deps-only slirp -y
+	$(OPAMFLAGS) OPAMBUILDTEST=1 opam depext -u slirp
+	# Don't run all the unit tests of all upstream packages in the universe for speed
+	$(OPAMFLAGS) opam install $(shell ls -1 $(OPAM_REPO)/packages/upstream) -y
+	# Please do run the unit tests for our packages
+	$(OPAMFLAGS) opam install --deps-only slirp -y -t
 
 com.docker.slirp:
-	$(OPAMFLAGS) opam config exec -- $(MAKE) -C src/com.docker.slirp
+	$(OPAMFLAGS) opam config exec -- $(MAKE) -C src/com.docker.slirp build test
 	cp src/com.docker.slirp/_build/src/main.native com.docker.slirp
 
 com.docker.slirp.exe:
 	cd src/com.docker.slirp.exe && \
 	$(OPAMFLAGS) opam config exec -- \
-	sh -c "oasis setup && ./configure && make"
+	sh -c "oasis setup && ./configure --enable-tests && make && make test"
 	cp src/com.docker.slirp.exe/_build/src/main.native com.docker.slirp.exe
 
 install:
