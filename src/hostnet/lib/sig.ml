@@ -55,7 +55,9 @@ end
 module type Binder = sig
   (** Bind local ports *)
 
-  val bind: Ipaddr.V4.t -> int -> bool -> (Lwt_unix.file_descr, [> `Msg of string]) Result.result Lwt.t
+  val bind: Ipaddr.V4.t -> int -> bool -> (Lwt_unix.file_descr list, [> `Msg of string]) Result.result Lwt.t
   (** [bind local_ip local_port stream] binds [local_ip:local_port] with
-      either a SOCK_STREAM if [stream] is true, or SOCK_DGRAM otherwise *)
+      either a SOCK_STREAM if [stream] is true, or SOCK_DGRAM otherwise.
+      Note the result can be a list of fds in some cases (typically where
+      one is TCP4 and another is TCP6. *)
 end

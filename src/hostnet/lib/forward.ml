@@ -76,9 +76,9 @@ end
 
 module Make(Connector: Sig.Connector with type port = Port.t)(Binder: Sig.Binder) = struct
 type t = {
-  local: Port.t;
+  mutable local: Port.t;
   remote_port: Port.t;
-  mutable fd: Lwt_unix.file_descr option;
+  mutable fds: Lwt_unix.file_descr list;
 }
 
 type key = Port.t
@@ -129,29 +129,33 @@ let bind local =
     >>= fun () ->
     Binder.bind local_ip local_port false
 
-let start_tcp_proxy vsock_path_var _local_ip _local_port fd t =
-  (* On failure here, we must close the fd *)
+let start_tcp_proxy vsock_path_var _local_ip _local_port t =
+  (* Resolve the local port yet (the fds are already bound, we assume
+     to the same port number even if on different IPs *)
+  List.iter (fun fd ->
+    match t.local, Lwt_unix.getsockname fd with
+    | `Tcp (local_ip, 0), Lwt_unix.ADDR_INET(_, local_port) ->
+      t.local <- `Tcp(local_ip, local_port)
+    | _ -> ()
+  ) t.fds;
+  (* On failure here, we must close all the fd *)
   Lwt.catch
     (fun () ->
-       Lwt_unix.listen fd 5;
-       match t.local, Lwt_unix.getsockname fd with
-       | `Tcp (local_ip, _), Lwt_unix.ADDR_INET(_, local_port) ->
-         let t = { t with local = `Tcp(local_ip, local_port) } in
-         Lwt.return (Result.Ok (t, fd))
-       | _ ->
-         Lwt.return (Result.Error (`Msg "failed to query local port"))
+      List.iter (fun fd ->
+        Lwt_unix.listen fd 5;
+      ) t.fds;
+      Lwt.return (Result.Ok ())
     ) (fun e ->
-        Lwt_unix.close fd
-        >>= fun () ->
-        Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to listen: %s" (Printexc.to_string e))))
-      )
+      Lwt_list.iter_s Lwt_unix.close t.fds
+      >>= fun () ->
+      Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to listen: %s" (Printexc.to_string e))))
+    )
   >>= function
   | Result.Error e -> Lwt.return (Result.Error e)
-  | Result.Ok (t, fd) ->
-    (* The `Forward.stop` function is in charge of closing the fd *)
-    let t = { t with fd = Some fd } in
+  | Result.Ok () ->
+    (* From now on, the `Forward.stop` function is in charge of closing the fd *)
     let description = to_string t in
-    let rec loop () =
+    let rec loop fd =
       Lwt.catch (fun () ->
           Lwt_unix.accept fd
           >>= fun (local_fd, _) ->
@@ -198,8 +202,8 @@ let start_tcp_proxy vsock_path_var _local_ip _local_port fd t =
           )
         in
         Lwt.async (fun () -> log_exception_continue (description ^ " proxy") proxy);
-        loop () in
-    Lwt.async loop;
+        loop fd in
+    List.iter (fun fd -> Lwt.async @@ fun () -> loop fd) t.fds;
     Lwt.return (Result.Ok t)
 
 let max_udp_length = 2048 (* > 1500 the MTU of our link + header *)
@@ -222,7 +226,7 @@ let conn_write flow buf =
   | `Error e -> Lwt.fail (Failure (Connector.error_message e))
   | `Ok () -> Lwt.return ()
 
-let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
+let start_udp_proxy vsock_path_var _local_ip _local_port t =
   let open Lwt.Infix in
   let description = to_string t in
   let from_internet_string = Bytes.make max_udp_length '\000' in
@@ -230,7 +234,7 @@ let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
   (* We write to the internet using the from_vsock_buffer *)
   let from_vsock_string = Bytes.make max_udp_length '\000' in
   let from_vsock_buffer = Cstruct.create max_udp_length in
-  let _ =
+  let handle fd =
     Active_list.Var.read vsock_path_var
     >>= fun _vsock_path ->
     Log.debug (fun f -> f "%s: connecting to vsock port %s" description (Port.to_string t.remote_port));
@@ -347,6 +351,7 @@ let start_udp_proxy vsock_path_var _local_ip _local_port fd t =
     from_internet ()
     >>= fun () ->
     Connector.close v in
+  List.iter (fun fd -> Lwt.async @@ fun () -> log_exception_continue "udp handle" @@ fun () -> handle fd) t.fds;
   Lwt.return (Result.Ok t)
 
 let start vsock_path_var t =
@@ -354,20 +359,21 @@ let start vsock_path_var t =
   >>= function
   | Result.Error (`Msg m) ->
     Lwt.return (Result.Error (`Msg m))
-  | Result.Ok fd ->
-  let t = { t with fd = Some fd } in
-  match t.local with
-  | `Tcp (local_ip, local_port) ->
-    start_tcp_proxy vsock_path_var local_ip local_port fd t
-  | `Udp (local_ip, local_port) ->
-    start_udp_proxy vsock_path_var local_ip local_port fd t
+  | Result.Ok fds ->
+    t.fds <- fds;
+    match t.local with
+    | `Tcp (local_ip, local_port) ->
+      start_tcp_proxy vsock_path_var local_ip local_port t
+    | `Udp (local_ip, local_port) ->
+      start_udp_proxy vsock_path_var local_ip local_port t
 
-let stop t = match t.fd with
-  | None -> Lwt.return ()
-  | Some fd ->
-    t.fd <- None;
+let stop t =
+  let fds = t.fds in
+  t.fds <- [];
+  Lwt_list.iter_s (fun fd ->
     Log.debug (fun f -> f "%s: closing listening socket" (to_string t));
     Lwt_unix.close fd
+  ) fds
 
 let of_string x =
   match Stringext.split ~on:':' ~max:6 x with
@@ -380,7 +386,7 @@ let of_string x =
       | Result.Error x, _ -> Result.Error x
       | _, Result.Error x -> Result.Error x
       | Result.Ok local, Result.Ok remote_port ->
-        Result.Ok { local; remote_port; fd = None }
+        Result.Ok { local; remote_port; fds = [] }
     end
   | _ ->
     Result.errorf "Failed to parse request [%s], expected %s" x description_of_format

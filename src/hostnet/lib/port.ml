@@ -7,7 +7,7 @@ let bind local_ip local_port sock_stream =
       (fun () ->
        Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
        Lwt_unix.bind fd addr;
-       Lwt.return (Result.Ok fd))
+       Lwt.return (Result.Ok [ fd ]))
       (fun e ->
        Lwt_unix.close fd
        >>= fun () ->
