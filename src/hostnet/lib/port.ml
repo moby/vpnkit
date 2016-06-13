@@ -11,7 +11,11 @@ let bind local_ip local_port sock_stream =
       (fun e ->
        Lwt_unix.close fd
        >>= fun () ->
-       Lwt.return (Result.Error (`Msg (Printf.sprintf "Failed to bind %s %s:%d %s"
-         (if sock_stream then "SOCK_STREAM" else "SOCK_DGRAM")
-         (Ipaddr.V4.to_string local_ip) local_port (Printexc.to_string e))))
+        (* Pretty-print the most common exception *)
+        let message = match e with
+        | Unix.Unix_error(Unix.EADDRINUSE, _, _) -> "address already in use"
+        | e -> Printexc.to_string e in
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Failed to bind %s %s:%d %s"
+         (if sock_stream then "tcp" else "udp")
+         (Ipaddr.V4.to_string local_ip) local_port message)))
       )

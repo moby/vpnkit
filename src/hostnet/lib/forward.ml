@@ -143,11 +143,7 @@ let start_tcp_proxy vsock_path_var _local_ip _local_port fd t =
     ) (fun e ->
         Lwt_unix.close fd
         >>= fun () ->
-        (* Pretty-print the most common exception *)
-        let message = match e with
-        | Unix.Unix_error(Unix.EADDRINUSE, _, _) -> "address already in use"
-        | e -> Printexc.to_string e in
-        Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to bind port: %s" message)))
+        Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to listen: %s" (Printexc.to_string e))))
       )
   >>= function
   | Result.Error e -> Lwt.return (Result.Error e)
