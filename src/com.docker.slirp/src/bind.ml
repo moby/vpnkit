@@ -23,7 +23,7 @@ let request_privileged_port local_ip local_port sock_stream =
         begin match r with
         | `Ok fd ->
           Log.debug (fun f -> f "Received fd successfully");
-          Lwt.return (Result.Ok fd)
+          Lwt.return (Result.Ok [ fd ])
         | `Error (`Msg x) ->
           Log.err (fun f -> f "Error binding to %s:%d: %s" (Ipaddr.V4.to_string local_ip) local_port x);
           Lwt.return (Result.Error (`Msg x))
