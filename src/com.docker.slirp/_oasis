@@ -14,5 +14,5 @@ Executable Main
   CompiledObject: best
   Path: src
   MainIs: main.ml
-  BuildDepends: hostnet, osx-daemon, osx-hyperkit, ofs, protocol-9p,
+  BuildDepends: hostnet, asl, unix-type-representations, osx-hyperkit, ofs, protocol-9p,
     protocol-9p.unix, proto-vmnet, vmnet-client, cmdliner, unix-sys-resource.unix
