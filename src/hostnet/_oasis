@@ -14,7 +14,7 @@ Library hostnet
   Path: lib
   Pack: true
   Findlibname: hostnet
-  Modules: Arp, Dns_forward, Filter, Slirp, Socket, Socket_stack, Tcpip_stack,
+  Modules: Arp, Dns_forward, Filter, Slirp, Socket, Tcpip_stack,
     Port, Forward, Conn_lwt_unix, Sig
   BuildDepends: cstruct, lwt.unix, logs, mirage-types.lwt, ipaddr, mirage-flow,
     mirage-unix, mirage-clock-unix, mirage-console.unix, tcpip.ethif,

@@ -29,12 +29,6 @@ let start_port_forwarding port_control_path vsock_path =
   let module Ports = Active_list.Make(Forward) in
   let module Server = Server9p_unix.Make(Log)(Ports) in
   let fs = Ports.make () in
-  Socket_stack.connect ()
-  >>= function
-  | `Error (`Msg m) ->
-    Log.err (fun f -> f "Failed to create a socket stack: %s" m);
-    exit 1
-  | `Ok _ ->
   Ports.set_context fs vsock_path;
   Osx_socket.listen port_control_path
   >>= fun port_s ->

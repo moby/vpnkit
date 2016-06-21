@@ -139,12 +139,6 @@ let start_port_forwarding port_control_url =
   let module Ports = Active_list.Make(Forward) in
   let module Server = Protocol_9p.Server.Make(Log)(Flow_lwt_hvsock)(Ports) in
   let fs = Ports.make () in
-  Socket_stack.connect ()
-  >>= function
-  | `Error (`Msg m) ->
-    Log.err (fun f -> f "Failed to create a socket stack: %s" m);
-    exit 1
-  | `Ok _ ->
   Ports.set_context fs "";
   let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid (Uri.of_string port_control_url) in
   Connect.set_port_forward_addr sockaddr;
