@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: d5c413aa3c9d5f11902fc2efc9b0b409)
+# DO NOT EDIT (digest: f087ed21ce77842510f02b6072f97291)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -16,6 +16,7 @@ true: annot, bin_annot
 "_darcs": not_hygienic
 # Library proto-vmnet
 "lib/proto-vmnet.cmxs": use_proto-vmnet
+<lib/*.ml{,i,y}>: pkg_channel
 <lib/*.ml{,i,y}>: pkg_cstruct
 <lib/*.ml{,i,y}>: pkg_cstruct.lwt
 <lib/*.ml{,i,y}>: pkg_io-page.unix
@@ -23,6 +24,7 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_ipaddr.unix
 <lib/*.ml{,i,y}>: pkg_logs
 <lib/*.ml{,i,y}>: pkg_lwt.unix
+<lib/*.ml{,i,y}>: pkg_mirage-flow
 <lib/*.ml{,i,y}>: pkg_mirage-types.lwt
 <lib/*.ml{,i,y}>: pkg_pcap-format
 <lib/*.ml{,i,y}>: pkg_ppx_sexp_conv
@@ -31,6 +33,7 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_sexplib
 # Library vmnet-client
 "unix/vmnet-client.cmxs": use_vmnet-client
+<unix/*.ml{,i,y}>: pkg_channel
 <unix/*.ml{,i,y}>: pkg_cstruct
 <unix/*.ml{,i,y}>: pkg_cstruct.lwt
 <unix/*.ml{,i,y}>: pkg_fd-send-recv
@@ -40,6 +43,7 @@ true: annot, bin_annot
 <unix/*.ml{,i,y}>: pkg_logs
 <unix/*.ml{,i,y}>: pkg_logs.cli
 <unix/*.ml{,i,y}>: pkg_lwt.unix
+<unix/*.ml{,i,y}>: pkg_mirage-flow
 <unix/*.ml{,i,y}>: pkg_mirage-types.lwt
 <unix/*.ml{,i,y}>: pkg_pcap-format
 <unix/*.ml{,i,y}>: pkg_ppx_sexp_conv
@@ -50,6 +54,7 @@ true: annot, bin_annot
 <unix/*.ml{,i,y}>: pkg_unix-errno.unix
 <unix/*.ml{,i,y}>: use_proto-vmnet
 # Executable vmnet-cli
+<bin/main.{native,byte}>: pkg_channel
 <bin/main.{native,byte}>: pkg_cmdliner
 <bin/main.{native,byte}>: pkg_cstruct
 <bin/main.{native,byte}>: pkg_cstruct.lwt
@@ -60,6 +65,7 @@ true: annot, bin_annot
 <bin/main.{native,byte}>: pkg_logs
 <bin/main.{native,byte}>: pkg_logs.cli
 <bin/main.{native,byte}>: pkg_lwt.unix
+<bin/main.{native,byte}>: pkg_mirage-flow
 <bin/main.{native,byte}>: pkg_mirage-types.lwt
 <bin/main.{native,byte}>: pkg_pcap-format
 <bin/main.{native,byte}>: pkg_ppx_sexp_conv
@@ -70,6 +76,7 @@ true: annot, bin_annot
 <bin/main.{native,byte}>: pkg_unix-errno.unix
 <bin/main.{native,byte}>: use_proto-vmnet
 <bin/main.{native,byte}>: use_vmnet-client
+<bin/*.ml{,i,y}>: pkg_channel
 <bin/*.ml{,i,y}>: pkg_cmdliner
 <bin/*.ml{,i,y}>: pkg_cstruct
 <bin/*.ml{,i,y}>: pkg_cstruct.lwt
@@ -80,6 +87,7 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: pkg_logs
 <bin/*.ml{,i,y}>: pkg_logs.cli
 <bin/*.ml{,i,y}>: pkg_lwt.unix
+<bin/*.ml{,i,y}>: pkg_mirage-flow
 <bin/*.ml{,i,y}>: pkg_mirage-types.lwt
 <bin/*.ml{,i,y}>: pkg_pcap-format
 <bin/*.ml{,i,y}>: pkg_ppx_sexp_conv
