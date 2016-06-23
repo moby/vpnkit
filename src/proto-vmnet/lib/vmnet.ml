@@ -174,6 +174,9 @@ module Infix = struct
 end
 
 module Make(C: CONN) = struct
+
+module Channel = Channel.Make(C)
+
 type stats = {
   mutable rx_bytes: int64;
   mutable rx_pkts: int32;
@@ -182,11 +185,10 @@ type stats = {
 }
 
 type t = {
-  mutable fd: C.flow option;
+  mutable fd: Channel.t option;
   stats: stats;
   client_macaddr: Macaddr.t;
   server_macaddr: Macaddr.t;
-  read_header: Cstruct.t;
   write_header: Cstruct.t;
   write_m: Lwt_mutex.t;
   mutable pcap: Lwt_unix.file_descr option;
@@ -203,38 +205,25 @@ let get_fd t = match t.fd with
   | Some fd -> fd
   | None -> failwith "Vmnet connection is disconnected"
 
-let read fd buf =
-  C.read_into fd buf
-  >>= function
-  | `Eof -> Lwt.fail End_of_file
-  | `Error e -> Lwt.fail (Failure (C.error_message e))
-  | `Ok () -> Lwt.return ()
-
-let write fd buf =
-  C.write fd buf
-  >>= function
-  | `Eof -> Lwt.fail End_of_file
-  | `Error e -> Lwt.fail (Failure (C.error_message e))
-  | `Ok () -> Lwt.return ()
-
 let server_negotiate t =
   error_of_failure
     (fun () ->
       let fd = get_fd t in
-      let buf = Cstruct.create Init.sizeof in
-      read fd buf
-      >>= fun () ->
+      Channel.read_exactly ~len:Init.sizeof fd
+      >>= fun bufs ->
+      let buf = Cstruct.concat bufs in
       let open Infix in
       Lwt.return (Init.unmarshal buf)
       >>= fun (init, _) ->
       Log.info (fun f -> f "PPP.negotiate: received %s" (Init.to_string init));
       let (_: Cstruct.t) = Init.marshal Init.default buf in
       let open Lwt.Infix in
-      write fd buf
+      Channel.write_buffer fd buf;
+      Channel.flush fd
       >>= fun () ->
-      let buf = Cstruct.create Command.sizeof in
-      read fd buf
-      >>= fun () ->
+      Channel.read_exactly ~len:Command.sizeof fd
+      >>= fun bufs ->
+      let buf = Cstruct.concat bufs in
       let open Infix in
       Lwt.return (Command.unmarshal buf)
       >>= fun (command, _) ->
@@ -244,7 +233,8 @@ let server_negotiate t =
       let (_: Cstruct.t) = Vif.marshal vif buf in
       let open Lwt.Infix in
       Log.info (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
-      write fd buf
+      Channel.write_buffer fd buf;
+      Channel.flush fd
       >>= fun () ->
       Lwt.return (`Ok ())
     )
@@ -256,10 +246,12 @@ let client_negotiate t =
       let fd = get_fd t in
       let buf = Cstruct.create Init.sizeof in
       let (_: Cstruct.t) = Init.marshal Init.default buf in
-      write fd buf
+      Channel.write_buffer fd buf;
+      Channel.flush fd
       >>= fun () ->
-      read fd buf
-      >>= fun () ->
+      Channel.read_exactly ~len:Init.sizeof fd
+      >>= fun bufs ->
+      let buf = Cstruct.concat bufs in
       let open Infix in
       Lwt.return (Init.unmarshal buf)
       >>= fun (init, _) ->
@@ -268,11 +260,12 @@ let client_negotiate t =
       let uuid = String.make 36 'X' in
       let (_: Cstruct.t) = Command.marshal (Command.Ethernet uuid) buf in
       let open Lwt.Infix in
-      write fd buf
+      Channel.write_buffer fd buf;
+      Channel.flush fd
       >>= fun () ->
-      let buf = Cstruct.create Vif.sizeof in
-      read fd buf
-      >>= fun () ->
+      Channel.read_exactly ~len:Vif.sizeof fd
+      >>= fun bufs ->
+      let buf = Cstruct.concat bufs in
       let open Infix in
       Lwt.return (Vif.unmarshal buf)
       >>= fun (vif, _) ->
@@ -325,7 +318,6 @@ let stop_capture t =
 let make ~client_macaddr ~server_macaddr fd =
   let fd = Some fd in
   let stats = { rx_bytes = 0L; rx_pkts = 0l; tx_bytes = 0L; tx_pkts = 0l } in
-  let read_header = Cstruct.create Packet.sizeof in
   let write_header = Cstruct.create Packet.sizeof in
   let write_m = Lwt_mutex.create () in
   let pcap = None in
@@ -333,20 +325,22 @@ let make ~client_macaddr ~server_macaddr fd =
   let pcap_m = Lwt_mutex.create () in
   let listeners = [] in
   let listening = false in
-  { fd; stats; client_macaddr; server_macaddr; read_header; write_header; write_m; pcap; pcap_size_limit; pcap_m; listeners; listening }
+  { fd; stats; client_macaddr; server_macaddr; write_header; write_m; pcap; pcap_size_limit; pcap_m; listeners; listening }
 
 type fd = C.flow
 
-let of_fd ~client_macaddr ~server_macaddr fd =
+let of_fd ~client_macaddr ~server_macaddr flow =
   let open Infix in
-  let t = make ~client_macaddr ~server_macaddr fd in
+  let channel = Channel.create flow in
+  let t = make ~client_macaddr ~server_macaddr channel in
   server_negotiate t
   >>= fun () ->
   Lwt.return (`Ok t)
 
-let client_of_fd ~client_macaddr ~server_macaddr fd =
+let client_of_fd ~client_macaddr ~server_macaddr flow =
   let open Infix in
-  let t = make ~client_macaddr ~server_macaddr fd in
+  let channel = Channel.create flow in
+  let t = make ~client_macaddr ~server_macaddr channel in
   client_negotiate t
   >>= fun () ->
   Lwt.return (`Ok t)
@@ -356,7 +350,7 @@ let disconnect t = match t.fd with
   | Some fd ->
     t.fd <- None;
     Log.info (fun f -> f "Vmnet.disconnect closing fd");
-    C.close fd
+    Channel.close fd
 
 let capture t bufs =
   match t.pcap with
@@ -413,20 +407,14 @@ let writev t bufs =
            end else begin
              Packet.marshal len t.write_header;
              let fd = get_fd t in
-             write fd t.write_header
-             >>= fun () ->
+             Channel.write_buffer fd t.write_header;
              Log.debug (fun f ->
                  let b = Buffer.create 128 in
                  List.iter (Cstruct.hexdump_to_buffer b) bufs;
                  f "sending\n%s" (Buffer.contents b)
                );
-             let rec loop = function
-               | [] -> Lwt.return ()
-               | buf :: bufs ->
-                 write fd buf
-                 >>= fun () ->
-                 loop bufs in
-             loop bufs
+            List.iter (Channel.write_buffer fd) bufs;
+            Channel.flush fd
            end
          )
     )
@@ -443,22 +431,23 @@ let listen t callback =
         (fun () ->
            let open Lwt.Infix in
            let fd = get_fd t in
-           read fd t.read_header
-           >>= fun () ->
+           Channel.read_exactly ~len:Packet.sizeof fd
+           >>= fun bufs ->
+           let read_header = Cstruct.concat bufs in
            let open Infix in
-           Lwt.return (Packet.unmarshal t.read_header)
+           Lwt.return (Packet.unmarshal read_header)
            >>= fun (len, _) ->
-           let buf = Cstruct.create len in
            let open Lwt.Infix in
-           read fd buf
-           >>= fun () ->
-           capture t [ buf ]
+           Channel.read_exactly ~len fd
+           >>= fun bufs ->
+           capture t bufs
            >>= fun () ->
            Log.debug (fun f ->
                let b = Buffer.create 128 in
-               Cstruct.hexdump_to_buffer b buf;
+               List.iter (Cstruct.hexdump_to_buffer b) bufs;
                f "received\n%s" (Buffer.contents b)
              );
+           let buf = Cstruct.concat bufs in
            let callback buf = log_exception_continue "PPP.listen callback" (fun () -> callback buf) in
            Lwt.async (fun () -> callback buf);
            List.iter (fun callback -> Lwt.async (fun () -> callback buf)) t.listeners;
@@ -497,14 +486,14 @@ let write t buf =
            end else begin
              Packet.marshal len t.write_header;
              let fd = get_fd t in
-             write fd t.write_header
-             >>= fun () ->
+             Channel.write_buffer fd t.write_header;
              Log.debug (fun f ->
                  let b = Buffer.create 128 in
                  Cstruct.hexdump_to_buffer b buf;
                  f "sending\n%s" (Buffer.contents b)
                );
-             write fd buf
+             Channel.write_buffer fd buf;
+             Channel.flush fd
            end
         )
     )
