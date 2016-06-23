@@ -8,7 +8,7 @@ module Port : sig
   val of_string: string -> (t, [ `Msg of string ]) Result.result
 end
 
-module Make(Connector: Sig.Connector with type port = Port.t)(Binder: Sig.Binder) : sig
+module Make(Connector: Sig.Connector)(Binder: Sig.Binder) : sig
   include Active_list.Instance
     with type context = string
 

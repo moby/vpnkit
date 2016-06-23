@@ -74,7 +74,8 @@ module Port = struct
 
 end
 
-module Make(Connector: Sig.Connector with type port = Port.t)(Binder: Sig.Binder) = struct
+module Make(Connector: Sig.Connector)(Binder: Sig.Binder) = struct
+
 type t = {
   mutable local: Port.t;
   remote_port: Port.t;
@@ -129,6 +130,33 @@ let bind local =
     >>= fun () ->
     Binder.bind local_ip local_port false
 
+(* Given a connection to the port forwarding service, write the header which
+   describes the container IP and port we wish to connect to. *)
+let write_forwarding_header description remote remote_port =
+  (* Matches the Go definition *)
+  let proto, ip, port = match remote_port with
+    | `Tcp(ip, port) -> 1, ip, port
+    | `Udp(ip, port) -> 2, ip, port in
+  let header = Cstruct.create (1 + 2 + 4 + 2) in
+  Cstruct.set_uint8 header 0 proto;
+  Cstruct.LE.set_uint16 header 1 4;
+  let ip = Ipaddr.V4.to_bytes ip in
+  Cstruct.blit_from_string ip 0 header 3 4;
+  Cstruct.LE.set_uint16 header 7 port;
+  (* Write the header, we should be connected to the container port *)
+  Connector.write remote header
+  >>= function
+  | `Error e ->
+    let msg = Printf.sprintf "%s: failed to write forwarding header: %s" description (Connector.error_message e) in
+    Log.err (fun f -> f "%s" msg);
+    Lwt.fail (Failure msg)
+  | `Eof ->
+    let msg = Printf.sprintf "%s: EOF writing forwarding header" description in
+    Log.err (fun f -> f "%s" msg);
+    Lwt.fail (Failure msg)
+  | `Ok () ->
+    Lwt.return_unit
+
 let start_tcp_proxy vsock_path_var _local_ip _local_port t =
   (* Resolve the local port yet (the fds are already bound, we assume
      to the same port number even if on different IPs *)
@@ -176,10 +204,11 @@ let start_tcp_proxy vsock_path_var _local_ip _local_port t =
         >>= fun _vsock_path ->
         let proxy () =
           finally (fun () ->
-            Connector.connect t.remote_port
+            Connector.connect ()
             >>= fun remote ->
             finally (fun () ->
-              (* proxy between local and remote *)
+              write_forwarding_header description remote t.remote_port
+              >>= fun () ->
               Log.debug (fun f -> f "%s: connected" description);
               Mirage_flow.proxy (module Clock) (module Connector) remote (module Socket.Stream) local ()
               >>= function
@@ -237,14 +266,10 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
   let handle fd =
     Active_list.Var.read vsock_path_var
     >>= fun _vsock_path ->
-    Log.debug (fun f -> f "%s: connecting to vsock port %s" description (Port.to_string t.remote_port));
-    Connector.connect t.remote_port
-    >>= fun v ->
-    Log.debug (fun f -> f "%s: connected to vsock port %s" description (Port.to_string t.remote_port));
     (* Construct the vsock header in a separate buffer but write the payload
        directly from the from_internet_buffer *)
     let write_header_buffer = Cstruct.create max_vsock_header_length in
-    let write buf sockaddr = match sockaddr with
+    let write v buf sockaddr = match sockaddr with
       | Unix.ADDR_UNIX _ ->
         Log.err (fun f -> f "%s: dropping UDP packet from unix domain socket" description);
         Lwt.return ()
@@ -285,7 +310,7 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
         conn_write v buf in
     (* Read the vsock header and payload into the same buffer, and write it
        to the internet from there. *)
-    let read () =
+    let read v =
       conn_read v (Cstruct.sub from_vsock_buffer 0 2)
       >>= fun () ->
       let frame_length = Cstruct.LE.get_uint16 from_vsock_buffer 0 in
@@ -314,12 +339,12 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
       (* payload *)
       let payload = Cstruct.sub rest 2 payload_length in
       Lwt.return (payload.Cstruct.off, payload_length, Unix.ADDR_INET(ip, port)) in
-    let rec from_internet () =
+    let rec from_internet v =
       Lwt.catch (fun () ->
         Lwt_unix.recvfrom fd from_internet_string 0 (String.length from_internet_string) []
         >>= fun (len, sockaddr) ->
         Cstruct.blit_from_string from_internet_string 0 from_internet_buffer 0 len;
-        write (Cstruct.sub from_internet_buffer 0 len) sockaddr
+        write v (Cstruct.sub from_internet_buffer 0 len) sockaddr
         >>= fun () ->
         Lwt.return true
       ) (function
@@ -329,12 +354,12 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
           Lwt.return false
       )
       >>= function
-      | true -> from_internet ()
+      | true -> from_internet v
       | false -> Lwt.return () in
-    let rec from_vsock () =
+    let rec from_vsock v =
       Lwt.catch
         (fun () ->
-          read ()
+          read v
           >>= fun (ofs, len, sockaddr) ->
           (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
           Cstruct.blit_to_bytes from_vsock_buffer ofs from_vsock_string 0 len;
@@ -345,12 +370,22 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
           Log.debug (fun f -> f "%s: shutting down from vsock thread: %s" description (Printexc.to_string e));
           Lwt.return false
         ) >>= function
-        | true -> from_vsock ()
+        | true -> from_vsock v
         | false -> Lwt.return () in
-    let _ = from_vsock () in
-    from_internet ()
-    >>= fun () ->
-    Connector.close v in
+
+    Log.debug (fun f -> f "%s: connecting to vsock port %s" description (Port.to_string t.remote_port));
+    Connector.connect ()
+    >>= fun v ->
+    Lwt.finalize
+      (fun () ->
+        write_forwarding_header description v t.remote_port
+        >>= fun () ->
+        Log.debug (fun f -> f "%s: connected to vsock port %s" description (Port.to_string t.remote_port));
+        let _ = from_vsock v in
+        from_internet v
+      ) (fun () ->
+        Connector.close v
+      ) in
   List.iter (fun fd -> Lwt.async @@ fun () -> log_exception_continue "udp handle" @@ fun () -> handle fd) t.fds;
   Lwt.return (Result.Ok t)
 

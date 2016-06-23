@@ -46,10 +46,8 @@ module type Connector = sig
 
   include CONN
 
-  type port
-
-  val connect: port -> flow Lwt.t
-  (** Connect to the given port on the VM *)
+  val connect: unit -> flow Lwt.t
+  (** Connect to the port multiplexing service in the VM *)
 end
 
 module type Binder = sig
