@@ -44,7 +44,7 @@ module Port = struct
   module M = struct
     type t = [
       | `Tcp of Ipaddr.V4.t * Int16.t
-      | `Udp of Ipaddr.V4.t * Int16.t
+      | `Udp of Ipaddr.t * Int16.t
     ]
     let compare = compare
   end
@@ -54,17 +54,16 @@ module Port = struct
 
   let to_string = function
     | `Tcp (addr, port) -> Printf.sprintf "tcp:%s:%d" (Ipaddr.V4.to_string addr) port
-    | `Udp (addr, port) -> Printf.sprintf "udp:%s:%d" (Ipaddr.V4.to_string addr) port
+    | `Udp (addr, port) -> Printf.sprintf "udp:%s:%d" (Ipaddr.to_string addr) port
 
   let of_string x =
     try
         match Stringext.split ~on:':' x with
         | [ proto; ip; port ] ->
-          let ip = Ipaddr.V4.of_string_exn ip in
           let port = int_of_string port in
           begin match String.lowercase proto with
-            | "tcp" -> Result.return (`Tcp (ip, port))
-            | "udp" -> Result.return (`Udp (ip, port))
+            | "tcp" -> Result.return (`Tcp (Ipaddr.V4.of_string_exn ip, port))
+            | "udp" -> Result.return (`Udp (Ipaddr.of_string_exn ip, port))
             | _ -> Result.errorf "unknown protocol: should be tcp or udp"
           end
         | _ ->
@@ -74,12 +73,12 @@ module Port = struct
 
 end
 
-module Make(Connector: Sig.Connector)(Binder: Sig.Binder) = struct
+module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
 
 type t = {
   mutable local: Port.t;
   remote_port: Port.t;
-  mutable fds: Lwt_unix.file_descr list;
+  mutable server: [ `Tcp of Socket.Stream.Tcp.server | `Udp of Socket.Datagram.Udp.server ] option;
 }
 
 type key = Port.t
@@ -94,53 +93,30 @@ let to_string t = Printf.sprintf "%s:%s" (Port.to_string t.local) (Port.to_strin
 
 let description_of_format = "'<tcp|udp>:local ip:local port:remote vchan port'"
 
-let finally f g =
-  Lwt.catch (fun () ->
-    f ()
-    >>= fun r ->
-    g ()
-    >>= fun () ->
-    Lwt.return r
-  ) (fun e ->
-    g ()
-    >>= fun () ->
-    Lwt.fail e
-  )
-
 let check_bind_allowed ip = match !allowed_addresses with
   | None -> Lwt.return () (* no restriction *)
   | Some ips ->
-    let match_ipv4 = function
-      | Ipaddr.V6 _ -> false
-      | Ipaddr.V4 x when x = Ipaddr.V4.any -> true
-      | Ipaddr.V4 x -> x = ip in
-    if List.fold_left (||) false (List.map match_ipv4 ips)
+    let match_ip allowed_ip =
+      let exact_match = Ipaddr.compare allowed_ip ip = 0 in
+      let wildcard = match ip, allowed_ip with
+        | Ipaddr.V4 _, Ipaddr.V4 x when x = Ipaddr.V4.any -> true
+        | _, _ -> false in
+      exact_match || wildcard in
+    if List.fold_left (||) false (List.map match_ip ips)
     then Lwt.return ()
     else Lwt.fail (Unix.Unix_error(Unix.EPERM, "bind", ""))
-
-
-let bind local =
-  match local with
-  | `Tcp (local_ip, local_port)  ->
-    check_bind_allowed local_ip
-    >>= fun () ->
-    Binder.bind local_ip local_port true
-  | `Udp (local_ip, local_port) ->
-    check_bind_allowed local_ip
-    >>= fun () ->
-    Binder.bind local_ip local_port false
 
 (* Given a connection to the port forwarding service, write the header which
    describes the container IP and port we wish to connect to. *)
 let write_forwarding_header description remote remote_port =
   (* Matches the Go definition *)
   let proto, ip, port = match remote_port with
-    | `Tcp(ip, port) -> 1, ip, port
-    | `Udp(ip, port) -> 2, ip, port in
+    | `Tcp(ip, port) -> 1, Ipaddr.V4.to_bytes ip, port
+    | `Udp(Ipaddr.V4 ip, port) -> 2, Ipaddr.V4.to_bytes ip, port
+    | `Udp(Ipaddr.V6 ip, port) -> 2, Ipaddr.V6.to_bytes ip, port in
   let header = Cstruct.create (1 + 2 + 4 + 2) in
   Cstruct.set_uint8 header 0 proto;
   Cstruct.LE.set_uint16 header 1 4;
-  let ip = Ipaddr.V4.to_bytes ip in
   Cstruct.blit_from_string ip 0 header 3 4;
   Cstruct.LE.set_uint16 header 7 port;
   (* Write the header, we should be connected to the container port *)
@@ -157,83 +133,34 @@ let write_forwarding_header description remote remote_port =
   | `Ok () ->
     Lwt.return_unit
 
-let start_tcp_proxy vsock_path_var _local_ip _local_port t =
-  (* Resolve the local port yet (the fds are already bound, we assume
-     to the same port number even if on different IPs *)
-  List.iter (fun fd ->
-    match t.local, Lwt_unix.getsockname fd with
-    | `Tcp (local_ip, 0), Lwt_unix.ADDR_INET(_, local_port) ->
-      t.local <- `Tcp(local_ip, local_port)
-    | _ -> ()
-  ) t.fds;
-  (* On failure here, we must close all the fd *)
-  Lwt.catch
-    (fun () ->
-      List.iter (fun fd ->
-        Lwt_unix.listen fd 5;
-      ) t.fds;
-      Lwt.return (Result.Ok ())
-    ) (fun e ->
-      Lwt_list.iter_s Lwt_unix.close t.fds
-      >>= fun () ->
-      Lwt.return (Result.Error (`Msg (Printf.sprintf "failed to listen: %s" (Printexc.to_string e))))
-    )
-  >>= function
-  | Result.Error e -> Lwt.return (Result.Error e)
-  | Result.Ok () ->
-    (* From now on, the `Forward.stop` function is in charge of closing the fd *)
-    let description = to_string t in
-    let rec loop fd =
-      Lwt.catch (fun () ->
-          Lwt_unix.accept fd
-          >>= fun (local_fd, _) ->
-          Lwt.return (Some local_fd)
-        ) (function
-          | Unix.Unix_error(Unix.EBADF, _, _) -> Lwt.return None
-          | e ->
-            Log.err (fun f -> f "%s: failed to accept: %s" description (Printexc.to_string e));
-            Lwt.return None
-        )
-      >>= function
-      | None ->
-        Log.debug (fun f -> f "%s: listening thread shutting down" description);
-        Lwt.return ()
-      | Some local_fd ->
-        let local = Socket.Stream.of_fd ~description local_fd in
-        Active_list.Var.read vsock_path_var
-        >>= fun _vsock_path ->
-        let proxy () =
-          finally (fun () ->
-            Connector.connect ()
-            >>= fun remote ->
-            finally (fun () ->
-              write_forwarding_header description remote t.remote_port
-              >>= fun () ->
-              Log.debug (fun f -> f "%s: connected" description);
-              Mirage_flow.proxy (module Clock) (module Connector) remote (module Socket.Stream) local ()
-              >>= function
-              | `Error (`Msg m) ->
-                Log.err (fun f -> f "%s proxy failed with %s" description m);
-                Lwt.return ()
-              | `Ok (l_stats, r_stats) ->
-                Log.debug (fun f ->
-                    f "%s completed: l2r = %s; r2l = %s" description
-                      (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
-                  );
-                Lwt.return ()
-            ) (fun () ->
-              Connector.close remote
-            )
-          ) (fun () ->
-            Socket.Stream.close local
-            >>= fun () ->
+let start_tcp_proxy description vsock_path_var remote_port server =
+  Socket.Stream.Tcp.listen server
+    (fun local ->
+      Active_list.Var.read vsock_path_var
+      >>= fun _vsock_path ->
+      Connector.connect ()
+      >>= fun remote ->
+      Lwt.finalize
+        (fun () ->
+          write_forwarding_header description remote remote_port
+          >>= fun () ->
+          Log.debug (fun f -> f "%s: connected" description);
+          Mirage_flow.proxy (module Clock) (module Connector) remote (module Socket.Stream.Tcp) local ()
+          >>= function
+          | `Error (`Msg m) ->
+            Log.err (fun f -> f "%s proxy failed with %s" description m);
             Lwt.return ()
-          )
-        in
-        Lwt.async (fun () -> log_exception_continue (description ^ " proxy") proxy);
-        loop fd in
-    List.iter (fun fd -> Lwt.async @@ fun () -> loop fd) t.fds;
-    Lwt.return (Result.Ok t)
+          | `Ok (l_stats, r_stats) ->
+            Log.debug (fun f ->
+                f "%s completed: l2r = %s; r2l = %s" description
+                  (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
+              );
+            Lwt.return ()
+        ) (fun () ->
+          Connector.close remote
+        )
+    );
+  Lwt.return ()
 
 let max_udp_length = 2048 (* > 1500 the MTU of our link + header *)
 
@@ -255,13 +182,10 @@ let conn_write flow buf =
   | `Error e -> Lwt.fail (Failure (Connector.error_message e))
   | `Ok () -> Lwt.return ()
 
-let start_udp_proxy vsock_path_var _local_ip _local_port t =
+let start_udp_proxy description vsock_path_var remote_port server =
   let open Lwt.Infix in
-  let description = to_string t in
-  let from_internet_string = Bytes.make max_udp_length '\000' in
   let from_internet_buffer = Cstruct.create max_udp_length in
   (* We write to the internet using the from_vsock_buffer *)
-  let from_vsock_string = Bytes.make max_udp_length '\000' in
   let from_vsock_buffer = Cstruct.create max_udp_length in
   let handle fd =
     Active_list.Var.read vsock_path_var
@@ -269,45 +193,38 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
     (* Construct the vsock header in a separate buffer but write the payload
        directly from the from_internet_buffer *)
     let write_header_buffer = Cstruct.create max_vsock_header_length in
-    let write v buf sockaddr = match sockaddr with
-      | Unix.ADDR_UNIX _ ->
-        Log.err (fun f -> f "%s: dropping UDP packet from unix domain socket" description);
-        Lwt.return ()
-      | Unix.ADDR_INET (ip, port) ->
-        (* Leave space for a uint16 frame length *)
-        let rest = Cstruct.shift write_header_buffer 2 in
-        (* uint16 IP address length *)
-        let ip_bytes =
-          match Ipaddr.of_string @@ Unix.string_of_inet_addr ip with
-          | Some Ipaddr.V4 ipv4 -> Ipaddr.V4.to_bytes ipv4
-          | Some Ipaddr.V6 ipv6 -> Ipaddr.V6.to_bytes ipv6
-          | None ->
-            Log.err (fun f -> f "%s: Ipaddr.of_string failed to parse IP %s" description (Unix.string_of_inet_addr ip));
-            failwith "Failed to parse IP" in
-        let ip_bytes_len = String.length ip_bytes in
-        Cstruct.LE.set_uint16 rest 0 ip_bytes_len;
-        let rest = Cstruct.shift rest 2 in
-        (* IP address bytes *)
-        Cstruct.blit_from_string ip_bytes 0 rest 0 ip_bytes_len;
-        let rest = Cstruct.shift rest ip_bytes_len in
-        (* uint16 Port *)
-        Cstruct.LE.set_uint16 rest 0 port;
-        let rest = Cstruct.shift rest 2 in
-        (* uint16 Zone length *)
-        Cstruct.LE.set_uint16 rest 0 0;
-        let rest = Cstruct.shift rest 2 in
-        (* Zone string *)
-        (* uint16 payload length *)
-        Cstruct.LE.set_uint16 rest 0 (Cstruct.len buf);
-        let rest = Cstruct.shift rest 2 in
-        let header_len = rest.Cstruct.off - write_header_buffer.Cstruct.off in
-        let frame_len = header_len + (Cstruct.len buf) in
-        let header = Cstruct.sub write_header_buffer 0 header_len in
-        (* Add an overall frame length at the start *)
-        Cstruct.LE.set_uint16 header 0 frame_len;
-        conn_write v header
-        >>= fun () ->
-        conn_write v buf in
+    let write v buf (ip, port) =
+      (* Leave space for a uint16 frame length *)
+      let rest = Cstruct.shift write_header_buffer 2 in
+      (* uint16 IP address length *)
+      let ip_bytes =
+        match ip with
+        | Ipaddr.V4 ipv4 -> Ipaddr.V4.to_bytes ipv4
+        | Ipaddr.V6 ipv6 -> Ipaddr.V6.to_bytes ipv6 in
+      let ip_bytes_len = String.length ip_bytes in
+      Cstruct.LE.set_uint16 rest 0 ip_bytes_len;
+      let rest = Cstruct.shift rest 2 in
+      (* IP address bytes *)
+      Cstruct.blit_from_string ip_bytes 0 rest 0 ip_bytes_len;
+      let rest = Cstruct.shift rest ip_bytes_len in
+      (* uint16 Port *)
+      Cstruct.LE.set_uint16 rest 0 port;
+      let rest = Cstruct.shift rest 2 in
+      (* uint16 Zone length *)
+      Cstruct.LE.set_uint16 rest 0 0;
+      let rest = Cstruct.shift rest 2 in
+      (* Zone string *)
+      (* uint16 payload length *)
+      Cstruct.LE.set_uint16 rest 0 (Cstruct.len buf);
+      let rest = Cstruct.shift rest 2 in
+      let header_len = rest.Cstruct.off - write_header_buffer.Cstruct.off in
+      let frame_len = header_len + (Cstruct.len buf) in
+      let header = Cstruct.sub write_header_buffer 0 header_len in
+      (* Add an overall frame length at the start *)
+      Cstruct.LE.set_uint16 header 0 frame_len;
+      conn_write v header
+      >>= fun () ->
+      conn_write v buf in
     (* Read the vsock header and payload into the same buffer, and write it
        to the internet from there. *)
     let read v =
@@ -323,11 +240,10 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
       let ip_bytes_string = Cstruct.(to_string (sub rest 2 ip_bytes_len)) in
       let rest = Cstruct.shift rest (2 + ip_bytes_len) in
       let ip =
-        Unix.inet_addr_of_string (
-          if String.length ip_bytes_string = 4
-          then Ipaddr.V4.to_string (Ipaddr.V4.of_bytes_exn ip_bytes_string)
-          else Ipaddr.V6.to_string (Ipaddr.V6.of_bytes_exn ip_bytes_string)
-        ) in
+        let open Ipaddr in
+        if String.length ip_bytes_string = 4
+        then V4 (V4.of_bytes_exn ip_bytes_string)
+        else V6 (Ipaddr.V6.of_bytes_exn ip_bytes_string) in
       (* uint16 Port *)
       let port = Cstruct.LE.get_uint16 rest 0 in
       let rest = Cstruct.shift rest 2 in
@@ -338,13 +254,12 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
       let payload_length = Cstruct.LE.get_uint16 rest 0 in
       (* payload *)
       let payload = Cstruct.sub rest 2 payload_length in
-      Lwt.return (payload.Cstruct.off, payload_length, Unix.ADDR_INET(ip, port)) in
+      Lwt.return (payload, (ip, port)) in
     let rec from_internet v =
       Lwt.catch (fun () ->
-        Lwt_unix.recvfrom fd from_internet_string 0 (String.length from_internet_string) []
-        >>= fun (len, sockaddr) ->
-        Cstruct.blit_from_string from_internet_string 0 from_internet_buffer 0 len;
-        write v (Cstruct.sub from_internet_buffer 0 len) sockaddr
+        Socket.Datagram.Udp.recvfrom fd from_internet_buffer
+        >>= fun (len, address) ->
+        write v (Cstruct.sub from_internet_buffer 0 len) address
         >>= fun () ->
         Lwt.return true
       ) (function
@@ -360,11 +275,9 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
       Lwt.catch
         (fun () ->
           read v
-          >>= fun (ofs, len, sockaddr) ->
-          (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
-          Cstruct.blit_to_bytes from_vsock_buffer ofs from_vsock_string 0 len;
-          Lwt_unix.sendto fd from_vsock_string 0 len [] sockaddr
-          >>= fun _ ->
+          >>= fun (buf, address) ->
+          Socket.Datagram.Udp.sendto fd address buf
+          >>= fun () ->
           Lwt.return true
         ) (fun e ->
           Log.debug (fun f -> f "%s: shutting down from vsock thread: %s" description (Printexc.to_string e));
@@ -373,42 +286,56 @@ let start_udp_proxy vsock_path_var _local_ip _local_port t =
         | true -> from_vsock v
         | false -> Lwt.return () in
 
-    Log.debug (fun f -> f "%s: connecting to vsock port %s" description (Port.to_string t.remote_port));
+    Log.debug (fun f -> f "%s: connecting to vsock port %s" description (Port.to_string remote_port));
     Connector.connect ()
     >>= fun v ->
     Lwt.finalize
       (fun () ->
-        write_forwarding_header description v t.remote_port
+        write_forwarding_header description v remote_port
         >>= fun () ->
-        Log.debug (fun f -> f "%s: connected to vsock port %s" description (Port.to_string t.remote_port));
+        Log.debug (fun f -> f "%s: connected to vsock port %s" description (Port.to_string remote_port));
         let _ = from_vsock v in
         from_internet v
       ) (fun () ->
         Connector.close v
       ) in
-  List.iter (fun fd -> Lwt.async @@ fun () -> log_exception_continue "udp handle" @@ fun () -> handle fd) t.fds;
-  Lwt.return (Result.Ok t)
+  Lwt.async (fun () -> log_exception_continue "udp handle" (fun () -> handle server));
+  Lwt.return ()
 
 let start vsock_path_var t =
-  bind t.local
-  >>= function
-  | Result.Error (`Msg m) ->
-    Lwt.return (Result.Error (`Msg m))
-  | Result.Ok fds ->
-    t.fds <- fds;
-    match t.local with
-    | `Tcp (local_ip, local_port) ->
-      start_tcp_proxy vsock_path_var local_ip local_port t
-    | `Udp (local_ip, local_port) ->
-      start_udp_proxy vsock_path_var local_ip local_port t
+  match t.local with
+  | `Tcp (local_ip, local_port)  ->
+    check_bind_allowed (Ipaddr.V4 local_ip)
+    >>= fun () ->
+    Socket.Stream.Tcp.bind (local_ip, local_port)
+    >>= fun server ->
+    t.server <- Some (`Tcp server);
+    (* Resolve the local port yet (the fds are already bound) *)
+    t.local <- ( match t.local with
+      | `Tcp (local_ip, 0) ->
+        let _, port = Socket.Stream.Tcp.getsockname server in
+        `Tcp (local_ip, port)
+      | _ ->
+        t.local );
+    start_tcp_proxy (to_string t) vsock_path_var t.remote_port server
+    >>= fun () ->
+    Lwt.return (Result.Ok t)
+  | `Udp (local_ip, local_port) ->
+    check_bind_allowed local_ip
+    >>= fun () ->
+    Socket.Datagram.Udp.bind (local_ip, local_port)
+    >>= fun server ->
+    t.server <- Some (`Udp server);
+    start_udp_proxy (to_string t) vsock_path_var t.remote_port server
+    >>= fun () ->
+    Lwt.return (Result.Ok t)
 
 let stop t =
-  let fds = t.fds in
-  t.fds <- [];
-  Lwt_list.iter_s (fun fd ->
-    Log.debug (fun f -> f "%s: closing listening socket" (to_string t));
-    Lwt_unix.close fd
-  ) fds
+  Log.debug (fun f -> f "%s: closing listening socket" (to_string t));
+  match t.server with
+  | Some (`Tcp s) -> Socket.Stream.Tcp.shutdown s
+  | Some (`Udp s) -> Socket.Datagram.Udp.shutdown s
+  | None -> Lwt.return_unit
 
 let of_string x =
   match Stringext.split ~on:':' ~max:6 x with
@@ -421,7 +348,7 @@ let of_string x =
       | Result.Error x, _ -> Result.Error x
       | _, Result.Error x -> Result.Error x
       | Result.Ok local, Result.Ok remote_port ->
-        Result.Ok { local; remote_port; fds = [] }
+        Result.Ok { local; remote_port; server = None }
     end
   | _ ->
     Result.errorf "Failed to parse request [%s], expected %s" x description_of_format

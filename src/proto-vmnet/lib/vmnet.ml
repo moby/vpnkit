@@ -28,7 +28,7 @@ let default_mtu = 1500
 let ethernet_header_length = 14 (* no VLAN *)
 
 module Init = struct
-  
+
   [%%cstruct
   type msg = {
     magic : uint8_t [@len 5];   (* VMN3T *)
@@ -196,6 +196,8 @@ type t = {
   pcap_m: Lwt_mutex.t;
   mutable listeners: (Cstruct.t -> unit Lwt.t) list;
   mutable listening: bool;
+  after_disconnect: unit Lwt.t;
+  after_disconnect_u: unit Lwt.u;
 }
 
 
@@ -325,7 +327,9 @@ let make ~client_macaddr ~server_macaddr fd =
   let pcap_m = Lwt_mutex.create () in
   let listeners = [] in
   let listening = false in
-  { fd; stats; client_macaddr; server_macaddr; write_header; write_m; pcap; pcap_size_limit; pcap_m; listeners; listening }
+  let after_disconnect, after_disconnect_u = Lwt.task () in
+  { fd; stats; client_macaddr; server_macaddr; write_header; write_m; pcap;
+    pcap_size_limit; pcap_m; listeners; listening; after_disconnect; after_disconnect_u }
 
 type fd = C.flow
 
@@ -349,8 +353,13 @@ let disconnect t = match t.fd with
   | None -> Lwt.return ()
   | Some fd ->
     t.fd <- None;
-    Log.info (fun f -> f "Vmnet.disconnect closing fd");
-    Channel.close fd
+    Log.info (fun f -> f "Vmnet.disconnect flushing channel");
+    Channel.flush fd
+    >>= fun () ->
+    Lwt.wakeup_later t.after_disconnect_u ();
+    Lwt.return ()
+
+let after_disconnect t = t.after_disconnect
 
 let capture t bufs =
   match t.pcap with

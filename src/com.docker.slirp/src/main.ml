@@ -20,6 +20,18 @@ let or_failwith = function
   | Result.Error (`Msg m) -> failwith m
   | Result.Ok x -> x
 
+let unix_listen path =
+  let startswith prefix x =
+    let prefix' = String.length prefix in
+    let x' = String.length x in
+    prefix' <= x' && (String.sub x 0 prefix' = prefix) in
+  if startswith "fd:" path then begin
+    let i = String.sub path 3 (String.length path - 3) in
+    let x = try int_of_string i with _ -> failwith (Printf.sprintf "Failed to parse command-line argument [%s]" path) in
+    let fd = Unix_representations.file_descr_of_int x in
+    Lwt.return (Socket.Stream.Unix.of_bound_fd fd)
+  end else Socket.Stream.Unix.bind path
+
 module Forward = Forward.Make(Connect)(Bind)
 
 let start_port_forwarding port_control_path vsock_path =
@@ -27,17 +39,24 @@ let start_port_forwarding port_control_path vsock_path =
   (* Start the 9P port forwarding server *)
   Connect.vsock_path := vsock_path;
   let module Ports = Active_list.Make(Forward) in
-  let module Server = Server9p_unix.Make(Log)(Ports) in
+  let module Server = Protocol_9p.Server.Make(Log)(Socket.Stream.Unix)(Ports) in
   let fs = Ports.make () in
   Ports.set_context fs vsock_path;
-  Osx_socket.listen port_control_path
+  unix_listen port_control_path
   >>= fun port_s ->
-  let server = Server.of_fd fs port_s in
-  Server.serve_forever server
-  >>= fun r ->
-  Lwt.return (or_failwith r)
+  Socket.Stream.Unix.listen port_s
+    (fun conn ->
+      Server.connect fs conn ()
+      >>= function
+      | Result.Error (`Msg m) ->
+        Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+        Lwt.return ()
+      | Result.Ok server ->
+        Server.after_disconnect server
+  );
+  Lwt.return ()
 
-module Slirp_stack = Slirp.Make(Vmnet.Make(Hostnet.Socket.Stream))(Resolv_conf)
+module Slirp_stack = Slirp.Make(Vmnet.Make(Hostnet.Socket.Stream.Unix))(Resolv_conf)
 
 let set_nofile nofile =
   let open Sys_resource.Resource in
@@ -60,8 +79,6 @@ let main_t socket_path port_control_path vsock_path db_path nofile debug =
       (Printexc.get_backtrace ())
     )
   );
-  Osx_socket.listen socket_path
-  >>= fun s ->
 
   Lwt.async (fun () ->
     log_exception_continue "start_port_server"
@@ -73,19 +90,21 @@ let main_t socket_path port_control_path vsock_path db_path nofile debug =
   let config = Active_config.create "unix" db_path in
   Slirp_stack.create config
   >>= fun stack ->
-  let rec loop () =
-    Lwt_unix.accept s
-    >>= fun (client, _) ->
-    Lwt.async (fun () ->
-      log_exception_continue "slirp_server"
-        (fun () ->
-          let conn = Hostnet.Socket.Stream.of_fd ~description:"slirp_server" client in
-          Slirp_stack.connect stack conn
-        )
-      (* NB: the vmnet layer will call close when it receives EOF *)
+
+  unix_listen socket_path
+  >>= fun server ->
+  Socket.Stream.Unix.listen server
+    (fun conn ->
+      Slirp_stack.connect stack conn
+      >>= fun stack ->
+      Log.info (fun f -> f "stack connected");
+      Slirp_stack.after_disconnect stack
+      >>= fun () ->
+      Log.info (fun f -> f "stack disconnected");
+      Lwt.return ()
     );
-    loop () in
-  loop ()
+  let wait_forever, _ = Lwt.task () in
+  wait_forever
 
 let main socket port_control vsock_path db nofile debug = Lwt_main.run @@ main_t socket port_control vsock_path db nofile debug
 

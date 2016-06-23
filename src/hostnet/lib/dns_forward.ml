@@ -107,19 +107,14 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
       )
   end;
   >>= function
-  | Some (dst, dst_port) -> begin match dst with
-    | Ipaddr.V4 dst ->
-      Log.debug (fun f -> f "DNS[%s] Forwarding to %s" (tidstr_of_dns dns) (Ipaddr.V4.to_string dst));
-      let reply buffer =
-        Log.debug (fun f -> f "DNS[%s] %s:%d <- %s %s" (tidstr_of_dns dns) src_str src_port dst_str (string_of_dns (parse_dns buffer)));
-        remove_tid dns;
-        Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer in
+  | Some (dst, dst_port) ->
+    Log.debug (fun f -> f "DNS[%s] Forwarding to %s" (tidstr_of_dns dns) (Ipaddr.to_string dst));
+    let reply buffer =
+      Log.debug (fun f -> f "DNS[%s] %s:%d <- %s %s" (tidstr_of_dns dns) src_str src_port dst_str (string_of_dns (parse_dns buffer)));
+      remove_tid dns;
+      Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer in
 
-      Socket.Datagram.input ~reply ~dst:(dst, dst_port) ~payload:buf
-    | Ipaddr.V6 _ ->
-      Log.info (fun f -> f "DNS[%s] Dropping IPv6 for %s" (tidstr_of_dns dns) (Ipaddr.to_string dst));
-      Lwt.return_unit
-    end
+    Socket.Datagram.input ~reply ~dst:(dst, dst_port) ~payload:buf
   | None ->
     Log.err (fun f -> f "DNS[%s] No upstream DNS server configured: dropping request" (tidstr_of_dns dns));
     Lwt.return_unit

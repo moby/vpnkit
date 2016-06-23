@@ -131,7 +131,7 @@ let accept_forever urls callback =
       )
   ) urls
 
-module Forward = Forward.Make(Connect)(Bind)
+module Forward = Forward.Make(Connect)(Hostnet.Sockets)
 
 let start_port_forwarding port_control_url =
   Log.info (fun f -> f "starting port_forwarding port_control_url:%s" port_control_url);

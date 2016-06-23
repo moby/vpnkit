@@ -1,1 +1,1 @@
-include Hostnet.Sig.Binder
+include module type of Hostnet.Socket

@@ -26,7 +26,7 @@ let bind_main_t socket ip port stream =
   >>= fun c ->
   Vmnet_client.bind_ipv4 c (ip, port, stream)
   >>= fun r ->
-  let fd = or_failwith r in
+  let fd = Lwt_unix.of_unix_file_descr (or_failwith r) in
   Log.debug (fun f -> f "Received fd successfully");
   Lwt_unix.listen fd 5;
   Lwt_unix.accept fd

@@ -54,7 +54,7 @@ let bind_ipv4 t (ipv4, port, stream) =
         f "received result bytes: %s which is %s" (String.escaped result) (Buffer.contents b)
       );
     match Cstruct.LE.get_uint64 buf 0 with
-    | 0L -> Lwt.return (`Ok (Lwt_unix.of_unix_file_descr fd))
+    | 0L -> Lwt.return (`Ok fd)
     | n ->
       Unix.close fd;
       begin match Errno.of_code ~host:Errno_unix.host (Int64.to_int n) with

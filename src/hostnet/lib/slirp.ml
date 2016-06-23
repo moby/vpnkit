@@ -42,6 +42,12 @@ module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)
   module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conv)
 
+type stack = {
+  after_disconnect: unit Lwt.t;
+}
+
+let after_disconnect t = t.after_disconnect
+
 let connect x peer_ip local_ip =
   let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in
         begin Tcpip_stack.connect ~config x
@@ -126,7 +132,7 @@ let connect x peer_ip local_ip =
                                        length
                                    );
                           let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
-                          Socket.Datagram.input ~reply ~dst:(dst, dst_port) ~payload
+                          Socket.Datagram.input ~reply ~dst:(Ipaddr.V4 dst, dst_port) ~payload
                         end
                         else if for_us && dst_port == 123 then begin
                           (* port 123 is special -- proxy these requests to
@@ -135,7 +141,7 @@ let connect x peer_ip local_ip =
                           let localhost = Ipaddr.V4.localhost in
                           Log.debug (fun f -> f "UDP/123 request from port %d -- sending it to %a:%d" src_port Ipaddr.V4.pp_hum localhost dst_port);
                           let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:local_ip ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
-                          Socket.Datagram.input ~reply ~dst:(localhost, dst_port) ~payload
+                          Socket.Datagram.input ~reply ~dst:(Ipaddr.V4 localhost, dst_port) ~payload
                         end else Lwt.return_unit
                       end
                     | _ -> Lwt.return_unit
@@ -162,7 +168,7 @@ let connect x peer_ip local_ip =
                 (* If the traffic is for us, use a local IP address that is really
                    ours, rather than send traffic off to someone else (!) *)
                 let src_ip = if for_us then Ipaddr.V4.localhost else src_ip in
-                Socket.Stream.connect_v4 src_ip src_port
+                Socket.Stream.Tcp.connect (src_ip, src_port)
                 >>= function
                 | `Error (`Msg m) ->
                   Log.info (fun f -> f "%s rejected: %s" description m);
@@ -172,7 +178,7 @@ let connect x peer_ip local_ip =
                       finally (fun () ->
                           (* proxy between local and remote *)
                           Log.debug (fun f -> f "%s connected" description);
-                          Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.Stream) remote ()
+                          Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.Stream.Tcp) remote ()
                           >>= function
                           | `Error (`Msg m) ->
                             Log.err (fun f -> f "%s proxy failed with %s" description m);
@@ -184,7 +190,7 @@ let connect x peer_ip local_ip =
                               );
                             return ()
                         ) (fun () ->
-                          Socket.Stream.close remote
+                          Socket.Stream.Tcp.close remote
                           >>= fun () ->
                           Log.debug (fun f -> f "%s Socket.Stream.close" description);
                           Lwt.return ()
@@ -194,10 +200,10 @@ let connect x peer_ip local_ip =
             Tcpip_stack.listen s
             >>= fun () ->
             Log.info (fun f -> f "TCP/IP ready");
-            Lwt.return ()
+            Lwt.return { after_disconnect = Vmnet.after_disconnect x }
         end
 
-  type t = {
+  type config = {
     peer_ip: Ipaddr.V4.t;
     local_ip: Ipaddr.V4.t;
     pcap_settings: pcap Active_config.values;
@@ -318,5 +324,4 @@ let connect x peer_ip local_ip =
             )
           );
         connect x t.peer_ip t.local_ip
-
 end
