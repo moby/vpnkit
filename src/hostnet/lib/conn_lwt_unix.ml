@@ -18,13 +18,15 @@ let error_message = Unix.error_message
 type flow = {
   fd: Lwt_unix.file_descr;
   read_buffer_size: int;
+  mutable read_buffer: Cstruct.t; (* contains free space available for reading *)
   mutable closed: bool;
 }
 
 let connect fd =
-  let read_buffer_size = 1024 in
+  let read_buffer_size = 65536 in
+  let read_buffer = Cstruct.create read_buffer_size in
   let closed = false in
-  { fd; read_buffer_size; closed }
+  { fd; read_buffer_size; read_buffer; closed }
 
 let close t =
   match t.closed with
@@ -36,14 +38,19 @@ let close t =
 
 let read flow =
   if flow.closed then return `Eof
-  else
-    let buffer = Lwt_bytes.create flow.read_buffer_size in
-    Lwt_bytes.read flow.fd buffer 0 (Lwt_bytes.length buffer)
+  else begin
+    if Cstruct.len flow.read_buffer = 0
+    then flow.read_buffer <- Cstruct.create flow.read_buffer_size;
+    let open Cstruct in
+    Lwt_bytes.read flow.fd flow.read_buffer.buffer flow.read_buffer.off flow.read_buffer.len
     >>= function
     | 0 ->
       return `Eof
     | n ->
-      return (`Ok (Cstruct.(sub (of_bigarray buffer) 0 n)))
+      let result = Cstruct.sub flow.read_buffer 0 n in
+      flow.read_buffer <- Cstruct.shift flow.read_buffer n;
+      return (`Ok result)
+  end
 
 let read_into flow buffer =
   if flow.closed then return `Eof
