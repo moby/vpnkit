@@ -174,22 +174,37 @@ module Stream = struct
       Lwt.return ()
 
   let read t =
-    (if Cstruct.len t.read_buffer = 0 then t.read_buffer <- Cstruct.create t.read_buffer_size);
-    Lwt.catch
-      (fun () ->
-         Lwt_bytes.read t.fd t.read_buffer.Cstruct.buffer t.read_buffer.Cstruct.off t.read_buffer.Cstruct.len
-         >>= function
-         | 0 -> Lwt.return `Eof
-         | n ->
-           let results = Cstruct.sub t.read_buffer 0 n in
-           t.read_buffer <- Cstruct.shift t.read_buffer n;
-           Lwt.return (`Ok results)
-      ) (fun e ->
-          Log.err (fun f -> f "Socket.TCPV4.read %s: caught %s returning Eof" t.description (Printexc.to_string e));
-          Lwt.return `Eof
-        )
+    if t.closed then Lwt.return `Eof
+    else begin
+      if Cstruct.len t.read_buffer = 0 then t.read_buffer <- Cstruct.create t.read_buffer_size;
+      Lwt.catch
+        (fun () ->
+           Lwt_bytes.read t.fd t.read_buffer.Cstruct.buffer t.read_buffer.Cstruct.off t.read_buffer.Cstruct.len
+           >>= function
+           | 0 -> Lwt.return `Eof
+           | n ->
+             let results = Cstruct.sub t.read_buffer 0 n in
+             t.read_buffer <- Cstruct.shift t.read_buffer n;
+             Lwt.return (`Ok results)
+        ) (fun e ->
+            Log.err (fun f -> f "Socket.TCPV4.read %s: caught %s returning Eof" t.description (Printexc.to_string e));
+            Lwt.return `Eof
+          )
+    end
+
+  let read_into t buffer =
+    if t.closed then Lwt.return `Eof
+    else
+      Lwt.catch
+        (fun () ->
+          Lwt_cstruct.(complete (read t.fd) buffer)
+          >>= fun () ->
+          Lwt.return (`Ok ())
+        ) (fun _e -> Lwt.return `Eof)
 
   let write t buf =
+    if t.closed then Lwt.return `Eof
+    else
     Lwt.catch
       (fun () ->
          Lwt_cstruct.(complete (write t.fd) buf)
@@ -206,9 +221,11 @@ module Stream = struct
          let rec loop = function
            | [] -> Lwt.return (`Ok ())
            | buf :: bufs ->
-             Lwt_cstruct.(complete (write t.fd) buf)
-             >>= fun () ->
-             loop bufs in
+             if t.closed then Lwt.return `Eof
+             else
+               Lwt_cstruct.(complete (write t.fd) buf)
+               >>= fun () ->
+               loop bufs in
          loop bufs
       ) (fun e ->
           Log.err (fun f -> f "Socket.TCPV4.writev %s: caught %s returning Eof" t.description (Printexc.to_string e));

@@ -9,7 +9,7 @@ module Datagram: sig
 end
 
 module Stream: sig
-  include Mirage_flow_s.SHUTDOWNABLE
+  include Sig.CONN
 
   val connect_v4: ?read_buffer_size:int -> Ipaddr.V4.t -> int
     -> [ `Ok of flow | `Error of [ `Msg of string ] ] Lwt.t
