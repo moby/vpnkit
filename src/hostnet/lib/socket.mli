@@ -4,7 +4,7 @@ module Datagram: sig
 
   type reply = Cstruct.t -> unit Lwt.t
 
-  val input: reply:reply -> src:(Ipaddr.V4.t * int) -> dst:(Ipaddr.V4.t * int) -> payload:Cstruct.t -> unit Lwt.t
+  val input: reply:reply -> dst:(Ipaddr.V4.t * int) -> payload:Cstruct.t -> unit Lwt.t
 
 end
 

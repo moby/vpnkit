@@ -47,7 +47,7 @@ module Datagram = struct
       loop () in
     loop ()
 
-  let input ~reply ~src:_ ~dst:(dst, dst_port) ~payload =
+  let input ~reply ~dst:(dst, dst_port) ~payload =
     let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.V4.to_string dst, dst_port) in
     (if Hashtbl.mem table (dst, dst_port) then begin
         Lwt.return (Some (Hashtbl.find table (dst, dst_port)))
