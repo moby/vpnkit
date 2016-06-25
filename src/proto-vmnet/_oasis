@@ -19,14 +19,6 @@ Library "proto-vmnet"
     mirage-types.lwt, ppx_sexp_conv, sexplib, ppx_type_conv, ppx_tools,
     ipaddr.unix, pcap-format, mirage-flow, channel
 
-Library "vmnet-client"
-  Build$: flag(unix)
-  Install$: flag(unix)
-  Path: unix
-  Findlibname: vmnet-client
-  Modules: Vmnet_client
-  BuildDepends: proto-vmnet, fd-send-recv, ipaddr, unix-errno, unix-errno.unix,cstruct, cstruct.lwt, lwt.unix, logs, logs.cli
-
 Document "proto-vmnet"
   Title:                Vmnet docs
   Type:                 ocamlbuild (0.4)
@@ -34,19 +26,3 @@ Document "proto-vmnet"
   Install:              true
   XOCamlbuildPath:      lib
   XOCamlbuildLibraries: proto-vmnet
-
-Document "vmnet-client"
-  Title:                Vmnet client docs
-  Type:                 ocamlbuild (0.4)
-  BuildTools+:          ocamldoc
-  Install:              true
-  XOCamlbuildPath:      lib
-  XOCamlbuildLibraries: vmnet-client
-
-Executable "vmnet-cli"
-  Build$: flag(unix)
-  Install$: flag(unix)
-  CompiledObject: best
-  Path: bin
-  MainIs: main.ml
-  BuildDepends: cmdliner, proto-vmnet, vmnet-client, lwt.unix

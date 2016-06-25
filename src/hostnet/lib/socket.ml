@@ -457,6 +457,12 @@ module Stream = struct
         | Lwt_unix.ADDR_UNIX path -> path
         | _ -> invalid_arg "Unix.getsockname passed a non-Unix socket"
 
+    let unsafe_get_raw_fd t =
+      (* By default Lwt sets fds to non-blocking mode. Reverse this to avoid
+         surprising the caller. *)
+      Lwt_unix.set_blocking ~set_flags:true t.fd true;
+      Lwt_unix.unix_file_descr t.fd
+
   end
 
 end

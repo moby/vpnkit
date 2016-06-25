@@ -6,31 +6,83 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 open Lwt.Infix
+open Vmnet
+open Hostnet
+
+let error_of_failure f = Lwt.catch f (fun e -> Lwt.return (`Error (`Msg (Printexc.to_string e))))
+
+module Channel = Channel.Make(Socket.Stream.Unix)
+
+type t = {
+  fd: Socket.Stream.Unix.flow;
+  c: Channel.t;
+}
+
+module Infix = struct
+  let ( >>= ) m f = m >>= function
+    | `Ok x -> f x
+    | `Error x -> Lwt.return (`Error x)
+end
+
+let of_fd fd =
+  let buf = Cstruct.create Init.sizeof in
+  let (_: Cstruct.t) = Init.marshal Init.default buf in
+  error_of_failure
+    (fun () ->
+       let c = Channel.create fd in
+       Channel.write_buffer c buf;
+       Channel.flush c
+       >>= fun () ->
+       Channel.read_exactly ~len:Init.sizeof c
+       >>= fun bufs ->
+       let buf = Cstruct.concat bufs in
+       let open Infix in
+       Lwt.return (Init.unmarshal buf)
+       >>= fun (init, _) ->
+       Log.info (fun f -> f "Client.negotiate: received %s" (Init.to_string init));
+       Lwt.return (`Ok { fd; c })
+    )
+
+let bind_ipv4 t (ipv4, port, stream) =
+  let buf = Cstruct.create Command.sizeof in
+  let (_: Cstruct.t) = Command.marshal (Command.Bind_ipv4(ipv4, port, stream)) buf in
+  Channel.write_buffer t.c buf;
+  Channel.flush t.c
+  >>= fun () ->
+  let rawfd = Socket.Stream.Unix.unsafe_get_raw_fd t.fd in
+  let result = String.make 8 '\000' in
+  let n, _, fd = Fd_send_recv.recv_fd rawfd result 0 8 [] in
+  if n <> 8 then Lwt.return (`Error (`Msg (Printf.sprintf "Message only contained %d bytes" n))) else begin
+    let buf = Cstruct.create 8 in
+    Cstruct.blit_from_string result 0 buf 0 8;
+    Log.debug (fun f ->
+        let b = Buffer.create 16 in
+        Cstruct.hexdump_to_buffer b buf;
+        f "received result bytes: %s which is %s" (String.escaped result) (Buffer.contents b)
+      );
+    match Cstruct.LE.get_uint64 buf 0 with
+    | 0L -> Lwt.return (`Ok fd)
+    | n ->
+      Unix.close fd;
+      begin match Errno.of_code ~host:Errno_unix.host (Int64.to_int n) with
+        | x :: _ ->
+          Lwt.return (`Error (`Msg ("Failed to bind: " ^ (Errno.to_string x))))
+        | [] ->
+          Lwt.return (`Error (`Msg ("Failed to bind: unrecognised errno: " ^ (Int64.to_string n))))
+      end
+  end
 
 (* This implementation is OSX-only *)
 let request_privileged_port local_ip local_port sock_stream =
-  let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
+  let open Infix in
+  Socket.Stream.Unix.connect "/var/tmp/com.docker.vmnetd.socket"
+  >>= fun flow ->
   Lwt.finalize
     (fun () ->
-      Lwt_unix.connect s (Unix.ADDR_UNIX "/var/tmp/com.docker.vmnetd.socket")
-      >>= fun () ->
-      Vmnet_client.of_fd s
-      >>= fun r ->
-      begin match r with
-      | `Error (`Msg x) -> Lwt.fail (Failure x)
-      | `Ok c ->
-        Vmnet_client.bind_ipv4 c (local_ip, local_port, sock_stream)
-        >>= fun r ->
-        begin match r with
-        | `Ok fd ->
-          Log.debug (fun f -> f "Received fd successfully");
-          Lwt.return fd
-        | `Error (`Msg x) ->
-          Log.err (fun f -> f "Error binding to %s:%d: %s" (Ipaddr.V4.to_string local_ip) local_port x);
-          Lwt.fail (Failure x)
-        end
-      end
-    ) (fun () -> Lwt_unix.close s)
+      of_fd flow
+      >>= fun c ->
+      bind_ipv4 c (local_ip, local_port, sock_stream)
+    ) (fun () -> Socket.Stream.Unix.close flow)
 
 module Datagram = struct
   type address = Hostnet.Socket.Datagram.address
@@ -45,8 +97,10 @@ module Datagram = struct
       | Ipaddr.V4 ipv4 ->
         if local_port < 1024 then begin
           request_privileged_port ipv4 local_port false
-          >>= fun fd ->
-          Lwt.return (Hostnet.Socket.Datagram.Udp.of_bound_fd fd)
+          >>= function
+          | `Error (`Msg x) -> Lwt.fail (Failure x)
+          | `Ok fd ->
+            Lwt.return (Hostnet.Socket.Datagram.Udp.of_bound_fd fd)
         end else bind (local_ip, local_port)
       | _ -> bind (local_ip, local_port)
   end
@@ -59,8 +113,10 @@ module Stream = struct
     let bind (local_ip, local_port) =
       if local_port < 1024 then begin
         request_privileged_port local_ip local_port true
-        >>= fun fd ->
-        Lwt.return (Hostnet.Socket.Stream.Tcp.of_bound_fd fd)
+        >>= function
+        | `Error (`Msg x) -> Lwt.fail (Failure x)
+        | `Ok fd ->
+          Lwt.return (Hostnet.Socket.Stream.Tcp.of_bound_fd fd)
       end else bind (local_ip, local_port)
   end
 
