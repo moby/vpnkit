@@ -106,6 +106,13 @@ module type SOCKETS = sig
   end
 end
 
+module type FILES = sig
+  (** An OS-based file reading implementation *)
+
+  val read_file: string -> [ `Ok of string | `Error of [ `Msg of string ] ] Lwt.t
+  (** Read a whole file into a string *)
+end
+
 module type VMNET = sig
   (** A virtual ethernet link to the VM *)
 
