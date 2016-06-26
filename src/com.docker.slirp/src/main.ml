@@ -56,7 +56,7 @@ let start_port_forwarding port_control_path vsock_path =
   );
   Lwt.return ()
 
-module Slirp_stack = Slirp.Make(Vmnet.Make(Hostnet.Socket.Stream.Unix))(Resolv_conf)
+module Slirp_stack = Slirp.Make(Vmnet.Make(Hostnet.Socket.Stream.Unix))(Resolv_conf)(Hostnet.Time)
 
 let set_nofile nofile =
   let open Sys_resource.Resource in
