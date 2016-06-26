@@ -1,1 +1,3 @@
-include module type of Hostnet.Socket
+open Hostnet
+
+module Make(Socket: Sig.SOCKETS): Sig.SOCKETS

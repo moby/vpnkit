@@ -1,7 +1,7 @@
 open Lwt.Infix
 
 let src =
-  let src = Logs.Src.create "socket" ~doc:"Unix socket connections" in
+  let src = Logs.Src.create "Lwt_unix" ~doc:"Host interface based on Lwt_unix" in
   Logs.Src.set_level src (Some Logs.Debug);
   src
 
@@ -16,6 +16,8 @@ let log_exception_continue description f =
        Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
        Lwt.return ()
     )
+
+module Sockets = struct
 
 let string_of_sockaddr = function
   | Lwt_unix.ADDR_INET(ip, port) -> Unix.string_of_inet_addr ip ^ ":" ^ (string_of_int port)
@@ -465,4 +467,39 @@ module Stream = struct
 
   end
 
+end
+end
+
+module Files = struct
+let read_file path =
+  let open Lwt.Infix in
+  Lwt.catch
+    (fun () ->
+      Lwt_unix.openfile path [ Lwt_unix.O_RDONLY ] 0
+      >>= fun fd ->
+      let buffer = Buffer.create 128 in
+      let frag = Bytes.make 1024 ' ' in
+      Lwt.finalize
+        (fun () ->
+          let rec loop () =
+            Lwt_unix.read fd frag 0 (Bytes.length frag)
+            >>= function
+            | 0 ->
+              Lwt.return (`Ok (Buffer.contents buffer))
+            | n ->
+              Buffer.add_substring buffer frag 0 n;
+              loop () in
+          loop ()
+        ) (fun () ->
+          Lwt_unix.close fd
+        )
+    ) (fun e ->
+      Lwt.return (`Error (`Msg (Printf.sprintf "reading %s: %s" path (Printexc.to_string e))))
+    )
+end
+
+module Time = struct
+type 'a io = 'a Lwt.t
+
+let sleep = Lwt_unix.sleep
 end

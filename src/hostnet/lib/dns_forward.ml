@@ -24,7 +24,7 @@ let tidstr_of_dns dns =
   | (_, None) -> "----"
   | (_, Some { Dns.Packet.id; _ }) -> Printf.sprintf "%04x" id
 
-module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) (Time: V1_LWT.TIME) = struct
+module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) = struct
 
 type transaction = {
   mutable resolvers : (Ipaddr.t * int) list;

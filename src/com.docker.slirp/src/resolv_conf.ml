@@ -6,11 +6,12 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 open Lwt
+open Hostnet
 open Dns.Resolvconf
 
 let resolv_conf = "/etc/resolv.conf"
 
-module Files = Hostnet.Files
+module Make(Files: Sig.FILES) = struct
 
 let get () =
   Files.read_file resolv_conf
@@ -32,3 +33,4 @@ let get () =
         end
     ) [] lines in
     Lwt.return (all_servers config)
+end

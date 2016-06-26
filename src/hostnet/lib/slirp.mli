@@ -4,7 +4,7 @@ type pcap = (string * int64 option) option
     file will grow without bound; otherwise the file will be closed when it is
     bigger than the given limit. *)
 
-module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Time: V1_LWT.TIME): sig
+module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Host: Sig.HOST): sig
 
   type config = {
     peer_ip: Ipaddr.V4.t;

@@ -5,12 +5,17 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+open Hostnet
+
 let (/) = Filename.concat
 let home = try Sys.getenv "HOME" with Not_found -> "/Users/root"
-let vsock_path = ref (home / "Library/Containers/com.docker.docker/Data/@connect")
 let vsock_port = 62373l
 
-include Hostnet.Socket.Stream.Unix
+module Make(Socket: Sig.SOCKETS) = struct
+
+let vsock_path = ref (home / "Library/Containers/com.docker.docker/Data/@connect")
+
+include Socket.Stream.Unix
 
 let connect () =
   let open Lwt.Infix in
@@ -32,3 +37,4 @@ let connect () =
       Lwt.fail (Failure msg)
     | `Ok () ->
       Lwt.return flow
+end

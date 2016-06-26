@@ -113,6 +113,21 @@ module type FILES = sig
   (** Read a whole file into a string *)
 end
 
+module type HOST = sig
+  (** The Host interface *)
+
+  module Sockets: sig
+    (** User-space socket connections *)
+    include SOCKETS
+  end
+
+  module Files: sig
+    include FILES
+  end
+
+  module Time: V1_LWT.TIME
+end
+
 module type VMNET = sig
   (** A virtual ethernet link to the VM *)
 

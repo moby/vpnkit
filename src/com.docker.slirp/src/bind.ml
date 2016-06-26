@@ -11,6 +11,8 @@ open Hostnet
 
 let error_of_failure f = Lwt.catch f (fun e -> Lwt.return (`Error (`Msg (Printexc.to_string e))))
 
+module Make(Socket: Sig.SOCKETS) = struct
+
 module Channel = Channel.Make(Socket.Stream.Unix)
 
 type t = {
@@ -85,13 +87,13 @@ let request_privileged_port local_ip local_port sock_stream =
     ) (fun () -> Socket.Stream.Unix.close flow)
 
 module Datagram = struct
-  type address = Hostnet.Socket.Datagram.address
-  type reply = Hostnet.Socket.Datagram.reply
+  type address = Socket.Datagram.address
+  type reply = Socket.Datagram.reply
 
-  let input = Hostnet.Socket.Datagram.input
+  let input = Socket.Datagram.input
 
   module Udp = struct
-    include Hostnet.Socket.Datagram.Udp
+    include Socket.Datagram.Udp
 
     let bind (local_ip, local_port) = match local_ip with
       | Ipaddr.V4 ipv4 ->
@@ -100,7 +102,7 @@ module Datagram = struct
           >>= function
           | `Error (`Msg x) -> Lwt.fail (Failure x)
           | `Ok fd ->
-            Lwt.return (Hostnet.Socket.Datagram.Udp.of_bound_fd fd)
+            Lwt.return (Socket.Datagram.Udp.of_bound_fd fd)
         end else bind (local_ip, local_port)
       | _ -> bind (local_ip, local_port)
   end
@@ -108,7 +110,7 @@ end
 
 module Stream = struct
   module Tcp = struct
-    include Hostnet.Socket.Stream.Tcp
+    include Socket.Stream.Tcp
 
     let bind (local_ip, local_port) =
       if local_port < 1024 then begin
@@ -116,9 +118,10 @@ module Stream = struct
         >>= function
         | `Error (`Msg x) -> Lwt.fail (Failure x)
         | `Ok fd ->
-          Lwt.return (Hostnet.Socket.Stream.Tcp.of_bound_fd fd)
+          Lwt.return (Socket.Stream.Tcp.of_bound_fd fd)
       end else bind (local_ip, local_port)
   end
 
-  module Unix = Hostnet.Socket.Stream.Unix
+  module Unix = Socket.Stream.Unix
+end
 end

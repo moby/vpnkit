@@ -38,9 +38,11 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
-module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Time: V1_LWT.TIME) = struct
+module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)
-  module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conv)(Time)
+  module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conv)(Host.Sockets)(Host.Time)
+
+module Socket = Host.Sockets
 
 type stack = {
   after_disconnect: unit Lwt.t;

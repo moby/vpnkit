@@ -20,6 +20,12 @@ let or_failwith = function
   | Result.Error (`Msg m) -> failwith m
   | Result.Ok x -> x
 
+module Host = Host_lwt_unix
+
+module Connect = Connect.Make(Host.Sockets)
+module Bind = Bind.Make(Host.Sockets)
+module Resolv_conf = Resolv_conf.Make(Host.Files)
+
 let unix_listen path =
   let startswith prefix x =
     let prefix' = String.length prefix in
@@ -29,8 +35,8 @@ let unix_listen path =
     let i = String.sub path 3 (String.length path - 3) in
     let x = try int_of_string i with _ -> failwith (Printf.sprintf "Failed to parse command-line argument [%s]" path) in
     let fd = Unix_representations.file_descr_of_int x in
-    Lwt.return (Socket.Stream.Unix.of_bound_fd fd)
-  end else Socket.Stream.Unix.bind path
+    Lwt.return (Host.Sockets.Stream.Unix.of_bound_fd fd)
+  end else Host.Sockets.Stream.Unix.bind path
 
 module Forward = Forward.Make(Connect)(Bind)
 
@@ -39,12 +45,12 @@ let start_port_forwarding port_control_path vsock_path =
   (* Start the 9P port forwarding server *)
   Connect.vsock_path := vsock_path;
   let module Ports = Active_list.Make(Forward) in
-  let module Server = Protocol_9p.Server.Make(Log)(Socket.Stream.Unix)(Ports) in
+  let module Server = Protocol_9p.Server.Make(Log)(Host.Sockets.Stream.Unix)(Ports) in
   let fs = Ports.make () in
   Ports.set_context fs vsock_path;
   unix_listen port_control_path
   >>= fun port_s ->
-  Socket.Stream.Unix.listen port_s
+  Host.Sockets.Stream.Unix.listen port_s
     (fun conn ->
       Server.connect fs conn ()
       >>= function
@@ -56,7 +62,7 @@ let start_port_forwarding port_control_path vsock_path =
   );
   Lwt.return ()
 
-module Slirp_stack = Slirp.Make(Vmnet.Make(Hostnet.Socket.Stream.Unix))(Resolv_conf)(Hostnet.Time)
+module Slirp_stack = Slirp.Make(Vmnet.Make(Host.Sockets.Stream.Unix))(Resolv_conf)(Host)
 
 let set_nofile nofile =
   let open Sys_resource.Resource in
@@ -93,7 +99,7 @@ let main_t socket_path port_control_path vsock_path db_path nofile debug =
 
   unix_listen socket_path
   >>= fun server ->
-  Socket.Stream.Unix.listen server
+  Host.Sockets.Stream.Unix.listen server
     (fun conn ->
       Slirp_stack.connect stack conn
       >>= fun stack ->
