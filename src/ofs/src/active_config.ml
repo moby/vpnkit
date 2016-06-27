@@ -7,7 +7,6 @@ let src =
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
-module Client = Client9p_unix.Make(Log)
 
 let ( >>*= ) x f =
   x >>= function
@@ -19,11 +18,27 @@ let ( >>|= ) x f =
   | Ok y -> f y
   | Error (`Msg msg) -> Lwt.return (Error (`Msg msg))
 
+let rec retry_forever f =
+  f ()
+  >>= function
+  | Ok x -> Lwt.return x
+  | Error (`Msg _) -> retry_forever f
 
 type 'a values = Value of ('a * ('a values) Lwt.t)
 
 let hd = function Value(first, _) -> first
 let tl = function Value(_, next) -> next
+
+let rec map f = function Value(first, next) ->
+  f first
+  >>= fun first' ->
+  let next' =
+    next
+    >>= fun next ->
+    map f next in
+  return (Value(first', next'))
+
+type path = string list
 
 let changes values =
   let rec loop last next =
@@ -33,8 +48,19 @@ let changes values =
     else return (Value(first, loop (Some first) next)) in
   loop None values
 
-module Transport = struct
-  type t = {
+module type S = sig
+  type t
+  val string_option: t -> path -> string option values Lwt.t
+  val string: t -> default:string -> path -> string values Lwt.t
+  val int: t -> default:int -> path -> int values Lwt.t
+  val bool: t -> default:bool -> path -> bool values Lwt.t
+end
+
+module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
+
+  module Client = Protocol_9p.Client.Make(Log)(FLOW)
+
+  type transport = {
     conn: Client.t;
     fid: Protocol_9p.Types.Fid.t;
     shas: string values;
@@ -86,30 +112,32 @@ module Transport = struct
   let rx = [`Read; `Execute]
   let rwxr_xr_x = Protocol_9p.Types.FileMode.make ~owner:rwx ~group:rx ~other:rx ()
 
-  let connect proto address ?username () =
+  let connect reconnect ?username () =
     let log_every = 100 in (* 10s *)
     let rec loop ?(x="") n =
-      if n = 0 then Log.err (fun f -> f "Failure connecting to db %S: %s" address x);
+      if n = 0 then Log.err (fun f -> f "Failure connecting to db: %s" x);
       let n = if n = 0 then log_every else n - 1 in
       Lwt.catch
         (fun () ->
-          Client.connect proto address ?username ()
-          >>= function
+          ( reconnect ()
+            >>|= fun flow ->
+            Client.connect flow ?username ()
+          ) >>= function
           | Result.Error (`Msg x) ->
-            Lwt_unix.sleep 0.1
+            Time.sleep 0.1
             >>= fun () ->
             loop ~x (n - 1)
           | Result.Ok conn ->
             Lwt.return conn
         ) (fun e ->
-            Lwt_unix.sleep 0.1
+            Time.sleep 0.1
             >>= fun () ->
             loop ~x:(Printexc.to_string e) (n - 1)
           ) in
     loop 1 (* if we fail straightaway, log the error *)
 
-  let create ?username proto address =
-    connect proto address ?username ()
+  let create_transport reconnect ?username () =
+    connect reconnect ?username ()
     >>= fun conn ->
     Lwt.catch
       (fun () ->
@@ -130,48 +158,40 @@ module Transport = struct
         >>= fun () ->
         Lwt.return (Error (`Msg ("Transport.create: " ^ (Printexc.to_string e))))
       )
-end
 
-type t = {
-  proto: string;
-  address: string;
-  username: string option;
-  mutable transport: Transport.t option;
-  transport_m: Lwt_mutex.t;
-}
+  type t = {
+    reconnect: unit -> (FLOW.flow, [ `Msg of string ]) Result.result Lwt.t;
+    username: string option;
+    mutable transport: transport option;
+    transport_m: Lwt_mutex.t;
+  }
 
-let create ?username proto address =
-  let transport = None in
-  let transport_m = Lwt_mutex.create () in
-  { proto; address; username; transport; transport_m }
+  let create ?username ~reconnect () =
+    let transport = None in
+    let transport_m = Lwt_mutex.create () in
+    { reconnect; username; transport; transport_m }
 
-let rec retry_forever f =
-  f ()
-  >>= function
-  | Ok x -> Lwt.return x
-  | Error (`Msg _) -> retry_forever f
-
-(* Will retry forever to create a connected transport *)
-let transport ({ username; proto; address; _ } as t) =
-  Lwt_mutex.with_lock t.transport_m
-    (fun () ->
-      match t.transport with
-        | Some transport -> Lwt.return transport
-        | None ->
-          Log.info (fun f -> f "attempting to reconnect to database on %s %s" proto address);
-          retry_forever (fun () -> Transport.create ?username proto address)
-          >>= fun transport ->
-          Log.info (fun f -> f "reconnected transport layer");
-          t.transport <- Some transport;
-          Lwt.return transport
-    )
+  (* Will retry forever to create a connected transport *)
+  let transport ({ username; reconnect; _ } as t) =
+    Lwt_mutex.with_lock t.transport_m
+      (fun () ->
+        match t.transport with
+          | Some transport -> Lwt.return transport
+          | None ->
+            Log.info (fun f -> f "attempting to reconnect to database");
+            retry_forever (fun () -> create_transport reconnect ?username ())
+            >>= fun transport ->
+            Log.info (fun f -> f "reconnected transport layer");
+            t.transport <- Some transport;
+            Lwt.return transport
+      )
 
 let rec values t path =
   transport t
-  >>= fun { Transport.conn; shas; _ } ->
+  >>= fun { conn; shas; _ } ->
   let rec loop = function
   | Value(hd, tl_t) ->
-    Transport.read conn ("trees" :: hd :: path)
+    read conn ("trees" :: hd :: path)
     >>= fun v_opt ->
     let next =
       Lwt.catch
@@ -186,16 +206,6 @@ let rec values t path =
     Lwt.return (Value(v_opt, next )) in
   loop shas
 
-let rec map f = function Value(first, next) ->
-  f first
-  >>= fun first' ->
-  let next' =
-    next
-    >>= fun next ->
-    map f next in
-  return (Value(first', next'))
-
-type path = string list
 
 let string_option t path =
   changes @@ values t path
@@ -219,3 +229,5 @@ let bool t ~default path =
   >>= fun strings ->
   let parse s = return (try bool_of_string s with _ -> default) in
   changes @@ map parse strings
+
+end

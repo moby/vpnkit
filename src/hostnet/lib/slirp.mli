@@ -4,7 +4,7 @@ type pcap = (string * int64 option) option
     file will grow without bound; otherwise the file will be closed when it is
     bigger than the given limit. *)
 
-module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Host: Sig.HOST): sig
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Host: Sig.HOST): sig
 
   type config = {
     peer_ip: Ipaddr.V4.t;
@@ -13,8 +13,8 @@ module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Host: Sig.HOST): sig
   }
   (** A slirp TCP/IP stack ready to accept connections *)
 
-  val create: Active_config.t -> config Lwt.t
-  (** Initialise a TCP/IP stack, taking configuration from the Active_config.t *)
+  val create: Config.t -> config Lwt.t
+  (** Initialise a TCP/IP stack, taking configuration from the Config.t *)
 
   type stack
 

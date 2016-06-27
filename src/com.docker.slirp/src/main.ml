@@ -25,6 +25,7 @@ module Main(Host: Sig.HOST) = struct
 module Connect = Connect.Make(Host.Sockets)
 module Bind = Bind.Make(Host.Sockets)
 module Resolv_conf = Resolv_conf.Make(Host.Files)
+module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 
 let unix_listen path =
   let startswith prefix x =
@@ -62,7 +63,7 @@ let start_port_forwarding port_control_path vsock_path =
   );
   Lwt.return ()
 
-module Slirp_stack = Slirp.Make(Vmnet.Make(Host.Sockets.Stream.Unix))(Resolv_conf)(Host)
+module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Resolv_conf)(Host)
 
 let set_nofile nofile =
   let open Sys_resource.Resource in
@@ -95,7 +96,12 @@ let main_t socket_path port_control_path vsock_path db_path nofile pcap debug =
 
   ( match db_path with
     | Some db_path ->
-      let config = Active_config.create "unix" db_path in
+      let reconnect () =
+        Host.Sockets.Stream.Unix.connect db_path
+        >>= function
+        | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
+        | `Ok x -> Lwt.return (Result.Ok x) in
+      let config = Config.create ~reconnect () in
       Slirp_stack.create config
     | None ->
       Log.warn (fun f -> f "no database: using hardcoded network configuration values");

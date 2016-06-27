@@ -1,9 +1,3 @@
-type t
-
-val create: ?username:string -> string -> string -> t
-(** [create ?username proto address] creates an active configuration
-    system backed by the database at [proto:address]. *)
-
 type 'a values = Value of ('a * ('a values) Lwt.t)
 (** An infinite stream of values of type ['a] *)
 
@@ -18,14 +12,27 @@ val map: ('a -> 'b Lwt.t) -> 'a values -> 'b values Lwt.t
 
 type path = string list
 
-val string_option: t -> path -> string option values Lwt.t
-(** The stream of optional string values at [path] *)
+module type S = sig
+  type t
+  (** An active configuration system *)
 
-val string: t -> default:string -> path -> string values Lwt.t
-(** The stream of string values at [path] *)
+  val string_option: t -> path -> string option values Lwt.t
+  (** The stream of optional string values at [path] *)
 
-val int: t -> default:int -> path -> int values Lwt.t
-(** The stream of int values at [path] *)
+  val string: t -> default:string -> path -> string values Lwt.t
+  (** The stream of string values at [path] *)
 
-val bool: t -> default:bool -> path -> bool values Lwt.t
-(** The stream of bool values at [path] *)
+  val int: t -> default:int -> path -> int values Lwt.t
+  (** The stream of int values at [path] *)
+
+  val bool: t -> default:bool -> path -> bool values Lwt.t
+  (** The stream of bool values at [path] *)
+end
+
+module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW): sig
+  include S
+
+  val create: ?username:string -> reconnect:(unit -> (FLOW.flow, [ `Msg of string ]) Result.result Lwt.t) -> unit -> t
+  (** [create ?username reconnect] creates an active configuration system
+      backed by the database connected to by [reconnect ()] *)
+end

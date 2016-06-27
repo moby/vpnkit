@@ -38,7 +38,7 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
-module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time)
   module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conv)(Host.Sockets)(Host.Time)
 
@@ -215,7 +215,7 @@ let connect x peer_ip local_ip =
     let driver = [ "com.docker.driver.amd64-linux" ] in
 
     let pcap_path = driver @ [ "slirp"; "capture" ] in
-    Active_config.string_option config pcap_path
+    Config.string_option config pcap_path
     >>= fun string_pcap_settings ->
     let parse_pcap = function
       | None -> Lwt.return None
@@ -239,7 +239,7 @@ let connect x peer_ip local_ip =
     >>= fun pcap_settings ->
 
     let bind_path = driver @ [ "allowed-bind-address" ] in
-    Active_config.string_option config bind_path
+    Config.string_option config bind_path
     >>= fun string_allowed_bind_address ->
     let parse_bind_address = function
       | None -> Lwt.return None
@@ -273,14 +273,14 @@ let connect x peer_ip local_ip =
       | Some x -> Lwt.return x in
     let default_peer = "192.168.65.2" in
     let default_host = "192.168.65.1" in
-    Active_config.string config ~default:default_peer peer_ips_path
+    Config.string config ~default:default_peer peer_ips_path
     >>= fun string_peer_ips ->
     Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips
     >>= fun peer_ips ->
     Lwt.async (fun () -> restart_on_change "slirp/docker" Ipaddr.V4.to_string peer_ips);
 
     let host_ips_path = driver @ [ "slirp"; "host" ] in
-    Active_config.string config ~default:default_host host_ips_path
+    Config.string config ~default:default_host host_ips_path
     >>= fun string_host_ips ->
     Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_host)) string_host_ips
     >>= fun host_ips ->
