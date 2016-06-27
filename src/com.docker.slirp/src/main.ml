@@ -72,7 +72,7 @@ let set_nofile nofile =
   try Sys_resource_unix.setrlimit NOFILE ~soft ~hard with
   | Errno.Error ex -> Log.warn (fun f -> f "setrlimit failed: %s" (Errno.string_of_error ex))
 
-let main_t socket_path port_control_path vsock_path db_path nofile debug =
+let main_t socket_path port_control_path vsock_path db_path nofile pcap debug =
   Osx_reporter.install ~stdout:debug;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
@@ -93,9 +93,18 @@ let main_t socket_path port_control_path vsock_path db_path nofile debug =
       )
     );
 
-  let config = Active_config.create "unix" db_path in
-  Slirp_stack.create config
-  >>= fun stack ->
+  ( match db_path with
+    | Some db_path ->
+      let config = Active_config.create "unix" db_path in
+      Slirp_stack.create config
+    | None ->
+      Log.warn (fun f -> f "no database: using hardcoded network configuration values");
+      let never, _ = Lwt.task () in
+      let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
+      Lwt.return { Slirp_stack.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
+        local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
+        pcap_settings = Active_config.Value(pcap, never) }
+  ) >>= fun stack ->
 
   unix_listen socket_path
   >>= fun server ->
@@ -112,16 +121,16 @@ let main_t socket_path port_control_path vsock_path db_path nofile debug =
   let wait_forever, _ = Lwt.task () in
   wait_forever
 
-let main socket port_control vsock_path db nofile debug =
-  Host.Main.run @@ main_t socket port_control vsock_path db nofile debug
+let main socket port_control vsock_path db nofile pcap debug =
+  Host.Main.run @@ main_t socket port_control vsock_path db nofile pcap debug
 
 end
 
-let main socket port_control vsock_path db nofile libuv debug =
+let main socket port_control vsock_path db nofile pcap libuv debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if libuv then Use_uwt.main else Use_lwt_unix.main)
-    socket port_control vsock_path db nofile debug
+    socket port_control vsock_path db nofile pcap debug
 
 open Cmdliner
 
@@ -143,13 +152,17 @@ make it fail instead? In case no argument is supplied? *)
 let vsock_path =
   Arg.(value & opt string "/var/tmp/com.docker.vsock/connect" & info [ "vsock-path" ] ~docv:"VSOCK")
 
-(* NOTE(aduermael): it seems to me that "/var/tmp/com.docker.db.socket" is a default value, right?
-This socket path is now dynamic, depending on current user's home directory. Could we just
-make it fail instead? In case no argument is supplied? *)
 let db_path =
-  Arg.(value & opt string "/var/tmp/com.docker.db.socket" & info [ "db" ] ~docv:"DB")
+  Arg.(value & opt (some string) None & info [ "db" ] ~docv:"DB")
 
 let nofile = Arg.(value & opt int 10240 & info [ "nofile" ] ~docv:"nofile rlimit")
+
+let pcap=
+  let doc =
+    Arg.info ~doc:
+      "Filename to write packet capture data to" ["pcap"]
+  in
+  Arg.(value & opt (some string) None doc)
 
 let libuv =
   let doc = "Use a libuv event loop rather than the default select-based one" in
@@ -166,7 +179,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ libuv $ debug),
+  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ pcap $ libuv $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =
