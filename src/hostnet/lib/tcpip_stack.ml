@@ -7,7 +7,7 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make(Vmnet: Sig.VMNET) = struct
+module Make(Vmnet: Sig.VMNET)(Time: V1_LWT.TIME) = struct
 
 type configuration = {
   local_ip: Ipaddr.V4.t;
@@ -82,9 +82,9 @@ module Ipv41 = Ipv4.Make(Ethif1)(Arpv41)
 
 module Udp1 = Udp.Make(Ipv41)
 
-module Tcp1 = Tcp.Flow.Make(Ipv41)(OS.Time)(Clock)(Random)
+module Tcp1 = Tcp.Flow.Make(Ipv41)(Time)(Clock)(Random)
 
-include Tcpip_stack_direct.Make(Console_unix)(OS.Time)
+include Tcpip_stack_direct.Make(Console_unix)(Time)
     (Random)(Netif)(Ethif1)(Arpv41)(Ipv41)(Udp1)(Tcp1)
 
 module Dhcp = struct
