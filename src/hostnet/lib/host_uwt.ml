@@ -633,3 +633,7 @@ module Time = struct
 
   let sleep secs = Uwt.Timer.sleep (int_of_float (secs *. 1000.))
 end
+
+module Main = struct
+  let run = Uwt.Main.run
+end

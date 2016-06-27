@@ -126,6 +126,11 @@ module type HOST = sig
   end
 
   module Time: V1_LWT.TIME
+
+  module Main: sig
+    val run: unit Lwt.t -> unit
+    (** Run the main event loop *)
+  end
 end
 
 module type VMNET = sig

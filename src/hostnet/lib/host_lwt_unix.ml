@@ -503,3 +503,7 @@ type 'a io = 'a Lwt.t
 
 let sleep = Lwt_unix.sleep
 end
+
+module Main = struct
+  let run = Lwt_main.run
+end
