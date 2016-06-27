@@ -19,7 +19,7 @@ Library hostnet
   BuildDepends: cstruct, lwt.unix, logs, mirage-types.lwt, ipaddr, mirage-flow,
     mirage-unix, mirage-clock-unix, mirage-console.unix, tcpip.ethif,
     tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct,
-    tcpip.stack-socket, charrua-core.server, dns, dns.lwt, ofs, uwt
+    tcpip.stack-socket, charrua-core.server, dns, dns.lwt, ofs, uwt, uwt.ext
 
 Executable test
   Path: lib_test

@@ -20,7 +20,7 @@ let or_failwith = function
   | Result.Error (`Msg m) -> failwith m
   | Result.Ok x -> x
 
-module Host = Host_lwt_unix
+module Main(Host: Sig.HOST) = struct
 
 module Connect = Connect.Make(Host.Sockets)
 module Bind = Bind.Make(Host.Sockets)
@@ -112,7 +112,16 @@ let main_t socket_path port_control_path vsock_path db_path nofile debug =
   let wait_forever, _ = Lwt.task () in
   wait_forever
 
-let main socket port_control vsock_path db nofile debug = Lwt_main.run @@ main_t socket port_control vsock_path db nofile debug
+let main socket port_control vsock_path db nofile debug =
+  Host.Main.run @@ main_t socket port_control vsock_path db nofile debug
+
+end
+
+let main socket port_control vsock_path db nofile libuv debug =
+  let module Use_lwt_unix = Main(Host_lwt_unix) in
+  let module Use_uwt = Main(Host_uwt) in
+  (if libuv then Use_uwt.main else Use_lwt_unix.main)
+    socket port_control vsock_path db nofile debug
 
 open Cmdliner
 
@@ -142,6 +151,10 @@ let db_path =
 
 let nofile = Arg.(value & opt int 10240 & info [ "nofile" ] ~docv:"nofile rlimit")
 
+let libuv =
+  let doc = "Use a libuv event loop rather than the default select-based one" in
+  Arg.(value & flag & info [ "libuv" ] ~doc)
+
 let debug =
   let doc = "Verbose debug logging to stdout" in
   Arg.(value & flag & info [ "debug" ] ~doc)
@@ -153,7 +166,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ debug),
+  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ libuv $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =
