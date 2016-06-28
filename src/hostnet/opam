@@ -22,6 +22,7 @@ depends: [
   "result"
   "ipaddr"
   "lwt"
+  "uwt"
   "tcpip" { = "999" }
   "dns"
   "hashcons" {= "1.0.1"}
