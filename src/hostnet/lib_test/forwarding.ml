@@ -12,97 +12,150 @@ let (>>*=) m f = m >>= function
   | Result.Ok x -> f x
   | Result.Error (`Msg m) -> failwith m
 
+module Make(Host: Sig.HOST) = struct
+
+module Channel = Channel.Make(Host.Sockets.Stream.Tcp)
+
+module ForwardServer = struct
+  (** Accept connections, read the forwarding header and run a proxy *)
+
+  let accept flow =
+    let sizeof = 1 + 2 + 4 + 2 in
+    let header = Cstruct.create sizeof in
+    Host.Sockets.Stream.Tcp.read_into flow header
+    >>= function
+    | `Eof -> failwith "EOF"
+    | `Error e -> failwith (Host.Sockets.Stream.Tcp.error_message e)
+    | `Ok () ->
+    let ip_len = Cstruct.LE.get_uint16 header 1 in
+    let ip =
+      let bytes = Cstruct.(to_string @@ sub header 3 ip_len) in
+      if String.length bytes = 4
+      then Ipaddr.V4.of_bytes_exn bytes
+      else assert false in (* IPv4 only *)
+    let port = Cstruct.LE.get_uint16 header 7 in
+    assert (Cstruct.get_uint8 header 0 == 1); (* TCP only *)
+
+    Host.Sockets.Stream.Tcp.connect (ip, port)
+    >>= function
+    | `Error (`Msg x) -> failwith x
+    | `Ok remote ->
+      Lwt.finalize
+        (fun () ->
+          Mirage_flow.proxy (module Clock) (module Host.Sockets.Stream.Tcp) flow (module Host.Sockets.Stream.Tcp) remote ()
+          >>= function
+          | `Error (`Msg m) -> failwith m
+          | `Ok (_l_stats, _r_stats) -> Lwt.return ()
+        ) (fun () ->
+          Host.Sockets.Stream.Tcp.close remote
+        )
+
+  let port =
+    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4.localhost, 0)
+    >>= fun server ->
+    let _, local_port = Host.Sockets.Stream.Tcp.getsockname server in
+    Host.Sockets.Stream.Tcp.listen server accept;
+    Lwt.return local_port
+
+  type t = {
+    local_port: int;
+    server: Host.Sockets.Stream.Tcp.server;
+  }
+end
 
 module Forward = Forward.Make(struct
   type port = Hostnet.Forward.Port.t
 
-  include Hostnet.Conn_lwt_unix
+  include Host.Sockets.Stream.Tcp
 
   open Lwt.Infix
 
-  let connect = function
-    | `Tcp(ip, port) ->
-      let sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.V4.to_string ip, port) in
-      let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
-      Lwt_unix.connect fd sockaddr
-      >>= fun () ->
-      Lwt.return (connect fd)
-    | `Udp(_ip, _port) -> failwith "unimplemented"
-end)(Hostnet.Port)
+  let connect () =
+    ForwardServer.port
+    >>= fun port ->
+    Host.Sockets.Stream.Tcp.connect (Ipaddr.V4.localhost, port)
+    >>= function
+    | `Error (`Msg m) -> failwith m
+    | `Ok x ->
+    Lwt.return x
+end)(Host.Sockets)
 
 let ports_port = 1234
 
-let localhost = Ipaddr.V4.(to_string localhost)
+let localhost = Ipaddr.V4.localhost
 
 module PortsServer = struct
   module Ports = Active_list.Make(Forward)
-  module Server = Server9p_unix.Make(Log)(Ports)
+  module Server = Protocol_9p.Server.Make(Log)(Host.Sockets.Stream.Tcp)(Ports)
 
   let with_server f =
     let ports = Ports.make () in
     Ports.set_context ports "";
-    Server.listen ports "tcp" (localhost ^ ":" ^ (string_of_int ports_port))
-    >>*= fun server ->
-    let _ = Server.serve_forever server in
+    Host.Sockets.Stream.Tcp.bind (localhost, ports_port)
+    >>= fun server ->
+    Host.Sockets.Stream.Tcp.listen server
+      (fun conn ->
+        Server.connect ports conn ()
+        >>= function
+        | Result.Error (`Msg m) ->
+          Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+          Lwt.return ()
+        | Result.Ok server ->
+          Server.after_disconnect server
+    );
     f ()
     >>= fun () ->
-    Server.shutdown server
+    Host.Sockets.Stream.Tcp.shutdown server
 end
 
 module LocalClient = struct
-  let connect ip port =
-    let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
-    Lwt_unix.connect fd (Unix.ADDR_INET(Unix.inet_addr_of_string ip, port))
-    >>= fun () ->
-    Lwt.return fd
-  let disconnect fd = Lwt_unix.close fd
+  let connect (ip, port) =
+    Host.Sockets.Stream.Tcp.connect (ip, port)
+    >>= function
+    | `Ok fd -> Lwt.return fd
+    | `Error (`Msg m) -> failwith m
+  let disconnect fd = Host.Sockets.Stream.Tcp.close fd
 end
+
+let read_http ch =
+  let rec loop acc =
+    Channel.read_line ch
+    >>= fun bufs ->
+    let txt = Cstruct.(to_string (concat bufs)) in
+    if txt = ""
+    then Lwt.return acc
+    else loop (acc ^ txt) in
+  loop ""
 
 module LocalServer = struct
   type t = {
     local_port: int;
-    listening_socket: Lwt_unix.file_descr;
+    server: Host.Sockets.Stream.Tcp.server;
   }
-  let create () =
-    let listening_socket = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
-    Lwt_unix.setsockopt listening_socket Lwt_unix.SO_REUSEADDR true;
-    Lwt_unix.bind listening_socket (Unix.ADDR_INET(Unix.inet_addr_of_string localhost, 0));
-    let local_port = match Lwt_unix.getsockname listening_socket with
-      | Lwt_unix.ADDR_INET(_, local_port) -> local_port
-      | _ -> assert false in
-    Lwt_unix.listen listening_socket 5;
-    { local_port; listening_socket }
-  let accept { listening_socket } =
-    Lwt_unix.accept listening_socket
-    >>= fun (fd, _) ->
-    let server_ic = Lwt_io.of_fd ~close:Lwt.return ~mode:Lwt_io.input fd in
-    let server_oc = Lwt_io.of_fd ~close:Lwt.return ~mode:Lwt_io.output fd in
-    let rec read_request acc =
-      Lwt_io.read_line server_ic
-      >>= fun line ->
-      if line = ""
-      then Lwt.return acc
-    else read_request (acc ^ line) in
-    read_request ""
+
+  let accept flow =
+    let ch = Channel.create flow in
+    read_http ch
     >>= fun request ->
     if not(Astring.String.is_prefix ~affix:"GET" request)
     then failwith (Printf.sprintf "unrecognised HTTP GET: [%s]" request);
     let response = "HTTP/1.0 404 Not found\r\ncontent-length: 0\r\n\r\n" in
-    Lwt_io.write server_oc response
-    >>= fun () ->
-    Lwt_io.flush server_oc
-    >>= fun () ->
-    Lwt_io.close server_oc
-    >>= fun () ->
-    Lwt_io.close server_ic
-    >>= fun () ->
-    Lwt_unix.close fd
+    Channel.write_string ch response 0 (String.length response);
+    Channel.flush ch
+
+  let create () =
+    Host.Sockets.Stream.Tcp.bind (localhost, 0)
+    >>= fun server ->
+    let _, local_port = Host.Sockets.Stream.Tcp.getsockname server in
+    Host.Sockets.Stream.Tcp.listen server accept;
+    Lwt.return { local_port; server }
 
   let to_string t =
-    Printf.sprintf "tcp:%s:%d" localhost t.local_port
-  let destroy t = Lwt_unix.close t.listening_socket
+    Printf.sprintf "tcp:127.0.0.1:%d" t.local_port
+  let destroy t = Host.Sockets.Stream.Tcp.shutdown t.server
   let with_server f =
-    let server = create () in
+    create ()
+    >>= fun server ->
     Lwt.finalize
       (fun () ->
         f server
@@ -113,14 +166,18 @@ end
 
 module ForwardControl = struct
   module Log = (val Logs.src_log Logs.default)
-  module Client = Client9p_unix.Make(Log)
+  module Client = Protocol_9p.Client.Make(Log)(Host.Sockets.Stream.Tcp)
 
   type t = {
     ninep: Client.t
   }
 
   let connect () =
-    Client.connect "tcp" (localhost ^ ":" ^ (string_of_int ports_port)) ()
+    Host.Sockets.Stream.Tcp.connect (localhost, ports_port)
+    >>= function
+    | `Error (`Msg m) -> failwith m
+    | `Ok flow ->
+    Client.connect flow ()
     >>*= fun ninep ->
     Lwt.return { ninep }
 
@@ -133,7 +190,7 @@ module ForwardControl = struct
   type forward = {
     t: t;
     fid: Protocol_9p_types.Fid.t;
-    ip: string;
+    ip: Ipaddr.V4.t;
     port: int;
   }
 
@@ -162,6 +219,7 @@ module ForwardControl = struct
       match Astring.String.cuts ~sep:":" line with
       | "tcp" :: ip :: port :: _ ->
         let port = int_of_string port in
+        let ip = Ipaddr.V4.of_string_exn ip in
         Lwt.return { t; fid; ip; port }
       | _ -> failwith ("failed to parse response: " ^ line)
     end else failwith response
@@ -175,17 +233,19 @@ module ForwardControl = struct
     Lwt.finalize (fun () -> f forward.ip forward.port) (fun () -> destroy forward)
 end
 
-let http_get client =
-  let client_ic = Lwt_io.of_fd ~close:Lwt.return ~mode:Lwt_io.input client in
-  let client_oc = Lwt_io.of_fd ~close:Lwt.return ~mode:Lwt_io.output client in
+let http_get flow =
+  let ch = Channel.create flow in
   let message = "GET / HTTP/1.0\r\nconnection: close\r\n\r\n" in
-  Lwt_io.write client_oc message
+  Channel.write_string ch message 0 (String.length message);
+  Channel.flush ch
   >>= fun () ->
-  Lwt_io.flush client_oc
+  Host.Sockets.Stream.Tcp.shutdown_write flow
   >>= fun () ->
-  Lwt_io.close client_oc
-  >>= fun () ->
-  Lwt_io.close client_ic
+  read_http ch
+  >>= fun response ->
+  if not(Astring.String.is_prefix ~affix:"HTTP" response)
+  then failwith (Printf.sprintf "unrecognised HTTP response: [%s]" response);
+  Lwt.return ()
 
 let test_one_forward () =
   let t =
@@ -195,24 +255,21 @@ let test_one_forward () =
           (fun () ->
             ForwardControl.with_connection
               (fun connection ->
-                let name = "tcp:" ^ localhost ^ ":0:" ^ (LocalServer.to_string server) in
+                let name = "tcp:127.0.0.1:0:" ^ (LocalServer.to_string server) in
                 ForwardControl.with_forward
                  connection
                   name
                   (fun ip port ->
-                    let server = LocalServer.accept server in
-                    LocalClient.connect ip port
+                    LocalClient.connect (ip, port)
                     >>= fun client ->
                     http_get client
                     >>= fun () ->
-                    server 
-                    >>= fun () ->
-                    Lwt_unix.close client
+                    LocalClient.disconnect client
                   )
               )
           )
       ) in
-  Lwt_main.run t
+  Host.Main.run t
 
 let test_10_connections () =
   let t =
@@ -222,7 +279,7 @@ let test_10_connections () =
           (fun () ->
             ForwardControl.with_connection
               (fun connection ->
-                let name = "tcp:" ^ localhost ^ ":0:" ^ (LocalServer.to_string server) in
+                let name = "tcp:127.0.0.1:0:" ^ (LocalServer.to_string server) in
                 ForwardControl.with_forward
                  connection
                   name
@@ -230,14 +287,11 @@ let test_10_connections () =
                     let rec loop = function
                       | 0 -> Lwt.return ()
                       | n ->
-                        let server = LocalServer.accept server in
-                        LocalClient.connect ip port
+                        LocalClient.connect (ip, port)
                         >>= fun client ->
                         http_get client
                         >>= fun () ->
-                        server
-                        >>= fun () ->
-                        Lwt_unix.close client
+                        LocalClient.disconnect client
                         >>= fun () ->
                         loop (n - 1) in
                     let start = Unix.gettimeofday () in
@@ -251,9 +305,10 @@ let test_10_connections () =
               )
           )
       ) in
-  Lwt_main.run t
+  Host.Main.run t
 
 let test = [
   "Test one port forward", `Quick, test_one_forward;
   "Check speed of 10 forwarded connections", `Quick, test_10_connections;
 ]
+end
