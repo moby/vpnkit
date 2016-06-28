@@ -348,14 +348,17 @@ module Stream = struct
     type server = {
       mutable listening_fds: Lwt_unix.file_descr list;
       read_buffer_size: int;
+      path: string; (* only for Win32 *)
+      mutable closed: bool;
     }
 
-    let make ?(read_buffer_size = default_read_buffer_size) listening_fds =
-      { listening_fds; read_buffer_size }
+    let make ?(read_buffer_size = default_read_buffer_size) ?(path="") listening_fds =
+      { listening_fds; read_buffer_size; path; closed = false }
 
     let shutdown server =
       let fds = server.listening_fds in
       server.listening_fds <- [];
+      server.closed <- true;
       Lwt_list.iter_s Lwt_unix.close fds
 
     let of_bound_fd ?(read_buffer_size = default_read_buffer_size) fd =
@@ -428,36 +431,79 @@ module Stream = struct
 
     type address = string
 
+    let is_win32 = Sys.os_type = "win32"
+
     let connect ?read_buffer_size path =
       let description = path in
-      let sockaddr = Unix.ADDR_UNIX path in
-      connect description ?read_buffer_size Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM sockaddr
+      if is_win32 then begin
+        Named_pipe_lwt.Client.openpipe path
+        >>= fun p ->
+        let fd = Named_pipe_lwt.Client.to_fd p in
+        Lwt.return (`Ok (of_fd ?read_buffer_size ~description fd))
+      end else begin
+        let sockaddr = Unix.ADDR_UNIX path in
+        connect description ?read_buffer_size Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM sockaddr
+      end
 
     let bind path =
-      Lwt.catch
-        (fun () ->
-          Lwt_unix.unlink path
-        ) (function
-          | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
-          | e -> Lwt.fail e)
-      >>= fun () ->
-      let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
-      Lwt.catch
-        (fun () ->
-          Lwt_unix.bind s (Lwt_unix.ADDR_UNIX path);
-          Lwt.return (make [ s ])
-        ) (fun e ->
-          Lwt_unix.close s
-          >>= fun () ->
-          Lwt.fail e
-        )
+      if is_win32
+      then Lwt.return (make ~path [])
+      else
+        Lwt.catch
+          (fun () ->
+            Lwt_unix.unlink path
+          ) (function
+            | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
+            | e -> Lwt.fail e)
+        >>= fun () ->
+        let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
+        Lwt.catch
+          (fun () ->
+            Lwt_unix.bind s (Lwt_unix.ADDR_UNIX path);
+            Lwt.return (make ~path [ s ])
+          ) (fun e ->
+            Lwt_unix.close s
+            >>= fun () ->
+            Lwt.fail e
+          )
 
-    let getsockname server = match server.listening_fds with
-      | [] -> failwith "Tcp.getsockname: socket is closed"
-      | fd :: _ ->
-        match Lwt_unix.getsockname fd with
-        | Lwt_unix.ADDR_UNIX path -> path
-        | _ -> invalid_arg "Unix.getsockname passed a non-Unix socket"
+      let listen server cb =
+        if not is_win32
+        then listen server cb
+        else
+          let rec loop () =
+            let open Lwt.Infix in
+            if server.closed
+            then Lwt.return_unit
+            else begin
+              let p = Named_pipe_lwt.Server.create server.path in
+              Named_pipe_lwt.Server.connect p
+              >>= function
+              | false ->
+                Log.err (fun f -> f "Named-pipe connection failed on %s" server.path);
+                Lwt.return ()
+              | true ->
+                let description = "named-pipe:" ^ server.path in
+                let read_buffer_size = server.read_buffer_size in
+                let fd = Named_pipe_lwt.Server.to_fd p in
+                let flow = of_fd ~read_buffer_size ~description fd in
+                Lwt.async
+                  (fun () ->
+                    Lwt.finalize
+                      (fun () ->
+                        log_exception_continue "Socket.Stream.Unix"
+                          (fun () -> cb flow )
+                      ) (fun () -> close flow)
+                  );
+                loop ()
+            end in
+        Lwt.async
+          (fun () ->
+            log_exception_continue "Socket.Stream.Unix"
+              (fun () -> loop ())
+          )
+
+    let getsockname server = server.path
 
     let unsafe_get_raw_fd t =
       (* By default Lwt sets fds to non-blocking mode. Reverse this to avoid
