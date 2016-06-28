@@ -1,0 +1,8 @@
+opam-version: "1.2"
+maintainer:   "David Scott <dave@recoil.org>"
+homepage:     "https://libuv.org/"
+license:      "ISC"
+
+build:   [make "-f" "Makefile.mingw"]
+install: ["./libuv-install.sh"]
+remove: ["./libuv-uninstall.sh"]
