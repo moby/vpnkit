@@ -28,7 +28,7 @@ Executable test
   MainIs: main.ml
   Build$: flag(tests)
   BuildDepends: hostnet, proto-vmnet, cmdliner, alcotest, lwt.unix, logs.fmt,
-    dns.mirage
+    dns.mirage, lwt.preemptive, uwt.preemptive
 
 Test test
   Run$:               flag(tests)
