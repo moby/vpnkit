@@ -6,3 +6,6 @@ license:      "ISC"
 build:   [make "-f" "Makefile.mingw"]
 install: ["./libuv-install.sh"]
 remove: ["./libuv-uninstall.sh"]
+depends: [
+  "conf-pkg-config"
+]
