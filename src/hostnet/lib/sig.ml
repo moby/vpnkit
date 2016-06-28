@@ -130,6 +130,9 @@ module type HOST = sig
   module Main: sig
     val run: unit Lwt.t -> unit
     (** Run the main event loop *)
+
+    val run_in_main: (unit -> 'a Lwt.t) -> 'a
+    (** Run the function in the main thread *)
   end
 end
 

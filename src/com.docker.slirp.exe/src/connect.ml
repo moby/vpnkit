@@ -9,16 +9,20 @@ let hvsockaddr = ref None
 
 let set_port_forward_addr x = hvsockaddr := Some x
 
-include Flow_lwt_hvsock_shutdown
+module Make(Time: V1_LWT.TIME)(Main: Lwt_hvsock.MAIN) = struct
+  include Flow_lwt_hvsock_shutdown.Make(Time)(Main)
 
-open Lwt.Infix
+  open Lwt.Infix
 
-let connect () = match !hvsockaddr with
-  | None ->
-    Log.err (fun f -> f "Please set a Hyper-V socket address for port forwarding");
-    failwith "Hyper-V socket forwarding not initialised"
-  | Some sockaddr ->
-    let fd = Lwt_hvsock.create () in
-    Lwt_hvsock.connect fd sockaddr
-    >>= fun () ->
-    Lwt.return (connect fd)
+  type address = unit
+
+  let connect () = match !hvsockaddr with
+    | None ->
+      Log.err (fun f -> f "Please set a Hyper-V socket address for port forwarding");
+      failwith "Hyper-V socket forwarding not initialised"
+    | Some sockaddr ->
+      let fd = Hvsock.create () in
+      Hvsock.connect fd sockaddr
+      >>= fun () ->
+      Lwt.return (connect fd)
+end

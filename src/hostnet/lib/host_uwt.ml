@@ -636,4 +636,5 @@ end
 
 module Main = struct
   let run = Uwt.Main.run
+  let run_in_main = Uwt_preemptive.run_in_main
 end

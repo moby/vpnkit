@@ -552,4 +552,5 @@ end
 
 module Main = struct
   let run = Lwt_main.run
+  let run_in_main = Lwt_preemptive.run_in_main
 end
