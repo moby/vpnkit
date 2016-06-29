@@ -453,7 +453,7 @@ module Sockets = struct
 
       let unsafe_get_raw_fd t =
         let fd = Uwt.Pipe.fileno_exn t.fd in
-        Unix.set_nonblock fd;
+        Unix.clear_nonblock fd;
         fd
 
       let connect ?(read_buffer_size = default_read_buffer_size) path =
