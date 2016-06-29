@@ -38,9 +38,9 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
-module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time)
-  module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conv)(Host.Sockets)(Host.Time)
+  module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conf)(Host.Sockets)(Host.Time)
 
 module Socket = Host.Sockets
 
@@ -155,9 +155,9 @@ let connect x peer_ip local_ip =
 
                 let for_us = Ipaddr.V4.compare src_ip local_ip == 0 in
                 ( if for_us && src_port = 53 then begin
-                    Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
+                    Resolv_conf.get () (* re-read /etc/resolv.conf *)
                     >>= function
-                    | { Dns_resolver_unix.servers = (Ipaddr.V4 ip, port) :: _; _ } -> Lwt.return (ip, port)
+                    | (Ipaddr.V4 ip, port) :: _  -> Lwt.return (ip, port)
                     | _ ->
                       Log.err (fun f -> f "Failed to discover DNS server: assuming 127.0.01");
                       Lwt.return (Ipaddr.V4.of_string_exn "127.0.0.1", 53)
