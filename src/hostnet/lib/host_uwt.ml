@@ -61,7 +61,9 @@ module Sockets = struct
       mutable reply: reply;
     }
 
-    (* Look up by dst * dst_port *)
+    (* FIXME: deduplicate some of the common code here with Host_lwt_unix *)
+
+    (* Look up by src * src_port * dst * dst_port *)
     let table = Hashtbl.create 7
 
     let _ =
@@ -82,11 +84,11 @@ module Sockets = struct
         loop () in
       loop ()
 
-    let input ~reply ~dst:(dst, dst_port) ~payload =
-      (if Hashtbl.mem table (dst, dst_port) then begin
-          Lwt.return (Some (Hashtbl.find table (dst, dst_port)))
+    let input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload =
+      (if Hashtbl.mem table (src, src_port, dst, dst_port) then begin
+          Lwt.return (Some (Hashtbl.find table (src, src_port, dst, dst_port)))
         end else begin
-         let description = Ipaddr.to_string dst ^ ":" ^ (string_of_int dst_port) in
+         let description = Ipaddr.to_string src ^ ":" ^ (string_of_int src_port) ^ "-" ^ (Ipaddr.to_string dst) ^ ":" ^ (string_of_int dst_port) in
          if Ipaddr.compare dst Ipaddr.(V4 V4.broadcast) = 0 then begin
            Log.debug (fun f -> f "Socket.Datagram.input %s: ignoring broadcast packet" description);
            Lwt.return None
@@ -101,7 +103,7 @@ module Sockets = struct
            end else begin
              let last_use = Unix.gettimeofday () in
              let flow = { description; fd; last_use; reply} in
-             Hashtbl.replace table (dst, dst_port) flow;
+             Hashtbl.replace table (src, src_port, dst, dst_port) flow;
              (* Start a listener *)
              let buf = Cstruct.create 1500 in
              let rec loop () =

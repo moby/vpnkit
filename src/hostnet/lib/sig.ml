@@ -46,7 +46,7 @@ module type DATAGRAM = sig
 
   type reply = Cstruct.t -> unit Lwt.t
 
-  val input: reply:reply -> dst:address -> payload:Cstruct.t -> unit Lwt.t
+  val input: reply:reply -> src:address -> dst:address -> payload:Cstruct.t -> unit Lwt.t
 
   module Udp: sig
     type server

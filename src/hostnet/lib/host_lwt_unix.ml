@@ -78,7 +78,9 @@ module Datagram = struct
     mutable reply: reply;
   }
 
-  (* Look up by dst * dst_port *)
+  (* FIXME: deduplicate some of the common code here with Host_uwt *)
+
+  (* Look up by src * src_port * dst * dst_port *)
   let table = Hashtbl.create 7
 
   let _ =
@@ -104,12 +106,12 @@ module Datagram = struct
       loop () in
     loop ()
 
-  let input ~reply ~dst:(dst, dst_port) ~payload =
+  let input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload =
     let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string dst, dst_port) in
-    (if Hashtbl.mem table (dst, dst_port) then begin
-        Lwt.return (Some (Hashtbl.find table (dst, dst_port)))
+    (if Hashtbl.mem table (src, src_port, dst, dst_port) then begin
+        Lwt.return (Some (Hashtbl.find table (src, src_port, dst, dst_port)))
       end else begin
-       let description = Ipaddr.to_string dst ^ ":" ^ (string_of_int dst_port) in
+       let description = Ipaddr.to_string src ^ ":" ^ (string_of_int src_port) ^ "-" ^ (Ipaddr.to_string dst) ^ ":" ^ (string_of_int dst_port) in
        if Ipaddr.compare dst Ipaddr.(V4 V4.broadcast) = 0 then begin
          Log.debug (fun f -> f "Socket.Datagram.input %s: ignoring broadcast packet" description);
          Lwt.return None
@@ -119,7 +121,7 @@ module Datagram = struct
          Lwt_unix.bind fd (Lwt_unix.ADDR_INET(Unix.inet_addr_any, 0));
          let last_use = Unix.gettimeofday () in
          let flow = { description; fd; last_use; reply} in
-         Hashtbl.replace table (dst, dst_port) flow;
+         Hashtbl.replace table (src, src_port, dst, dst_port) flow;
          (* Start a listener *)
          let buffer = Cstruct.create 1500 in
          let bytes = Bytes.make 1500 '\000' in

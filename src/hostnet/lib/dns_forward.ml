@@ -114,7 +114,7 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
       remove_tid dns;
       Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer in
 
-    Socket.Datagram.input ~reply ~dst:(dst, dst_port) ~payload:buf
+    Socket.Datagram.input ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(dst, dst_port) ~payload:buf
   | None ->
     Log.err (fun f -> f "DNS[%s] No upstream DNS server configured: dropping request" (tidstr_of_dns dns));
     Lwt.return_unit
