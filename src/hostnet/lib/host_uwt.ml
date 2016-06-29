@@ -121,7 +121,7 @@ module Sockets = struct
                       Lwt.return true
                     end
                  ) (function
-                     | Unix.Unix_error(Unix.EBADF, _, _) ->
+                     | Uwt.Uwt_error(Uwt.ECANCELED, _, _) ->
                        (* fd has been closed by the GC *)
                        Log.debug (fun f -> f "Socket.Datagram.input %s: shutting down listening thread" description);
                        Lwt.return false
