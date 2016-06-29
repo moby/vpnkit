@@ -191,7 +191,7 @@ type t = {
   server_macaddr: Macaddr.t;
   write_header: Cstruct.t;
   write_m: Lwt_mutex.t;
-  mutable pcap: Lwt_unix.file_descr option;
+  mutable pcap: Unix.file_descr option;
   mutable pcap_size_limit: int64 option;
   pcap_m: Lwt_mutex.t;
   mutable listeners: (Cstruct.t -> unit Lwt.t) list;
@@ -275,17 +275,28 @@ let client_negotiate t =
       Lwt.return (`Ok ())
     )
 
+(* Use blocking I/O here so we can avoid Using Lwt_unix or Uwt. Ideally we
+   would use a FLOW handle referencing a file/stream. *)
+let really_write fd str =
+  let rec loop ofs =
+    if ofs = (String.length str)
+    then ()
+    else
+      let n = Unix.write fd str ofs (String.length str - ofs) in
+      loop (ofs + n) in
+  loop 0
+
 let start_capture t ?size_limit filename =
   Lwt_mutex.with_lock t.pcap_m
     (fun () ->
       ( match t.pcap with
         | Some fd ->
-          Lwt_unix.close fd
+          Unix.close fd;
+          Lwt.return ()
         | None ->
           Lwt.return ()
       ) >>= fun () ->
-      Lwt_unix.openfile filename [ Unix.O_WRONLY; Unix.O_TRUNC; Unix.O_CREAT ] 0o0644
-      >>= fun fd ->
+      let fd = Unix.openfile filename [ Unix.O_WRONLY; Unix.O_TRUNC; Unix.O_CREAT ] 0o0644 in
       let buf = Cstruct.create Pcap.LE.sizeof_pcap_header in
       let open Pcap.LE in
       set_pcap_header_magic_number buf Pcap.magic_number;
@@ -295,8 +306,7 @@ let start_capture t ?size_limit filename =
       set_pcap_header_sigfigs buf 4l;
       set_pcap_header_snaplen buf 1500l;
       set_pcap_header_network buf (Pcap.Network.to_int32 Pcap.Network.Ethernet);
-      Lwt_cstruct.(complete (write fd) buf)
-      >>= fun () ->
+      really_write fd (Cstruct.to_string buf);
       t.pcap <- Some fd;
       t.pcap_size_limit <- size_limit;
       Lwt.return ()
@@ -305,8 +315,7 @@ let start_capture t ?size_limit filename =
 let stop_capture_already_locked t = match t.pcap with
   | None -> Lwt.return ()
   | Some fd ->
-    Lwt_unix.close fd
-    >>= fun () ->
+    Unix.close fd;
     t.pcap <- None;
     t.pcap_size_limit <- None;
     Lwt.return ()
@@ -377,16 +386,8 @@ let capture t bufs =
          set_pcap_packet_ts_usec buf usecs;
          set_pcap_packet_incl_len buf @@ Int32.of_int len;
          set_pcap_packet_orig_len buf @@ Int32.of_int len;
-         Lwt_cstruct.(complete (write pcap) buf)
-         >>= fun () ->
-         let rec loop = function
-           | [] -> Lwt.return ()
-           | buf :: bufs ->
-             Lwt_cstruct.(complete (write pcap) buf)
-             >>= fun () ->
-             loop bufs in
-         loop bufs
-         >>= fun () ->
+         really_write pcap (Cstruct.to_string buf);
+         List.iter (fun buf -> really_write pcap (Cstruct.to_string buf)) bufs;
          match t.pcap_size_limit with
          | None -> Lwt.return () (* no limit *)
          | Some limit ->
