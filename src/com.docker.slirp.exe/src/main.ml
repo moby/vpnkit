@@ -92,7 +92,7 @@ let start_port_forwarding port_control_url =
 
 module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Resolv_conf)(Host)
 
-let main socket_url port_control_url db_path dns pcap debug =
+let main_t socket_url port_control_url db_path dns pcap debug =
   if debug
   then Logs.set_reporter (Logs_fmt.reporter ())
   else begin
@@ -146,8 +146,14 @@ let main socket_url port_control_url db_path dns pcap debug =
       >>= fun () ->
       Log.info (fun f -> f "stack disconnected");
       Lwt.return ()
-    )
+    ) >>= fun () ->
+  Log.debug (fun f -> f "initialised: serving requests forever");
+  let wait_forever, _ = Lwt.task () in
+  wait_forever
 
+let main socket_url port_control_url db_path dns pcap debug =
+  Host.Main.run
+    (main_t socket_url port_control_url db_path dns pcap debug)
 end
 
 let main socket port_control db dns pcap libuv debug =
