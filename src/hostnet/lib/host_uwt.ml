@@ -245,7 +245,6 @@ module Sockets = struct
         let description = Ipaddr.V4.to_string ip ^ ":" ^ (string_of_int port) in
         Lwt.catch
           (fun () ->
-             Log.debug (fun f -> f "Socket.Tcp.connect %s: connecting" description);
              let sockaddr = make_sockaddr (Ipaddr.V4 ip, port) in
              Uwt.Tcp.connect fd ~addr:sockaddr
              >>= fun () ->

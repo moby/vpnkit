@@ -152,11 +152,7 @@ let connect x peer_ip local_ip =
             );
             Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
-                let description =
-                  Printf.sprintf "TCP %s:%d > %s:%d"
-                    (Ipaddr.V4.to_string src_ip) src_port
-                    (Ipaddr.V4.to_string dst_ip) dst_port in
-                Log.debug (fun f -> f "%s connecting" description);
+
                 let for_us = Ipaddr.V4.compare src_ip local_ip == 0 in
                 ( if for_us && src_port = 53 then begin
                     Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
@@ -172,29 +168,27 @@ let connect x peer_ip local_ip =
                 let src_ip = if for_us then Ipaddr.V4.localhost else src_ip in
                 Socket.Stream.Tcp.connect (src_ip, src_port)
                 >>= function
-                | `Error (`Msg m) ->
-                  Log.info (fun f -> f "%s rejected: %s" description m);
+                | `Error (`Msg _) ->
                   return `Reject
                 | `Ok remote ->
                   Lwt.return (`Accept (fun local ->
                       finally (fun () ->
                           (* proxy between local and remote *)
-                          Log.debug (fun f -> f "%s connected" description);
                           Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.Stream.Tcp) remote ()
                           >>= function
                           | `Error (`Msg m) ->
-                            Log.err (fun f -> f "%s proxy failed with %s" description m);
+                            Log.err (fun f ->
+                              let description =
+                                Printf.sprintf "TCP %s:%d > %s:%d"
+                                  (Ipaddr.V4.to_string src_ip) src_port
+                                  (Ipaddr.V4.to_string dst_ip) dst_port in
+                               f "%s proxy failed with %s" description m);
                             return ()
-                          | `Ok (l_stats, r_stats) ->
-                            Log.debug (fun f ->
-                                f "%s closing: l2r = %s; r2l = %s" description
-                                  (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
-                              );
+                          | `Ok (_l_stats, _r_stats) ->
                             return ()
                         ) (fun () ->
                           Socket.Stream.Tcp.close remote
                           >>= fun () ->
-                          Log.debug (fun f -> f "%s Socket.Stream.close" description);
                           Lwt.return ()
                         )
                     ))
