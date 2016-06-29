@@ -132,10 +132,10 @@ let main socket port_control vsock_path db nofile pcap debug =
 
 end
 
-let main socket port_control vsock_path db nofile pcap libuv debug =
+let main socket port_control vsock_path db nofile pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
-  (if libuv then Use_uwt.main else Use_lwt_unix.main)
+  (if select then Use_lwt_unix.main else Use_uwt.main)
     socket port_control vsock_path db nofile pcap debug
 
 open Cmdliner
@@ -170,9 +170,9 @@ let pcap=
   in
   Arg.(value & opt (some string) None doc)
 
-let libuv =
-  let doc = "Use a libuv event loop rather than the default select-based one" in
-  Arg.(value & flag & info [ "libuv" ] ~doc)
+let select =
+  let doc = "Use a select event loop rather than the default libuv-based one" in
+  Arg.(value & flag & info [ "select" ] ~doc)
 
 let debug =
   let doc = "Verbose debug logging to stdout" in
@@ -185,7 +185,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ pcap $ libuv $ debug),
+  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ pcap $ select $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =
