@@ -3,7 +3,7 @@ maintainer:   "David Scott <dave@recoil.org>"
 homepage:     "https://libuv.org/"
 license:      "ISC"
 
-build:   [make "-f" "Makefile.mingw"]
+build:   ["./libuv-build.sh"]
 install: ["./libuv-install.sh"]
 remove: ["./libuv-uninstall.sh"]
 depends: [
