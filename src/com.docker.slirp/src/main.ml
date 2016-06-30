@@ -34,7 +34,9 @@ let unix_listen path =
     prefix' <= x' && (String.sub x 0 prefix' = prefix) in
   if startswith "fd:" path then begin
     let i = String.sub path 3 (String.length path - 3) in
-    let x = try int_of_string i with _ -> failwith (Printf.sprintf "Failed to parse command-line argument [%s]" path) in
+    (  try Lwt.return (int_of_string i)
+       with _ -> Lwt.fail (Failure (Printf.sprintf "Failed to parse command-line argument [%s]" path))
+    ) >>= fun x ->
     let fd = Unix_representations.file_descr_of_int x in
     Lwt.return (Host.Sockets.Stream.Unix.of_bound_fd fd)
   end else Host.Sockets.Stream.Unix.bind path
