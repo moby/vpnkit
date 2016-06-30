@@ -1,2 +1,0 @@
-Virtual package relying on a libuv system installation.
-This package can only install if libuv 1.0 or later is installed on the system.
