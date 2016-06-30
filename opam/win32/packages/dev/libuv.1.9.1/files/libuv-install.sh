@@ -10,7 +10,7 @@ LIBDIR="$PREFIX/lib/"
 INCLUDEDIR="$PREFIX/include/libuv"
 
 mkdir -p "$LIBDIR"
-ranlib libuv.a
+/usr/bin/x86_64-w64-mingw32-ranlib.exe libuv.a
 cp libuv.a "$LIBDIR"
 mkdir -p "$INCLUDEDIR"
 cp include/*.h "$INCLUDEDIR"
