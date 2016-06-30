@@ -4,13 +4,13 @@ MACOSX_DEPLOYMENT_TARGET?=10.10
 EXEDIR=C:\projects\vpnkit
 LICENSEDIRS=$(REPO_ROOT)/opam/licenses
 
-.PHONY: com.docker.slirp.exe com.docker.slirp install uninstall OSS-LICENSES COMMIT
+.PHONY: com.docker.slirp.exe com.docker.slirp.tgz install uninstall OSS-LICENSES COMMIT
 
 TARGETS :=
 ifeq ($(OS),Windows_NT)
 	TARGETS += com.docker.slirp.exe
 else
-	TARGETS += com.docker.slirp
+	TARGETS += com.docker.slirp.tgz
 endif
 
 ifeq ($(OS),Windows_NT)
@@ -58,9 +58,9 @@ depends:
 	# Please do run the unit tests for our packages
 	$(OPAMFLAGS) opam install --deps-only slirp -y -t
 
-com.docker.slirp:
-	$(OPAMFLAGS) opam config exec -- $(MAKE) -C src/com.docker.slirp build test
-	cp src/com.docker.slirp/_build/src/main.native com.docker.slirp
+com.docker.slirp.tgz:
+	$(OPAMFLAGS) opam config exec -- $(MAKE) -C src/com.docker.slirp build test stage
+	cp src/com.docker.slirp/com.docker.slirp.tgz .
 
 com.docker.slirp.exe:
 	cd src/com.docker.slirp.exe && \
