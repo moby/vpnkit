@@ -31,7 +31,7 @@ depends: [
 ]
 depexts: [
   [["freebsd"] ["pkgconf" "libuv"]]
-  [["osx" "homebrew"] ["libuv" "pkg-config"]]
+  [["osx" "homebrew"] ["pkg-config"]]
 ]
 post-messages: [
   "Could not build uwt. The most common reason for that is a missing or old 'libuv' system package (version 0.x is not supported)." {failure}
