@@ -10,6 +10,7 @@ LIBDIR="$PREFIX/lib/"
 INCLUDEDIR="$PREFIX/include/libuv"
 
 mkdir -p "$LIBDIR"
+ranlib libuv.a
 cp libuv.a "$LIBDIR"
 mkdir -p "$INCLUDEDIR"
 cp include/*.h "$INCLUDEDIR"
