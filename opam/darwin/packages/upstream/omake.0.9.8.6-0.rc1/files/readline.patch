@@ -1,0 +1,11 @@
+--- a/lib/configure/readline.om
++++ b/lib/configure/readline.om
+@@ -39,7 +39,7 @@
+             READLINE_CFLAGS += -DREADLINE_ENABLED
+
+             # Test for GNU
+-            if $(CheckLib ncurses readline, rl_on_new_line)
++            if $(and $(not $(equal $(SYSNAME), Darwin)), $(CheckLib ncurses readline, rl_on_new_line))
+                 READLINE_GNU = true
+                 READLINE_CFLAGS += -DREADLINE_GNU
+                 export

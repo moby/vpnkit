@@ -1,0 +1,12 @@
+diff -ru a/lib/configure/Configure.om b/lib/configure/Configure.om
+--- a/lib/configure/Configure.om
++++ b/lib/configure/Configure.om
+@@ -266,7 +266,7 @@
+ # \end{doc}
+ #
+ public.CheckCLib(libs, funs) =
+-    CFLAGS += $(addprefix -l, $(libs))
++    LDFLAGS += $(addprefix -l, $(libs))
+
+     return $(TryLinkC $"""
+ #ifdef __cplusplus

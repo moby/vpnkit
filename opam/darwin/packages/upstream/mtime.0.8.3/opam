@@ -14,10 +14,11 @@ depends:
   "ocamlbuild" {build}
 ]
 depopts: [ "js_of_ocaml" ]
-build:
-[
-  [ "ocaml" "pkg/git.ml" ]
-  [ "ocaml" "pkg/build.ml" "native=%{ocaml-native}%"
-                           "native-dynlink=%{ocaml-native-dynlink}%"
-                           "jsoo=%{js_of_ocaml:installed}%" ]
+build: ["ocaml" "pkg/git.ml"]
+install: [
+  "ocaml"
+  "pkg/build.ml"
+  "native=%{ocaml-native}%"
+  "native-dynlink=%{ocaml-native-dynlink}%"
+  "jsoo=%{js_of_ocaml:installed}%"
 ]

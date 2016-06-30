@@ -4,13 +4,11 @@ tags: [
   "org:mirage"
   "org:xapi-project"
 ]
-build: [
-  [make "unix-build"]
-  [make "unix-install"]
-]
+build: [make "unix-build"]
 remove: ["ocamlfind" "remove" "mirage-clock-unix"]
 depends: [
   "ocamlfind"
   "mirage-types" {>= "0.3.0"}
 ]
 dev-repo: "git://github.com/mirage/mirage-clock"
+install: [make "unix-install"]

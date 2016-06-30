@@ -1,0 +1,21 @@
+opam-version: "1.2"
+maintainer: "andreashauptmann@t-online.de"
+homepage: "https://github.com/libuv/libuv"
+license: "MIT"
+bug-reports: "https://github.com/libuv/libuv/issues"
+authors: [ "Ryan Dahl" "Bert Belder" "et al." ]
+build: [
+  ["pkg-config" "libuv" "--atleast-version=1"] { os != "freebsd" }
+  ["pkgconf" "libuv" "--atleast-version=1"] { os = "freebsd" }
+]
+depexts: [
+#  not available in any mainstream distro at the momement
+#  [["debian"] ["pkg-config" "libuv-dev"]]
+#  [["ubuntu"] ["pkg-config" "libuv-dev"]]
+  [["osx" "homebrew"] ["libuv" "pkg-config"]]
+  [["freebsd"] ["pkgconf" "libuv"]]
+  [["source" "linux"] ["https://gist.githubusercontent.com/fdopen/cbfb14114f4ec423a1a4/raw/1d4144f16aa2c65d39a1be5aae39911dc5e53ef6/install-libuv.sh"]]
+]
+post-messages: [
+  "This package requires libuv 1.x development packages installed on your system" {failure}
+]

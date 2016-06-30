@@ -1,0 +1,11 @@
+--- ./pkg/build.ml
++++ ./pkg/build.ml
+@@ -3,7 +3,7 @@
+ #use "topkg.ml"
+ 
+ let ocamlbuild =
+-  "ocamlbuild -use-ocamlfind -classic-display -plugin-tag 'package(cppo_ocamlbuild)'"
++  "ocamlbuild -use-ocamlfind -classic-display -plugin-tag " ^ Filename.quote "package(cppo_ocamlbuild)"
+ 
+ let () =
+   Pkg.describe "ppx_import" ~builder:(`Other (ocamlbuild, "_build")) [
