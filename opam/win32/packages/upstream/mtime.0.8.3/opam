@@ -23,3 +23,4 @@ build:
                            "native-dynlink=%{ocaml-native-dynlink}%"
                            "jsoo=%{js_of_ocaml:installed}%" ]
 ]
+patches: "mtime-0.8.3.patch" {os = "win32"}

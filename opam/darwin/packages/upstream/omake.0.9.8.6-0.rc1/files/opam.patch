@@ -1,0 +1,12 @@
+diff -ru a/OMakefile b/OMakefile
+--- a/OMakefile	2010-10-27 02:42:37.000000000 +0200
++++ b/OMakefile	2012-10-05 18:14:52.045652506 +0200
+@@ -57,7 +57,7 @@
+ #
+ # OCaml options
+ #
+-OCAMLFLAGS[] += -w Ae$(if $(OCAML_ACCEPTS_Z_WARNING), z)
++OCAMLFLAGS[] += -w a
+ if $(THREADS_ENABLED)
+     OCAMLFLAGS += -thread
+     export

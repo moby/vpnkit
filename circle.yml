@@ -7,7 +7,7 @@ machine:
     MACOSX_DEPLOYMENT_TARGET: "10.10"
 general:
   artifacts:
-  - com.docker.slirp
+  - com.docker.slirp.tgz
   - COMMIT
   - OSS-LICENSES
 checkout:

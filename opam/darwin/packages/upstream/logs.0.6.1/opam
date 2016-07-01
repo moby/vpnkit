@@ -19,10 +19,18 @@ depopts: [
   "fmt"
   "cmdliner"
   "lwt" ]
-build: [[
-  "ocaml" "pkg/pkg.ml" "build"
-          "--installer" "true"
-          "--with-js_of_ocaml" "%{js_of_ocaml:installed}%"
-          "--with-fmt" "%{fmt:installed}%"
-          "--with-cmdliner" "%{cmdliner:installed}%"
-          "--with-lwt" "%{lwt:installed}%" ]]
+install: [
+  "ocaml"
+  "pkg/pkg.ml"
+  "build"
+  "--installer"
+  "true"
+  "--with-js_of_ocaml"
+  "%{js_of_ocaml:installed}%"
+  "--with-fmt"
+  "%{fmt:installed}%"
+  "--with-cmdliner"
+  "%{cmdliner:installed}%"
+  "--with-lwt"
+  "%{lwt:installed}%"
+]

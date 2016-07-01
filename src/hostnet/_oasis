@@ -14,12 +14,13 @@ Library hostnet
   Path: lib
   Pack: true
   Findlibname: hostnet
-  Modules: Arp, Dns_forward, Filter, Slirp, Socket, Socket_stack, Tcpip_stack,
-    Port, Forward, Conn_lwt_unix, Sig
+  Modules: Arp, Dns_forward, Filter, Slirp, Tcpip_stack,
+    Forward, Host_lwt_unix, Host_uwt, Sig
   BuildDepends: cstruct, lwt.unix, logs, mirage-types.lwt, ipaddr, mirage-flow,
-    mirage-unix, mirage-clock-unix, mirage-console.unix, tcpip.ethif,
+    mirage-console.unix, tcpip.ethif,
     tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct,
-    tcpip.stack-socket, charrua-core.server, dns, dns.lwt, ofs
+    charrua-core.server, dns, dns.lwt, ofs, uwt, uwt.ext, uwt.preemptive,
+    lwt.preemptive, threads
 
 Executable test
   Path: lib_test
@@ -27,7 +28,7 @@ Executable test
   MainIs: main.ml
   Build$: flag(tests)
   BuildDepends: hostnet, proto-vmnet, cmdliner, alcotest, lwt.unix, logs.fmt,
-    dns.mirage
+    dns.mirage, lwt.preemptive, uwt.preemptive
 
 Test test
   Run$:               flag(tests)

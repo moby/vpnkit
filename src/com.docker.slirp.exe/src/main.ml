@@ -21,69 +21,6 @@ let default d = function None -> d | Some x -> x
 let ethernet_serviceid = "30D48B34-7D27-4B0B-AAAF-BBBED334DD59"
 let ports_serviceid = "0B95756A-9985-48AD-9470-78E060895BE7"
 
-(* These could be shared with datakit. Perhaps they should live in mirage/conduit? *)
-
-let make_unix_socket path =
-  Lwt.catch
-    (fun () -> Lwt_unix.unlink path)
-    (function
-      | Unix.Unix_error(Unix.ENOENT, _, _) -> Lwt.return ()
-      | e -> Lwt.fail e)
-  >>= fun () ->
-  let s = Lwt_unix.(socket PF_UNIX SOCK_STREAM 0) in
-  Lwt_unix.bind s (Lwt_unix.ADDR_UNIX path);
-  Lwt.return s
-
-let unix_accept_forever url socket callback =
-  Lwt_unix.listen socket 5;
-  let rec aux () =
-    Lwt_unix.accept socket >>= fun (client, _addr) ->
-    let _ = (* background thread *)
-      (* the callback will close the connection when its done *)
-      callback client in
-    aux () in
-  Log.debug (fun l -> l "Waiting for connections on socket %S" url);
-  aux ()
-
-let rec named_pipe_accept_forever path callback =
-  let open Lwt.Infix in
-  let p = Named_pipe_lwt.Server.create path in
-  Named_pipe_lwt.Server.connect p
-  >>= function
-  | false ->
-    Log.err (fun f -> f "Named-pipe connection failed on %s" path);
-    Lwt.return ()
-  | true ->
-    let _ = (* background thread *)
-      let fd = Named_pipe_lwt.Server.to_fd p in
-      callback fd in
-    named_pipe_accept_forever path callback
-
-let hvsock_connect_forever url sockaddr callback =
-  Log.info (fun f -> f "connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid) sockaddr.Hvsock.serviceid);
-  let rec aux () =
-    let socket = Lwt_hvsock.create () in
-    Lwt.catch
-      (fun () ->
-        Lwt_hvsock.connect socket sockaddr
-        >>= fun () ->
-        Log.info (fun f -> f "hvsock connected successfully");
-        callback socket
-      ) (function
-        | Unix.Unix_error(_, _, _) ->
-          Lwt_hvsock.close socket
-          >>= fun () ->
-          Lwt_unix.sleep 1.
-        | _ ->
-          Lwt_hvsock.close socket
-          >>= fun () ->
-          Lwt_unix.sleep 1.
-      )
-    >>= fun () ->
-    aux () in
-  Log.debug (fun f -> f "Waiting for connections on socket %s" url);
-  aux ()
-
 let hvsock_addr_of_uri ~default_serviceid uri =
   (* hyperv://vmid/serviceid *)
   let vmid = match Uri.host uri with None -> Hvsock.Loopback | Some x -> Hvsock.Id x in
@@ -95,75 +32,65 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     else if String.length p > 0 then String.sub p 1 (String.length p - 1) else p in
     { Hvsock.vmid; serviceid }
 
-let accept_forever urls callback =
-  Lwt_list.iter_p (fun url ->
+module Main(Host: Sig.HOST) = struct
+
+module Bind = Host.Sockets
+module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
+
+module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Main)
+
+let hvsock_connect_forever url sockaddr callback =
+  Log.info (fun f -> f "connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid) sockaddr.Hvsock.serviceid);
+  let rec aux () =
+    let socket = HV.Hvsock.create () in
     Lwt.catch
       (fun () ->
-         (* Check if it looks like a UNC name before a URI *)
-         let is_unc =
-           String.length url > 2 && String.sub url 0 2 = "\\\\" in
-         if is_unc
-         then named_pipe_accept_forever url callback
-         else
-         let uri = Uri.of_string url in
-         match Uri.scheme uri with
-         | Some "file" ->
-           make_unix_socket (Uri.path uri)
-           >>= fun socket ->
-           unix_accept_forever url socket callback
-         | Some "tcp" ->
-           let host = Uri.host uri |> default "127.0.0.1" in
-           let port = Uri.port uri |> default 5640 in
-           let addr = Lwt_unix.ADDR_INET (Unix.inet_addr_of_string host, port) in
-           let socket = Lwt_unix.(socket PF_INET SOCK_STREAM 0) in
-           Lwt_unix.bind socket addr;
-           unix_accept_forever url socket callback
-         | _ ->
-           Printf.fprintf stderr
-             "Unknown URL schema. Please use file: or tcp:\n";
-           exit 1
+        HV.Hvsock.connect socket sockaddr
+        >>= fun () ->
+        Log.info (fun f -> f "hvsock connected successfully");
+        callback socket
+      ) (function
+        | Unix.Unix_error(_, _, _) ->
+          HV.Hvsock.close socket
+          >>= fun () ->
+          Host.Time.sleep 1.
+        | _ ->
+          HV.Hvsock.close socket
+          >>= fun () ->
+          Host.Time.sleep 1.
       )
-      (fun ex ->
-         Printf.fprintf stderr
-           "Failed to set up server socket listening on %S: %s\n%!"
-           url (Printexc.to_string ex);
-         exit 1
-      )
-  ) urls
+    >>= fun () ->
+    aux () in
+  Log.debug (fun f -> f "Waiting for connections on socket %s" url);
+  aux ()
 
-module Forward = Forward.Make(Connect)(Bind)
+module Forward = Forward.Make(Connect.Make(Host.Time)(Host.Main))(Host.Sockets)
 
 let start_port_forwarding port_control_url =
   Log.info (fun f -> f "starting port_forwarding port_control_url:%s" port_control_url);
   (* Start the 9P port forwarding server *)
   let module Ports = Active_list.Make(Forward) in
-  let module Server = Protocol_9p.Server.Make(Log)(Flow_lwt_hvsock)(Ports) in
+  let module Server = Protocol_9p.Server.Make(Log)(HV)(Ports) in
   let fs = Ports.make () in
-  Socket_stack.connect ()
-  >>= function
-  | `Error (`Msg m) ->
-    Log.err (fun f -> f "Failed to create a socket stack: %s" m);
-    exit 1
-  | `Ok _ ->
   Ports.set_context fs "";
   let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid (Uri.of_string port_control_url) in
   Connect.set_port_forward_addr sockaddr;
   hvsock_connect_forever port_control_url sockaddr
     (fun fd ->
-      let flow = Flow_lwt_hvsock.connect fd in
+      let flow = HV.connect fd in
       Server.connect fs flow ()
       >>= function
       | Result.Error (`Msg _) ->
         Log.err (fun f -> f "Failed to negotiate 9P connection on port control server");
-        Lwt_hvsock.close fd
+        HV.Hvsock.close fd
       | Result.Ok t ->
         Log.info (fun f -> f "Client connected to 9P port control server");
         Server.after_disconnect t
         >>= fun () ->
-        Lwt_hvsock.close fd
+        HV.Hvsock.close fd
     )
 
-module Slirp_stack = Slirp.Make(Vmnet.Make(Flow_lwt_hvsock))(Resolv_conf)
+module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Resolv_conf)(Host)
 
 let main_t socket_url port_control_url db_path dns pcap debug =
   if debug
@@ -192,8 +119,13 @@ let main_t socket_url port_control_url db_path dns pcap debug =
 
   ( match db_path with
     | Some db_path ->
-      let db = Active_config.create "named-pipe" db_path in
-      Slirp_stack.create db
+      let reconnect () =
+        Host.Sockets.Stream.Unix.connect db_path
+        >>= function
+        | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
+        | `Ok x -> Lwt.return (Result.Ok x) in
+      let config = Config.create ~reconnect () in
+      Slirp_stack.create config
     | None ->
       Log.warn (fun f -> f "no database: using hardcoded network configuration values");
       let never, _ = Lwt.task () in
@@ -206,12 +138,29 @@ let main_t socket_url port_control_url db_path dns pcap debug =
   let sockaddr = hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid (Uri.of_string socket_url) in
   hvsock_connect_forever socket_url sockaddr
     (fun fd ->
-      let conn = Flow_lwt_hvsock.connect fd in
+      let conn = HV.connect fd in
       Slirp_stack.connect stack conn
-    )
+      >>= fun stack ->
+      Log.info (fun f -> f "stack connected");
+      Slirp_stack.after_disconnect stack
+      >>= fun () ->
+      Log.info (fun f -> f "stack disconnected");
+      Lwt.return ()
+    ) >>= fun () ->
+  Log.debug (fun f -> f "initialised: serving requests forever");
+  let wait_forever, _ = Lwt.task () in
+  wait_forever
 
-let main socket port_control db dns pcap debug =
-  Lwt_main.run @@ main_t socket port_control db dns pcap debug
+let main socket_url port_control_url db_path dns pcap debug =
+  Host.Main.run
+    (main_t socket_url port_control_url db_path dns pcap debug)
+end
+
+let main socket port_control db dns pcap select debug =
+  let module Use_lwt_unix = Main(Host_lwt_unix) in
+  let module Use_uwt = Main(Host_uwt) in
+  (if select then Use_lwt_unix.main else Use_uwt.main)
+    socket port_control db dns pcap debug
 
 open Cmdliner
 
@@ -253,6 +202,10 @@ let pcap=
   in
   Arg.(value & opt (some string) None doc)
 
+let select =
+  let doc = "Use a select event loop rather than the default libuv-based one" in
+  Arg.(value & flag & info [ "select" ] ~doc)
+
 let debug =
   let doc = "Verbose debug logging to stdout" in
   Arg.(value & flag & info [ "debug" ] ~doc)
@@ -264,7 +217,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ db_path $ dns $ pcap $ debug),
+  Term.(pure main $ socket $ port_control_path $ db_path $ dns $ pcap $ select $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =

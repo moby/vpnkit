@@ -1,3 +1,7 @@
-val vsock_path: string ref
+open Hostnet
 
-include Hostnet.Sig.Connector with type port = Hostnet.Forward.Port.t
+module Make(Socket: Sig.SOCKETS): sig
+  include Sig.Connector
+
+  val vsock_path: string ref
+end

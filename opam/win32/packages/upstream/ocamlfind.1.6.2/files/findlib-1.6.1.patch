@@ -259,35 +259,36 @@
  	  );
  	Printf.printf "The standard library is assumed to reside in:\n    %s\n"
 -	  (Findlib.ocaml_stdlib());
-+    (Findlib.ocaml_stdlib() |> sl);
++    (sl (Findlib.ocaml_stdlib()));
  	Printf.printf "The ld.conf file can be found here:\n    %s\n"
 -	  (Findlib.ocaml_ldconf());
-+    (Findlib.ocaml_ldconf() |> sl);
++    (sl (Findlib.ocaml_ldconf()));
  	flush stdout
      | Some "conf" ->
 -	print_endline Findlib_config.config_file
-+  print_endline @@ sl Findlib_config.config_file
++  print_endline (sl Findlib_config.config_file)
      | Some "path" ->
 -	List.iter print_endline (Findlib.search_path())
-+  List.iter ( fun x -> sl x |> print_endline) (Findlib.search_path())
++  List.iter ( fun x -> print_endline (sl x)) (Findlib.search_path())
      | Some "destdir" ->
 -	print_endline (Findlib.default_location())
-+  print_endline @@ sl (Findlib.default_location())
++  print_endline ( sl (Findlib.default_location()))
      | Some "metadir" ->
 -	print_endline (Findlib.meta_directory())
-+  print_endline @@ sl (Findlib.meta_directory())
++  print_endline ( sl (Findlib.meta_directory()))
      | Some "metapath" ->
          let mdir = Findlib.meta_directory() in
          let ddir = Findlib.default_location() in
 -	print_endline 
-+  print_endline @@ sl
-           (if mdir <> "" then mdir ^ "/META.%s" else ddir ^ "/%s/META")
+-          (if mdir <> "" then mdir ^ "/META.%s" else ddir ^ "/%s/META")
++  print_endline ( sl
++          (if mdir <> "" then mdir ^ "/META.%s" else ddir ^ "/%s/META"))
      | Some "stdlib" ->
 -	print_endline (Findlib.ocaml_stdlib())
-+  print_endline @@ sl (Findlib.ocaml_stdlib())
++  print_endline ( sl (Findlib.ocaml_stdlib()))
      | Some "ldconf" ->
 -	print_endline (Findlib.ocaml_ldconf())
-+  print_endline @@ sl (Findlib.ocaml_ldconf())
++  print_endline ( sl (Findlib.ocaml_ldconf()))
      | _ ->
  	assert false
  ;;

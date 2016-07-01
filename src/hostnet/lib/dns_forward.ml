@@ -24,7 +24,7 @@ let tidstr_of_dns dns =
   | (_, None) -> "----"
   | (_, Some { Dns.Packet.id; _ }) -> Printf.sprintf "%04x" id
 
-module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) = struct
+module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) = struct
 
 type transaction = {
   mutable resolvers : (Ipaddr.t * int) list;
@@ -36,7 +36,7 @@ let table = Hashtbl.create 7
 
 let start_reaper () =
   let rec loop () =
-    Lwt_unix.sleep 60.
+    Time.sleep 60.
     >>= fun () ->
     let snapshot = Hashtbl.copy table in
     let now = Unix.gettimeofday () in
@@ -107,54 +107,14 @@ let input ~ip ~udp ~src ~dst ~src_port buf =
       )
   end;
   >>= function
-  | Some (dst, dst_port) -> begin
-    let remote_sockaddr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string dst, dst_port) in
-
-    let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+  | Some (dst, dst_port) ->
     Log.debug (fun f -> f "DNS[%s] Forwarding to %s" (tidstr_of_dns dns) (Ipaddr.to_string dst));
-    Lwt_unix.connect fd remote_sockaddr >>= fun () ->
-    Lwt.catch
-      (fun () ->
-        let payload = Cstruct.to_string buf in
-        Lwt_unix.send fd payload 0 (String.length payload) []
-        >>= fun n ->
-        if n <> buf.Cstruct.len
-        then Log.err (fun f -> f "DNS[%s] forwarder: Lwt_bytes.send short: expected %d got %d" (tidstr_of_dns dns) buf.Cstruct.len n);
-        Lwt.return ()
-      ) (fun e ->
-        Log.err (fun f -> f "DNS[%s] send failed with %s" (tidstr_of_dns dns) (Printexc.to_string e));
-        Lwt.return ()
-      )
-    >>= fun () ->
-    let receiver =
-      let bytes = Bytes.make 4096 '\000' in
-      Lwt.catch
-        (fun () ->
-          Lwt_unix.recv fd bytes 0 (String.length bytes) []
-           >>= fun n ->
-           let buffer = Cstruct.create n in
-           Cstruct.blit_from_string bytes 0 buffer 0 n;
-           Lwt.return (`Result buffer)
-        ) (fun e ->
-           Log.err (fun f -> f "DNS[%s] recv failed with %s" (tidstr_of_dns dns) (Printexc.to_string e));
-           Lwt.return `Error
-        ) in
-    let timeout = Lwt_unix.sleep 5. >>= fun () -> Lwt.return `Timeout in
-    Lwt.pick [ receiver; timeout ]
-    >>= fun r ->
-    Lwt_unix.close fd
-    >>= fun () ->
-    match r with
-    | `Error ->
-      Lwt.return_unit
-    | `Timeout ->
-      Log.err (fun f -> f "DNS[%s] timed out after 5s" (tidstr_of_dns dns));
-      Lwt.return_unit
-    | `Result buffer ->
+    let reply buffer =
       Log.debug (fun f -> f "DNS[%s] %s:%d <- %s %s" (tidstr_of_dns dns) src_str src_port dst_str (string_of_dns (parse_dns buffer)));
       remove_tid dns;
-      Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer
-    end
+      Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer in
+
+    Socket.Datagram.input ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(dst, dst_port) ~payload:buf
   | None ->
     Log.err (fun f -> f "DNS[%s] No upstream DNS server configured: dropping request" (tidstr_of_dns dns));
     Lwt.return_unit

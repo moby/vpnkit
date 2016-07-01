@@ -14,6 +14,10 @@ type fd = C.flow
 include V1_LWT.NETWORK
   with type buffer = Cstruct.t
 
+val after_disconnect: t -> unit Lwt.t
+(** [after_disconnect connection] resolves after [connection] has
+      disconnected. *)
+
 val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
 
 val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.flow -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t

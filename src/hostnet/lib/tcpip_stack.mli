@@ -1,4 +1,4 @@
-module Make(Vmnet: Sig.VMNET): sig
+module Make(Vmnet: Sig.VMNET)(Time: V1_LWT.TIME): sig
 include Sig.TCPIP
 
 type configuration

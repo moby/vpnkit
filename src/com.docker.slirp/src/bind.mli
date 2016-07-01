@@ -1,1 +1,3 @@
-include Hostnet.Sig.Binder
+open Hostnet
+
+module Make(Socket: Sig.SOCKETS): Sig.SOCKETS

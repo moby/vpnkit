@@ -1,1 +1,3 @@
-include Hostnet.Sig.RESOLV_CONF
+open Hostnet
+
+module Make(Files: Sig.FILES): Sig.RESOLV_CONF

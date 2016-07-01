@@ -1,0 +1,26 @@
+$NetBSD: patch-ab,v 1.1.1.1 2010/05/29 10:43:14 obache Exp $
+
+--- src/libmojave-external/cutil/fam_kqueue.c.orig	2010-05-28 09:23:46.000000000 +0000
++++ src/libmojave-external/cutil/fam_kqueue.c
+@@ -181,6 +181,12 @@ static kevent_t *new_kevent() {
+     return ev;
+ }
+ 
++#if defined(__NetBSD__)
++typedef intptr_t kqueue_udata_t;
++#else
++typedef void *kqueue_udata_t;
++#endif
++
+ /*
+  * Start monitoring a directory.
+  * We store the DirInfo pointer as the userdata in the kevent.
+@@ -199,7 +205,7 @@ static int monitor_start(FAMConnection *
+         dir->kevent = kev;
+         /* Register interest in the MON_FLAGS flags of the dir */
+         EV_SET(kev, dir->handle, EVFILT_VNODE, EV_ADD | EV_CLEAR, MON_FLAGS,
+-                (intptr_t) NULL, (void *)dir);
++                (intptr_t) NULL, (kqueue_udata_t) dir);
+         code = kevent(fc->id, kev, 1, NULL, 0, &gTime0);
+ #ifdef FAM_DEBUG
+         fprintf(stderr,

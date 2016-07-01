@@ -34,6 +34,7 @@ depends: [
   "ppx_sexp_conv" {build}
   "ipaddr" {>="2.7.0"}
   "mirage-flow"
+  "channel"
   "pcap-format"
 ]
 depopts: [

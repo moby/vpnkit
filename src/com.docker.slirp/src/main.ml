@@ -20,6 +20,27 @@ let or_failwith = function
   | Result.Error (`Msg m) -> failwith m
   | Result.Ok x -> x
 
+module Main(Host: Sig.HOST) = struct
+
+module Connect = Connect.Make(Host.Sockets)
+module Bind = Bind.Make(Host.Sockets)
+module Resolv_conf = Resolv_conf.Make(Host.Files)
+module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
+
+let unix_listen path =
+  let startswith prefix x =
+    let prefix' = String.length prefix in
+    let x' = String.length x in
+    prefix' <= x' && (String.sub x 0 prefix' = prefix) in
+  if startswith "fd:" path then begin
+    let i = String.sub path 3 (String.length path - 3) in
+    (  try Lwt.return (int_of_string i)
+       with _ -> Lwt.fail (Failure (Printf.sprintf "Failed to parse command-line argument [%s]" path))
+    ) >>= fun x ->
+    let fd = Unix_representations.file_descr_of_int x in
+    Lwt.return (Host.Sockets.Stream.Unix.of_bound_fd fd)
+  end else Host.Sockets.Stream.Unix.bind path
+
 module Forward = Forward.Make(Connect)(Bind)
 
 let start_port_forwarding port_control_path vsock_path =
@@ -27,23 +48,24 @@ let start_port_forwarding port_control_path vsock_path =
   (* Start the 9P port forwarding server *)
   Connect.vsock_path := vsock_path;
   let module Ports = Active_list.Make(Forward) in
-  let module Server = Server9p_unix.Make(Log)(Ports) in
+  let module Server = Protocol_9p.Server.Make(Log)(Host.Sockets.Stream.Unix)(Ports) in
   let fs = Ports.make () in
-  Socket_stack.connect ()
-  >>= function
-  | `Error (`Msg m) ->
-    Log.err (fun f -> f "Failed to create a socket stack: %s" m);
-    exit 1
-  | `Ok _ ->
   Ports.set_context fs vsock_path;
-  Osx_socket.listen port_control_path
+  unix_listen port_control_path
   >>= fun port_s ->
-  let server = Server.of_fd fs port_s in
-  Server.serve_forever server
-  >>= fun r ->
-  Lwt.return (or_failwith r)
+  Host.Sockets.Stream.Unix.listen port_s
+    (fun conn ->
+      Server.connect fs conn ()
+      >>= function
+      | Result.Error (`Msg m) ->
+        Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+        Lwt.return ()
+      | Result.Ok server ->
+        Server.after_disconnect server
+  );
+  Lwt.return ()
 
-module Slirp_stack = Slirp.Make(Vmnet.Make(Hostnet.Conn_lwt_unix))(Resolv_conf)
+module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Resolv_conf)(Host)
 
 let set_nofile nofile =
   let open Sys_resource.Resource in
@@ -53,7 +75,7 @@ let set_nofile nofile =
   try Sys_resource_unix.setrlimit NOFILE ~soft ~hard with
   | Errno.Error ex -> Log.warn (fun f -> f "setrlimit failed: %s" (Errno.string_of_error ex))
 
-let main_t socket_path port_control_path vsock_path db_path nofile debug =
+let main_t socket_path port_control_path vsock_path db_path nofile pcap debug =
   Osx_reporter.install ~stdout:debug;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
@@ -66,8 +88,6 @@ let main_t socket_path port_control_path vsock_path db_path nofile debug =
       (Printexc.get_backtrace ())
     )
   );
-  Osx_socket.listen socket_path
-  >>= fun s ->
 
   Lwt.async (fun () ->
     log_exception_continue "start_port_server"
@@ -76,24 +96,49 @@ let main_t socket_path port_control_path vsock_path db_path nofile debug =
       )
     );
 
-  let config = Active_config.create "unix" db_path in
-  Slirp_stack.create config
-  >>= fun stack ->
-  let rec loop () =
-    Lwt_unix.accept s
-    >>= fun (client, _) ->
-    Lwt.async (fun () ->
-      log_exception_continue "slirp_server"
-        (fun () ->
-          let conn = Hostnet.Conn_lwt_unix.connect client in
-          Slirp_stack.connect stack conn
-        )
-      (* NB: the vmnet layer will call close when it receives EOF *)
-    );
-    loop () in
-  loop ()
+  ( match db_path with
+    | Some db_path ->
+      let reconnect () =
+        Host.Sockets.Stream.Unix.connect db_path
+        >>= function
+        | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
+        | `Ok x -> Lwt.return (Result.Ok x) in
+      let config = Config.create ~reconnect () in
+      Slirp_stack.create config
+    | None ->
+      Log.warn (fun f -> f "no database: using hardcoded network configuration values");
+      let never, _ = Lwt.task () in
+      let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
+      Lwt.return { Slirp_stack.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
+        local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
+        pcap_settings = Active_config.Value(pcap, never) }
+  ) >>= fun stack ->
 
-let main socket port_control vsock_path db nofile debug = Lwt_main.run @@ main_t socket port_control vsock_path db nofile debug
+  unix_listen socket_path
+  >>= fun server ->
+  Host.Sockets.Stream.Unix.listen server
+    (fun conn ->
+      Slirp_stack.connect stack conn
+      >>= fun stack ->
+      Log.info (fun f -> f "stack connected");
+      Slirp_stack.after_disconnect stack
+      >>= fun () ->
+      Log.info (fun f -> f "stack disconnected");
+      Lwt.return ()
+    );
+  let wait_forever, _ = Lwt.task () in
+  wait_forever
+
+let main socket port_control vsock_path db nofile pcap debug =
+  Host.Main.run @@ main_t socket port_control vsock_path db nofile pcap debug
+
+end
+
+let main socket port_control vsock_path db nofile pcap select debug =
+  let module Use_lwt_unix = Main(Host_lwt_unix) in
+  let module Use_uwt = Main(Host_uwt) in
+  (if select then Use_lwt_unix.main else Use_uwt.main)
+    socket port_control vsock_path db nofile pcap debug
 
 open Cmdliner
 
@@ -115,13 +160,21 @@ make it fail instead? In case no argument is supplied? *)
 let vsock_path =
   Arg.(value & opt string "/var/tmp/com.docker.vsock/connect" & info [ "vsock-path" ] ~docv:"VSOCK")
 
-(* NOTE(aduermael): it seems to me that "/var/tmp/com.docker.db.socket" is a default value, right?
-This socket path is now dynamic, depending on current user's home directory. Could we just
-make it fail instead? In case no argument is supplied? *)
 let db_path =
-  Arg.(value & opt string "/var/tmp/com.docker.db.socket" & info [ "db" ] ~docv:"DB")
+  Arg.(value & opt (some string) None & info [ "db" ] ~docv:"DB")
 
 let nofile = Arg.(value & opt int 10240 & info [ "nofile" ] ~docv:"nofile rlimit")
+
+let pcap=
+  let doc =
+    Arg.info ~doc:
+      "Filename to write packet capture data to" ["pcap"]
+  in
+  Arg.(value & opt (some string) None doc)
+
+let select =
+  let doc = "Use a select event loop rather than the default libuv-based one" in
+  Arg.(value & flag & info [ "select" ] ~doc)
 
 let debug =
   let doc = "Verbose debug logging to stdout" in
@@ -134,7 +187,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ debug),
+  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ pcap $ select $ debug),
   Term.info "proxy" ~doc ~man
 
 let () =

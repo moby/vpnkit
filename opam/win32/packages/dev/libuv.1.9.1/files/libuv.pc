@@ -1,0 +1,11 @@
+prefix=/usr/local
+exec_prefix=/usr/local
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include/libuv
+
+Name: libuv
+Version: 1.9.1
+Description: multi-platform support library with a focus on asynchronous I/O.
+
+Libs: -L${libdir} -luv -lpthread -lws2_32 -lwsock32 -lpsapi -liphlpapi -luserenv
+Cflags: -I${includedir}

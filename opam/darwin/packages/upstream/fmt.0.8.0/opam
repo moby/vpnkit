@@ -16,8 +16,14 @@ depends: [
 ]
 depopts: [ "base-unix" "cmdliner" ]
 conflicts: [ "cmdliner" {< "0.9.8"} ]
-build: [[
-  "ocaml" "pkg/pkg.ml" "build"
-          "--installer" "true"
-          "--with-base-unix" "%{base-unix:installed}%"
-          "--with-cmdliner" "%{cmdliner:installed}%" ]]
+install: [
+  "ocaml"
+  "pkg/pkg.ml"
+  "build"
+  "--installer"
+  "true"
+  "--with-base-unix"
+  "%{base-unix:installed}%"
+  "--with-cmdliner"
+  "%{cmdliner:installed}%"
+]

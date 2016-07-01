@@ -38,9 +38,17 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
-module Make(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF) = struct
-  module Tcpip_stack = Tcpip_stack.Make(Vmnet)
-  module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conv)
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
+  module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time)
+  module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conf)(Host.Sockets)(Host.Time)
+
+module Socket = Host.Sockets
+
+type stack = {
+  after_disconnect: unit Lwt.t;
+}
+
+let after_disconnect t = t.after_disconnect
 
 let connect x peer_ip local_ip =
   let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in
@@ -126,7 +134,7 @@ let connect x peer_ip local_ip =
                                        length
                                    );
                           let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
-                          Socket.Datagram.input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload
+                          Socket.Datagram.input ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload
                         end
                         else if for_us && dst_port == 123 then begin
                           (* port 123 is special -- proxy these requests to
@@ -135,7 +143,7 @@ let connect x peer_ip local_ip =
                           let localhost = Ipaddr.V4.localhost in
                           Log.debug (fun f -> f "UDP/123 request from port %d -- sending it to %a:%d" src_port Ipaddr.V4.pp_hum localhost dst_port);
                           let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:local_ip ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
-                          Socket.Datagram.input ~reply ~src:(localhost, src_port) ~dst:(localhost, dst_port) ~payload
+                          Socket.Datagram.input ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 localhost, dst_port) ~payload
                         end else Lwt.return_unit
                       end
                     | _ -> Lwt.return_unit
@@ -144,16 +152,12 @@ let connect x peer_ip local_ip =
             );
             Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
-                let description =
-                  Printf.sprintf "TCP %s:%d > %s:%d"
-                    (Ipaddr.V4.to_string src_ip) src_port
-                    (Ipaddr.V4.to_string dst_ip) dst_port in
-                Log.debug (fun f -> f "%s connecting" description);
+
                 let for_us = Ipaddr.V4.compare src_ip local_ip == 0 in
                 ( if for_us && src_port = 53 then begin
-                    Dns_resolver_unix.create () (* re-read /etc/resolv.conf *)
+                    Resolv_conf.get () (* re-read /etc/resolv.conf *)
                     >>= function
-                    | { Dns_resolver_unix.servers = (Ipaddr.V4 ip, port) :: _; _ } -> Lwt.return (ip, port)
+                    | (Ipaddr.V4 ip, port) :: _  -> Lwt.return (ip, port)
                     | _ ->
                       Log.err (fun f -> f "Failed to discover DNS server: assuming 127.0.01");
                       Lwt.return (Ipaddr.V4.of_string_exn "127.0.0.1", 53)
@@ -162,31 +166,29 @@ let connect x peer_ip local_ip =
                 (* If the traffic is for us, use a local IP address that is really
                    ours, rather than send traffic off to someone else (!) *)
                 let src_ip = if for_us then Ipaddr.V4.localhost else src_ip in
-                Socket.Stream.connect_v4 src_ip src_port
+                Socket.Stream.Tcp.connect (src_ip, src_port)
                 >>= function
-                | `Error (`Msg m) ->
-                  Log.info (fun f -> f "%s rejected: %s" description m);
+                | `Error (`Msg _) ->
                   return `Reject
                 | `Ok remote ->
                   Lwt.return (`Accept (fun local ->
                       finally (fun () ->
                           (* proxy between local and remote *)
-                          Log.debug (fun f -> f "%s connected" description);
-                          Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.Stream) remote ()
+                          Mirage_flow.proxy (module Clock) (module Tcpip_stack.TCPV4_half_close) local (module Socket.Stream.Tcp) remote ()
                           >>= function
                           | `Error (`Msg m) ->
-                            Log.err (fun f -> f "%s proxy failed with %s" description m);
+                            Log.err (fun f ->
+                              let description =
+                                Printf.sprintf "TCP %s:%d > %s:%d"
+                                  (Ipaddr.V4.to_string src_ip) src_port
+                                  (Ipaddr.V4.to_string dst_ip) dst_port in
+                               f "%s proxy failed with %s" description m);
                             return ()
-                          | `Ok (l_stats, r_stats) ->
-                            Log.debug (fun f ->
-                                f "%s closing: l2r = %s; r2l = %s" description
-                                  (Mirage_flow.CopyStats.to_string l_stats) (Mirage_flow.CopyStats.to_string r_stats)
-                              );
+                          | `Ok (_l_stats, _r_stats) ->
                             return ()
                         ) (fun () ->
-                          Socket.Stream.close remote
+                          Socket.Stream.Tcp.close remote
                           >>= fun () ->
-                          Log.debug (fun f -> f "%s Socket.Stream.close" description);
                           Lwt.return ()
                         )
                     ))
@@ -194,10 +196,10 @@ let connect x peer_ip local_ip =
             Tcpip_stack.listen s
             >>= fun () ->
             Log.info (fun f -> f "TCP/IP ready");
-            Lwt.return ()
+            Lwt.return { after_disconnect = Vmnet.after_disconnect x }
         end
 
-  type t = {
+  type config = {
     peer_ip: Ipaddr.V4.t;
     local_ip: Ipaddr.V4.t;
     pcap_settings: pcap Active_config.values;
@@ -207,7 +209,7 @@ let connect x peer_ip local_ip =
     let driver = [ "com.docker.driver.amd64-linux" ] in
 
     let pcap_path = driver @ [ "slirp"; "capture" ] in
-    Active_config.string_option config pcap_path
+    Config.string_option config pcap_path
     >>= fun string_pcap_settings ->
     let parse_pcap = function
       | None -> Lwt.return None
@@ -231,7 +233,7 @@ let connect x peer_ip local_ip =
     >>= fun pcap_settings ->
 
     let bind_path = driver @ [ "allowed-bind-address" ] in
-    Active_config.string_option config bind_path
+    Config.string_option config bind_path
     >>= fun string_allowed_bind_address ->
     let parse_bind_address = function
       | None -> Lwt.return None
@@ -265,14 +267,14 @@ let connect x peer_ip local_ip =
       | Some x -> Lwt.return x in
     let default_peer = "192.168.65.2" in
     let default_host = "192.168.65.1" in
-    Active_config.string config ~default:default_peer peer_ips_path
+    Config.string config ~default:default_peer peer_ips_path
     >>= fun string_peer_ips ->
     Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips
     >>= fun peer_ips ->
     Lwt.async (fun () -> restart_on_change "slirp/docker" Ipaddr.V4.to_string peer_ips);
 
     let host_ips_path = driver @ [ "slirp"; "host" ] in
-    Active_config.string config ~default:default_host host_ips_path
+    Config.string config ~default:default_host host_ips_path
     >>= fun string_host_ips ->
     Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_host)) string_host_ips
     >>= fun host_ips ->
@@ -318,5 +320,4 @@ let connect x peer_ip local_ip =
             )
           );
         connect x t.peer_ip t.local_ip
-
 end

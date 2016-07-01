@@ -12,7 +12,6 @@ dev-repo: "git://github.com/mirage/ocaml-base64.git"
 build: [
   ["ocaml" "setup.ml" "-configure" "--prefix" prefix]
   ["ocaml" "setup.ml" "-build"]
-  ["ocaml" "setup.ml" "-install"]
 ]
 build-doc: [
   ["ocaml" "setup.ml" "-doc"]
@@ -25,3 +24,4 @@ depends: [
   "base-bytes"
   "ocamlbuild" {build}
 ]
+install: ["ocaml" "setup.ml" "-install"]

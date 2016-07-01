@@ -29,7 +29,8 @@ module Make(Input: Sig.VMNET) = struct
     Lwt.return (`Ok { input; stats; valid_sources })
 
   let disconnect t = Input.disconnect t.input
-
+  let after_disconnect t = Input.after_disconnect t.input
+  
   let write t buf = Input.write t.input buf
   let writev t bufs = Input.writev t.input bufs
 

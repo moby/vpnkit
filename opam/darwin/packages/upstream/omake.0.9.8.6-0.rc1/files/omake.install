@@ -1,0 +1,5 @@
+bin: [
+  "src/main/omake.opt" {"osh"}
+  "src/main/omake.opt" {"omake"}
+  "src/main/cvs_realclean.opt" {"cvs_realclean"}
+]

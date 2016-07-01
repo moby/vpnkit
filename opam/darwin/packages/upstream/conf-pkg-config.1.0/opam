@@ -14,6 +14,8 @@ depexts: [
   [["archlinux"] ["pkg-config"]]
   [["fedora"] ["pkgconfig"]]
   [["centos"] ["pkgconfig"]]
+  [["rhel"] ["pkgconfig"]]
   [["oraclelinux"] ["pkgconfig"]]
+  [["alpine"] ["pkgconfig"]]
   [["osx" "homebrew"] ["pkg-config"]]
 ]

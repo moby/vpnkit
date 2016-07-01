@@ -1,0 +1,31 @@
+opam-version: "1.2"
+maintainer: "andreashauptmann@t-online.de"
+authors: [ "Jason Hickey" "Aleksey Nogin" "Gerd Stolpmann" ]
+homepage: "http://projects.camlcity.org/projects/omake.html"
+dev-repo: "https://github.com/gerdstolpmann/omake.git"
+bug-reports: "https://github.com/gerdstolpmann/omake/issues"
+build: [
+  ["ocamlfind" "ocamlopt" "-linkpkg" "-package" "str,cygwinpath" "ohelper.ml" "-o" "omake-mmtranslate.exe"] { os = "win32" }
+  ["install" "-m" "0755" "omake-mmtranslate.exe" "%{bin}%/omake-mmtranslate.exe"] { os = "win32" }
+  ["%{prefix}%/bin/ocaml" "configure.ml"]
+  ["%{prefix}%/bin/ocaml" "build.ml"] {os != "win32"}
+  ["%{prefix}%/bin/ocaml" "build.ml" "-build" "-make" make "-j" jobs] {os = "win32"}
+]
+install: [
+  ["%{prefix}%/bin/ocaml" "build.ml" "-install"]
+]
+remove: [
+  ["rm" "-rf" "%{bin}%/osh"]
+  ["rm" "-rf" "%{bin}%/omake"]
+  ["rm" "-rf" "%{bin}%/omake-mmtranslate"] { os = "win32" }
+  ["rm" "-rf" "%{lib}%/omake"]
+]
+depends: [
+ "ocamlfind"
+ "cygwinpath" { build }
+]
+patches: [
+  "omake-0.10.0-test2.patch" {os = "win32"}
+  "omake-faster-build.patch" {os = "win32"}
+]
+available: [ ocaml-version >= "4.02.0" ]
