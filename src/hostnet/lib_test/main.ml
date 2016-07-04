@@ -10,6 +10,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Resolv_conf = struct
   let get () = Lwt.return [ Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.8.8"), 53 ]
+  let set _ = ()
 end
 
 module Make(Host: Sig.HOST) = struct
@@ -213,7 +214,8 @@ module Slirp_uwt = Make(Host_uwt)
 
 let tests =
   (List.map (fun (name, test) -> name ^ " with Lwt_unix", test) Slirp_lwt_unix.suite) @
-  (List.map (fun (name, test) -> name ^ " with Uwt", test) Slirp_uwt.suite)
+  (List.map (fun (name, test) -> name ^ " with Uwt", test) Slirp_uwt.suite) @
+  Resolver_test.suite
 
 (* Run it *)
 let () =

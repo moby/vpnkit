@@ -113,7 +113,7 @@ let main_t socket_url port_control_url max_connections db_path dns pcap debug =
   );
   Printexc.record_backtrace true;
 
-  Resolv_conf.set_dns dns;
+  Resolv_conf.set_default_dns [ (Ipaddr.V4 (Ipaddr.V4.of_string_exn dns)), 53 ];
 
   Lwt.async_exception_hook := (fun exn ->
     Log.err (fun f -> f "Lwt.async failure %s: %s"
