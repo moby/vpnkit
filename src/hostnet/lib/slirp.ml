@@ -153,8 +153,8 @@ let connect x peer_ip local_ip =
             Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
 
-                let for_us = Ipaddr.V4.compare src_ip local_ip == 0 in
-                ( if for_us && src_port = 53 then begin
+                let for_us src_ip = Ipaddr.V4.compare src_ip local_ip == 0 in
+                ( if for_us src_ip && src_port = 53 then begin
                     Resolv_conf.get () (* re-read /etc/resolv.conf *)
                     >>= function
                     | (Ipaddr.V4 ip, port) :: _  -> Lwt.return (ip, port)
@@ -165,7 +165,7 @@ let connect x peer_ip local_ip =
                 ) >>= fun (src_ip, src_port) ->
                 (* If the traffic is for us, use a local IP address that is really
                    ours, rather than send traffic off to someone else (!) *)
-                let src_ip = if for_us then Ipaddr.V4.localhost else src_ip in
+                let src_ip = if for_us src_ip then Ipaddr.V4.localhost else src_ip in
                 Socket.Stream.Tcp.connect (src_ip, src_port)
                 >>= function
                 | `Error (`Msg _) ->
