@@ -1,0 +1,21 @@
+diff -u -r ../ppx_deriving-4.0.orig/pkg/topkg.ml ./pkg/topkg.ml
+--- ./pkg/topkg.ml
++++ ./pkg/topkg.ml
+@@ -152,7 +152,7 @@
+ module Exts : Exts = struct
+   let interface = [".mli"; ".cmi"; ".cmti"]
+   let interface_opt = ".cmx" :: interface
+-  let c_library = if Sys.win32 then [".lib"] else [".a"]
++  let c_library = [".a"]
+   let c_dll_library = if Sys.win32 then [".dll"] else [".so"]
+   let library = [".cma"; ".cmxa"; ".cmxs"] @ c_library
+   let module_library = (interface_opt @ library)
+@@ -258,7 +258,7 @@
+     let src, dst =
+       if not auto then src, dst else
+       let dst = match dst with
+-      | None -> Some (Filename.basename src)
++      | None -> Some (Filename.basename src ^ ".exe")
+       | Some _ as dst -> dst
+       in
+       let src = if Env.native then src ^ ".native" else src ^ ".byte" in
