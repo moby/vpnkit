@@ -63,9 +63,7 @@ com.docker.slirp.tgz:
 	cp src/com.docker.slirp/com.docker.slirp.tgz .
 
 com.docker.slirp.exe:
-	cd src/com.docker.slirp.exe && \
-	$(OPAMFLAGS) opam config exec -- \
-	sh -c "oasis setup && ./configure --enable-tests && make && make test"
+	cd src/com.docker.slirp.exe && $(OPAMFLAGS) opam config exec -- $(MAKE)
 	cp src/com.docker.slirp.exe/_build/src/main.native com.docker.slirp.exe
 
 install:

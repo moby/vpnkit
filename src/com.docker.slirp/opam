@@ -3,9 +3,9 @@ maintainer: "David Scott <dave.scott@docker.com>"
 authors: [ "David Scott <dave.scott@docker.com>" ]
 
 depends: [
-  "ocamlfind" {build}
+  "ocamlfind"  {build}
   "ocamlbuild" {build}
-  "oasis" {build}
+  "topkg"      {build}
   "result"
   "ipaddr"
   "lwt"
