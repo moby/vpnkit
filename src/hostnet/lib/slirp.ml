@@ -50,14 +50,14 @@ type stack = {
 
 let after_disconnect t = t.after_disconnect
 
-let connect x peer_ip local_ip =
-  let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip in
+let connect x peer_ip local_ip extra_dns_ip =
+  let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip in
         begin Tcpip_stack.connect ~config x
         >>= function
         | `Error (`Msg m) -> failwith m
-        | `Ok s ->
+        | `Ok (s, (dns_ip, dns_udp)) ->
           let (ip, udp) = Tcpip_stack.ipv4 s, Tcpip_stack.udpv4 s in
-            Tcpip_stack.listen_udpv4 s ~port:53 (Dns_forward.input ~ip ~udp);
+            Tcpip_stack.listen_udpv4 s ~port:53 (Dns_forward.input ~secondary:false ~ip ~udp);
             Vmnet.add_listener x (
               fun buf ->
                 match (Wire_structs.parse_ethernet_frame buf) with
@@ -124,10 +124,14 @@ let connect x peer_ip local_ip =
                       end else begin
                         let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
                         let for_us = Ipaddr.V4.compare dst local_ip = 0 in
+                        let for_extra_dns = Ipaddr.V4.compare dst extra_dns_ip = 0 in
+                        if for_extra_dns && dst_port = 53 then begin
+                          Dns_forward.input ~secondary:true ~ip:dns_ip ~udp:dns_udp ~src ~dst ~src_port payload
+                        end
                         (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
                         (* ... but if it's going to an external IP then we treat it like all other
                            UDP and NAT it *)
-                        if (not for_us) then begin
+                        else if (not for_us) then begin
                           Log.debug (fun f -> f "UDP %s:%d -> %s:%d len %d"
                                        (Ipaddr.V4.to_string src) src_port
                                        (Ipaddr.V4.to_string dst) dst_port
@@ -152,9 +156,9 @@ let connect x peer_ip local_ip =
             );
             Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
-
                 let for_us src_ip = Ipaddr.V4.compare src_ip local_ip = 0 in
-                ( if for_us src_ip && src_port = 53 then begin
+                let for_dns src_ip = for_us src_ip || Ipaddr.V4.compare src_ip extra_dns_ip = 0 in
+                ( if for_dns src_ip && src_port = 53 then begin
                     Resolv_conf.get () (* re-read /etc/resolv.conf *)
                     >>= function
                     | (Ipaddr.V4 ip, port) :: _  -> Lwt.return (ip, port)
@@ -202,6 +206,7 @@ let connect x peer_ip local_ip =
   type config = {
     peer_ip: Ipaddr.V4.t;
     local_ip: Ipaddr.V4.t;
+    extra_dns_ip: Ipaddr.V4.t;
     pcap_settings: pcap Active_config.values;
   }
 
@@ -267,6 +272,7 @@ let connect x peer_ip local_ip =
       | Some x -> Lwt.return x in
     let default_peer = "192.168.65.2" in
     let default_host = "192.168.65.1" in
+    let default_dns_extra = "192.168.65.3" in
     Config.string config ~default:default_peer peer_ips_path
     >>= fun string_peer_ips ->
     Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips
@@ -280,8 +286,16 @@ let connect x peer_ip local_ip =
     >>= fun host_ips ->
     Lwt.async (fun () -> restart_on_change "slirp/host" Ipaddr.V4.to_string host_ips);
 
+    let extra_dns_ips_path = driver @ [ "slirp"; "extra_dns" ] in
+    Config.string config ~default:default_dns_extra extra_dns_ips_path
+    >>= fun string_extra_dns_ips ->
+    Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_dns_extra)) string_extra_dns_ips
+    >>= fun extra_dns_ips ->
+    Lwt.async (fun () -> restart_on_change "slirp/extra_dns" Ipaddr.V4.to_string extra_dns_ips);
+
     let peer_ip = Active_config.hd peer_ips in
     let local_ip = Active_config.hd host_ips in
+    let extra_dns_ip = Active_config.hd extra_dns_ips in
 
     Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s"
       (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
@@ -289,9 +303,9 @@ let connect x peer_ip local_ip =
     let t = {
       peer_ip;
       local_ip;
+      extra_dns_ip;
       pcap_settings;
     } in
-    Lwt.async (fun () -> Dns_forward.start_reaper ());
     Lwt.return t
 
   let connect t client =
@@ -319,5 +333,5 @@ let connect x peer_ip local_ip =
               monitor_pcap_settings t.pcap_settings
             )
           );
-        connect x t.peer_ip t.local_ip
+        connect x t.peer_ip t.local_ip t.extra_dns_ip
 end

@@ -9,6 +9,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_C
   type config = {
     peer_ip: Ipaddr.V4.t;
     local_ip: Ipaddr.V4.t;
+    extra_dns_ip: Ipaddr.V4.t;
     pcap_settings: pcap Active_config.values;
   }
   (** A slirp TCP/IP stack ready to accept connections *)

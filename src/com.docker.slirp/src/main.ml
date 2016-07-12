@@ -128,6 +128,7 @@ let main_t socket_path port_control_path vsock_path db_path nofile pcap debug =
       let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
       Lwt.return { Slirp_stack.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
         local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
+        extra_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.3";
         pcap_settings = Active_config.Value(pcap, never) }
   ) >>= fun stack ->
 
