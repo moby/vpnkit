@@ -82,11 +82,14 @@ module Sockets = struct
         loop () in
       loop ()
 
-    let input ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload =
+    let input ?userdesc ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
       (if Hashtbl.mem table (src, src_port, dst, dst_port) then begin
           Lwt.return (Some (Hashtbl.find table (src, src_port, dst, dst_port)))
         end else begin
-         let description = String.concat "" [Ipaddr.to_string src; ":"; string_of_int src_port; "-"; Ipaddr.to_string dst; ":"; string_of_int dst_port] in
+         let userdesc = match userdesc with
+           | None -> ""
+           | Some x -> String.concat "" [ " ("; x; ")" ] in
+         let description = String.concat "" [ Ipaddr.to_string src; ":"; string_of_int src_port; "-"; Ipaddr.to_string dst; ":"; string_of_int dst_port; userdesc ] in
          if Ipaddr.compare dst Ipaddr.(V4 V4.broadcast) = 0 then begin
            Log.debug (fun f -> f "Socket.Datagram.input %s: ignoring broadcast packet" description);
            Lwt.return None
