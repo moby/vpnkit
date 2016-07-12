@@ -18,9 +18,7 @@ let log_exception_continue description f =
     )
 
 let make_sockaddr (ip, port) =
-  let unix = Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port) in
-  Uwt_base.Conv.of_unix_sockaddr_exn unix
-
+  Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port)
 
 module Common = struct
   (** FLOW boilerplate *)
@@ -36,7 +34,7 @@ module Common = struct
 
   let ip_port_of_sockaddr sockaddr =
     try
-      match Uwt_base.Conv.to_unix_sockaddr_exn sockaddr with
+      match sockaddr with
       | Unix.ADDR_INET(ip, port) ->
         Some (Ipaddr.of_string @@ Unix.string_of_inet_addr ip, port)
       | _ ->
@@ -205,7 +203,7 @@ module Sockets = struct
             Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping response from unknown sockaddr");
             Lwt.fail (Failure "Socket.Datagram.recvfrom unknown sender")
           | Some address ->
-            begin match Uwt.Conv.to_unix_sockaddr_exn address with
+            begin match address with
               | Unix.ADDR_INET(ip, port) ->
                 let address = Ipaddr.of_string_exn @@ Unix.string_of_inet_addr ip, port in
                 Lwt.return (recv.Uwt.Udp.recv_len, address)
@@ -215,7 +213,6 @@ module Sockets = struct
 
       let sendto server (ip, port) buf =
         let sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port) in
-        let sockaddr = Uwt_base.Conv.of_unix_sockaddr_exn sockaddr in
         Uwt.Udp.send_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer server.fd sockaddr
     end
 
@@ -341,7 +338,7 @@ module Sockets = struct
       let getsockname server = match server.listening_fds with
         | [] -> failwith "Tcp.getsockname: socket is closed"
         | fd :: _ ->
-          match Uwt.Conv.to_unix_sockaddr_exn @@ Uwt.Tcp.getsockname_exn fd with
+          match Uwt.Tcp.getsockname_exn fd with
           | Unix.ADDR_INET(iaddr, port) ->
             Ipaddr.V4.of_string_exn (Unix.string_of_inet_addr iaddr), port
           | _ -> invalid_arg "Tcp.getsockname passed a non-TCP socket"

@@ -11,7 +11,7 @@ available: [ ocaml-version >= "4.01.0"]
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
-  "topkg" {build}
+  "topkg" {build & >= "0.7.5"}
   "result"
   "mtime" {test} ]
 depopts: [
@@ -19,10 +19,18 @@ depopts: [
   "fmt"
   "cmdliner"
   "lwt" ]
-build: [[
-  "ocaml" "pkg/pkg.ml" "build"
-          "--installer" "true"
-          "--with-js_of_ocaml" "%{js_of_ocaml:installed}%"
-          "--with-fmt" "%{fmt:installed}%"
-          "--with-cmdliner" "%{cmdliner:installed}%"
-          "--with-lwt" "%{lwt:installed}%" ]]
+build: [
+  "ocaml"
+  "pkg/pkg.ml"
+  "build"
+  "--pinned"
+  "%{pinned}%"
+  "--with-js_of_ocaml"
+  "%{js_of_ocaml:installed}%"
+  "--with-fmt"
+  "%{fmt:installed}%"
+  "--with-cmdliner"
+  "%{cmdliner:installed}%"
+  "--with-lwt"
+  "%{lwt:installed}%"
+]

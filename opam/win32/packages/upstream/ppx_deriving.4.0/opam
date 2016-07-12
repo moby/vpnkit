@@ -21,9 +21,14 @@ build-doc: [
 ]
 depends: [
   "ocamlbuild" {build}
-  "ocamlfind"  {build & >= "1.5.4"}
+  "ocamlfind"  {build & >= "1.6.0"}
   "cppo"       {build}
   "ppx_tools"  {>= "4.02.3"}
+  "result"
   "ounit"      {test}
 ]
 available: [ ocaml-version >= "4.02.1" & opam-version >= "1.2" ]
+patches: [
+  "patch-topkg-ppx_deriving.4.0" {os = "win32"}
+  "patch-quoting" { os = "win32" }
+]
