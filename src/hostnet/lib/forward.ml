@@ -305,30 +305,55 @@ let start_udp_proxy description vsock_path_var remote_port server =
 let start vsock_path_var t =
   match t.local with
   | `Tcp (local_ip, local_port)  ->
-    check_bind_allowed (Ipaddr.V4 local_ip)
-    >>= fun () ->
-    Socket.Stream.Tcp.bind (local_ip, local_port)
-    >>= fun server ->
-    t.server <- Some (`Tcp server);
-    (* Resolve the local port yet (the fds are already bound) *)
-    t.local <- ( match t.local with
-      | `Tcp (local_ip, 0) ->
-        let _, port = Socket.Stream.Tcp.getsockname server in
-        `Tcp (local_ip, port)
-      | _ ->
-        t.local );
-    start_tcp_proxy (to_string t) vsock_path_var t.remote_port server
-    >>= fun () ->
-    Lwt.return (Result.Ok t)
-  | `Udp (local_ip, local_port) ->
-    check_bind_allowed local_ip
-    >>= fun () ->
-    Socket.Datagram.Udp.bind (local_ip, local_port)
-    >>= fun server ->
-    t.server <- Some (`Udp server);
-    start_udp_proxy (to_string t) vsock_path_var t.remote_port server
-    >>= fun () ->
-    Lwt.return (Result.Ok t)
+    Lwt.catch
+      (fun () ->
+        check_bind_allowed (Ipaddr.V4 local_ip)
+        >>= fun () ->
+        Socket.Stream.Tcp.bind (local_ip, local_port)
+        >>= fun server ->
+        t.server <- Some (`Tcp server);
+        (* Resolve the local port yet (the fds are already bound) *)
+        t.local <- ( match t.local with
+          | `Tcp (local_ip, 0) ->
+            let _, port = Socket.Stream.Tcp.getsockname server in
+            `Tcp (local_ip, port)
+          | _ ->
+            t.local );
+        start_tcp_proxy (to_string t) vsock_path_var t.remote_port server
+        >>= fun () ->
+        Lwt.return (Result.Ok t)
+      ) (function
+        | Unix.Unix_error(Unix.EADDRINUSE, _, _) ->
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: port is already allocated" (Ipaddr.V4.to_string local_ip) local_port)))
+        | Unix.Unix_error(Unix.EADDRNOTAVAIL, _, _) ->
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "listen tcp %s:%d: bind: cannot assign requested address" (Ipaddr.V4.to_string local_ip) local_port)))
+        | Unix.Unix_error(Unix.EPERM, _, _) ->
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: permission denied" (Ipaddr.V4.to_string local_ip) local_port)))
+        | e ->
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d: unexpected error %s" (Ipaddr.V4.to_string local_ip) local_port (Printexc.to_string e))))
+      )
+    | `Udp (local_ip, local_port) ->
+      Lwt.catch
+        (fun () ->
+          check_bind_allowed local_ip
+          >>= fun () ->
+          Socket.Datagram.Udp.bind (local_ip, local_port)
+          >>= fun server ->
+          t.server <- Some (`Udp server);
+          start_udp_proxy (to_string t) vsock_path_var t.remote_port server
+          >>= fun () ->
+          Lwt.return (Result.Ok t)
+      ) (function
+        | Unix.Unix_error(Unix.EADDRINUSE, _, _) ->
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: port is already allocated" (Ipaddr.to_string local_ip) local_port)))
+        | Unix.Unix_error(Unix.EADDRNOTAVAIL, _, _) ->
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "listen udp %s:%d: bind: cannot assign requested address" (Ipaddr.to_string local_ip) local_port)))
+        | Unix.Unix_error(Unix.EPERM, _, _) ->
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: permission denied" (Ipaddr.to_string local_ip) local_port)))
+        | e ->
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d: unexpected error %s" (Ipaddr.to_string local_ip) local_port (Printexc.to_string e))))
+      )
+
 
 let stop t =
   Log.debug (fun f -> f "%s: closing listening socket" (to_string t));

@@ -170,8 +170,9 @@ module Sockets = struct
         let fd = Uwt.Udp.init () in
         let result = Uwt.Udp.bind ~mode:[ Uwt.Udp.Reuse_addr ] fd ~addr:sockaddr () in
         if not(Uwt.Int_result.is_ok result) then begin
-          Log.err (fun f -> f "Socket.Datagram.bind returned %s" (Uwt.strerror (Uwt.Int_result.to_error result)));
-          Lwt.fail (Uwt.Int_result.to_exn result)
+          let error = Uwt.Int_result.to_error result in
+          Log.err (fun f -> f "Socket.Udp.bind(%s, %d): %s" (Ipaddr.to_string ip) port (Uwt.strerror error));
+          Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
         end else Lwt.return { fd; closed = false }
 
       let of_bound_fd fd =
@@ -351,21 +352,23 @@ module Sockets = struct
           let error = Uwt.Int_result.to_error result in
           let msg = Printf.sprintf "Socket.Tcp.bind(%s, %d): %s" (Ipaddr.to_string ip) port (Uwt.strerror error) in
           Log.err (fun f -> f "%s" msg);
-          if error = Uwt.EADDRINUSE
-          then Lwt.fail (Unix.Unix_error(Unix.EADDRINUSE, "bind", ""))
-          else Lwt.fail (Failure msg)
+          Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
         end else Lwt.return fd
 
       let bind (ip, port) =
         bind_one (Ipaddr.V4 ip, port)
         >>= fun fd ->
-        let local_port = match Uwt.Tcp.getsockname fd with
+        ( match Uwt.Tcp.getsockname fd with
           | Uwt.Ok sockaddr ->
             begin match ip_port_of_sockaddr sockaddr with
-              | Some (_, local_port) -> local_port
+              | Some (_, local_port) -> Lwt.return local_port
               | _ -> assert false
             end
-          | _ -> assert false in
+          | Uwt.Error error ->
+            let msg = Printf.sprintf "Socket.Tcp.bind(%s, %d): %s" (Ipaddr.V4.to_string ip) port (Uwt.strerror error) in
+            Log.err (fun f -> f "%s" msg);
+            Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", "")) )
+        >>= fun local_port ->
         (* On some systems localhost will resolve to ::1 first and this can
            cause performance problems (particularly on Windows). Perform a
            best-effort bind to the ::1 address. *)
