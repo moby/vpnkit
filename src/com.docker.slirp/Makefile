@@ -1,4 +1,4 @@
-all:
+build:
 	ocaml pkg/pkg.ml build
 
 clean:
@@ -8,7 +8,7 @@ clean:
 
 stage:
 	mkdir -p _build/root/Contents/MacOS
-	mv _build/main.native com.docker.slirp
+	mv _build/src/main.native com.docker.slirp
 	mv com.docker.slirp _build/root/Contents/MacOS/com.docker.slirp
 	dylibbundler -od -b \
 	  -x _build/root/Contents/MacOS/com.docker.slirp \

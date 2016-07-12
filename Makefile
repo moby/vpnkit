@@ -59,7 +59,7 @@ depends:
 	$(OPAMFLAGS) opam install --deps-only slirp -y -t
 
 com.docker.slirp.tgz:
-	$(OPAMFLAGS) opam config exec -- $(MAKE) -C src/com.docker.slirp build test stage
+	cd src/com.docker.slirp && $(OPAMFLAGS) opam config exec -- $(MAKE) build stage
 	cp src/com.docker.slirp/com.docker.slirp.tgz .
 
 com.docker.slirp.exe:
