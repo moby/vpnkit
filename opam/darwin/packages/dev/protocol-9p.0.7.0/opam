@@ -1,7 +1,5 @@
 opam-version: "1.2"
-name: "protocol-9p"
 maintainer: "dave@recoil.org"
-version: "0.6.0"
 authors: [ "David Scott" "David Sheets" "Thomas Leonard" ]
 license: "ISC"
 homepage: "https://github.com/mirage/ocaml-9p"
@@ -24,12 +22,16 @@ depends: [
   "sexplib" {> "113.00.00" }
   "result"
   "mirage-types-lwt"
+  "channel" {>= "1.1.0" }
   "lwt" {>= "2.4.7"}
   "base-unix"
   "cmdliner"
   "stringext"
+  "astring"
+  "named-pipe"
   "fmt"
   "logs" {>= "0.5.0"}
+  "win-error"
   "ppx_deriving" {build}
   "ppx_sexp_conv" {build}
   "ocamlfind" {build}
