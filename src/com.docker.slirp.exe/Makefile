@@ -1,5 +1,5 @@
 build:
-	ocaml pkg/pkg.ml build
+	ocaml pkg/pkg.ml build --vcs true --pinned true
 
 clean:
-	ocaml pkg/pkg.ml clean
+	rm -rf _build/
