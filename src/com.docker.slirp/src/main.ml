@@ -188,7 +188,7 @@ let command =
          flows via userspace sockets"]
   in
   Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ pcap $ select $ debug),
-  Term.info "proxy" ~doc ~man
+  Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
   Printexc.record_backtrace true;

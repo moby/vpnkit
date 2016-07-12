@@ -5,3 +5,6 @@ _build/
 *~
 COMMIT
 OSS-LICENSES
+com.docker.slirp
+com.docker.slirp.tgz
+opam/licenses/dependency.slirp

@@ -149,7 +149,50 @@
  /*
 --- ./src/clib/lm_fs_case_sensitive.c
 +++ ./src/clib/lm_fs_case_sensitive.c
-@@ -105,9 +105,9 @@
+@@ -48,6 +48,10 @@
+ /* Other various includes */
+ #include <memory.h>
+ #include <errno.h>
++#include <string.h>
++#ifdef _WIN32
++#define strdup _strdup
++#endif
+ 
+ typedef struct vol_caps_buf {
+     unsigned long size;
+@@ -66,7 +70,11 @@
+ value lm_fs_case_sensitive(value path_val) {
+     CAMLparam1(path_val);
+     struct statfs stat;
+-    char *path = String_val(path_val);
++    char *path = strdup(String_val(path_val));
++    value o_ret = Val_false;
++    if ( path == NULL ){
++      caml_raise_out_of_memory();
++    }
+     
+     do {
+         caml_enter_blocking_section();
+@@ -81,7 +89,8 @@
+         
+         if (getattrlist(stat.f_mntonname, &alist, &buffer, sizeof(buffer), 0))
+             break;
+-        
++        free(path);
++        path = NULL;
+         caml_leave_blocking_section();
+         if (!(alist.volattr & ATTR_VOL_CAPABILITIES))
+             caml_failwith("Couldn't get volume capabilities");
+@@ -98,16 +107,17 @@
+         }
+         
+     } while (0);
++    free(path);
+     caml_leave_blocking_section();
+     caml_failwith(strerror(errno));
+-    CAMLreturn(Val_false);  /* For the compiler's sake */
++    CAMLreturn(o_ret);
+ }
  
  #else /* not DETECT_FS_CASE_SENSITIVE_GETATTRLIST */
  
@@ -315,7 +358,40 @@
  #endif /* WIN32 */
  
  #ifdef FAM_PSEUDO
-@@ -96,9 +98,9 @@
+@@ -55,6 +57,12 @@
+ #include <sys/select.h>
+ #endif /* FAM_PSEUDO */
+ 
++#include <stdlib.h>
++#include <string.h>
++#ifdef _WIN32
++#define strdup _strdup
++#endif
++
+ /*
+  * Custom blocks.
+  */
+@@ -84,6 +92,19 @@
+      }                                       \
+   } while(0)
+ 
++#define CheckCodeFree(fmt, expr, to_free)    \
++  do {                                       \
++     enter_blocking_section();               \
++     code = expr;                            \
++     leave_blocking_section();               \
++     if(code < 0) {                          \
++         char buffer[256];                   \
++         ErrFmt(buffer, fmt);                \
++         free(to_free);                      \
++         failwith(buffer);                   \
++     }                                       \
++  } while(0)
++
+ static int fam_connection_compare(value v1, value v2)
+ {
+     FAMConnection *info1 = FAMConnection_val(v1);
+@@ -96,24 +117,34 @@
  #endif /* !FAM_PSEUDO */
  }
  
@@ -326,8 +402,34 @@
 +    return (intnat) FAMConnection_val(v);
  }
  
- static void fam_connection_finalize(value v_info)
-@@ -123,7 +125,10 @@
+-static void fam_connection_finalize(value v_info)
++static void fam_connection_finalize_real(value v_info,int x)
+ {
+     FAMInfo *info;
+ 
+     info = FAMInfo_val(v_info);
+     if(info->is_open) {
++        if ( x == 1 ){
+         int code;
+         CheckCode("om_notify_close", FAMClose(info->fc));
++        }
++        else {
++            FAMClose(info->fc);
++        }
+         free(info->fc);
+         info->is_open = 0;
+     }
+ }
+ 
++static void fam_connection_finalize(value v_info)
++{
++    fam_connection_finalize_real(v_info,0);
++}
++
+ /*
+  * Pass info in a custom block.
+  */
+@@ -123,7 +154,10 @@
      fam_connection_compare,
      fam_connection_hash,
      custom_serialize_default,
@@ -339,6 +441,47 @@
  };
  
  /*
+@@ -164,7 +198,7 @@
+  */
+ value om_notify_close(value v_fc)
+ {
+-    fam_connection_finalize(v_fc);
++    fam_connection_finalize_real(v_fc,1);
+     return Val_unit;
+ }
+ 
+@@ -197,23 +231,27 @@
+ value om_notify_monitor_directory(value v_fc, value v_name, value v_recursive)
+ {
+     CAMLparam3(v_fc, v_name, v_recursive);
+-    const char *name;
++    char *name;
+     FAMConnection *fc;
+     FAMRequest request;
+     int code, recursive;
+ 
+     fc = FAMConnection_val(v_fc);
+-    name = String_val(v_name);
++    name = strdup(String_val(v_name));
++    if ( name == NULL ){
++      caml_raise_out_of_memory();
++    }
+     recursive = Int_val(v_recursive);
+     if(recursive) {
+ #ifdef WIN32
+-        CheckCode("om_notify_monitor_directory", FAMMonitorDirectoryTree(fc, name, &request, 0));
++        CheckCodeFree("om_notify_monitor_directory", FAMMonitorDirectoryTree(fc, name, &request, 0),name);
+ #else /* WIN32 */
+         failwith("om_notify_monitor_directory: recursive monitoring is not allowed");
+ #endif /* !WIN32 */
+     }
+     else
+-        CheckCode("om_notify_monitor_directory", FAMMonitorDirectory(fc, name, &request, 0));
++        CheckCodeFree("om_notify_monitor_directory", FAMMonitorDirectory(fc, name, &request, 0),name);
++    free(name);
+     CAMLreturn(Val_int(request.reqnum));
+ }
+ 
 --- ./src/clib/lm_printf.c
 +++ ./src/clib/lm_printf.c
 @@ -15,7 +15,9 @@
@@ -491,6 +634,22 @@
          if(processp->pid == pid)
              break;
      }
+@@ -849,6 +853,7 @@
+     fprintf(stderr, "+++ wait: pid=%d, group=%d, status=%d\n", processp->pid, processp->pgrp, processp->status);
+ #endif
+     tuple = caml_alloc_small(3, 0);
++    Field(tuple, 0) = Val_true;
+     Field(tuple, 1) = Val_int(processp->pid);
+     Field(tuple, 2) = Val_int(processp->code);
+     switch(processp->status) {
+@@ -856,7 +861,6 @@
+         Field(tuple, 0) = Val_false;
+         break;
+     case STATUS_EXITED:
+-        Field(tuple, 0) = Val_true;
+         CloseHandle(processp->handle);
+         *processpp = processp->next;
+         free(processp);
 @@ -1092,7 +1096,7 @@
          ExitProcess(1);
          break;

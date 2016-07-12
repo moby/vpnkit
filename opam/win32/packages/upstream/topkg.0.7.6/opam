@@ -11,10 +11,8 @@ available: [ ocaml-version >= "4.01.0"]
 depends: [
   "ocamlfind" {build & >= "1.6.1"}
   "ocamlbuild" {build}
-  "result"
-]
-build:[[
+  "result" ]
+build: [
   "ocaml" "pkg/pkg.ml" "build"
-          "--pkg-name" "%{name}%"
-          "--pinned" "%{pinned}%"
-]]
+          "--pkg-name" name
+          "--pinned" "%{pinned}%" ]

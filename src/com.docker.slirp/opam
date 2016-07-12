@@ -2,10 +2,14 @@ opam-version: "1.2"
 maintainer: "David Scott <dave.scott@docker.com>"
 authors: [ "David Scott <dave.scott@docker.com>" ]
 
+homepage:    "https://github.com/docker/vpnkit"
+bug-reports: "https://github.com/docker/vpnkit/issues"
+dev-repo:    "https://github.com/docker/vpnkit.git"
+
 depends: [
-  "ocamlfind" {build}
+  "ocamlfind"  {build}
   "ocamlbuild" {build}
-  "oasis" {build}
+  "topkg"      {build}
   "result"
   "ipaddr"
   "lwt"
@@ -19,9 +23,10 @@ depends: [
   "fmt"
   "proto-vmnet"
   "unix-sys-resource"
+  "astring"
+  "protocol-9p"
+  "ipaddr"
   "fd-send-recv" # to enable vmnet-client
   "unix-errno" # to enable vmnet-client
   "ctypes" # to enable vmnet-client
-  "ounit" {test}
-  "alcotest" {test}
 ]

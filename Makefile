@@ -59,13 +59,11 @@ depends:
 	$(OPAMFLAGS) opam install --deps-only slirp -y -t
 
 com.docker.slirp.tgz:
-	$(OPAMFLAGS) opam config exec -- $(MAKE) -C src/com.docker.slirp build test stage
+	cd src/com.docker.slirp && $(OPAMFLAGS) opam config exec -- $(MAKE) build stage
 	cp src/com.docker.slirp/com.docker.slirp.tgz .
 
 com.docker.slirp.exe:
-	cd src/com.docker.slirp.exe && \
-	$(OPAMFLAGS) opam config exec -- \
-	sh -c "oasis setup && ./configure --enable-tests && make && make test"
+	cd src/com.docker.slirp.exe && $(OPAMFLAGS) opam config exec -- $(MAKE)
 	cp src/com.docker.slirp.exe/_build/src/main.native com.docker.slirp.exe
 
 install:
