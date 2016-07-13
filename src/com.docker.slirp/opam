@@ -21,7 +21,7 @@ depends: [
   "fmt"
   "proto-vmnet"
   "unix-sys-resource"
-  "osx-daemon"
+  "unix-type-representations"
   "astring"
   "protocol-9p"
   "ipaddr"
