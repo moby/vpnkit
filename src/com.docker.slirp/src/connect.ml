@@ -13,28 +13,28 @@ let vsock_port = 62373l
 
 module Make(Socket: Sig.SOCKETS) = struct
 
-let vsock_path = ref (home / "Library/Containers/com.docker.docker/Data/@connect")
+  let vsock_path = ref (home / "Library/Containers/com.docker.docker/Data/@connect")
 
-include Socket.Stream.Unix
+  include Socket.Stream.Unix
 
-let connect () =
-  let open Lwt.Infix in
-  connect (!vsock_path)
-  >>= function
-  | `Error (`Msg msg) ->
-    Log.err (fun f -> f "vsock connect write got %s" msg);
-    Lwt.fail (Failure msg)
-  | `Ok flow ->
-    let address = Cstruct.of_string (Printf.sprintf "00000003.%08lx\n" vsock_port) in
-    write flow address
+  let connect () =
+    let open Lwt.Infix in
+    connect (!vsock_path)
     >>= function
-    | `Eof ->
-      Log.err (fun f -> f "vsock connect write got Eof");
-      Lwt.fail End_of_file
-    | `Error e ->
-      let msg = error_message e in
+    | `Error (`Msg msg) ->
       Log.err (fun f -> f "vsock connect write got %s" msg);
       Lwt.fail (Failure msg)
-    | `Ok () ->
-      Lwt.return flow
+    | `Ok flow ->
+      let address = Cstruct.of_string (Printf.sprintf "00000003.%08lx\n" vsock_port) in
+      write flow address
+      >>= function
+      | `Eof ->
+        Log.err (fun f -> f "vsock connect write got Eof");
+        Lwt.fail End_of_file
+      | `Error e ->
+        let msg = error_message e in
+        Log.err (fun f -> f "vsock connect write got %s" msg);
+        Lwt.fail (Failure msg)
+      | `Ok () ->
+        Lwt.return flow
 end
