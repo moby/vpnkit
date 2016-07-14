@@ -99,7 +99,9 @@ let main_t socket_url port_control_url db_path dns pcap debug =
     let h = Eventlog.register "Docker.exe" in
     Logs.set_reporter (Log_eventlog.reporter ~eventlog:h ());
   end;
-  Log.info (fun f -> f "vpnkit version %%VERSION%%");
+  Log.info (fun f -> f "vpnkit version %%VERSION%% with hostnet version %s %s uwt version %s hvsock version %s %s"
+    Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
+  );
   Printexc.record_backtrace true;
 
   Resolv_conf.set_dns dns;
