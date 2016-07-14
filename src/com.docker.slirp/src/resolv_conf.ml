@@ -13,24 +13,24 @@ let resolv_conf = "/etc/resolv.conf"
 
 module Make(Files: Sig.FILES) = struct
 
-let get () =
-  Files.read_file resolv_conf
-  >>= function
-  | `Error (`Msg m) ->
-    Log.err (fun f -> f "Error reading %s: %s" resolv_conf m);
-    Lwt.return []
-  | `Ok txt ->
-    let lines = Astring.String.cuts ~sep:"\n" txt in
-    let config = List.rev @@ List.fold_left (fun acc x ->
-      match map_line x with
-      | None -> acc
-      | Some x ->
-        begin
-          try
-            KeywordValue.of_string x :: acc
-          with
-          | _ -> acc
-        end
-    ) [] lines in
-    Lwt.return (all_servers config)
+  let get () =
+    Files.read_file resolv_conf
+    >>= function
+    | `Error (`Msg m) ->
+      Log.err (fun f -> f "Error reading %s: %s" resolv_conf m);
+      Lwt.return []
+    | `Ok txt ->
+      let lines = Astring.String.cuts ~sep:"\n" txt in
+      let config = List.rev @@ List.fold_left (fun acc x ->
+          match map_line x with
+          | None -> acc
+          | Some x ->
+            begin
+              try
+                KeywordValue.of_string x :: acc
+              with
+              | _ -> acc
+            end
+        ) [] lines in
+      Lwt.return (all_servers config)
 end

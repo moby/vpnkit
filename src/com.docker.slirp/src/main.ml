@@ -76,10 +76,25 @@ let set_nofile nofile =
   | Errno.Error ex -> Log.warn (fun f -> f "setrlimit failed: %s" (Errno.string_of_error ex))
 
 let main_t socket_path port_control_path vsock_path db_path nofile pcap debug =
-  Osx_reporter.install ~stdout:debug;
+  (* Write to stdout if expicitly requested [debug = true] or if the environment
+     variable DEBUG is set *)
+  let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
+  if debug || env_debug then begin
+    Logs.set_reporter (Logs_fmt.reporter ());
+    Log.info (fun f -> f "Logging to stdout (stdout:%b DEBUG:%b)" debug env_debug);
+  end else begin
+    let facility = Filename.basename Sys.executable_name in
+    let client = Asl.Client.create ~ident:"Docker" ~facility () in
+    Logs.set_reporter (Log_asl.reporter ~client ());
+    let dev_null = Unix.openfile "/dev/null" [ Unix.O_WRONLY ] 0 in
+    Unix.dup2 dev_null Unix.stdout;
+    Unix.dup2 dev_null Unix.stderr;
+    Log.info (fun f -> f "Logging to Apple System Log")
+  end;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   set_nofile nofile;
+  Log.info (fun f -> f "vpnkit version %%VERSION%%");
   Printexc.record_backtrace true;
 
   Lwt.async_exception_hook := (fun exn ->

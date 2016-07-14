@@ -3,7 +3,7 @@ true: warn_error(+1..49), warn(A-3-4-41-44)
 
 <src>: include
 
-true: package(hostnet), package(osx-daemon), package(osx-hyperkit)
+true: package(hostnet), package(unix-type-representations), package(asl), package(logs.fmt)
 true: package(ofs), package(protocol-9p), package(protocol-9p.unix)
 true: package(proto-vmnet), package(fd-send-recv), package(cmdliner)
 true: package(astring), package(unix-sys-resource.unix)
