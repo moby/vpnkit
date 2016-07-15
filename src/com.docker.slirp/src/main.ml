@@ -94,7 +94,9 @@ let main_t socket_path port_control_path vsock_path db_path nofile pcap debug =
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   set_nofile nofile;
-  Log.info (fun f -> f "vpnkit version %%VERSION%%");
+  Log.info (fun f -> f "vpnkit version %%VERSION%% with hostnet version %s %s and uwt version %s"
+    Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version
+  );
   Printexc.record_backtrace true;
 
   Lwt.async_exception_hook := (fun exn ->

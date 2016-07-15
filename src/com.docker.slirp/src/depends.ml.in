@@ -1,0 +1,3 @@
+let hostnet_version = "%{hostnet:version}%"
+let hostnet_pinned = "%%HOSTNET_PINNED%%"
+let uwt_version = "%{uwt:version}%"
