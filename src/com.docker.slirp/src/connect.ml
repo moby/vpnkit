@@ -30,10 +30,14 @@ module Make(Socket: Sig.SOCKETS) = struct
       >>= function
       | `Eof ->
         Log.err (fun f -> f "vsock connect write got Eof");
+        close flow
+        >>= fun () ->
         Lwt.fail End_of_file
       | `Error e ->
         let msg = error_message e in
         Log.err (fun f -> f "vsock connect write got %s" msg);
+        close flow
+        >>= fun () ->
         Lwt.fail (Failure msg)
       | `Ok () ->
         Lwt.return flow
