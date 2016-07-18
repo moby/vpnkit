@@ -12,6 +12,7 @@ module Make(Vmnet: Sig.VMNET)(Time: V1_LWT.TIME) = struct
 type configuration = {
   local_ip: Ipaddr.V4.t;
   peer_ip: Ipaddr.V4.t;
+  extra_dns_ip: Ipaddr.V4.t;
   prefix: Ipaddr.V4.Prefix.t;
   client_macaddr: Macaddr.t;
   server_macaddr: Macaddr.t;
@@ -28,8 +29,12 @@ let rec smallest_prefix a_ip other_ips = function
     then prefix
     else smallest_prefix a_ip other_ips (bits - 1)
 
+let maximum_ip = function
+  | [] -> Ipaddr.V4.of_string_exn "0.0.0.0"
+  | hd::tl -> List.fold_left (fun acc x -> if compare acc x > 0 then acc else x) hd tl
+
 (* given some MACs and IPs, construct a usable DHCP configuration *)
-let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
+let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip =
   let open Dhcp_server.Config in
   (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
      intend only to serve IPs to one downstream host.
@@ -37,18 +42,15 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
      resolved in the future *)
   let low_ip, high_ip =
     let open Ipaddr.V4 in
-    let highest = if compare local_ip peer_ip < 0 then peer_ip else local_ip in
+    let all_static_ips = [ local_ip; peer_ip; extra_dns_ip ] in
+    let highest = maximum_ip all_static_ips in
     let i32 = to_int32 highest in
     of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
   let prefix = smallest_prefix peer_ip [ local_ip; low_ip; high_ip ] 32 in
-  (* 
-  let config ~config =
-    Dhcp_server.Config.parse (dhcp_conf ~config) [(config.local_ip,
-    config.server_macaddr)] *)
   let options = [
     Dhcp_wire.Domain_name "local";
     Dhcp_wire.Routers [ local_ip ];
-    Dhcp_wire.Dns_servers [ local_ip ];
+    Dhcp_wire.Dns_servers [ local_ip; extra_dns_ip ];
     Dhcp_wire.Ntp_servers [ local_ip ];
     Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
     Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix)
@@ -70,7 +72,7 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip =
     network = prefix;
     range = (low_ip, high_ip);
   } in
-  { peer_ip; local_ip; prefix; server_macaddr; client_macaddr; dhcp_configuration }
+  { peer_ip; local_ip; extra_dns_ip; prefix; server_macaddr; client_macaddr; dhcp_configuration }
 
 module Netif = Filter.Make(Vmnet)
 
@@ -169,6 +171,7 @@ let connect ~config (ppp: Vmnet.t) =
   let arp_table = [
     config.peer_ip, config.client_macaddr;
     config.local_ip, config.server_macaddr;
+    config.extra_dns_ip, config.server_macaddr;
   ] in
   or_error "filter" @@ Netif.connect ~valid_sources ppp
   >>= fun interface ->
@@ -193,9 +196,13 @@ let connect ~config (ppp: Vmnet.t) =
   } in
   or_error "stack" @@ connect cfg ethif arp ipv4 udp4 tcp4
   >>= fun stack ->
+  or_error "dns_ipv4" @@ Ipv41.connect ~ip:config.extra_dns_ip ~netmask ethif arp
+  >>= fun dns_ipv4 ->
+  or_error "dns_udp" @@ Udp1.connect dns_ipv4
+  >>= fun dns_udp ->
   (* Hook in the DHCP server too *)
   Netif.add_listener interface (Dhcp.listen config.server_macaddr config interface);
-  Lwt.return (`Ok stack)
+  Lwt.return (`Ok (stack, (dns_ipv4, dns_udp)))
 
 (* FIXME: this is unnecessary, mirage-flow should be changed *)
 module TCPV4_half_close = struct
