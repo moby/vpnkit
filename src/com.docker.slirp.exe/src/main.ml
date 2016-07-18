@@ -34,6 +34,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
 module Main(Host: Sig.HOST) = struct
 
+module Connect = Connect.Make(Host.Time)(Host.Main)
 module Bind = Host.Sockets
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 
@@ -64,7 +65,7 @@ let hvsock_connect_forever url sockaddr callback =
   Log.debug (fun f -> f "Waiting for connections on socket %s" url);
   aux ()
 
-module Forward = Forward.Make(Connect.Make(Host.Time)(Host.Main))(Host.Sockets)
+module Forward = Forward.Make(Connect)(Host.Sockets)
 
 let start_port_forwarding port_control_url max_connections =
   Log.info (fun f -> f "starting port_forwarding port_control_url:%s max_connections:%s" port_control_url (match max_connections with None -> "None" | Some x -> "Some " ^ (string_of_int x)));

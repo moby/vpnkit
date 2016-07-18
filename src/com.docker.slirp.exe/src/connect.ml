@@ -5,20 +5,20 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let hvsockaddr = ref None
-
-let set_port_forward_addr x = hvsockaddr := Some x
-
-let max_connections = ref None
-
-let set_max_connections x = max_connections := x
-
 module Make(Time: V1_LWT.TIME)(Main: Lwt_hvsock.MAIN) = struct
   include Flow_lwt_hvsock_shutdown.Make(Time)(Main)
 
   open Lwt.Infix
 
   type address = unit
+
+  let hvsockaddr = ref None
+
+  let set_port_forward_addr x = hvsockaddr := Some x
+
+  let max_connections = ref None
+
+  let set_max_connections x = max_connections := x
 
   let active_connections = ref 0
 
