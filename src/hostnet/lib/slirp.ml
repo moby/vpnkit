@@ -123,7 +123,7 @@ let connect x peer_ip local_ip =
                         Tcpip_stack.IPV4.writev (Tcpip_stack.ipv4 s) ethernet_ip_hdr [ reply ];
                       end else begin
                         let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
-                        let for_us = Ipaddr.V4.compare dst local_ip == 0 in
+                        let for_us = Ipaddr.V4.compare dst local_ip = 0 in
                         (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
                         (* ... but if it's going to an external IP then we treat it like all other
                            UDP and NAT it *)
@@ -136,7 +136,7 @@ let connect x peer_ip local_ip =
                           let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
                           Socket.Datagram.input ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload
                         end
-                        else if for_us && dst_port == 123 then begin
+                        else if for_us && dst_port = 123 then begin
                           (* port 123 is special -- proxy these requests to
                              our localhost address for the local OSX ntp
                              listener to respond to *)
@@ -153,7 +153,7 @@ let connect x peer_ip local_ip =
             Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
 
-                let for_us src_ip = Ipaddr.V4.compare src_ip local_ip == 0 in
+                let for_us src_ip = Ipaddr.V4.compare src_ip local_ip = 0 in
                 ( if for_us src_ip && src_port = 53 then begin
                     Resolv_conf.get () (* re-read /etc/resolv.conf *)
                     >>= function
