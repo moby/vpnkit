@@ -43,10 +43,14 @@ let unix_listen path =
 
 module Forward = Forward.Make(Connect)(Bind)
 
-let start_port_forwarding port_control_path vsock_path =
-  Log.info (fun f -> f "starting port_forwarding port_control_path:%s vsock_path:%s" port_control_path vsock_path);
+let start_port_forwarding port_control_path max_connections vsock_path =
+  Log.info (fun f -> f "starting port_forwarding port_control_path:%s max_connections:%s vsock_path:%s"
+    port_control_path
+    (match max_connections with None -> "None" | Some x -> "Some " ^ (string_of_int x))
+    vsock_path);
   (* Start the 9P port forwarding server *)
   Connect.vsock_path := vsock_path;
+  Connect.set_max_connections max_connections;
   let module Ports = Active_list.Make(Forward) in
   let module Server = Protocol_9p.Server.Make(Log)(Host.Sockets.Stream.Unix)(Ports) in
   let fs = Ports.make () in
@@ -75,7 +79,7 @@ let set_nofile nofile =
   try Sys_resource_unix.setrlimit NOFILE ~soft ~hard with
   | Errno.Error ex -> Log.warn (fun f -> f "setrlimit failed: %s" (Errno.string_of_error ex))
 
-let main_t socket_path port_control_path vsock_path db_path nofile pcap debug =
+let main_t socket_path port_control_path max_connections vsock_path db_path nofile pcap debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -109,7 +113,7 @@ let main_t socket_path port_control_path vsock_path db_path nofile pcap debug =
   Lwt.async (fun () ->
     log_exception_continue "start_port_server"
       (fun () ->
-        start_port_forwarding port_control_path vsock_path
+        start_port_forwarding port_control_path max_connections vsock_path
       )
     );
 
@@ -147,16 +151,16 @@ let main_t socket_path port_control_path vsock_path db_path nofile pcap debug =
   let wait_forever, _ = Lwt.task () in
   wait_forever
 
-let main socket port_control vsock_path db nofile pcap debug =
-  Host.Main.run @@ main_t socket port_control vsock_path db nofile pcap debug
+let main socket port_control max_connections vsock_path db nofile pcap debug =
+  Host.Main.run @@ main_t socket port_control max_connections vsock_path db nofile pcap debug
 
 end
 
-let main socket port_control vsock_path db nofile pcap select debug =
+let main socket port_control max_connections vsock_path db nofile pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control vsock_path db nofile pcap debug
+    socket port_control max_connections vsock_path db nofile pcap debug
 
 open Cmdliner
 
@@ -171,6 +175,13 @@ This socket path is now dynamic, depending on current user's home directory. Cou
 make it fail instead? In case no argument is supplied? *)
 let port_control_path =
   Arg.(value & opt string "/var/tmp/com.docker.port.socket" & info [ "port-control" ] ~docv:"PORT")
+
+let max_connections =
+ let doc =
+   Arg.info ~doc:
+     "Maximum number of concurrent forwarded connections" [ "max-connections" ]
+ in
+ Arg.(value & opt (some int) None doc)
 
 (* NOTE(aduermael): it seems to me that "/var/tmp/com.docker.vsock/connect" is a default value, right?
 This socket path is now dynamic, depending on current user's home directory. Could we just
@@ -205,7 +216,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ vsock_path $ db_path $ nofile $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ max_connections $ vsock_path $ db_path $ nofile $ pcap $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =

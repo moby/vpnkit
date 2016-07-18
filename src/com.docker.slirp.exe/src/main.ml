@@ -66,8 +66,8 @@ let hvsock_connect_forever url sockaddr callback =
 
 module Forward = Forward.Make(Connect.Make(Host.Time)(Host.Main))(Host.Sockets)
 
-let start_port_forwarding port_control_url =
-  Log.info (fun f -> f "starting port_forwarding port_control_url:%s" port_control_url);
+let start_port_forwarding port_control_url max_connections =
+  Log.info (fun f -> f "starting port_forwarding port_control_url:%s max_connections:%s" port_control_url (match max_connections with None -> "None" | Some x -> "Some " ^ (string_of_int x)));
   (* Start the 9P port forwarding server *)
   let module Ports = Active_list.Make(Forward) in
   let module Server = Protocol_9p.Server.Make(Log)(HV)(Ports) in
@@ -75,6 +75,7 @@ let start_port_forwarding port_control_url =
   Ports.set_context fs "";
   let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid (Uri.of_string port_control_url) in
   Connect.set_port_forward_addr sockaddr;
+  Connect.set_max_connections max_connections;
   hvsock_connect_forever port_control_url sockaddr
     (fun fd ->
       let flow = HV.connect fd in
@@ -92,7 +93,7 @@ let start_port_forwarding port_control_url =
 
 module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Resolv_conf)(Host)
 
-let main_t socket_url port_control_url db_path dns pcap debug =
+let main_t socket_url port_control_url max_connections db_path dns pcap debug =
   if debug
   then Logs.set_reporter (Logs_fmt.reporter ())
   else begin
@@ -116,7 +117,7 @@ let main_t socket_url port_control_url db_path dns pcap debug =
   Lwt.async (fun () ->
     log_exception_continue "start_port_server"
       (fun () ->
-        start_port_forwarding port_control_url
+        start_port_forwarding port_control_url max_connections
       )
     );
 
@@ -155,16 +156,16 @@ let main_t socket_url port_control_url db_path dns pcap debug =
   let wait_forever, _ = Lwt.task () in
   wait_forever
 
-let main socket_url port_control_url db_path dns pcap debug =
+let main socket_url port_control_url max_connections db_path dns pcap debug =
   Host.Main.run
-    (main_t socket_url port_control_url db_path dns pcap debug)
+    (main_t socket_url port_control_url max_connections db_path dns pcap debug)
 end
 
-let main socket port_control db dns pcap select debug =
+let main socket port_control max_connections db dns pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control db dns pcap debug
+    socket port_control max_connections db dns pcap debug
 
 open Cmdliner
 
@@ -183,6 +184,13 @@ let port_control_path =
       hyperv-connect://vmid/serviceid" ["port"]
   in
   Arg.(value & opt string "hyperv-connect://vmid/serviceid" doc)
+
+let max_connections =
+  let doc =
+    Arg.info ~doc:
+      "Maximum number of concurrent forwarded connections" [ "max-connections" ]
+  in
+  Arg.(value & opt (some int) None doc)
 
 let db_path =
   let doc =
@@ -221,7 +229,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ db_path $ dns $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ max_connections $ db_path $ dns $ pcap $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
