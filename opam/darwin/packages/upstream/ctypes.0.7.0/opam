@@ -12,6 +12,9 @@ build: [
   [make "XEN=%{mirage-xen:enable}%" "ctypes-base" "ctypes-stubs"]
   [make "XEN=%{mirage-xen:enable}%" "ctypes-foreign"] {ctypes-foreign:installed}
 ]
+build-test: [
+   [make "test"]
+]
 install: [
   [make "install" "XEN=%{mirage-xen:enable}%"]
 ]
@@ -23,6 +26,8 @@ depends: [
    "ocamlfind" {build}
    "conf-pkg-config" {build}
    "lwt" {test}
+   "ounit" {test}
+   "ctypes-foreign" {test}
 ]
 depopts: [
    "ctypes-foreign"

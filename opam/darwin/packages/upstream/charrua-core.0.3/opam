@@ -16,7 +16,7 @@ depends: [
   {build}
   "ppx_sexp_conv"
   "ppx_type_conv"
-  "cstruct"
+  "cstruct" {>= "1.9"}
   "sexplib"
   "menhir"
   "ipaddr"
