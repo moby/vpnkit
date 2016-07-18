@@ -1,0 +1,43 @@
+opam-version: "1.2"
+maintainer:   "dave@recoil.org"
+authors:      [ "David Scott" "David Sheets" "Thomas Leonard" ]
+license:      "ISC"
+homepage:     "https://github.com/mirage/ocaml-9p"
+dev-repo:     "https://github.com/mirage/ocaml-9p.git"
+bug-reports:  "https://github.com/mirage/ocaml-9p/issues"
+doc:          "https://mirage.github.io/ocaml-9p/"
+
+build: ["ocaml" "pkg/pkg.ml" "build" "--pinned" pinned
+          "--with-lambda-term" lambda-term:installed]
+
+build-test: [
+  ["ocaml" "pkg/pkg.ml" "build" "--tests" "true"
+     "--with-lambda-term" lambda-term:installed]
+  ["ocaml" "pkg/pkg.ml" "test"]
+]
+
+depends: [
+  "base-bytes"
+  "cstruct" {>= "1.9.0"}
+  "sexplib" {> "113.00.00" }
+  "result"
+  "mirage-types-lwt"
+  "channel" {>= "1.1.0" }
+  "lwt" {>= "2.4.7"}
+  "base-unix"
+  "cmdliner"
+  "astring"
+  "named-pipe"
+  "fmt"
+  "logs" {>= "0.5.0"}
+  "win-error"
+  "ppx_deriving" {build}
+  "ppx_sexp_conv" {build}
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "ppx_tools" {build}
+  "topkg" {build & >= "0.7.3"}
+  "alcotest" {test & >= "0.4.0"}
+]
+depopts: ["lambda-term"]
+available: [ocaml-version >= "4.02.0"]
