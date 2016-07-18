@@ -2,6 +2,13 @@ open Lwt
 open Hostnet
 
 let src =
+  let src = Logs.Src.create "9P" ~doc:"/port filesystem" in
+  Logs.Src.set_level src (Some Logs.Info);
+  src
+
+module Log9P = (val Logs.src_log src : Logs.LOG)
+
+let src =
   let src = Logs.Src.create "usernet" ~doc:"Mirage TCP/IP <-> socket proxy" in
   Logs.Src.set_level src (Some Logs.Debug);
   src
@@ -70,7 +77,7 @@ let start_port_forwarding port_control_url =
   Log.info (fun f -> f "starting port_forwarding port_control_url:%s" port_control_url);
   (* Start the 9P port forwarding server *)
   let module Ports = Active_list.Make(Forward) in
-  let module Server = Protocol_9p.Server.Make(Log)(HV)(Ports) in
+  let module Server = Protocol_9p.Server.Make(Log9P)(HV)(Ports) in
   let fs = Ports.make () in
   Ports.set_context fs "";
   let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid (Uri.of_string port_control_url) in
