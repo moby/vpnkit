@@ -1,4 +1,5 @@
 open Lwt.Infix
+open Astring
 
 module Time = struct
   type 'a io = 'a Lwt.t
@@ -32,7 +33,7 @@ let open_unix path =
 let connect proto address () =
   ( match proto, address with
     | "tcp", _ ->
-      begin match Stringext.split ~on:':' address with
+      begin match String.cuts ~sep:":" address with
         | [ hostname; port ] -> open_tcp hostname (int_of_string port)
         | [ hostname ]       -> open_tcp hostname 5640
         | _ ->
@@ -40,7 +41,7 @@ let connect proto address () =
       end
     | "unix", _ ->
       open_unix address
-    | _, address when Astring.String.is_prefix ~affix:"\\\\" address ->
+    | _, address when String.is_prefix ~affix:"\\\\" address ->
       Named_pipe_lwt.Client.openpipe address
       >>= fun pipe ->
       Lwt.return (Named_pipe_lwt.Client.to_fd pipe)
@@ -50,10 +51,10 @@ let connect proto address () =
   Lwt.return (Result.Ok (Flow_lwt_unix.connect s))
 
 let watch address key =
-  let proto, address = match Stringext.split ~on:':' ~max:2 address with
-    | [ proto; address ] -> proto, address
-    | _ -> failwith "Failed to parse protocol:address" in
-  let path = Stringext.split ~on:'/' key in
+  let proto, address = match String.cut ~sep:":" address with
+    | Some (proto, address) -> proto, address
+    | None -> failwith "Failed to parse protocol:address" in
+  let path = String.cuts ~sep:"/" key in
   let t =
     let reconnect = connect proto address in
     let config = AC.create ~reconnect () in
