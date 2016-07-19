@@ -237,6 +237,30 @@ let connect x peer_ip local_ip extra_dns_ip =
     Active_config.map parse_pcap string_pcap_settings
     >>= fun pcap_settings ->
 
+    (* Watch for DNS server overrides *)
+    let dns_path = driver @ [ "slirp"; "dns" ] in
+    Config.string_option config dns_path
+    >>= fun string_dns_settings ->
+
+    let rec monitor_dns_settings settings =
+      begin match Active_config.hd settings with
+      | None ->
+        Log.info (fun f -> f "remove resolver override");
+        Resolv_conf.set []
+      | Some txt ->
+        begin match Resolver.parse_resolvers txt with
+        | Some r ->
+          Log.info (fun f -> f "updating resolvers to %s" (String.concat "; " (List.map (fun (ip, port) -> Ipaddr.to_string ip ^ ":" ^ (string_of_int port)) r)));
+          Resolv_conf.set r
+        | None ->
+          Log.err (fun f -> f "failed to parse resolver key: %s" txt)
+        end
+      end;
+      Active_config.tl settings
+      >>= fun settings ->
+      monitor_dns_settings settings in
+    Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings string_dns_settings));
+
     let bind_path = driver @ [ "allowed-bind-address" ] in
     Config.string_option config bind_path
     >>= fun string_allowed_bind_address ->

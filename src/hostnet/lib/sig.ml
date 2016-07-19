@@ -172,6 +172,8 @@ module type RESOLV_CONF = sig
   (** The system DNS configuration *)
 
   val get : unit -> (Ipaddr.t * int) list Lwt.t
+
+  val set : (Ipaddr.t * int) list -> unit
 end
 
 
