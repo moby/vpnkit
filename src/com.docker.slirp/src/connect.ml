@@ -15,13 +15,32 @@ module Make(Socket: Sig.SOCKETS) = struct
 
   let vsock_path = ref (home / "Library/Containers/com.docker.docker/Data/@connect")
 
+  let max_connections = ref None
+
+  let set_max_connections x = max_connections := x
+
   include Socket.Stream.Unix
+
+  let active_connections = ref 0
+
+  let close flow =
+    decr active_connections;
+    close flow
 
   let connect () =
     let open Lwt.Infix in
+    ( match !max_connections with
+      | Some m when !active_connections >= m ->
+        Log.err (fun f -> f "exceeded maximum number of forwarded connections (%d)" m);
+        Lwt.fail End_of_file
+      | _ ->
+        incr active_connections;
+        Lwt.return_unit )
+    >>= fun () ->
     connect (!vsock_path)
     >>= function
     | `Error (`Msg msg) ->
+      decr active_connections;
       Log.err (fun f -> f "vsock connect write got %s" msg);
       Lwt.fail (Failure msg)
     | `Ok flow ->
@@ -30,10 +49,14 @@ module Make(Socket: Sig.SOCKETS) = struct
       >>= function
       | `Eof ->
         Log.err (fun f -> f "vsock connect write got Eof");
+        close flow
+        >>= fun () ->
         Lwt.fail End_of_file
       | `Error e ->
         let msg = error_message e in
         Log.err (fun f -> f "vsock connect write got %s" msg);
+        close flow
+        >>= fun () ->
         Lwt.fail (Failure msg)
       | `Ok () ->
         Lwt.return flow
