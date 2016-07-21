@@ -18,7 +18,6 @@ depends: [
   "cmdliner"
   "logs"
   "fmt"
-  "proto-vmnet"
   "named-pipe"
   "hvsock"
   "win-eventlog"
