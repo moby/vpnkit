@@ -24,6 +24,7 @@ depends: [
   "lwt"
   "uwt"
   "tcpip" { = "999" }
+  "pcap-format"
   "dns"
   "hashcons" {= "1.0.1"}
   "pcap-format" { >= "0.4.0" }
@@ -35,5 +36,4 @@ depends: [
   "mirage-types-lwt" { = "999" }
   "ounit"
   "alcotest"
-  "proto-vmnet"
 ]

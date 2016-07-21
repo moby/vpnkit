@@ -6,8 +6,8 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 open Lwt.Infix
-open Vmnet
 open Hostnet
+open Vmnet
 
 let error_of_failure f = Lwt.catch f (fun e -> Lwt.return (`Error (`Msg (Printexc.to_string e))))
 
