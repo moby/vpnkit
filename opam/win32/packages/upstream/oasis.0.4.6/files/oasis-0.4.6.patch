@@ -2363,6 +2363,17 @@
        (fun () ->
           s_ "Run command to distclean test step.")
        test_data (fun _ t -> t.cmd_distclean)
+--- ./src/plugins/extra/devfiles/DevFilesPlugin.ml
++++ ./src/plugins/extra/devfiles/DevFilesPlugin.ml
+@@ -201,7 +201,7 @@
+             Printf.bprintf buff
+               "setup.exe: setup.ml\n\
+                \tocamlfind ocamlopt -o $@%s $< || ocamlfind ocamlc -o $@%s $< || true\n\
+-               \t$(RM) setup.cmi setup.cmo setup.cmx setup.o\n\n"
++               \t$(RM) setup.cmi setup.cmo setup.cmx setup.o setup.obj\n\n"
+               packages packages;
+           end;
+           Buffer.add_string buff (".PHONY: "^(String.concat " " targets)^"\n");
 --- ./src/plugins/internal/InternalInstallPlugin.ml
 +++ ./src/plugins/internal/InternalInstallPlugin.ml
 @@ -63,11 +63,19 @@

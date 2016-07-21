@@ -30,5 +30,5 @@ depends: [
 available: [ ocaml-version >= "4.02.1" & opam-version >= "1.2" ]
 patches: [
   "patch-topkg-ppx_deriving.4.0" {os = "win32"}
-  "patch-quoting" { os = "win32" }
+  "patch-quoting" {os = "win32"}
 ]

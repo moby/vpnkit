@@ -17,3 +17,4 @@ build:
 depends: [
   "ocamlbuild" {build}
 ]
+patches: "cmdliner-0.9.8.patch" {os = "win32"}
