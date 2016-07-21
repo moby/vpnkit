@@ -85,21 +85,60 @@
  	  files
        with Not_found -> true in
  
+--- ./src/findlib/fl_split.ml
++++ ./src/findlib/fl_split.ml
+@@ -126,10 +126,17 @@
+     | '/' | '\\' -> true
+     | _ -> false in
+   let norm_dir_win() =
+-    if l >= 1 && s.[0] = '/' then
+-      Buffer.add_char b '\\' else Buffer.add_char b s.[0];
+-    if l >= 2 && s.[1] = '/' then
+-      Buffer.add_char b '\\' else Buffer.add_char b s.[1];
++    if l >= 1 then (
++      if s.[0] = '/' then
++        Buffer.add_char b '\\'
++      else
++        Buffer.add_char b s.[0] ;
++      if l >= 2 then
++        if s.[1] = '/' then
++          Buffer.add_char b '\\'
++        else
++          Buffer.add_char b s.[1];
++    );
+     for k = 2 to l - 1 do
+       let c = s.[k] in
+       if is_slash c then (
 --- ./src/findlib/frontend.ml
 +++ ./src/findlib/frontend.ml
-@@ -24,6 +24,12 @@
+@@ -24,11 +24,17 @@
    | Plus
  ;;
  
 +let () =
 +  match Findlib_config.system with
-+    | "mingw" | "cygwin" | "mingw64" | "cygwin64" ->
++    | "win32" | "win64" | "mingw" | "cygwin" | "mingw64" | "cygwin64" ->
 +      (try set_binary_mode_out stdout true with _ -> ());
 +      (try set_binary_mode_out stderr true with _ -> ());
 +    | _ -> ()
  
  
  let slashify s =
+   match Findlib_config.system with
+-    | "mingw" | "mingw64" | "cygwin" ->
++   | "win32" | "win64" | "mingw" | "mingw64" | "cygwin" ->
+         let b = Buffer.create 80 in
+         String.iter
+           (function
+@@ -43,7 +49,7 @@
+ 
+ let out_path ?(prefix="") s =
+   match Findlib_config.system with
+-    | "mingw" | "mingw64" | "cygwin" ->
++   | "win32" | "win64" | "mingw" | "mingw64" | "cygwin" ->
+ 	let u = slashify s in
+ 	prefix ^ 
+ 	  (if String.contains u ' ' then
 @@ -450,6 +456,87 @@
        )
        packages
@@ -311,3 +350,21 @@
  		sed -e 's;@AUTOLINK@;$(OCAML_AUTOLINK);g' \
  		    -e 's;@SYSTEM@;$(SYSTEM);g' \
  		     >findlib_config.ml
+@@ -107,7 +108,7 @@
+ 	$(OCAMLC) -a -o num_top.cma $(NUMTOP_OBJECTS)
+ 
+ clean:
+-	rm -f *.cmi *.cmo *.cma *.cmx *.a *.o *.cmxa \
++	rm -f *.cmi *.cmo *.cma *.cmx *.lib *.a *.o *.cmxa \
+ 	  fl_meta.ml findlib_config.ml findlib.mml topfind.ml topfind \
+ 	  ocamlfind$(EXEC_SUFFIX) ocamlfind_opt$(EXEC_SUFFIX)
+ 
+@@ -115,7 +116,7 @@
+ 	mkdir -p "$(prefix)$(OCAML_SITELIB)/$(NAME)"
+ 	mkdir -p "$(prefix)$(OCAMLFIND_BIN)"
+ 	test $(INSTALL_TOPFIND) -eq 0 || cp topfind "$(prefix)$(OCAML_CORE_STDLIB)"
+-	files=`$(TOP)/tools/collect_files $(TOP)/Makefile.config findlib.cmi findlib.mli findlib.cma topfind.cmi topfind.mli fl_package_base.mli fl_package_base.cmi fl_metascanner.mli fl_metascanner.cmi fl_metatoken.cmi findlib_top.cma findlib.cmxa findlib.a findlib.cmxs findlib_dynload.cma findlib_dynload.cmxa findlib_dynload.a findlib_dynload.cmxs fl_dynload.mli fl_dynload.cmi META` && \
++	files=`$(TOP)/tools/collect_files $(TOP)/Makefile.config findlib.cmi findlib.mli findlib.cma topfind.cmi topfind.mli fl_package_base.mli fl_package_base.cmi fl_metascanner.mli fl_metascanner.cmi fl_metatoken.cmi findlib_top.cma findlib.cmxa findlib$(LIB_SUFFIX) findlib.cmxs findlib_dynload.cma findlib_dynload.cmxa findlib_dynload$(LIB_SUFFIX) findlib_dynload.cmxs fl_dynload.mli fl_dynload.cmi META` && \
+ 	cp $$files "$(prefix)$(OCAML_SITELIB)/$(NAME)"
+ 	f="ocamlfind$(EXEC_SUFFIX)"; { test -f ocamlfind_opt$(EXEC_SUFFIX) && f="ocamlfind_opt$(EXEC_SUFFIX)"; }; \
+ 	cp $$f "$(prefix)$(OCAMLFIND_BIN)/ocamlfind$(EXEC_SUFFIX)"
