@@ -29,7 +29,7 @@ let or_failwith = function
 
 module Main(Host: Sig.HOST) = struct
 
-module Connect = Connect.Make(Host.Sockets)
+module Connect = Connect.Make(Host)
 module Bind = Bind.Make(Host.Sockets)
 module Resolv_conf = Resolv_conf.Make(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)

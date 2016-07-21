@@ -5,8 +5,10 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make(Time: V1_LWT.TIME)(Main: Lwt_hvsock.MAIN) = struct
-  include Flow_lwt_hvsock_shutdown.Make(Time)(Main)
+open Hostnet
+
+module Make(Host: Sig.HOST) = struct
+  include Flow_lwt_hvsock_shutdown.Make(Host.Time)(Host.Main)
 
   open Lwt.Infix
 

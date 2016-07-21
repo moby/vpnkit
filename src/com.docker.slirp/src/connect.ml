@@ -11,7 +11,7 @@ let (/) = Filename.concat
 let home = try Sys.getenv "HOME" with Not_found -> "/Users/root"
 let vsock_port = 62373l
 
-module Make(Socket: Sig.SOCKETS) = struct
+module Make(Host: Sig.HOST) = struct
 
   let vsock_path = ref (home / "Library/Containers/com.docker.docker/Data/@connect")
 
@@ -19,7 +19,7 @@ module Make(Socket: Sig.SOCKETS) = struct
 
   let set_max_connections x = max_connections := x
 
-  include Socket.Stream.Unix
+  include Host.Sockets.Stream.Unix
 
   let active_connections = ref 0
 
