@@ -11,6 +11,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 module Resolv_conf = struct
   let get () = Lwt.return [ Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.8.8"), 53 ]
   let set _ = ()
+  let set_default_dns _ = ()
 end
 
 module Make(Host: Sig.HOST) = struct

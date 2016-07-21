@@ -43,6 +43,7 @@ module Main(Host: Sig.HOST) = struct
 
 module Connect = Connect.Make(Host)
 module Bind = Host.Sockets
+module Resolv_conf = Resolv_conf.Make(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 
 module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Main)

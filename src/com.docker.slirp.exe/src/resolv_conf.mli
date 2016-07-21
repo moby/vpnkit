@@ -1,3 +1,3 @@
-include Hostnet.Sig.RESOLV_CONF
+open Hostnet
 
-val set_default_dns: (Ipaddr.t * int) list -> unit
+module Make(Files: Sig.FILES): Hostnet.Sig.RESOLV_CONF

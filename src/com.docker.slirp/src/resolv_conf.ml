@@ -40,4 +40,6 @@ module Make(Files: Sig.FILES) = struct
               end
           ) [] lines in
         Lwt.return (all_servers config)
+
+  let set_default_dns _ = ()
 end

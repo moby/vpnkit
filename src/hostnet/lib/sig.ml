@@ -174,6 +174,8 @@ module type RESOLV_CONF = sig
   val get : unit -> (Ipaddr.t * int) list Lwt.t
 
   val set : (Ipaddr.t * int) list -> unit
+
+  val set_default_dns: (Ipaddr.t * int) list -> unit
 end
 
 
