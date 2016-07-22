@@ -137,8 +137,6 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
-module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Resolv_conf)(Host)
-
 let main_t socket_url port_control_url max_connections vsock_path db_path dns pcap debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
@@ -184,40 +182,66 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
       )
     );
 
-  ( match db_path with
+  let hardcoded_configuration =
+    let never, _ = Lwt.task () in
+    let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
+    { Slirp.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
+      local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
+      extra_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.3";
+      pcap_settings = Active_config.Value(pcap, never) } in
+
+  let config = match db_path with
     | Some db_path ->
       let reconnect () =
         Host.Sockets.Stream.Unix.connect db_path
         >>= function
         | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
         | `Ok x -> Lwt.return (Result.Ok x) in
-      let config = Config.create ~reconnect () in
-      Slirp_stack.create config
+      Some (Config.create ~reconnect ())
     | None ->
       Log.warn (fun f -> f "no database: using hardcoded network configuration values");
-      let never, _ = Lwt.task () in
-      let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
-      Lwt.return { Slirp_stack.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
-        local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
-        extra_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.3";
-        pcap_settings = Active_config.Value(pcap, never) }
-  ) >>= fun stack ->
+      None in
 
-  let sockaddr = hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid (Uri.of_string socket_url) in
-  hvsock_connect_forever socket_url sockaddr
-    (fun fd ->
-      let conn = HV.connect fd in
-      Slirp_stack.connect stack conn
-      >>= fun stack ->
-      Log.info (fun f -> f "stack connected");
-      Slirp_stack.after_disconnect stack
-      >>= fun () ->
-      Log.info (fun f -> f "stack disconnected");
-      Lwt.return ()
-    ) >>= fun () ->
-  Log.debug (fun f -> f "initialised: serving requests forever");
-  let wait_forever, _ = Lwt.task () in
-  wait_forever
+  let uri = Uri.of_string socket_url in
+  match Uri.scheme uri with
+  | Some "hyperv-connect" ->
+    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Resolv_conf)(Host) in
+    let sockaddr = hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid (Uri.of_string socket_url) in
+    hvsock_connect_forever socket_url sockaddr
+      (fun fd ->
+        let conn = HV.connect fd in
+        ( match config with
+          | Some config -> Slirp_stack.create config
+          | None -> Lwt.return hardcoded_configuration )
+        >>= fun stack ->
+        Slirp_stack.connect stack conn
+        >>= fun stack ->
+        Log.info (fun f -> f "stack connected");
+        Slirp_stack.after_disconnect stack
+        >>= fun () ->
+        Log.info (fun f -> f "stack disconnected");
+        Lwt.return ()
+      )
+  | _ ->
+    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Resolv_conf)(Host) in
+    unix_listen socket_url
+    >>= fun server ->
+    Host.Sockets.Stream.Unix.listen server
+      (fun conn ->
+        ( match config with
+          | Some config -> Slirp_stack.create config
+          | None -> Lwt.return hardcoded_configuration )
+        >>= fun stack ->
+        Slirp_stack.connect stack conn
+        >>= fun stack ->
+        Log.info (fun f -> f "stack connected");
+        Slirp_stack.after_disconnect stack
+        >>= fun () ->
+        Log.info (fun f -> f "stack disconnected");
+        Lwt.return ()
+      );
+    let wait_forever, _ = Lwt.task () in
+    wait_forever
 
 let main socket_url port_control_url max_connections vsock_path db_path dns pcap debug =
   Host.Main.run

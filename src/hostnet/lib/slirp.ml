@@ -38,6 +38,13 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
+type config = {
+  peer_ip: Ipaddr.V4.t;
+  local_ip: Ipaddr.V4.t;
+  extra_dns_ip: Ipaddr.V4.t;
+  pcap_settings: pcap Active_config.values;
+}
+
 module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time)
   module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conf)(Host.Sockets)(Host.Time)
@@ -202,13 +209,6 @@ let connect x peer_ip local_ip extra_dns_ip =
             Log.info (fun f -> f "TCP/IP ready");
             Lwt.return { after_disconnect = Vmnet.after_disconnect x }
         end
-
-  type config = {
-    peer_ip: Ipaddr.V4.t;
-    local_ip: Ipaddr.V4.t;
-    extra_dns_ip: Ipaddr.V4.t;
-    pcap_settings: pcap Active_config.values;
-  }
 
   let create config =
     let driver = [ "com.docker.driver.amd64-linux" ] in
