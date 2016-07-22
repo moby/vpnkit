@@ -159,11 +159,14 @@ let main socket port_control max_connections vsock_path db dns pcap select debug
 
 open Cmdliner
 
-(* NOTE(aduermael): it seems to me that "/var/tmp/com.docker.slirp.socket" is a default value, right?
-This socket path is now dynamic, depending on current user's home directory. Could we just
-make it fail instead? In case no argument is supplied? *)
 let socket =
-  Arg.(value & opt string "/var/tmp/com.docker.slirp.socket" & info [ "socket" ] ~docv:"SOCKET")
+  let doc =
+    Arg.info ~doc:
+      "A URLs to connect to for ethernet of the form \
+      hyperv-connect://vmid/serviceid or hyperv-connect://vmid for the default serviceid on Windows \
+      or /var/tmp/com.docker.slirp.socket on Mac" ["ethernet"]
+  in
+  Arg.(value & opt string "" doc)
 
 (* NOTE(aduermael): it seems to me that "/var/tmp/com.docker.port.socket" is a default value, right?
 This socket path is now dynamic, depending on current user's home directory. Could we just

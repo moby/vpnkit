@@ -181,9 +181,10 @@ let socket =
   let doc =
     Arg.info ~doc:
       "A URLs to connect to for ethernet of the form \
-      hyperv-connect://vmid/serviceid or hyperv-connect://vmid for the default serviceid" ["ethernet"]
+      hyperv-connect://vmid/serviceid or hyperv-connect://vmid for the default serviceid on Windows \
+      or /var/tmp/com.docker.slirp.socket on Mac" ["ethernet"]
   in
-  Arg.(value & opt string "hyperv-connect://vmid/serviceid" doc)
+  Arg.(value & opt string "" doc)
 
 let port_control_path =
   let doc =
