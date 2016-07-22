@@ -19,7 +19,6 @@ depends: [
   "cmdliner"
   "logs"
   "fmt"
-  "unix-sys-resource"
   "unix-type-representations"
   "astring"
   "protocol-9p"

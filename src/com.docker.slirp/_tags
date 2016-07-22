@@ -6,7 +6,7 @@ true: warn_error(+1..49), warn(A-3-4-41-44)
 true: package(hostnet), package(unix-type-representations), package(asl), package(logs.fmt)
 true: package(ofs), package(protocol-9p), package(protocol-9p.unix)
 true: package(fd-send-recv), package(cmdliner)
-true: package(astring), package(unix-sys-resource.unix)
+true: package(astring)
 true: package(unix-errno), package(unix-errno.unix), thread
 true: package(lwt), package(dns), package(fmt), package(logs), package(result)
 true: package(ipaddr), package(ctypes)
