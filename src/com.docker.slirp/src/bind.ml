@@ -66,10 +66,10 @@ module Make(Socket: Sig.SOCKETS) = struct
       | 0L -> Lwt.return (`Ok fd)
       | n ->
         Unix.close fd;
-        begin match Errno.of_code ~host:Errno_unix.host (Int64.to_int n) with
-          | x :: _ ->
-            Lwt.return (`Error (`Msg ("Failed to bind: " ^ (Errno.to_string x))))
-          | [] ->
+        begin match n with
+          | 48L -> Lwt.return (`Error (`Msg "EADDRINUSE"))
+          | 49L -> Lwt.return (`Error (`Msg "EADDRNOTAVAIL"))
+          | n   ->
             Lwt.return (`Error (`Msg ("Failed to bind: unrecognised errno: " ^ (Int64.to_string n))))
         end
     end
