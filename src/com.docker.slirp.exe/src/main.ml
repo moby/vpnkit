@@ -41,11 +41,13 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
 module Main(Host: Sig.HOST) = struct
 
-module Connect = Connect.Make(Host)
+module Connect_unix = Connect.Make_unix(Host)
+module Connect_hvsock = Connect.Make_hvsock(Host)
 module Bind = Bind.Make(Host.Sockets)
 module Resolv_conf = Resolv_conf.Make(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
-module Forward = Forward.Make(Connect)(Bind)
+module Forward_unix = Forward.Make(Connect_unix)(Bind)
+module Forward_hvsock = Forward.Make(Connect_hvsock)(Bind)
 module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Main)
 
 let file_descr_of_int (x: int) : Unix.file_descr =
@@ -98,18 +100,19 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     (match max_connections with None -> "None" | Some x -> "Some " ^ (string_of_int x))
     vsock_path);
   (* Start the 9P port forwarding server *)
-  Connect.vsock_path := vsock_path;
-  Connect.set_max_connections max_connections;
-  let module Ports = Active_list.Make(Forward) in
-  let fs = Ports.make () in
-  Ports.set_context fs vsock_path;
+  Connect_unix.vsock_path := vsock_path;
+  Connect_unix.set_max_connections max_connections;
+  Connect_hvsock.set_max_connections max_connections;
 
   let uri = Uri.of_string port_control_url in
   match Uri.scheme uri with
   | Some "hyperv-connect" ->
+    let module Ports = Active_list.Make(Forward_hvsock) in
+    let fs = Ports.make () in
+    Ports.set_context fs "";
     let module Server = Protocol_9p.Server.Make(Log9P)(HV)(Ports) in
     let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid uri in
-    Connect.set_port_forward_addr sockaddr;
+    Connect_hvsock.set_port_forward_addr sockaddr;
     hvsock_connect_forever port_control_url sockaddr
       (fun fd ->
         let flow = HV.connect fd in
@@ -122,6 +125,9 @@ let start_port_forwarding port_control_url max_connections vsock_path =
           Server.after_disconnect server
       )
   | _ ->
+    let module Ports = Active_list.Make(Forward_unix) in
+    let fs = Ports.make () in
+    Ports.set_context fs vsock_path;
     let module Server = Protocol_9p.Server.Make(Log9P)(Host.Sockets.Stream.Unix)(Ports) in
     unix_listen port_control_url
     >>= fun port_s ->
