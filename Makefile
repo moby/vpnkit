@@ -63,12 +63,12 @@ com.docker.slirp.tgz:
 	cp src/com.docker.slirp/com.docker.slirp.tgz .
 
 com.docker.slirp.exe:
-	cd src/com.docker.slirp.exe && $(OPAMFLAGS) opam config exec -- $(MAKE)
-	cp src/com.docker.slirp.exe/_build/src/main.native com.docker.slirp.exe
+	cd src/com.docker.slirp && $(OPAMFLAGS) opam config exec -- $(MAKE)
+	cp src/com.docker.slirp/_build/src/main.native com.docker.slirp.exe
 
 install:
-	cp src/com.docker.slirp.exe/com.docker.slirp.exe '$(EXEDIR)'
-	cp src/com.docker.slirp.exe/register.ps1 '$(EXEDIR)'
+	cp src/com.docker.slirp/com.docker.slirp.exe '$(EXEDIR)'
+	cp src/com.docker.slirp/register.ps1 '$(EXEDIR)'
 
 uninstall:
 	@echo uninstall not implemented
