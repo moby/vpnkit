@@ -244,11 +244,11 @@ let port_control_path =
   Arg.(value & opt string "" doc)
 
 let max_connections =
- let doc =
-   Arg.info ~doc:
-     "Maximum number of concurrent forwarded connections" [ "max-connections" ]
- in
- Arg.(value & opt (some int) None doc)
+  let doc =
+    Arg.info ~doc:
+      "Maximum number of concurrent forwarded connections" [ "max-connections" ]
+  in
+  Arg.(value & opt (some int) None doc)
 
 let vsock_path =
   let doc =
