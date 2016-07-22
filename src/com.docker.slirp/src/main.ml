@@ -23,10 +23,6 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
-let or_failwith = function
-  | Result.Error (`Msg m) -> failwith m
-  | Result.Ok x -> x
-
 module Main(Host: Sig.HOST) = struct
 
 module Connect = Connect.Make(Host)
