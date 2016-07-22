@@ -13,6 +13,10 @@ let vsock_port = 62373l
 
 module Make(Host: Sig.HOST) = struct
 
+  let hvsockaddr = ref None
+
+  let set_port_forward_addr x = hvsockaddr := Some x
+
   let vsock_path = ref (home / "Library/Containers/com.docker.docker/Data/@connect")
 
   let max_connections = ref None

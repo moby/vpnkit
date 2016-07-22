@@ -46,8 +46,26 @@ module Bind = Bind.Make(Host.Sockets)
 module Resolv_conf = Resolv_conf.Make(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 module Forward = Forward.Make(Connect)(Bind)
-
 module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Main)
+
+let file_descr_of_int (x: int) : Unix.file_descr =
+  if Sys.os_type <> "Unix"
+  then failwith "Cannot convert from an int to Unix.file_descr on platforms other than Unix";
+  Obj.magic x
+
+let unix_listen path =
+  let startswith prefix x =
+    let prefix' = String.length prefix in
+    let x' = String.length x in
+    prefix' <= x' && (String.sub x 0 prefix' = prefix) in
+  if startswith "fd:" path then begin
+    let i = String.sub path 3 (String.length path - 3) in
+    (  try Lwt.return (int_of_string i)
+       with _ -> Lwt.fail (Failure (Printf.sprintf "Failed to parse command-line argument [%s]" path))
+    ) >>= fun x ->
+    let fd = file_descr_of_int x in
+    Lwt.return (Host.Sockets.Stream.Unix.of_bound_fd fd)
+  end else Host.Sockets.Stream.Unix.bind path
 
 let hvsock_connect_forever url sockaddr callback =
   Log.info (fun f -> f "connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid) sockaddr.Hvsock.serviceid);
@@ -74,34 +92,54 @@ let hvsock_connect_forever url sockaddr callback =
   Log.debug (fun f -> f "Waiting for connections on socket %s" url);
   aux ()
 
-let start_port_forwarding port_control_url max_connections =
-  Log.info (fun f -> f "starting port_forwarding port_control_url:%s max_connections:%s" port_control_url (match max_connections with None -> "None" | Some x -> "Some " ^ (string_of_int x)));
+let start_port_forwarding port_control_url max_connections vsock_path =
+  Log.info (fun f -> f "starting port_forwarding port_control_url:%s max_connections:%s vsock_path:%s"
+    port_control_url
+    (match max_connections with None -> "None" | Some x -> "Some " ^ (string_of_int x))
+    vsock_path);
   (* Start the 9P port forwarding server *)
-  let module Ports = Active_list.Make(Forward) in
-  let module Server = Protocol_9p.Server.Make(Log9P)(HV)(Ports) in
-  let fs = Ports.make () in
-  Ports.set_context fs "";
-  let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid (Uri.of_string port_control_url) in
-  Connect.set_port_forward_addr sockaddr;
+  Connect.vsock_path := vsock_path;
   Connect.set_max_connections max_connections;
-  hvsock_connect_forever port_control_url sockaddr
-    (fun fd ->
-      let flow = HV.connect fd in
-      Server.connect fs flow ()
-      >>= function
-      | Result.Error (`Msg _) ->
-        Log.err (fun f -> f "Failed to negotiate 9P connection on port control server");
-        HV.Hvsock.close fd
-      | Result.Ok t ->
-        Log.info (fun f -> f "Client connected to 9P port control server");
-        Server.after_disconnect t
-        >>= fun () ->
-        HV.Hvsock.close fd
-    )
+  let module Ports = Active_list.Make(Forward) in
+  let fs = Ports.make () in
+  Ports.set_context fs vsock_path;
+
+  let uri = Uri.of_string port_control_url in
+  match Uri.scheme uri with
+  | Some "hyperv-connect" ->
+    let module Server = Protocol_9p.Server.Make(Log9P)(HV)(Ports) in
+    let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid uri in
+    Connect.set_port_forward_addr sockaddr;
+    hvsock_connect_forever port_control_url sockaddr
+      (fun fd ->
+        let flow = HV.connect fd in
+        Server.connect fs flow ()
+        >>= function
+        | Result.Error (`Msg m) ->
+          Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+          Lwt.return ()
+        | Result.Ok server ->
+          Server.after_disconnect server
+      )
+  | _ ->
+    let module Server = Protocol_9p.Server.Make(Log9P)(Host.Sockets.Stream.Unix)(Ports) in
+    unix_listen port_control_url
+    >>= fun port_s ->
+    Host.Sockets.Stream.Unix.listen port_s
+      (fun conn ->
+        Server.connect fs conn ()
+        >>= function
+        | Result.Error (`Msg m) ->
+          Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+          Lwt.return ()
+        | Result.Ok server ->
+          Server.after_disconnect server
+    );
+    Lwt.return_unit
 
 module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Resolv_conf)(Host)
 
-let main_t socket_url port_control_url max_connections db_path dns pcap debug =
+let main_t socket_url port_control_url max_connections vsock_path db_path dns pcap debug =
   if debug
   then Logs.set_reporter (Logs_fmt.reporter ())
   else begin
@@ -125,7 +163,7 @@ let main_t socket_url port_control_url max_connections db_path dns pcap debug =
   Lwt.async (fun () ->
     log_exception_continue "start_port_server"
       (fun () ->
-        start_port_forwarding port_control_url max_connections
+        start_port_forwarding port_control_url max_connections vsock_path
       )
     );
 
@@ -164,16 +202,16 @@ let main_t socket_url port_control_url max_connections db_path dns pcap debug =
   let wait_forever, _ = Lwt.task () in
   wait_forever
 
-let main socket_url port_control_url max_connections db_path dns pcap debug =
+let main socket_url port_control_url max_connections vsock_path db_path dns pcap debug =
   Host.Main.run
-    (main_t socket_url port_control_url max_connections db_path dns pcap debug)
+    (main_t socket_url port_control_url max_connections vsock_path db_path dns pcap debug)
 end
 
-let main socket port_control max_connections db dns pcap select debug =
+let main socket port_control max_connections vsock_path db_path dns pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control max_connections db dns pcap debug
+    socket port_control max_connections vsock_path db_path dns pcap debug
 
 open Cmdliner
 
@@ -201,6 +239,14 @@ let max_connections =
       "Maximum number of concurrent forwarded connections" [ "max-connections" ]
   in
   Arg.(value & opt (some int) None doc)
+
+let vsock_path =
+  let doc =
+    Arg.info ~doc:
+      "Path of the Unix domain socket used to setup virtio-vsock connections \
+       to the VM." [ "vsock-path" ] ~docv:"VSOCK"
+  in
+  Arg.(value & opt string "" doc)
 
 let db_path =
   let doc =
@@ -239,7 +285,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ max_connections $ db_path $ dns $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ max_connections $ vsock_path $ db_path $ dns $ pcap $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =

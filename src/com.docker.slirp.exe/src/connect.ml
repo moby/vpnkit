@@ -7,6 +7,9 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 open Hostnet
 
+let (/) = Filename.concat
+let home = try Sys.getenv "HOME" with Not_found -> "/Users/root"
+
 module Make(Host: Sig.HOST) = struct
   include Flow_lwt_hvsock_shutdown.Make(Host.Time)(Host.Main)
 
@@ -17,6 +20,8 @@ module Make(Host: Sig.HOST) = struct
   let hvsockaddr = ref None
 
   let set_port_forward_addr x = hvsockaddr := Some x
+
+  let vsock_path = ref (home / "Library/Containers/com.docker.docker/Data/@connect")
 
   let max_connections = ref None
 
