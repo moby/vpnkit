@@ -13,19 +13,35 @@ let resolv_conf = "/etc/resolv.conf"
 
 module Make(Files: Sig.FILES) = struct
 
-  let upstream_dns = ref []
+  let default_dns = ref []
 
-  let set dns = upstream_dns := dns
+  let set_default_dns dns = default_dns := dns
+
+  (* The current_dns settings are the ones we're using right now. Overrides
+     via the database will be made here by `set` *)
+  let current_dns = ref !default_dns
+
+  let set = function
+    | _ :: _ as dns ->
+      Log.info (fun f -> f "using DNS forwarders on %s"
+                   (String.concat "; " (List.map (fun (ip, port) -> Ipaddr.to_string ip ^ "#" ^ (string_of_int port)) dns))
+               );
+      current_dns := dns
+    | [] ->
+      Log.info (fun f -> f "using default DNS on %s"
+                   (String.concat "; " (List.map (fun (ip, port) -> Ipaddr.to_string ip ^ "#" ^ (string_of_int port)) !default_dns))
+               );
+      current_dns := !default_dns
 
   let get () =
-    match !upstream_dns with
+    match !current_dns with
     | _ :: _ as dns -> Lwt.return dns
     | [] ->
       Files.read_file resolv_conf
       >>= function
       | `Error (`Msg m) ->
         Log.err (fun f -> f "Error reading %s: %s" resolv_conf m);
-        Lwt.return []
+        Lwt.return !default_dns
       | `Ok txt ->
         let lines = Astring.String.cuts ~sep:"\n" txt in
         let config = List.rev @@ List.fold_left (fun acc x ->
@@ -41,5 +57,4 @@ module Make(Files: Sig.FILES) = struct
           ) [] lines in
         Lwt.return (all_servers config)
 
-  let set_default_dns _ = ()
 end
