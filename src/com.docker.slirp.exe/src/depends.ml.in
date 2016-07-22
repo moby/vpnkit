@@ -1,6 +1,0 @@
-let version = "%%VERSION%%"
-let hostnet_version = "%{hostnet:version}%"
-let hostnet_pinned = "%%HOSTNET_PINNED%%"
-let uwt_version = "%{uwt:version}%"
-let hvsock_version = "%{hvsock:version}%"
-let hvsock_pinned = "%%HVSOCK_PINNED%%"
