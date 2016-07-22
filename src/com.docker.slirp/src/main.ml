@@ -81,7 +81,7 @@ let set_nofile nofile =
   try Sys_resource_unix.setrlimit NOFILE ~soft ~hard with
   | Errno.Error ex -> Log.warn (fun f -> f "setrlimit failed: %s" (Errno.string_of_error ex))
 
-let main_t socket_path port_control_path max_connections vsock_path db_path nofile pcap debug =
+let main_t socket_path port_control_path max_connections vsock_path db_path dns nofile pcap debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -100,10 +100,12 @@ let main_t socket_path port_control_path max_connections vsock_path db_path nofi
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   set_nofile nofile;
-  Log.info (fun f -> f "vpnkit version %%VERSION%% with hostnet version %s %s and uwt version %s"
+  Log.info (fun f -> f "vpnkit version 8c8ae73-dirty with hostnet version %s %s and uwt version %s"
     Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version
   );
   Printexc.record_backtrace true;
+
+  Resolv_conf.set_default_dns [ (Ipaddr.V4 (Ipaddr.V4.of_string_exn dns)), 53 ];
 
   Lwt.async_exception_hook := (fun exn ->
     Log.err (fun f -> f "Lwt.async failure %s: %s"
@@ -153,16 +155,16 @@ let main_t socket_path port_control_path max_connections vsock_path db_path nofi
   let wait_forever, _ = Lwt.task () in
   wait_forever
 
-let main socket port_control max_connections vsock_path db nofile pcap debug =
-  Host.Main.run @@ main_t socket port_control max_connections vsock_path db nofile pcap debug
+let main socket port_control max_connections vsock_path db dns nofile pcap debug =
+  Host.Main.run @@ main_t socket port_control max_connections vsock_path db dns nofile pcap debug
 
 end
 
-let main socket port_control max_connections vsock_path db nofile pcap select debug =
+let main socket port_control max_connections vsock_path db dns nofile pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control max_connections vsock_path db nofile pcap debug
+    socket port_control max_connections vsock_path db dns nofile pcap debug
 
 open Cmdliner
 
@@ -196,6 +198,13 @@ let db_path =
 
 let nofile = Arg.(value & opt int 10240 & info [ "nofile" ] ~docv:"nofile rlimit")
 
+let dns =
+  let doc =
+    Arg.info ~doc:
+      "IP address of upstream DNS server" ["dns"]
+  in
+  Arg.(value & opt string "10.0.75.1" doc)
+
 let pcap=
   let doc =
     Arg.info ~doc:
@@ -218,7 +227,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ max_connections $ vsock_path $ db_path $ nofile $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ max_connections $ vsock_path $ db_path $ dns $ nofile $ pcap $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
