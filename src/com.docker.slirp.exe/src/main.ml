@@ -163,8 +163,8 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
   end;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore with Invalid_argument _ -> ());
-  Log.info (fun f -> f "vpnkit version %%VERSION%% with hostnet version %s %s uwt version %s hvsock version %s %s"
-    Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
+  Log.info (fun f -> f "vpnkit version %s with hostnet version %s %s uwt version %s hvsock version %s %s"
+    Depends.version Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
   );
   Printexc.record_backtrace true;
 
@@ -303,7 +303,7 @@ let command =
          flows via userspace sockets"]
   in
   Term.(pure main $ socket $ port_control_path $ max_connections $ vsock_path $ db_path $ dns $ pcap $ select $ debug),
-  Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
+  Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =
   Printexc.record_backtrace true;
