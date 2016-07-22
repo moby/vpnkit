@@ -140,9 +140,13 @@ let start_port_forwarding port_control_url max_connections vsock_path =
 module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Resolv_conf)(Host)
 
 let main_t socket_url port_control_url max_connections vsock_path db_path dns pcap debug =
-  if debug
-  then Logs.set_reporter (Logs_fmt.reporter ())
-  else begin
+  (* Write to stdout if expicitly requested [debug = true] or if the environment
+     variable DEBUG is set *)
+  let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
+  if debug || env_debug then begin
+    Logs.set_reporter (Logs_fmt.reporter ());
+    Log.info (fun f -> f "Logging to stdout (stdout:%b DEBUG:%b)" debug env_debug);
+  end else begin
     let h = Eventlog.register "Docker.exe" in
     Logs.set_reporter (Log_eventlog.reporter ~eventlog:h ());
   end;
