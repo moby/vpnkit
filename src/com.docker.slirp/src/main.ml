@@ -147,13 +147,19 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
     Logs.set_reporter (Logs_fmt.reporter ());
     Log.info (fun f -> f "Logging to stdout (stdout:%b DEBUG:%b)" debug env_debug);
   end else begin
-    let facility = Filename.basename Sys.executable_name in
-    let client = Asl.Client.create ~ident:"Docker" ~facility () in
-    Logs.set_reporter (Log_asl.reporter ~client ());
-    let dev_null = Unix.openfile "/dev/null" [ Unix.O_WRONLY ] 0 in
-    Unix.dup2 dev_null Unix.stdout;
-    Unix.dup2 dev_null Unix.stderr;
-    Log.info (fun f -> f "Logging to Apple System Log")
+    if Sys.os_type = "Win32" then begin
+      let h = Eventlog.register "Docker.exe" in
+      Logs.set_reporter (Log_eventlog.reporter ~eventlog:h ());
+      Log.info (fun f -> f "Logging to the Windows event log")
+    end else begin
+      let facility = Filename.basename Sys.executable_name in
+      let client = Asl.Client.create ~ident:"Docker" ~facility () in
+      Logs.set_reporter (Log_asl.reporter ~client ());
+      let dev_null = Unix.openfile "/dev/null" [ Unix.O_WRONLY ] 0 in
+      Unix.dup2 dev_null Unix.stdout;
+      Unix.dup2 dev_null Unix.stderr;
+      Log.info (fun f -> f "Logging to Apple System Log")
+    end
   end;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;

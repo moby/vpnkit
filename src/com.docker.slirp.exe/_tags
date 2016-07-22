@@ -4,6 +4,7 @@ true: warn_error(+1..49), warn(A-3-4-41-44)
 <src>: include
 
 true: package(hostnet), package(win-eventlog), package(named-pipe.lwt)
+true: package(asl)
 true: package(ofs), package(protocol-9p), package(protocol-9p.unix)
 true: package(cmdliner), package(logs.fmt)
 true: package(hvsock.lwt), package(fmt), package(ipaddr), package(result)
