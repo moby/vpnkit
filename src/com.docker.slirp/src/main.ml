@@ -33,6 +33,7 @@ module Connect = Connect.Make(Host)
 module Bind = Bind.Make(Host.Sockets)
 module Resolv_conf = Resolv_conf.Make(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
+module Forward = Forward.Make(Connect)(Bind)
 
 let unix_listen path =
   let startswith prefix x =
@@ -47,8 +48,6 @@ let unix_listen path =
     let fd = Unix_representations.file_descr_of_int x in
     Lwt.return (Host.Sockets.Stream.Unix.of_bound_fd fd)
   end else Host.Sockets.Stream.Unix.bind path
-
-module Forward = Forward.Make(Connect)(Bind)
 
 let start_port_forwarding port_control_path max_connections vsock_path =
   Log.info (fun f -> f "starting port_forwarding port_control_path:%s max_connections:%s vsock_path:%s"

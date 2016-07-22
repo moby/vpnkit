@@ -45,6 +45,7 @@ module Connect = Connect.Make(Host)
 module Bind = Bind.Make(Host.Sockets)
 module Resolv_conf = Resolv_conf.Make(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
+module Forward = Forward.Make(Connect)(Bind)
 
 module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Main)
 
@@ -72,8 +73,6 @@ let hvsock_connect_forever url sockaddr callback =
     aux () in
   Log.debug (fun f -> f "Waiting for connections on socket %s" url);
   aux ()
-
-module Forward = Forward.Make(Connect)(Host.Sockets)
 
 let start_port_forwarding port_control_url max_connections =
   Log.info (fun f -> f "starting port_forwarding port_control_url:%s max_connections:%s" port_control_url (match max_connections with None -> "None" | Some x -> "Some " ^ (string_of_int x)));
