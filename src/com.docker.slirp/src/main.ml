@@ -139,7 +139,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
 
 module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Resolv_conf)(Host)
 
-let main_t socket_path port_control_url max_connections vsock_path db_path dns pcap debug =
+let main_t socket_url port_control_url max_connections vsock_path db_path dns pcap debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -197,7 +197,7 @@ let main_t socket_path port_control_url max_connections vsock_path db_path dns p
         pcap_settings = Active_config.Value(pcap, never) }
   ) >>= fun stack ->
 
-  unix_listen socket_path
+  unix_listen socket_url
   >>= fun server ->
   Host.Sockets.Stream.Unix.listen server
     (fun conn ->
@@ -212,16 +212,16 @@ let main_t socket_path port_control_url max_connections vsock_path db_path dns p
   let wait_forever, _ = Lwt.task () in
   wait_forever
 
-let main socket port_control_url max_connections vsock_path db_path dns pcap debug =
-  Host.Main.run @@ main_t socket port_control_url max_connections vsock_path db_path dns pcap debug
-
+let main socket_url port_control_url max_connections vsock_path db_path dns pcap debug =
+  Host.Main.run
+    (main_t socket_url port_control_url max_connections vsock_path db_path dns pcap debug)
 end
 
-let main socket port_control max_connections vsock_path db dns pcap select debug =
+let main socket port_control max_connections vsock_path db_path dns pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control max_connections vsock_path db dns pcap debug
+    socket port_control max_connections vsock_path db_path dns pcap debug
 
 open Cmdliner
 
@@ -259,7 +259,12 @@ let vsock_path =
   Arg.(value & opt string "" doc)
 
 let db_path =
-  Arg.(value & opt (some string) None & info [ "db" ] ~docv:"DB")
+  let doc =
+    Arg.info ~doc:
+      "A URLs to connect to datakitof the form \
+      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\irmin" ["db"]
+  in
+  Arg.(value & opt (some string) None doc)
 
 let dns =
   let doc =
