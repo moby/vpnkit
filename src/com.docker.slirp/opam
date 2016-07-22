@@ -25,6 +25,7 @@ depends: [
   "named-pipe"
   "hvsock"
   "win-eventlog"
+  "asl"
   "fd-send-recv" # to enable vmnet-client
   "ctypes" # to enable vmnet-client
 ]
