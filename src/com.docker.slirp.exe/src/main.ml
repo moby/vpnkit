@@ -190,9 +190,10 @@ let port_control_path =
   let doc =
     Arg.info ~doc:
       "A URL to connect to for port control of the form \
-      hyperv-connect://vmid/serviceid" ["port"]
+     hyperv-connect://vmid/serviceid on Windows or \
+     /var/tmp/com.docker.port.socket on Mac" ["port"]
   in
-  Arg.(value & opt string "hyperv-connect://vmid/serviceid" doc)
+  Arg.(value & opt string "" doc)
 
 let max_connections =
   let doc =
