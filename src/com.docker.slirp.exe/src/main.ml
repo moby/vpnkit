@@ -161,6 +161,8 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
       Log.info (fun f -> f "Logging to Apple System Log")
     end
   end;
+  Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
+  (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore with Invalid_argument _ -> ());
   Log.info (fun f -> f "vpnkit version %%VERSION%% with hostnet version %s %s uwt version %s hvsock version %s %s"
     Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
   );
