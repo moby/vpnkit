@@ -42,7 +42,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 module Main(Host: Sig.HOST) = struct
 
 module Connect = Connect.Make(Host)
-module Bind = Host.Sockets
+module Bind = Bind.Make(Host.Sockets)
 module Resolv_conf = Resolv_conf.Make(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 
