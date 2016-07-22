@@ -15,12 +15,16 @@ depends: [
   "lwt"
   "ofs"
   "hostnet"
+  "dns"
   "cmdliner"
   "logs"
   "fmt"
+  "astring"
+  "protocol-9p"
+  "ipaddr"
   "named-pipe"
   "hvsock"
   "win-eventlog"
-  "protocol-9p"
-  "uwt"
+  "fd-send-recv" # to enable vmnet-client
+  "ctypes" # to enable vmnet-client
 ]
