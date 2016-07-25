@@ -1,0 +1,25 @@
+opam-version: "1.2"
+name: "win-eventlog"
+maintainer: "dave@recoil.org"
+version: "0.1"
+authors: [ "David Scott" ]
+license: "ISC"
+homepage: "https://github.com/djs55/ocaml-win-eventlog"
+dev-repo: "https://github.com/djs55/ocaml-win-eventlog.git"
+bug-reports: "https://github.com/djs55/ocaml-win-eventlog/issues"
+
+build: [
+  [make "PREFIX=%{prefix}%"]
+]
+
+install: [make "PREFIX=%{prefix}%" "install"]
+
+remove: [["ocamlfind" "remove" "win-eventlog"]]
+
+depends: [
+  "result"
+  "logs"
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+]
+build-doc: ["ocaml" "setup.ml" "-doc"]

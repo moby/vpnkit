@@ -11,6 +11,8 @@ open Vmnet
 
 let error_of_failure f = Lwt.catch f (fun e -> Lwt.return (`Error (`Msg (Printexc.to_string e))))
 
+let is_windows = Sys.os_type = "Win32"
+
 module Make(Socket: Sig.SOCKETS) = struct
 
   module Channel = Channel.Make(Socket.Stream.Unix)
@@ -66,10 +68,10 @@ module Make(Socket: Sig.SOCKETS) = struct
       | 0L -> Lwt.return (`Ok fd)
       | n ->
         Unix.close fd;
-        begin match Errno.of_code ~host:Errno_unix.host (Int64.to_int n) with
-          | x :: _ ->
-            Lwt.return (`Error (`Msg ("Failed to bind: " ^ (Errno.to_string x))))
-          | [] ->
+        begin match n with
+          | 48L -> Lwt.return (`Error (`Msg "EADDRINUSE"))
+          | 49L -> Lwt.return (`Error (`Msg "EADDRNOTAVAIL"))
+          | n   ->
             Lwt.return (`Error (`Msg ("Failed to bind: unrecognised errno: " ^ (Int64.to_string n))))
         end
     end
@@ -95,9 +97,10 @@ module Make(Socket: Sig.SOCKETS) = struct
     module Udp = struct
       include Socket.Datagram.Udp
 
-      let bind (local_ip, local_port) = match local_ip with
+      let bind (local_ip, local_port) =
+        match local_ip with
         | Ipaddr.V4 ipv4 ->
-          if local_port < 1024 then begin
+          if local_port < 1024 && not is_windows then begin
             request_privileged_port ipv4 local_port false
             >>= function
             | `Error (`Msg x) -> Lwt.fail (Failure x)
@@ -113,7 +116,7 @@ module Make(Socket: Sig.SOCKETS) = struct
       include Socket.Stream.Tcp
 
       let bind (local_ip, local_port) =
-        if local_port < 1024 then begin
+        if local_port < 1024 && not is_windows then begin
           request_privileged_port local_ip local_port true
           >>= function
           | `Error (`Msg x) -> Lwt.fail (Failure x)

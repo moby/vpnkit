@@ -11,6 +11,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 module Resolv_conf = struct
   let get () = Lwt.return [ Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.8.8"), 53 ]
   let set _ = ()
+  let set_default_dns _ = ()
 end
 
 module Make(Host: Sig.HOST) = struct
@@ -62,7 +63,7 @@ module DNS = Dns_resolver_mirage.Make(Host.Time)(Client)
 let config =
   let never, _ = Lwt.task () in
   {
-    Slirp_stack.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
+    Slirp.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
     local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
     extra_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.3";
     pcap_settings = Active_config.Value(None, never);
