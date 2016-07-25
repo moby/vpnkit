@@ -175,7 +175,10 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
   );
   Printexc.record_backtrace true;
 
-  Resolv_conf.set_default_dns [ (Ipaddr.V4 (Ipaddr.V4.of_string_exn dns)), 53 ];
+  ( match dns with
+    | None -> ()
+    | Some dns ->
+      Resolv_conf.set_default_dns [ (Ipaddr.V4 (Ipaddr.V4.of_string_exn dns)), 53 ] );
 
   Lwt.async_exception_hook := (fun exn ->
     Log.err (fun f -> f "Lwt.async failure %s: %s"
@@ -321,7 +324,7 @@ let dns =
     Arg.info ~doc:
       "IP address of upstream DNS server" ["dns"]
   in
-  Arg.(value & opt string "10.0.75.1" doc)
+  Arg.(value & opt (some string) None doc)
 
 let pcap=
   let doc =
