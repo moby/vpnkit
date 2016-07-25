@@ -166,6 +166,9 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
     end
   end;
   Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
+  (* This will always succeed on Mac but will raise Illegal_argument on Windows.
+     Happily on Windows there is no such thing as SIGPIPE so it's safe to catch
+     the exception and throw it away. *)
   (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore with Invalid_argument _ -> ());
   Log.info (fun f -> f "vpnkit version %s with hostnet version %s %s uwt version %s hvsock version %s %s"
     Depends.version Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
