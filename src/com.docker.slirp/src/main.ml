@@ -268,18 +268,24 @@ open Cmdliner
 let socket =
   let doc =
     Arg.info ~doc:
-      "A URLs to connect to for ethernet of the form \
-      hyperv-connect://vmid/serviceid or hyperv-connect://vmid for the default serviceid on Windows \
-      or /var/tmp/com.docker.slirp.socket on Mac" ["ethernet"]
+      "The address on the host for the VM ethernet connection. \
+       Possible values include: \
+       hyperv-connect://vmid/serviceid to connect to a specific Hyper-V 'serviceid' on VM 'vmid'; \
+       hyperv-connect://vmid to connect to the default Hyper-V 'serviceid' on VM 'vmid'; \
+       /var/tmp/com.docker.slirp.socket to listen on a Unix domain socket for incoming connections."
+    [ "ethernet" ]
   in
   Arg.(value & opt string "" doc)
 
 let port_control_path =
   let doc =
     Arg.info ~doc:
-      "A URL to connect to for port control of the form \
-     hyperv-connect://vmid/serviceid on Windows or \
-     /var/tmp/com.docker.port.socket on Mac" ["port"]
+      "The address on the host for the 9P filesystem needed to control host port forwarding. \
+       Possible values include: \
+       hyperv-connect://vmid/serviceid to connect to a specific Hyper-V 'serviceid' on VM 'vmid'; \
+       hyperv-connect://vmid to connect to the default Hyper-V 'serviceid' on VM 'vmid'; \
+       /var/tmp/com.docker.port.socket to listen on a Unix domain socket for incoming connections."
+     [ "port" ]
   in
   Arg.(value & opt string "" doc)
 
@@ -301,8 +307,12 @@ let vsock_path =
 let db_path =
   let doc =
     Arg.info ~doc:
-      "A URLs to connect to datakitof the form \
-      file:///var/tmp/foo or tcp://host:port or \\\\\\\\.\\\\pipe\\\\irmin" ["db"]
+      "The address on the host for the datakit database. \
+       Possible values include: \
+       file:///var/tmp/foo to connect to Unix domain socket /var/tmp/foo; \
+       tcp://host:port to connect to over TCP/IP; \
+       \\\\\\\\.\\\\pipe\\\\irmin to connect to a named pipe on Windows."
+    ["db"]
   in
   Arg.(value & opt (some string) None doc)
 
