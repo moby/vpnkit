@@ -5,9 +5,6 @@ license: "ISC"
 homepage: "https://github.com/djs55/ocaml-hvsock"
 dev-repo: "https://github.com/djs55/ocaml-hvsock.git"
 bug-reports: "https://github.com/djs55/ocaml-hvsock/issues"
-patches: [
-  "send-recv.patch"
-]
 build: [
   ["ocaml" "setup.ml" "-configure"]
   [make]
