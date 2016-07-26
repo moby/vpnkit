@@ -52,7 +52,7 @@ depends:
 	  local "$(OPAM_REPO)"
 	$(OPAMFLAGS) opam update -u -y
 	$(OPAMFLAGS) opam install $(DEPEXT) -y
-	$(OPAMFLAGS) OPAMBUILDTEST=1 opam depext -u slirp
+	$(OPAMFLAGS) OPAMBUILDTEST=1 opam depext --su -d -u slirp
 	# Don't run all the unit tests of all upstream packages in the universe for speed
 	$(OPAMFLAGS) opam install $(shell ls -1 $(OPAM_REPO)/packages/upstream) -y
 	# Please do run the unit tests for our packages

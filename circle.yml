@@ -15,7 +15,8 @@ checkout:
   - opam/check-upstream.sh
 dependencies:
   override:
-  - brew install wget opam dylibbundler libffi pkg-config
+  - brew update || brew update
+  - brew install wget opam dylibbundler libffi
   - make depends
   - make
   - make OSS-LICENSES
