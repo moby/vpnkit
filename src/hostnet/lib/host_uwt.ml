@@ -264,7 +264,7 @@ module Sockets = struct
         try
           if not closed then Uwt.Tcp.shutdown fd else Lwt.return ()
         with
-        | Unix.Unix_error(Unix.ENOTCONN, _, _) -> Lwt.return ()
+        | Uwt.Uwt_error(Uwt.ENOTCONN, _, _) -> Lwt.return ()
         | e ->
           Log.err (fun f -> f "Socket.TCPV4.shutdown_write %s: caught %s returning Eof" description (Printexc.to_string e));
           Lwt.return ()
@@ -472,7 +472,7 @@ module Sockets = struct
         try
           if not closed then Uwt.Pipe.shutdown fd else Lwt.return ()
         with
-        | Unix.Unix_error(Unix.ENOTCONN, _, _) -> Lwt.return ()
+        | Uwt.Uwt_error(Uwt.ENOTCONN, _, _) -> Lwt.return ()
         | e ->
           Log.err (fun f -> f "Socket.Pipe.shutdown_write %s: caught %s returning Eof" description (Printexc.to_string e));
           Lwt.return ()
