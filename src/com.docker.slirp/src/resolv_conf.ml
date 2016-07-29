@@ -33,6 +33,10 @@ module Make(Files: Sig.FILES) = struct
                );
       current_dns := !default_dns
 
+  let all_ipv4_servers config =
+     all_servers config |>
+     List.filter (fun (ip,_) -> match ip with Ipaddr.V4 _ -> true |_ -> false)
+
   let get () =
     match !current_dns with
     | _ :: _ as dns -> Lwt.return dns
@@ -55,6 +59,6 @@ module Make(Files: Sig.FILES) = struct
                 | _ -> acc
               end
           ) [] lines in
-        Lwt.return (all_servers config)
+        Lwt.return (all_ipv4_servers config)
 
 end
