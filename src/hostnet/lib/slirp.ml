@@ -47,7 +47,7 @@ type config = {
 
 module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time)
-  module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conf)(Host.Sockets)(Host.Time)
+  module Dns_forwarder = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conf)(Host.Sockets)(Host.Time)
 
 module Socket = Host.Sockets
 
@@ -64,7 +64,7 @@ let connect x peer_ip local_ip extra_dns_ip =
         | `Error (`Msg m) -> failwith m
         | `Ok (s, (dns_ip, dns_udp)) ->
           let (ip, udp) = Tcpip_stack.ipv4 s, Tcpip_stack.udpv4 s in
-            Tcpip_stack.listen_udpv4 s ~port:53 (Dns_forward.input ~secondary:false ~ip ~udp);
+            Tcpip_stack.listen_udpv4 s ~port:53 (Dns_forwarder.input ~secondary:false ~ip ~udp);
             Vmnet.add_listener x (
               fun buf ->
                 match (Wire_structs.parse_ethernet_frame buf) with
@@ -133,7 +133,7 @@ let connect x peer_ip local_ip extra_dns_ip =
                         let for_us = Ipaddr.V4.compare dst local_ip = 0 in
                         let for_extra_dns = Ipaddr.V4.compare dst extra_dns_ip = 0 in
                         if for_extra_dns && dst_port = 53 then begin
-                          Dns_forward.input ~secondary:true ~ip:dns_ip ~udp:dns_udp ~src ~dst ~src_port payload
+                          Dns_forwarder.input ~secondary:true ~ip:dns_ip ~udp:dns_udp ~src ~dst ~src_port payload
                         end
                         (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
                         (* ... but if it's going to an external IP then we treat it like all other
@@ -167,7 +167,8 @@ let connect x peer_ip local_ip extra_dns_ip =
                 let for_dns src_ip = for_us src_ip || Ipaddr.V4.compare src_ip extra_dns_ip = 0 in
                 ( if for_dns src_ip && src_port = 53 then begin
                     Resolv_conf.get () (* re-read /etc/resolv.conf *)
-                    >>= function
+                    >>= fun all ->
+                    match Dns_forward.only_ipv4 all with
                     | (Ipaddr.V4 ip, port) :: _  -> Lwt.return (ip, port)
                     | _ ->
                       Log.err (fun f -> f "Failed to discover DNS server: assuming 127.0.01");

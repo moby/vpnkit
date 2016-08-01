@@ -24,6 +24,12 @@ let tidstr_of_dns dns =
   | (_, None) -> "----"
   | (_, Some { Dns.Packet.id; _ }) -> Printf.sprintf "%04x" id
 
+let only_ipv4 servers =
+  List.filter (function
+    | Ipaddr.V4 _, _ -> true
+    | _ -> false
+  ) servers
+
 module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) = struct
 
 let input ~secondary ~ip ~udp ~src ~dst ~src_port buf =
@@ -37,8 +43,8 @@ let input ~secondary ~ip ~udp ~src ~dst ~src_port buf =
   Log.debug (fun f -> f "DNS[%s] %s:%d -> %s %s" (tidstr_of_dns dns) src_str src_port dst_str (string_of_dns dns));
 
   Resolv_conf.get ()
-
-  >>= ( function
+  >>= fun all ->
+  ( match only_ipv4 all with
   | _::sec::_ when secondary -> Lwt.return_some ("secondary", sec)
   | pri::_::_ when not secondary -> Lwt.return_some ("primary", pri)
   (* These two could be collapsed, but for the desire to differentiate in the logging *)
