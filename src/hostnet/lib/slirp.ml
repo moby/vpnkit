@@ -164,17 +164,19 @@ let connect x peer_ip local_ip extra_dns_ip =
             Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
                 let for_us src_ip = Ipaddr.V4.compare src_ip local_ip = 0 in
-                let for_dns src_ip = for_us src_ip || Ipaddr.V4.compare src_ip extra_dns_ip = 0 in
+                let for_extra_dns = Ipaddr.V4.compare src_ip extra_dns_ip = 0 in
+                let for_dns src_ip = for_us src_ip || for_extra_dns in
                 ( if for_dns src_ip && src_port = 53 then begin
-                    Resolv_conf.get () (* re-read /etc/resolv.conf *)
+                    Resolv_conf.get ()
                     >>= fun all ->
-                    match Dns_forward.only_ipv4 all with
-                    | (Ipaddr.V4 ip, port) :: _  -> Lwt.return (ip, port)
+                    match Dns_forward.choose_server ~secondary:for_extra_dns all with
+                    | Some (description, (Ipaddr.V4 ip, port)) ->
+                      Lwt.return (":" ^ description, ip, port)
                     | _ ->
                       Log.err (fun f -> f "Failed to discover DNS server: assuming 127.0.01");
-                      Lwt.return (Ipaddr.V4.of_string_exn "127.0.0.1", 53)
-                  end else Lwt.return (src_ip, src_port)
-                ) >>= fun (src_ip, src_port) ->
+                      Lwt.return (":no DNS server", Ipaddr.V4.of_string_exn "127.0.0.1", 53)
+                  end else Lwt.return ("", src_ip, src_port)
+                ) >>= fun (description, src_ip, src_port) ->
                 (* If the traffic is for us, use a local IP address that is really
                    ours, rather than send traffic off to someone else (!) *)
                 let src_ip = if for_us src_ip then Ipaddr.V4.localhost else src_ip in
@@ -191,7 +193,7 @@ let connect x peer_ip local_ip extra_dns_ip =
                           | `Error (`Msg m) ->
                             Log.err (fun f ->
                               let description =
-                                Printf.sprintf "TCP %s:%d > %s:%d"
+                                Printf.sprintf "TCP%s %s:%d > %s:%d" description
                                   (Ipaddr.V4.to_string src_ip) src_port
                                   (Ipaddr.V4.to_string dst_ip) dst_port in
                                f "%s proxy failed with %s" description m);
