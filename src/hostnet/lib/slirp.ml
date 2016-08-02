@@ -47,7 +47,7 @@ type config = {
 
 module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
   module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time)
-  module Dns_forward = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conf)(Host.Sockets)(Host.Time)
+  module Dns_forwarder = Dns_forward.Make(Tcpip_stack.IPV4)(Tcpip_stack.UDPV4)(Resolv_conf)(Host.Sockets)(Host.Time)
 
 module Socket = Host.Sockets
 
@@ -64,7 +64,7 @@ let connect x peer_ip local_ip extra_dns_ip =
         | `Error (`Msg m) -> failwith m
         | `Ok (s, (dns_ip, dns_udp)) ->
           let (ip, udp) = Tcpip_stack.ipv4 s, Tcpip_stack.udpv4 s in
-            Tcpip_stack.listen_udpv4 s ~port:53 (Dns_forward.input ~secondary:false ~ip ~udp);
+            Tcpip_stack.listen_udpv4 s ~port:53 (Dns_forwarder.input ~secondary:false ~ip ~udp);
             Vmnet.add_listener x (
               fun buf ->
                 match (Wire_structs.parse_ethernet_frame buf) with
@@ -133,7 +133,7 @@ let connect x peer_ip local_ip extra_dns_ip =
                         let for_us = Ipaddr.V4.compare dst local_ip = 0 in
                         let for_extra_dns = Ipaddr.V4.compare dst extra_dns_ip = 0 in
                         if for_extra_dns && dst_port = 53 then begin
-                          Dns_forward.input ~secondary:true ~ip:dns_ip ~udp:dns_udp ~src ~dst ~src_port payload
+                          Dns_forwarder.input ~secondary:true ~ip:dns_ip ~udp:dns_udp ~src ~dst ~src_port payload
                         end
                         (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
                         (* ... but if it's going to an external IP then we treat it like all other
@@ -164,16 +164,19 @@ let connect x peer_ip local_ip extra_dns_ip =
             Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
                 let for_us src_ip = Ipaddr.V4.compare src_ip local_ip = 0 in
-                let for_dns src_ip = for_us src_ip || Ipaddr.V4.compare src_ip extra_dns_ip = 0 in
+                let for_extra_dns = Ipaddr.V4.compare src_ip extra_dns_ip = 0 in
+                let for_dns src_ip = for_us src_ip || for_extra_dns in
                 ( if for_dns src_ip && src_port = 53 then begin
-                    Resolv_conf.get () (* re-read /etc/resolv.conf *)
-                    >>= function
-                    | (Ipaddr.V4 ip, port) :: _  -> Lwt.return (ip, port)
+                    Resolv_conf.get ()
+                    >>= fun all ->
+                    match Dns_forward.choose_server ~secondary:for_extra_dns all with
+                    | Some (description, (Ipaddr.V4 ip, port)) ->
+                      Lwt.return (":" ^ description, ip, port)
                     | _ ->
                       Log.err (fun f -> f "Failed to discover DNS server: assuming 127.0.01");
-                      Lwt.return (Ipaddr.V4.of_string_exn "127.0.0.1", 53)
-                  end else Lwt.return (src_ip, src_port)
-                ) >>= fun (src_ip, src_port) ->
+                      Lwt.return (":no DNS server", Ipaddr.V4.of_string_exn "127.0.0.1", 53)
+                  end else Lwt.return ("", src_ip, src_port)
+                ) >>= fun (description, src_ip, src_port) ->
                 (* If the traffic is for us, use a local IP address that is really
                    ours, rather than send traffic off to someone else (!) *)
                 let src_ip = if for_us src_ip then Ipaddr.V4.localhost else src_ip in
@@ -190,7 +193,7 @@ let connect x peer_ip local_ip extra_dns_ip =
                           | `Error (`Msg m) ->
                             Log.err (fun f ->
                               let description =
-                                Printf.sprintf "TCP %s:%d > %s:%d"
+                                Printf.sprintf "TCP%s %s:%d > %s:%d" description
                                   (Ipaddr.V4.to_string src_ip) src_port
                                   (Ipaddr.V4.to_string dst_ip) dst_port in
                                f "%s proxy failed with %s" description m);

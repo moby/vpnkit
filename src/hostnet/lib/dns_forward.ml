@@ -24,6 +24,21 @@ let tidstr_of_dns dns =
   | (_, None) -> "----"
   | (_, Some { Dns.Packet.id; _ }) -> Printf.sprintf "%04x" id
 
+let only_ipv4 servers =
+  List.filter (function
+    | Ipaddr.V4 _, _ -> true
+    | _ -> false
+  ) servers
+
+let choose_server ~secondary all =
+  match only_ipv4 all, secondary with
+  | _   :: sec :: _  , true  -> Some ("secondary",          sec)
+  | pri :: _   :: _  , false -> Some ("primary",            pri)
+  (* These two could be collapsed, but for the desire to differentiate in the logging *)
+  | pri :: _         , true  -> Some ("secondary(wrapped)", pri)
+  | pri :: _         , false -> Some ("primary(sole)",      pri)
+  | _                        -> None
+
 module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) = struct
 
 let input ~secondary ~ip ~udp ~src ~dst ~src_port buf =
@@ -37,16 +52,8 @@ let input ~secondary ~ip ~udp ~src ~dst ~src_port buf =
   Log.debug (fun f -> f "DNS[%s] %s:%d -> %s %s" (tidstr_of_dns dns) src_str src_port dst_str (string_of_dns dns));
 
   Resolv_conf.get ()
-
-  >>= ( function
-  | _::sec::_ when secondary -> Lwt.return_some ("secondary", sec)
-  | pri::_::_ when not secondary -> Lwt.return_some ("primary", pri)
-  (* These two could be collapsed, but for the desire to differentiate in the logging *)
-  | pri::_ when secondary -> Lwt.return_some ("secondary(wrapped)", pri)
-  | pri::_ when not secondary -> Lwt.return_some ("primary(sole)", pri)
-  | _ -> Lwt.return_none )
-
-  >>= function
+  >>= fun all ->
+  match choose_server ~secondary all with
   | Some (dst_str, (dst, dst_port)) ->
     Log.debug (fun f -> f "DNS[%s] Forwarding to %s (%s)" (tidstr_of_dns dns) (Ipaddr.to_string dst) dst_str);
     let reply buffer =
