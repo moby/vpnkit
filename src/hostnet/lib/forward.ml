@@ -61,7 +61,7 @@ module Port = struct
         match Stringext.split ~on:':' x with
         | [ proto; ip; port ] ->
           let port = int_of_string port in
-          begin match String.lowercase proto with
+          begin match String.lowercase_ascii proto with
             | "tcp" -> Result.return (`Tcp (Ipaddr.V4.of_string_exn ip, port))
             | "udp" -> Result.return (`Udp (Ipaddr.of_string_exn ip, port))
             | _ -> Result.errorf "unknown protocol: should be tcp or udp"
