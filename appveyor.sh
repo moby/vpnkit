@@ -5,7 +5,7 @@ set -eu
 ### From ocaml-ci-scripts
 
 # default setttings
-SWITCH='4.02.3+mingw64c'
+SWITCH='4.03.0+mingw64c'
 OPAM_URL='https://dl.dropboxusercontent.com/s/b2q2vjau7if1c1b/opam64.tar.xz'
 OPAM_ARCH=opam64
 

@@ -1,0 +1,21 @@
+opam-version: "1"
+version: "4.03.0"
+src: "https://dl.dropboxusercontent.com/s/nuu05ssr1yk338w/4.03.0+mingw64c.tar.xz"
+
+build: [
+  [ "sed" "-i" "s#@PREFIX@#%{prefix}%#g" "lib/ocaml/ld.conf" ]
+  [ "sed" "-i" "s#@PREFIX@#%{prefix}%#g" "lib/ocaml/Makefile.config" ]
+  [ "dash.exe" "install.sh" prefix ]
+]
+
+packages: [
+  "base-unix"
+  "base-bigarray"
+  "base-threads"
+]
+env: [
+  [OCAMLLIB = "%{prefix}%/lib/ocaml"]
+  [CAML_LD_LIBRARY_PATH = "%{lib}%/stublibs"]
+  [CC = "x86_64-w64-mingw32-gcc.exe"]
+  [CPP = "x86_64-w64-mingw32-cpp.exe"]
+]

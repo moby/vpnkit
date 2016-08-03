@@ -2,7 +2,7 @@
 
 set -ex
 
-OPAM_SWITCH=${OPAM_SWITCH:-4.02.3}
+OPAM_SWITCH=${OPAM_SWITCH:-4.03.0}
 OPAM_REPO=${OPAM_REPO:-https://github.com/ocaml/opam-repository.git}
 OPAM_OS=${OPAM_OS:-darwin}
 
@@ -85,7 +85,7 @@ rm -rf "${TARGET_DIR}/packages/upstream/"
 mkdir -p "${TARGET_DIR}/packages/upstream/"
 
 # Note: not sure why this is needed, but it is
-BASE_PKGS="base-unix.base base-threads.base base-bigarray.base base-ocamlbuild.base"
+BASE_PKGS="base-unix.base base-threads.base base-bigarray.base"
 
 for pkg in ${BASE_PKGS} ${ALL_PACKAGES//\"}; do
     echo Adding ${pkg}

@@ -94,24 +94,24 @@ module Dhcp = struct
     Macaddr.compare dest mac = 0 || not (Macaddr.is_unicast dest)
 
   let input net (config : Dhcp_server.Config.t) database buf =
-    let open Dhcp_server.Input in
+    let open Dhcp_server in
     match (Dhcp_wire.pkt_of_buf buf (Cstruct.len buf)) with
     | `Error e ->
       Log.err (fun f -> f "failed to parse DHCP packet: %s" e);
       Lwt.return database
     | `Ok pkt ->
-      match (input_pkt config database pkt (Clock.time ())) with
-      | Silence -> Lwt.return database
-      | Update database ->
+      match (Input.input_pkt config database pkt (Clock.time ())) with
+      | Input.Silence -> Lwt.return database
+      | Input.Update database ->
         Log.debug (fun f -> f "lease database updated");
         Lwt.return database
-      | Warning w ->
+      | Input.Warning w ->
         Log.warn (fun f -> f "%s" w);
         Lwt.return database
-      | Error e ->
+      | Input.Error e ->
         Log.err (fun f -> f "%s" e);
         Lwt.return database
-      | Reply (reply, database) ->
+      | Input.Reply (reply, database) ->
         let open Dhcp_wire in
         Log.debug (fun f -> f "%s from %s" (op_to_string pkt.op) (Macaddr.to_string (pkt.srcmac)));
         Netif.write net (Dhcp_wire.buf_of_pkt reply)

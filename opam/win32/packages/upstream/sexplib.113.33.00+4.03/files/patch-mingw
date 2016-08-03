@@ -1,0 +1,40 @@
+--- ./Makefile
++++ ./Makefile
+@@ -65,3 +65,26 @@
+ 	./$(SETUP) -configure $(CONFIGUREFLAGS)
+ 
+ .PHONY: default build doc test all install uninstall reinstall clean distclean configure
++
++OS_SYSTEM:=$(shell ocamlfind ocamlc -config | awk '/^system:/ {print $$2}')
++
++ifeq ($(OS_SYSTEM),$(filter $(OS_SYSTEM),mingw64 mingw))
++src/pre_sexp.ml: src/pre_sexp.ml.in
++	`ocamlc -config | grep bytecomp_c_compiler: | sed -e 's/.*: //'` -E -undef -traditional -Isyntax -w - < $< > $@
++else
++CPP1 := $(shell command -v cpp 2> /dev/null)
++CPP2 := $(shell command -v x86_64-w64-mingw32-cpp 2> /dev/null)
++CPP3 := $(shell command -v i686-w64-mingw32-cpp 2> /dev/null)
++ifdef CPP3
++src/pre_sexp.ml: src/pre_sexp.ml.in
++	i686-w64-mingw32-cpp -E -undef -traditional -Isyntax -w - < $< > $@
++else
++ifdef CPP2
++src/pre_sexp.ml: src/pre_sexp.ml.in
++	x86_64-w64-mingw32-cpp -E -undef -traditional -Isyntax -w - < $< > $@
++else
++src/pre_sexp.ml: src/pre_sexp.ml.in
++	cpp -E -undef -traditional -Isyntax -w - < $< > $@
++endif
++endif
++endif
+--- ./_tags
++++ ./_tags
+@@ -5,7 +5,7 @@
+ <src/*.ml>: for-pack(Sexplib)
+ <num/lib/*.ml>: for-pack(Sexplib_num)
+ <unix/lib/*.ml>: for-pack(Sexplib_unix)
+-<src/pre_sexp.ml>: pp(cpp -undef -traditional -Isyntax -w)
++# <src/pre_sexp.ml>: pp(cpp -undef -traditional -Isyntax -w)
+ # OASIS_START
+ # DO NOT EDIT (digest: d1691c6135ef6e5a8fa5e7c454631c67)
+ # Ignore VCS directories, you can use the same kind of rule outside
