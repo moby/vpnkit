@@ -85,7 +85,7 @@ rm -rf "${TARGET_DIR}/packages/upstream/"
 mkdir -p "${TARGET_DIR}/packages/upstream/"
 
 # Note: not sure why this is needed, but it is
-BASE_PKGS="base-unix.base base-threads.base base-bigarray.base base-ocamlbuild.base"
+BASE_PKGS="base-unix.base base-threads.base base-bigarray.base"
 
 for pkg in ${BASE_PKGS} ${ALL_PACKAGES//\"}; do
     echo Adding ${pkg}
