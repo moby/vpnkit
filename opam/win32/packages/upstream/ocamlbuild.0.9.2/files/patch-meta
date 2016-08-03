@@ -1,0 +1,10 @@
+--- ./META
++++ ./META
+@@ -2,5 +2,7 @@
+ requires = "unix"
+ version = "0.9.0"
+ description = "ocamlbuild support library"
++directory= "^ocamlbuild"
+ archive(byte) = "ocamlbuildlib.cma"
+ archive(native) = "ocamlbuildlib.cmxa"
++
