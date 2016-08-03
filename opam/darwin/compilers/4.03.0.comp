@@ -1,8 +1,11 @@
 opam-version: "1"
-version: "4.02.3"
-src: "http://caml.inria.fr/pub/distrib/ocaml-4.02/ocaml-4.02.3.tar.gz"
+version: "4.03.0"
+src: "https://github.com/ocaml/ocaml/archive/4.03.0.tar.gz"
 build: [
+  ["mkdir" "-p" "%{lib}%/ocaml/"]
+  ["sh" "-exc" "echo \"* : g = 1\" > %{lib}%/ocaml/ocaml_compiler_internal_params"]
   ["./configure" "-prefix" prefix "-with-debug-runtime"]
+  [make "world"]
   [make "world.opt"]
   [make "install"]
 ]
@@ -10,7 +13,5 @@ packages: [
   "base-unix"
   "base-bigarray"
   "base-threads"
-  "base-ocamlbuild"
 ]
-patches: ["https://github.com/ocaml/ocaml/commit/24c118d7.diff"]
 env: [[CAML_LD_LIBRARY_PATH = "%{lib}%/stublibs"]]

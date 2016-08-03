@@ -20,9 +20,9 @@ else
 endif
 
 ifeq ($(OS),Windows_NT)
-	OPAM_COMP="4.02.3+mingw64c"
+	OPAM_COMP="4.03.0+mingw64c"
 else
-	OPAM_COMP="4.02.3"
+	OPAM_COMP="4.03.0"
 endif
 
 ifeq ($(OS),Windows_NT)
