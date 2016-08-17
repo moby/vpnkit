@@ -188,6 +188,118 @@ let test_http_fetch () =
       ) in
   Host.Main.run t
 
+module DevNullServer = struct
+  (* Accept local TCP connections, throw away all incoming data and then return
+     the total number of bytes processed. *)
+  type t = {
+    local_port: int;
+    server: Host.Sockets.Stream.Tcp.server;
+  }
+
+  let accept flow =
+    let module Channel = Channel.Make(Host.Sockets.Stream.Tcp) in
+    let ch = Channel.create flow in
+    (* XXX: this looks like it isn't tail recursive to me *)
+    let rec drop_all_data count =
+      Lwt.catch
+        (fun () ->
+          Channel.read_some ch
+          >>= fun buffer ->
+          drop_all_data Int64.(add count (of_int (Cstruct.len buffer)))
+        ) (function
+          | End_of_file ->
+            Lwt.return count
+          | e ->
+            Lwt.fail e
+          ) in
+    drop_all_data 0L
+    >>= fun total ->
+    let response = Cstruct.create 8 in
+    Cstruct.LE.set_uint64 response 0 total;
+    Channel.write_buffer ch response;
+    Channel.flush ch
+
+  let create () =
+    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4.localhost, 0)
+    >>= fun server ->
+    let _, local_port = Host.Sockets.Stream.Tcp.getsockname server in
+    Host.Sockets.Stream.Tcp.listen server accept;
+    Lwt.return { local_port; server }
+
+  let to_string t =
+    Printf.sprintf "tcp:127.0.0.1:%d" t.local_port
+  let destroy t = Host.Sockets.Stream.Tcp.shutdown t.server
+  let with_server f =
+    create ()
+    >>= fun server ->
+    Lwt.finalize
+      (fun () ->
+        f server
+      ) (fun () ->
+        destroy server
+      )
+end
+
+
+let test_stream_data length () =
+  let t =
+    DevNullServer.with_server
+      (fun { DevNullServer.local_port } ->
+        with_stack
+          (fun stack ->
+            Client.TCPV4.create_connection (Client.tcpv4 stack) (Ipaddr.V4.localhost, local_port)
+            >>= function
+            | `Error `Refused ->
+              Log.info (fun f -> f "DevNullServer Refused connection");
+              failwith "DevNulServer refused connection"
+            | `Error `Timeout ->
+              Log.err (fun f -> f "DevNullServer connection timeout");
+              failwith "DevNullServer connection timeout";
+            | `Error (`Unknown x) ->
+              Log.err (fun f -> f "DevNullServer connnection failure: %s" x);
+              failwith x
+            | `Ok flow ->
+              Log.info (fun f -> f "Connected to local server");
+              let page = Io_page.(to_cstruct (get 1)) in
+              Cstruct.memset page 0;
+              let rec loop remaining =
+                if remaining = 0
+                then Lwt.return ()
+                else begin
+                  let this_time = min remaining (Cstruct.len page) in
+                  let buf = Cstruct.sub page 0 this_time in
+                  Client.TCPV4.write flow buf >>= function
+                  | `Eof     ->
+                    Log.err (fun f -> f "EOF writing to DevNullServerwith %d bytes left" remaining);
+                    failwith "EOF on writing to DevNullServer"
+                  | `Error _ ->
+                    Log.err (fun f -> f "Failure writing to DevNullServer with %d bytes left" remaining);
+                    failwith "Failure on writing to DevNullServer"
+                  | `Ok () ->
+                    loop (remaining - this_time)
+                end in
+              loop length
+              >>= fun () ->
+              Client.TCPV4.close flow
+              >>= fun () ->
+              Client.TCPV4.read flow >>= function
+              | `Eof ->
+                Log.err (fun f -> f "EOF reading result from DevNullServer");
+                failwith "EOF reading result from DevNullServer"
+              | `Error _ ->
+                Log.err (fun f -> f "Failure reading result from DevNullServer");
+                failwith "Failure on reading result from DevNullServer"
+              | `Ok buf ->
+                Log.info (fun f -> f "Read %d bytes from DevNullServer" (Cstruct.len buf));
+                Log.info (fun f -> f "%s" (Cstruct.to_string buf));
+                let response = Cstruct.LE.get_uint64 buf 0 in
+                if Int64.to_int response != length
+                then failwith (Printf.sprintf "Response was %Ld while expected %d" response length);
+                Lwt.return ()
+          )
+      ) in
+  Host.Main.run t
+
 let test_dhcp = [
   "Simple query", `Quick, test_dhcp_query;
 ]
@@ -198,6 +310,10 @@ let test_dns = [
 
 let test_tcp = [
   "HTTP GET http://www.google.com/", `Quick, test_http_fetch;
+  "Local TCP 1 connection 1 KiB", `Quick, test_stream_data 1024;
+  "Local TCP 1 connection 1 MiB", `Quick, test_stream_data (1024*1024);
+  "Local TCP 1 connection 1 GiB", `Quick, test_stream_data (1024*1024*1024);
+
 ]
 
 module F = Forwarding.Make(Host)
