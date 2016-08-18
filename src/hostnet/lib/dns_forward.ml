@@ -39,7 +39,7 @@ let choose_server ~nth all =
 
 module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) = struct
 
-let input ~secondary ~udp ~src ~dst ~src_port buf =
+let input ~nth ~udp ~src ~dst ~src_port buf =
   let src_str = Ipaddr.V4.to_string src in
   let dst_str = Ipaddr.V4.to_string dst in
 
@@ -49,7 +49,7 @@ let input ~secondary ~udp ~src ~dst ~src_port buf =
 
   Resolv_conf.get ()
   >>= fun all ->
-  match choose_server ~nth:(if secondary then 1 else 0) all with
+  match choose_server ~nth all with
   | Some (dst_str, (dst, dst_port)) ->
     Log.debug (fun f -> f "DNS[%s] Forwarding to %s (%s)" (tidstr_of_dns dns) (Ipaddr.to_string dst) dst_str);
     let reply buffer =

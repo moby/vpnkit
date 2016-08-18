@@ -4,7 +4,7 @@ module Make
     (Resolv_conv: Sig.RESOLV_CONF)
     (Socket: Sig.SOCKETS)
     (Time: V1_LWT.TIME) : sig
-  val input: secondary:bool -> udp:Udp.t -> src:Ipaddr.V4.t -> dst:Ipaddr.V4.t -> src_port:int -> Cstruct.t -> unit Lwt.t
+  val input: nth:int -> udp:Udp.t -> src:Ipaddr.V4.t -> dst:Ipaddr.V4.t -> src_port:int -> Cstruct.t -> unit Lwt.t
 end
 
 val choose_server: nth:int -> (Ipaddr.t * int) list -> (string * (Ipaddr.t * int)) option

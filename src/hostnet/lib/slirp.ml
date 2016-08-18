@@ -132,18 +132,15 @@ let connect x peer_ip local_ip extra_dns_ip =
                         let for_primary_ip = Ipaddr.V4.compare dst local_ip = 0 in
                         let for_extra_dns = List.fold_left (||) false (List.map (fun ip -> Ipaddr.V4.compare dst ip = 0) extra_dns_ip) in
                         let for_us = for_primary_ip || for_extra_dns in
-                        (* DNS to our primary IP *)
-                        if for_primary_ip && dst_port = 53 then begin
-                          let udp = Tcpip_stack.udpv4 s in
-                          Dns_forwarder.input ~secondary:false ~udp ~src ~dst ~src_port payload
-                        end else if for_extra_dns && dst_port = 53 then begin
-                          (* DNS to one of our secondary IPs *)
-                          Lwt_list.iter_s
-                            (fun (ip, udp) ->
-                              if Ipaddr.V4.compare dst ip = 0 && dst_port = 53 then begin
-                                Dns_forwarder.input ~secondary:true ~udp ~src ~dst ~src_port payload
-                              end else Lwt.return_unit
-                            ) ips_to_udp;
+                        if for_us && dst_port = 53 then begin
+                          let primary_udp = Tcpip_stack.udpv4 s in
+                          (* We need to find the corresponding `udp` value so we can send
+                             data with the correct source IP, and the `nth` value so we can
+                             map to the correct destination server. *)
+                          let (nth, udp), _ = List.fold_left (fun ((nth, udp), i) (x, udp') ->
+                            (if Ipaddr.V4.compare dst x = 0 then (i, udp') else (nth, udp)), i + 1
+                          ) ((0, primary_udp), 0) ((local_ip, primary_udp) :: ips_to_udp) in
+                          Dns_forwarder.input ~nth ~udp ~src ~dst ~src_port payload
                         end else if (not for_us) then begin
                           (* For any other IP, NAT as usual *)
                           Log.debug (fun f -> f "UDP %s:%d -> %s:%d len %d"
