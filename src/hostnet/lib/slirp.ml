@@ -176,7 +176,10 @@ let connect x peer_ip local_ip extra_dns_ip =
                 ( if for_dns src_ip && src_port = 53 then begin
                     Resolv_conf.get ()
                     >>= fun all ->
-                    match Dns_forward.choose_server ~secondary:for_extra_dns all with
+                    let nth, _ = List.fold_left (fun (nth, i) x ->
+                      (if Ipaddr.V4.compare src_ip x = 0 then i else nth), i + 1
+                    ) (0, 0) (local_ip :: extra_dns_ip) in
+                    match Dns_forward.choose_server ~nth all with
                     | Some (description, (Ipaddr.V4 ip, port)) ->
                       Lwt.return (":" ^ description, ip, port)
                     | _ ->
