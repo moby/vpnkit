@@ -41,9 +41,7 @@ let choose_server ~secondary all =
 
 module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) = struct
 
-let input ~secondary ~ip ~udp ~src ~dst ~src_port buf =
-  if List.mem dst (Ip.get_ip ip) then begin
-
+let input ~secondary ~udp ~src ~dst ~src_port buf =
   let src_str = Ipaddr.V4.to_string src in
   let dst_str = Ipaddr.V4.to_string dst in
 
@@ -64,5 +62,4 @@ let input ~secondary ~ip ~udp ~src ~dst ~src_port buf =
   | None ->
     Log.err (fun f -> f "DNS[%s] No upstream DNS server configured: dropping request" (tidstr_of_dns dns));
     Lwt.return_unit
-  end else Lwt.return_unit
 end

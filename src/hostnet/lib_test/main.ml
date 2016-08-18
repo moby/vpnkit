@@ -65,7 +65,7 @@ let config =
   {
     Slirp.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
     local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
-    extra_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.3";
+    extra_dns_ip = [ Ipaddr.V4.of_string_exn "192.168.65.3" ];
     pcap_settings = Active_config.Value(None, never);
   }
 

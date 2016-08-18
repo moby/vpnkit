@@ -41,7 +41,7 @@ let print_pcap = function
 type config = {
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
-  extra_dns_ip: Ipaddr.V4.t;
+  extra_dns_ip: Ipaddr.V4.t list;
   pcap_settings: pcap Active_config.values;
 }
 
@@ -62,9 +62,8 @@ let connect x peer_ip local_ip extra_dns_ip =
         begin Tcpip_stack.connect ~config x
         >>= function
         | `Error (`Msg m) -> failwith m
-        | `Ok (s, (dns_ip, dns_udp)) ->
-          let (ip, udp) = Tcpip_stack.ipv4 s, Tcpip_stack.udpv4 s in
-            Tcpip_stack.listen_udpv4 s ~port:53 (Dns_forwarder.input ~secondary:false ~ip ~udp);
+        | `Ok (s, udps) ->
+            let ips_to_udp = List.combine extra_dns_ip udps in
             Vmnet.add_listener x (
               fun buf ->
                 match (Wire_structs.parse_ethernet_frame buf) with
@@ -130,15 +129,23 @@ let connect x peer_ip local_ip extra_dns_ip =
                         Tcpip_stack.IPV4.writev (Tcpip_stack.ipv4 s) ethernet_ip_hdr [ reply ];
                       end else begin
                         let payload = Cstruct.sub udp Wire_structs.sizeof_udp (length - Wire_structs.sizeof_udp) in
-                        let for_us = Ipaddr.V4.compare dst local_ip = 0 in
-                        let for_extra_dns = Ipaddr.V4.compare dst extra_dns_ip = 0 in
-                        if for_extra_dns && dst_port = 53 then begin
-                          Dns_forwarder.input ~secondary:true ~ip:dns_ip ~udp:dns_udp ~src ~dst ~src_port payload
-                        end
-                        (* We handle DNS on port 53 ourselves, see [listen_udpv4] above *)
-                        (* ... but if it's going to an external IP then we treat it like all other
-                           UDP and NAT it *)
-                        else if (not for_us) then begin
+                        let for_primary_ip = Ipaddr.V4.compare dst local_ip = 0 in
+                        let for_extra_dns = List.fold_left (||) false (List.map (fun ip -> Ipaddr.V4.compare dst ip = 0) extra_dns_ip) in
+                        let for_us = for_primary_ip || for_extra_dns in
+                        (* DNS to our primary IP *)
+                        if for_primary_ip && dst_port = 53 then begin
+                          let udp = Tcpip_stack.udpv4 s in
+                          Dns_forwarder.input ~secondary:false ~udp ~src ~dst ~src_port payload
+                        end else if for_extra_dns && dst_port = 53 then begin
+                          (* DNS to one of our secondary IPs *)
+                          Lwt_list.iter_s
+                            (fun (ip, udp) ->
+                              if Ipaddr.V4.compare dst ip = 0 && dst_port = 53 then begin
+                                Dns_forwarder.input ~secondary:true ~udp ~src ~dst ~src_port payload
+                              end else Lwt.return_unit
+                            ) ips_to_udp;
+                        end else if (not for_us) then begin
+                          (* For any other IP, NAT as usual *)
                           Log.debug (fun f -> f "UDP %s:%d -> %s:%d len %d"
                                        (Ipaddr.V4.to_string src) src_port
                                        (Ipaddr.V4.to_string dst) dst_port
@@ -164,7 +171,7 @@ let connect x peer_ip local_ip extra_dns_ip =
             Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
                 let for_us src_ip = Ipaddr.V4.compare src_ip local_ip = 0 in
-                let for_extra_dns = Ipaddr.V4.compare src_ip extra_dns_ip = 0 in
+                let for_extra_dns = List.fold_left (||) false (List.map (fun ip -> Ipaddr.V4.compare src_ip ip = 0) extra_dns_ip) in
                 let for_dns src_ip = for_us src_ip || for_extra_dns in
                 ( if for_dns src_ip && src_port = 53 then begin
                     Resolv_conf.get ()
@@ -297,9 +304,23 @@ let connect x peer_ip local_ip extra_dns_ip =
         Log.err (fun f -> f "Failed to parse IPv4 address '%s', using default of %s" x (Ipaddr.V4.to_string default));
         Lwt.return default
       | Some x -> Lwt.return x in
+    let parse_ipv4_list default x =
+      let all = List.map (fun x -> Ipaddr.V4.of_string @@ String.trim x) @@ Astring.String.cuts ~sep:"," x in
+      let any_none, some = List.fold_left (fun (any_none, some) x -> match x with
+        | None -> true, some
+        | Some x -> any_none, x :: some
+      ) (false, []) all in
+      if any_none then begin
+        Log.err (fun f -> f "Failed to parse IPv4 address list '%s', using default of %s" x (String.concat "," (List.map Ipaddr.V4.to_string default)));
+        Lwt.return default
+      end else Lwt.return some in
+
     let default_peer = "192.168.65.2" in
     let default_host = "192.168.65.1" in
-    let default_dns_extra = "192.168.65.3" in
+    let default_dns_extra = [
+      "192.168.65.3"; "192.168.65.4"; "192.168.65.5"; "192.168.65.6";
+      "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
+    ] in
     Config.string config ~default:default_peer peer_ips_path
     >>= fun string_peer_ips ->
     Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips
@@ -314,11 +335,11 @@ let connect x peer_ip local_ip extra_dns_ip =
     Lwt.async (fun () -> restart_on_change "slirp/host" Ipaddr.V4.to_string host_ips);
 
     let extra_dns_ips_path = driver @ [ "slirp"; "extra_dns" ] in
-    Config.string config ~default:default_dns_extra extra_dns_ips_path
+    Config.string config ~default:(String.concat "," default_dns_extra) extra_dns_ips_path
     >>= fun string_extra_dns_ips ->
-    Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_dns_extra)) string_extra_dns_ips
+    Active_config.map (parse_ipv4_list (List.map Ipaddr.V4.of_string_exn default_dns_extra)) string_extra_dns_ips
     >>= fun extra_dns_ips ->
-    Lwt.async (fun () -> restart_on_change "slirp/extra_dns" Ipaddr.V4.to_string extra_dns_ips);
+    Lwt.async (fun () -> restart_on_change "slirp/extra_dns" (fun x -> String.concat "," (List.map Ipaddr.V4.to_string x)) extra_dns_ips);
 
     let peer_ip = Active_config.hd peer_ips in
     let local_ip = Active_config.hd host_ips in

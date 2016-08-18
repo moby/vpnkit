@@ -12,7 +12,7 @@ module Make(Vmnet: Sig.VMNET)(Time: V1_LWT.TIME) = struct
 type configuration = {
   local_ip: Ipaddr.V4.t;
   peer_ip: Ipaddr.V4.t;
-  extra_dns_ip: Ipaddr.V4.t;
+  extra_dns_ip: Ipaddr.V4.t list;
   prefix: Ipaddr.V4.Prefix.t;
   client_macaddr: Macaddr.t;
   server_macaddr: Macaddr.t;
@@ -42,7 +42,7 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip =
      resolved in the future *)
   let low_ip, high_ip =
     let open Ipaddr.V4 in
-    let all_static_ips = [ local_ip; peer_ip; extra_dns_ip ] in
+    let all_static_ips = local_ip :: peer_ip :: extra_dns_ip in
     let highest = maximum_ip all_static_ips in
     let i32 = to_int32 highest in
     of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
@@ -50,7 +50,7 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip =
   let options = [
     Dhcp_wire.Domain_name "local";
     Dhcp_wire.Routers [ local_ip ];
-    Dhcp_wire.Dns_servers [ local_ip; extra_dns_ip ];
+    Dhcp_wire.Dns_servers (local_ip :: extra_dns_ip);
     Dhcp_wire.Ntp_servers [ local_ip ];
     Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
     Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix)
@@ -171,8 +171,7 @@ let connect ~config (ppp: Vmnet.t) =
   let arp_table = [
     config.peer_ip, config.client_macaddr;
     config.local_ip, config.server_macaddr;
-    config.extra_dns_ip, config.server_macaddr;
-  ] in
+  ] @ (List.map (fun ip -> ip, config.server_macaddr) config.extra_dns_ip) in
   or_error "filter" @@ Netif.connect ~valid_sources ppp
   >>= fun interface ->
   or_error "console" @@ Console_unix.connect "0"
@@ -196,13 +195,21 @@ let connect ~config (ppp: Vmnet.t) =
   } in
   or_error "stack" @@ connect cfg ethif arp ipv4 udp4 tcp4
   >>= fun stack ->
-  or_error "dns_ipv4" @@ Ipv41.connect ~ip:config.extra_dns_ip ~netmask ethif arp
-  >>= fun dns_ipv4 ->
-  or_error "dns_udp" @@ Udp1.connect dns_ipv4
-  >>= fun dns_udp ->
+
+  Lwt_list.fold_left_s
+    (fun acc ip ->
+      Lwt.return acc >>= fun acc ->
+      or_error "dns_ipv4" @@ Ipv41.connect ~ip ~netmask ethif arp
+      >>= fun dns_ipv4 ->
+      or_error "dns_udp" @@ Udp1.connect dns_ipv4
+      >>= fun dns_udpv4 ->
+      Lwt.return (`Ok (dns_udpv4 :: acc))
+    ) (`Ok []) config.extra_dns_ip
+  >>= fun udps ->
+
   (* Hook in the DHCP server too *)
   Netif.add_listener interface (Dhcp.listen config.server_macaddr config interface);
-  Lwt.return (`Ok (stack, (dns_ipv4, dns_udp)))
+  Lwt.return (`Ok (stack, List.rev udps))
 
 (* FIXME: this is unnecessary, mirage-flow should be changed *)
 module TCPV4_half_close = struct

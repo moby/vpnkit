@@ -32,6 +32,7 @@ depends: [
   "charrua-core" { >= "0.3" }
   "logs"
   "fmt"
+  "astring"
   "mirage-flow" { >= "1.1.0" }
   "mirage-types-lwt" { = "999" }
   "ounit"

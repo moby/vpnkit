@@ -7,7 +7,7 @@ type pcap = (string * int64 option) option
 type config = {
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
-  extra_dns_ip: Ipaddr.V4.t;
+  extra_dns_ip: Ipaddr.V4.t list;
   pcap_settings: pcap Active_config.values;
 }
 (** A slirp TCP/IP stack ready to accept connections *)
