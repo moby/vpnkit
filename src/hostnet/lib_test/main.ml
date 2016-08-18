@@ -60,12 +60,19 @@ end
 
 module DNS = Dns_resolver_mirage.Make(Host.Time)(Client)
 
+let primary_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
+
+let extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
+"192.168.65.3"; "192.168.65.4"; "192.168.65.5"; "192.168.65.6";
+"192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
+]
+
 let config =
   let never, _ = Lwt.task () in
   {
     Slirp.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
     local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
-    extra_dns_ip = [ Ipaddr.V4.of_string_exn "192.168.65.3" ];
+    extra_dns_ip;
     pcap_settings = Active_config.Value(None, never);
   }
 
@@ -125,12 +132,12 @@ let test_dhcp_query () =
       ) in
   Host.Main.run t
 
-let test_dns_query () =
+let test_dns_query server () =
   let t =
     with_stack
       (fun stack ->
         let resolver = DNS.create stack in
-        DNS.gethostbyname resolver "www.google.com"
+        DNS.gethostbyname ~server resolver "www.google.com"
         >>= fun ips ->
         Log.info (fun f -> f "www.google.com has IPs: %s" (String.concat ", " (List.map Ipaddr.to_string ips)));
         Lwt.return ()
@@ -193,8 +200,11 @@ let test_dhcp = [
 ]
 
 let test_dns = [
-  "Use 8.8.8.8 to lookup www.google.com", `Quick, test_dns_query;
-]
+  "Use 8.8.8.8 to lookup www.google.com", `Quick, test_dns_query primary_dns_ip;
+] @ (List.map (fun ip ->
+  "Use 8.8.8.8 to lookup www.google.com via " ^ (Ipaddr.V4.to_string ip), `Quick, test_dns_query ip;
+  ) extra_dns_ip
+)
 
 let test_tcp = [
   "HTTP GET http://www.google.com/", `Quick, test_http_fetch;
