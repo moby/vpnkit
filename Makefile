@@ -56,7 +56,7 @@ depends:
 	# Don't run all the unit tests of all upstream packages in the universe for speed
 	$(OPAMFLAGS) opam install $(shell ls -1 $(OPAM_REPO)/packages/upstream) -y
 	# Please do run the unit tests for our packages
-	$(OPAMFLAGS) opam install --deps-only slirp -y -t
+	$(OPAMFLAGS) OPAMVERBOSE=1 opam install --deps-only slirp -y -t
 
 com.docker.slirp.tgz:
 	cd src/com.docker.slirp && $(OPAMFLAGS) opam config exec -- $(MAKE) build stage
