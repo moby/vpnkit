@@ -234,12 +234,14 @@ let test_tcp = [
 ]
 
 module F = Forwarding.Make(Host)
+module N = Nat.Make(Host)
 
 let suite = [
   "DHCP", test_dhcp;
   "DNS UDP", test_dns;
   "TCP", test_tcp;
   "Forwarding", F.test;
+  "UDP", N.suite;
 ]
 end
 
