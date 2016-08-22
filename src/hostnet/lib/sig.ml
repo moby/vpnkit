@@ -74,6 +74,15 @@ end
 module type SOCKETS = sig
   (* An OS-based BSD sockets implementation *)
 
+  val set_max_connections: int option -> unit
+  (** Set the maximum number of connections we permit ourselves to use. This
+      is to prevent starving global OS resources, particularly on OSX *)
+
+  (** TODO: hide these by refactoring Hyper-V sockets stuff *)
+  val register_connection: string -> int Lwt.t
+  val deregister_connection: int -> unit
+  val dump_connection_table: unit -> unit
+  
   module Datagram: sig
 
     type address = Ipaddr.t * int
