@@ -61,7 +61,7 @@ module Sockets = struct
 
     (* FIXME: deduplicate some of the common code here with Host_lwt_unix *)
 
-    (* Look up by src * src_port * dst * dst_port *)
+    (* Look up by src * src_port *)
     let table = Hashtbl.create 7
 
     let _ =
@@ -83,8 +83,8 @@ module Sockets = struct
       loop ()
 
     let input ?userdesc ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
-      (if Hashtbl.mem table (src, src_port, dst, dst_port) then begin
-          Lwt.return (Some (Hashtbl.find table (src, src_port, dst, dst_port)))
+      (if Hashtbl.mem table (src, src_port) then begin
+          Lwt.return (Some (Hashtbl.find table (src, src_port)))
         end else begin
          let userdesc = match userdesc with
            | None -> ""
@@ -104,7 +104,7 @@ module Sockets = struct
            end else begin
              let last_use = Unix.gettimeofday () in
              let flow = { description; fd; last_use; reply} in
-             Hashtbl.replace table (src, src_port, dst, dst_port) flow;
+             Hashtbl.replace table (src, src_port) flow;
              (* Start a listener *)
              let buf = Cstruct.create 1500 in
              let rec loop () =
