@@ -199,7 +199,10 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
     let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
     { Slirp.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
       local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
-      extra_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.3";
+      extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
+        "192.168.65.3"; "192.168.65.4"; "192.168.65.5"; "192.168.65.6";
+        "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
+      ];
       pcap_settings = Active_config.Value(pcap, never) } in
 
   let config = match db_path with
