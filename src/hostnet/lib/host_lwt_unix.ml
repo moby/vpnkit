@@ -192,6 +192,12 @@ module Datagram = struct
     let of_bound_fd fd =
       make (Lwt_unix.of_unix_file_descr fd)
 
+    let getsockname { fd; _ } =
+      match Lwt_unix.getsockname fd with
+      | Lwt_unix.ADDR_INET(iaddr, port) ->
+        Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
+      | _ -> invalid_arg "Tcp.getsockname passed a non-TCP socket"
+
     let shutdown server =
       if not server.closed then begin
         server.closed <- true;

@@ -186,6 +186,12 @@ module Sockets = struct
           Log.err (fun f -> f "%s" msg);
           failwith msg
 
+      let getsockname { fd; _ } =
+        match Uwt.Udp.getsockname_exn fd with
+        | Unix.ADDR_INET(iaddr, port) ->
+          Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
+        | _ -> invalid_arg "Udp.getsockname passed a non-TCP socket"
+
       let shutdown server =
         if not server.closed then begin
           server.closed <- true;

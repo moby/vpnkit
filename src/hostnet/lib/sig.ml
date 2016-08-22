@@ -55,6 +55,9 @@ module type DATAGRAM = sig
 
     val bind: address -> server Lwt.t
 
+    val getsockname: server -> address
+    (** Query the address the server is bound to *)
+
     val recvfrom: server -> Cstruct.t -> (int * address) Lwt.t
 
     val sendto: server -> address -> Cstruct.t -> unit Lwt.t
