@@ -68,6 +68,36 @@ let test_etc_hosts_query server () =
       ) in
   Host.Main.run t
 
+let test_max_connections () =
+  let t =
+    with_stack
+      (fun stack ->
+        Lwt.finalize
+          (fun () ->
+            let resolver = DNS.create stack in
+            DNS.gethostbyname ~server:primary_dns_ip resolver "www.google.com"
+            >>= function
+            | Ipaddr.V4 ip :: _ ->
+              Host.Sockets.set_max_connections (Some 0);
+              begin Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
+              >>= function
+              | `Ok flow ->
+                Log.err (fun f -> f "Connected to www.google.com, max_connections exceeded");
+                failwith "too many connections"
+              | `Error _ ->
+                Log.debug (fun f -> f "Expected failure to connect to www.google.com");
+                Lwt.return ()
+              end
+            | _ ->
+              Log.err (fun f -> f "Failed to look up an IPv4 address for www.google.com");
+              failwith "http_fetch dns"
+          ) (fun () ->
+            Host.Sockets.set_max_connections None;
+            Lwt.return_unit
+          )
+      ) in
+  Host.Main.run t
+
 let test_http_fetch () =
   let t =
     with_stack
@@ -258,6 +288,7 @@ let test_dns = [
 
 let test_tcp = [
   "HTTP GET http://www.google.com/", `Quick, test_http_fetch;
+  "HTTP GET fails beyond max connections", `Quick, test_max_connections;
   "1 TCP connection transferring 1 KiB", `Quick, test_stream_data 1 1024;
   (*
   "10 TCP connections each transferring 1 KiB", `Quick, test_stream_data 10 1024;
