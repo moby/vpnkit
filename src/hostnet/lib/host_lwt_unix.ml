@@ -83,6 +83,8 @@ module Datagram = struct
   (* Look up by src * src_port *)
   let table = Hashtbl.create 7
 
+  let get_nat_table_size () = Hashtbl.length table
+
   let _ =
     let rec loop () =
       Lwt_unix.sleep 60.
