@@ -337,12 +337,14 @@ let test_dns = [
 let test_tcp = [
   "HTTP GET http://www.google.com/", `Quick, test_http_fetch;
   "1 TCP connection transferring 1 KiB", `Quick, test_stream_data 1 1024;
+  (*
   "10 TCP connections each transferring 1 KiB", `Quick, test_stream_data 10 1024;
   "32 TCP connections each transferring 1 KiB", `Quick, test_stream_data 32 1024;
   "1 TCP connection transferring 1 MiB", `Quick, test_stream_data 1 (1024*1024);
   "32 TCP connections each transferring 1 MiB", `Quick, test_stream_data 32 (1024*1024);
   "1 TCP connection transferring 1 GiB", `Slow, test_stream_data 1 (1024*1024*1024);
   "32 TCP connections each transferring 1 GiB", `Slow, test_stream_data 32 (1024*1024*1024);
+  *)
 ]
 
 module F = Forwarding.Make(Host)
