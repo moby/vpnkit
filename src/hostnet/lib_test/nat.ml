@@ -220,7 +220,61 @@ let test_nat_punch () =
       ) in
   Host.Main.run t
 
+(* The NAT table rule should be associated with the virtual address, rather
+   than physical address. Check if we have 2 physical servers we have only a
+   single NAT rule *)
+let test_shared_nat_rule () =
+  let t =
+    EchoServer.with_server
+      (fun { EchoServer.local_port } ->
+        with_stack
+          (fun stack ->
+            let buffer = Cstruct.create 1024 in
+            (* Send '1' *)
+            Cstruct.set_uint8 buffer 0 1;
+            let udpv4 = Client.udpv4 stack in
+            let virtual_port = 1024 in
+            let server = UdpServer.make stack virtual_port in
+            let init_table_size = Host.Sockets.Datagram.get_nat_table_size () in
+
+            let rec loop remaining =
+              if remaining = 0 then failwith "Timed-out before UDP response arrived";
+              Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port (Cstruct.get_uint8 buffer 0));
+              Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
+              >>= fun () ->
+              UdpServer.wait_for ~timeout:1. ~highest:1 server
+              >>= function
+              | true -> Lwt.return_unit
+              | false -> loop (remaining - 1) in
+            loop 5
+            >>= fun () ->
+            Alcotest.(check int) "One NAT rule" 1 (Host.Sockets.Datagram.get_nat_table_size () - init_table_size);
+            (* Send '2' *)
+            Cstruct.set_uint8 buffer 0 2;
+            (* Create another physical server and send traffic from the same
+               virtual address *)
+            EchoServer.with_server
+              (fun { EchoServer.local_port } ->
+                let rec loop remaining =
+                  if remaining = 0 then failwith "Timed-out before UDP response arrived";
+                  Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port (Cstruct.get_uint8 buffer 0));
+                  Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
+                  >>= fun () ->
+                  UdpServer.wait_for ~timeout:1. ~highest:2 server
+                  >>= function
+                  | true -> Lwt.return_unit
+                  | false -> loop (remaining - 1) in
+                loop 5
+                >>= fun () ->
+                Alcotest.(check int) "Still one NAT rule" 1 (Host.Sockets.Datagram.get_nat_table_size () - init_table_size);
+                Lwt.return_unit
+              )
+          )
+        ) in
+  Host.Main.run t
+
 let suite = [
+  "Shared NAT rule", `Quick, test_shared_nat_rule;
   "1 UDP connection", `Quick, test_udp;
   "2 UDP connections", `Quick, test_udp_2;
   "NAT punch", `Quick, test_nat_punch;
