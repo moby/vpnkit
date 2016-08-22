@@ -20,6 +20,7 @@ module EchoServer = struct
   type t = {
     local_port: int;
     server: Host.Sockets.Datagram.Udp.server;
+    mutable seen_addresses: Host.Sockets.Datagram.address list;
   }
 
   let create () =
@@ -28,21 +29,24 @@ module EchoServer = struct
     let _, local_port = Host.Sockets.Datagram.Udp.getsockname server in
     (* Start a background echo thread. This will naturally fail when the
        file descriptor is closed underneath it from `shutdown` *)
+    let seen_addresses = [] in
+    let t = { local_port; server; seen_addresses } in
     let _ =
       let buf = Cstruct.create 2048 in
-      let seen_addresses = ref [] in
       let rec loop () =
         Host.Sockets.Datagram.Udp.recvfrom server buf
         >>= fun (len, address) ->
-        seen_addresses := address :: !seen_addresses;
+        t.seen_addresses <- address :: t.seen_addresses;
         Lwt_list.iter_p
           (fun address ->
             Host.Sockets.Datagram.Udp.sendto server address (Cstruct.sub buf 0 len)
-          ) !seen_addresses
+          ) t.seen_addresses
         >>= fun () ->
         loop () in
       loop () in
-    Lwt.return { local_port; server }
+    Lwt.return t
+
+  let get_seen_addresses t = t.seen_addresses
 
   let to_string t =
     Printf.sprintf "udp:127.0.0.1:%d" t.local_port
@@ -163,8 +167,63 @@ let test_udp_2 () =
         ) in
   Host.Main.run t
 
+(* Start a local UDP echo server, send some traffic to it over the virtual interface.
+   Send traffic to the outside address on a second physical interface, check that
+   this external third party can traverse the NAT *)
+let test_nat_punch () =
+  let t =
+    EchoServer.with_server
+      (fun echoserver ->
+        with_stack
+          (fun stack ->
+            let buffer = Cstruct.create 1024 in
+            (* Send '1' *)
+            Cstruct.set_uint8 buffer 0 1;
+            let udpv4 = Client.udpv4 stack in
+
+            (* Listen on one virtual source port and count received packets *)
+            let virtual_port1 = 1024 in
+            let server1 = UdpServer.make stack virtual_port1 in
+
+            let rec loop remaining =
+              if remaining = 0 then failwith "Timed-out before UDP response arrived";
+              let dest_port = echoserver.EchoServer.local_port in
+              Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port1 dest_port (Cstruct.get_uint8 buffer 0));
+              Client.UDPV4.write ~source_port:virtual_port1 ~dest_ip:Ipaddr.V4.localhost ~dest_port udpv4 buffer
+              >>= fun () ->
+              UdpServer.wait_for ~timeout:1. ~highest:1 server1
+              >>= function
+              | true -> Lwt.return_unit
+              | false -> loop (remaining - 1) in
+            loop 5
+            >>= fun () ->
+
+            (* Using the physical outside interface, send traffic to the address
+               and see if this traffic will also be sent via the NAT. *)
+            (* Send '2' *)
+            Cstruct.set_uint8 buffer 0 2;
+            Host.Sockets.Datagram.Udp.bind (Ipaddr.(V4 V4.localhost), 0)
+            >>= fun client ->
+            let _, source_port = Host.Sockets.Datagram.Udp.getsockname client in
+            let address = List.hd (EchoServer.get_seen_addresses echoserver) in
+            let _, dest_port = address in
+            let rec loop remaining =
+              if remaining = 0 then failwith "Timed-out before UDP response arrived";
+              Log.debug (fun f -> f "Sending %d -> %d value %d" source_port dest_port (Cstruct.get_uint8 buffer 0));
+              Host.Sockets.Datagram.Udp.sendto client address buffer
+              >>= fun () ->
+              UdpServer.wait_for ~timeout:1. ~highest:2 server1
+              >>= function
+              | true -> Lwt.return_unit
+              | false -> loop (remaining - 1) in
+            loop 5
+          )
+      ) in
+  Host.Main.run t
+
 let suite = [
   "1 UDP connection", `Quick, test_udp;
   "2 UDP connections", `Quick, test_udp_2;
+  "NAT punch", `Quick, test_nat_punch;
 ]
 end
