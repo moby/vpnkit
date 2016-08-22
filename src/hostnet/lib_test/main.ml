@@ -324,4 +324,10 @@ let tests =
 (* Run it *)
 let () =
   Logs.set_reporter (Logs_fmt.reporter ());
+  Lwt.async_exception_hook := (fun exn ->
+    Log.err (fun f -> f "Lwt.async failure %s: %s"
+      (Printexc.to_string exn)
+      (Printexc.get_backtrace ())
+    )
+  );
   Alcotest.run "Hostnet" tests
