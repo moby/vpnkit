@@ -62,35 +62,6 @@ module EchoServer = struct
       )
 end
 
-(* Start a local UDP echo server, send traffic to it and listen for a response *)
-let test_udp () =
-  let t =
-    EchoServer.with_server
-      (fun { EchoServer.local_port } ->
-        with_stack
-          (fun stack ->
-            let virtual_port = 1024 in
-            let t, u = Lwt.task () in
-            Client.listen_udpv4 stack ~port:virtual_port
-              (fun ~src ~dst ~src_port buffer ->
-                Lwt.wakeup u ();
-                Lwt.return_unit;
-              );
-            let buffer = Cstruct.create 1024 in
-            Cstruct.memset buffer 0;
-            let rec loop remaining =
-              if remaining = 0 then failwith "Timed-out before UDP response arrived";
-              let udpv4 = Client.udpv4 stack in
-              Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
-              >>= fun () ->
-              Lwt.pick [ t; Host.Time.sleep 1. ]
-              >>= fun () ->
-              if Lwt.state t = Lwt.Sleep then loop (remaining - 1) else Lwt.return_unit in
-            loop 5
-          )
-        ) in
-  Host.Main.run t
-
 module UdpServer = struct
   type t = {
     port: int;
@@ -116,6 +87,34 @@ module UdpServer = struct
       Lwt.return (t.highest >= highest)
     end else Lwt.return true
 end
+
+(* Start a local UDP echo server, send traffic to it and listen for a response *)
+let test_udp () =
+  let t =
+    EchoServer.with_server
+      (fun { EchoServer.local_port } ->
+        with_stack
+          (fun stack ->
+            let buffer = Cstruct.create 1024 in
+            (* Send '1' *)
+            Cstruct.set_uint8 buffer 0 1;
+            let udpv4 = Client.udpv4 stack in
+            let virtual_port = 1024 in
+            let server = UdpServer.make stack virtual_port in
+
+            let rec loop remaining =
+              if remaining = 0 then failwith "Timed-out before UDP response arrived";
+              Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port (Cstruct.get_uint8 buffer 0));
+              Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
+              >>= fun () ->
+              UdpServer.wait_for ~timeout:1. ~highest:1 server
+              >>= function
+              | true -> Lwt.return_unit
+              | false -> loop (remaining - 1) in
+            loop 5
+          )
+        ) in
+  Host.Main.run t
 
 (* Start a local UDP mult-echo server, send traffic to it from one source port,
    wait for the response, send traffic to it from another source port, expect
