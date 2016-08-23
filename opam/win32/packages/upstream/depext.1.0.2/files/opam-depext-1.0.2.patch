@@ -1,0 +1,104 @@
+--- ./depext.ml
++++ ./depext.ml
+@@ -45,12 +45,21 @@
+   in
+   aux 0
+ 
++let is_win = Sys.os_type = "Win32"
++
+ let has_command c =
+-  let cmd = Printf.sprintf "command -v %s >/dev/null" c in
++  let cmd =
++    if is_win then
++      Printf.sprintf "dash.exe -ec 'command -v %s' >NUL" c
++    else
++      Printf.sprintf "command -v %s >/dev/null" c
++  in
+   try Sys.command cmd = 0 with Sys_error _ -> false
+ 
++let dev_null = if is_win then "NUL" else "/dev/null"
++
+ let run_command ?(no_stderr=false) c =
+-  let c = if no_stderr then c @ ["2>/dev/null"] else c in
++  let c = if no_stderr then c @ ["2>" ^ dev_null] else c in
+   let c = String.concat " " c in
+   if !debug then Printf.eprintf "+ %s\n%!" c;
+   Unix.system c
+@@ -65,6 +74,24 @@
+       with End_of_file -> false)
+     fmt
+ 
++let execvp =
++  if is_win = false then
++    Unix.execvp
++  else
++    fun cmd args ->
++      let pid =
++        Unix.create_process
++          cmd
++          args
++          Unix.stdin
++          Unix.stdout
++          Unix.stderr
++      in
++      match snd (Unix.waitpid [] pid) with
++      | Unix.WEXITED n -> exit n
++      | Unix.WSIGNALED _ -> exit 2 (* like OCaml's uncaught exceptions *)
++      | Unix.WSTOPPED _ -> exit 1
++
+ (* system detection *)
+ 
+ let arch () =
+@@ -127,6 +154,11 @@
+      with Not_found | Failure _ -> None)
+   | `OpenBSD -> Some `OpenBSD
+   | `FreeBSD -> Some `FreeBSD
++  | `Win32 ->
++    if has_command "cygwin-install" then
++      Some `Cygwinports
++    else
++      None
+   | _ -> None
+ 
+ (* generate OPAM depexts flags *)
+@@ -166,6 +198,7 @@
+   | Some `Gentoo -> ["gentoo"]
+   | Some `OpenBSD -> ["openbsd"]
+   | Some `FreeBSD -> ["freebsd"]
++  | Some `Cygwinports -> ["cygwinports"]
+   | Some (`Other s) -> [String.lowercase s]
+   | None -> []
+ 
+@@ -222,6 +255,8 @@
+     ["emerge"::packages]
+   | Some `Alpine ->
+     ["apk"::"add"::packages]
++  | Some `Cygwinports ->
++    ["cygwin-install.exe"::"install"::packages]
+   | Some `OpenSUSE ->
+     ["zypper"::"install"::yes ["-y"] packages]
+   | Some (`Other d) ->
+@@ -314,12 +349,13 @@
+          | [pkg;_;_;"installed"] -> (try StringMap.find pkg virtual_map @ acc with Not_found -> acc)
+          | _ -> acc)
+       installed lines
+-  | Some (`Centos | `Fedora | `Mageia | `Archlinux| `Gentoo | `Alpine | `RHEL | `OracleLinux) ->
++  | Some (`Centos | `Fedora | `Mageia | `Archlinux| `Gentoo | `Alpine | `RHEL | `OracleLinux | `Cygwinports ) ->
+     let query_command_prefix = match distribution with
+       | Some (`Centos | `Fedora | `Mageia | `RHEL | `OracleLinux) -> ["rpm"; "-qi"]
+       | Some `Archlinux -> ["pacman"; "-Q"]
+       | Some `Gentoo -> ["equery"; "list"]
+       | Some `Alpine -> ["apk"; "info"; "-e"]
++      | Some `Cygwinports -> [ "cygwin-install.exe"; "status" ]
+       | _ -> assert(false)
+     in
+     List.filter
+@@ -466,7 +502,7 @@
+   if install_arg && opam_packages <> [] then begin
+     (if not short then Printf.printf "# Now letting OPAM install the packages\n%!");
+     (if !debug then Printf.eprintf "+ %s\n%!" (String.concat " " opam_cmdline));
+-    Unix.execvp "opam" (Array.of_list opam_cmdline)
++    execvp "opam" (Array.of_list ("opam"::"install"::opam_packages))
+   end
+ 
+ open Cmdliner
