@@ -176,7 +176,7 @@ let connect x peer_ip local_ip extra_dns_ip =
                     let nth, _ = List.fold_left (fun (nth, i) x ->
                       (if Ipaddr.V4.compare src_ip x = 0 then i else nth), i + 1
                     ) (0, 0) (local_ip :: extra_dns_ip) in
-                    match Dns_forward.choose_server ~nth all with
+                    match Dns_forward.choose_server ~nth all.Resolver.resolvers with
                     | Some (description, (Ipaddr.V4 ip, port)) ->
                       Lwt.return (":" ^ description, ip, port)
                     | _ ->
@@ -256,11 +256,11 @@ let connect x peer_ip local_ip extra_dns_ip =
       begin match Active_config.hd settings with
       | None ->
         Log.info (fun f -> f "remove resolver override");
-        Resolv_conf.set []
+        Resolv_conf.set { Resolver.resolvers = []; search = [] }
       | Some txt ->
         begin match Resolver.parse_resolvers txt with
         | Some r ->
-          Log.info (fun f -> f "updating resolvers to %s" (String.concat "; " (List.map (fun (ip, port) -> Ipaddr.to_string ip ^ ":" ^ (string_of_int port)) r)));
+          Log.info (fun f -> f "updating resolvers to %s" (Resolver.to_string r));
           Resolv_conf.set r
         | None ->
           Log.err (fun f -> f "failed to parse resolver key: %s" txt)

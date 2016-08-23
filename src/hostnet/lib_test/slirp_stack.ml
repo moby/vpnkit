@@ -9,10 +9,10 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module Resolv_conf = struct
-  let get () = Lwt.return [
+  let get () = Lwt.return { Resolver.resolvers = [
     Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.8.8"), 53;
     Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.4.4"), 53;
-  ]
+  ]; search = []}
   let set _ = ()
   let set_default_dns _ = ()
 end
