@@ -48,12 +48,18 @@ module type DATAGRAM = sig
 
   val input: ?userdesc:string -> reply:reply -> src:address -> dst:address -> payload:Cstruct.t -> unit -> unit Lwt.t
 
+  val get_nat_table_size: unit -> int
+  (** Return the current number of allocated NAT table entries *)
+
   module Udp: sig
     type server
 
     val of_bound_fd: Unix.file_descr -> server
 
     val bind: address -> server Lwt.t
+
+    val getsockname: server -> address
+    (** Query the address the server is bound to *)
 
     val recvfrom: server -> Cstruct.t -> (int * address) Lwt.t
 

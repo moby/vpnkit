@@ -1,0 +1,18 @@
+--- ./src/main.ml
++++ ./src/main.ml
+@@ -26,6 +26,7 @@
+ exception Exit_silently
+ 
+ let clean () =
++  Log.finish ();
+   Shell.rm_rf !Options.build_dir;
+   if !Options.make_links then begin
+     let entry =
+@@ -34,7 +35,6 @@
+     in
+     Slurp.force (Resource.clean_up_links entry)
+   end;
+-  Log.finish ();
+   raise Exit_silently
+ ;;
+ 

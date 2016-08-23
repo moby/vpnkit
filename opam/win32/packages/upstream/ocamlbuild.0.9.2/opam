@@ -1,8 +1,5 @@
 opam-version: "1.2"
-name: "ocamlbuild"
 maintainer: "Gabriel Scherer <gabriel.scherer@gmail.com>"
-version: "0.9.2"
-
 authors: [
   "Nicolas Pouillard"
   "Berke Durak"
@@ -43,7 +40,6 @@ remove: [
   ["rm" "-rf" "%{lib}%/ocaml/ocamlbuild"] { os = "win32" }
   ["rm" "-rf" "%{lib}%/ocamlbuild"] { os = "win32" }
 ]
-
 available: [ocaml-version >= "4.03"]
 conflicts: [
   "base-ocamlbuild"
@@ -54,4 +50,5 @@ patches: [
   "patch-meta" {os = "win32"}
   "patch-various" {os = "win32"}
   "patch-restore-old" {os = "win32"}
+  "patch-clean" {os = "win32"}
 ]

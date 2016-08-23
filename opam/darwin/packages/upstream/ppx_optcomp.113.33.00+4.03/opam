@@ -15,4 +15,4 @@ depends: [
   "ppx_core"   {>= "113.33.00+4.03" & < "113.34.00+4.03"}
   "ppx_tools"  {>= "0.99.3"}
 ]
-available: [ ocaml-version >= "4.03.0" ]
+available: [ ocaml-version >= "4.03.0" & ocaml-version < "4.04.0" ]

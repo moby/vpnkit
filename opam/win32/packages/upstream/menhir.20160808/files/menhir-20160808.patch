@@ -1,0 +1,46 @@
+--- ./Makefile
++++ ./Makefile
+@@ -60,10 +60,11 @@
+ # If the compiler is MSVC, then the name of the executable file ends in .exe,
+ # and object file names end in .obj instead of .o.
+ 
+-ifneq (,$(shell ocamlc -config | grep -E "ccomp_type: msvc"))
++OS_TYPE:=$(shell ocamlc -config | awk '/^os_type:/ {print $$2}')
++ifeq ($(OS_TYPE),$(filter $(OS_TYPE),Win32 Cygwin))
+   MENHIREXE    := menhir.exe
+-  OBJ          := obj
+-# LIBSUFFIX    := lib
++  OBJ          := $(shell ocamlc -config | awk '/^ext_obj:/ {print $$2}' | tr -d '.')
++# LIBSUFFIX    := $(shell ocamlc -config | awk '/^ext_lib:/ {print $$2}' | tr -d '.')
+ else
+   MENHIREXE    := menhir
+   OBJ          := o
+@@ -85,8 +86,8 @@
+ # performed if "os_type" is "Win32" or "Win64", and must not be performed if
+ # "os_type" is "Cygwin" or "Unix".
+ 
+-ifneq (,$(shell ocamlc -config | grep -E "os_type: (Win32|Win64)"))
+-installation_libdir := $(shell cygpath -m $(libdir))
++ifeq ($(OS_TYPE),Win32)
++installation_libdir := $(shell cygpath -m $(libdir) || echo $(libdir))
+ else
+ installation_libdir := $(libdir)
+ endif
+@@ -169,7 +170,7 @@
+ # Install the library.
+ 	mkdir -p $(libdir)
+ 	install -m 644 $(MLYLIB) $(libdir)
+-	@if `$(BUILDDIR)/menhir.$(TARGET) --suggest-ocamlfind` ; then \
++	@if `$(BUILDDIR)/menhir.$(TARGET) --suggest-ocamlfind | tr -d '\15'` ; then \
+ 	  echo 'Installing MenhirLib via ocamlfind.' ; \
+ 	  ocamlfind install menhirLib src/META $(patsubst %,$(BUILDDIR)/%,$(MENHIRLIB)) ; \
+ 	else \
+@@ -184,7 +185,7 @@
+ 	fi
+ 
+ uninstall:
+-	@if `$(bindir)/$(MENHIREXE) --suggest-ocamlfind` ; then \
++	@if `$(bindir)/$(MENHIREXE) --suggest-ocamlfind | tr -d '\15'` ; then \
+ 	  echo 'Un-installing MenhirLib via ocamlfind.' ; \
+ 	  ocamlfind remove menhirLib ; \
+ 	fi

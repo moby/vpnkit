@@ -61,8 +61,10 @@ module Sockets = struct
 
     (* FIXME: deduplicate some of the common code here with Host_lwt_unix *)
 
-    (* Look up by src * src_port * dst * dst_port *)
+    (* Look up by src * src_port *)
     let table = Hashtbl.create 7
+
+    let get_nat_table_size () = Hashtbl.length table
 
     let _ =
       let rec loop () =
@@ -83,8 +85,8 @@ module Sockets = struct
       loop ()
 
     let input ?userdesc ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
-      (if Hashtbl.mem table (src, src_port, dst, dst_port) then begin
-          Lwt.return (Some (Hashtbl.find table (src, src_port, dst, dst_port)))
+      (if Hashtbl.mem table (src, src_port) then begin
+          Lwt.return (Some (Hashtbl.find table (src, src_port)))
         end else begin
          let userdesc = match userdesc with
            | None -> ""
@@ -104,7 +106,7 @@ module Sockets = struct
            end else begin
              let last_use = Unix.gettimeofday () in
              let flow = { description; fd; last_use; reply} in
-             Hashtbl.replace table (src, src_port, dst, dst_port) flow;
+             Hashtbl.replace table (src, src_port) flow;
              (* Start a listener *)
              let buf = Cstruct.create 1500 in
              let rec loop () =
@@ -185,6 +187,12 @@ module Sockets = struct
           let msg = Printf.sprintf "Socket.Datagram.of_bound_fd failed with %s" (Uwt.strerror error) in
           Log.err (fun f -> f "%s" msg);
           failwith msg
+
+      let getsockname { fd; _ } =
+        match Uwt.Udp.getsockname_exn fd with
+        | Unix.ADDR_INET(iaddr, port) ->
+          Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
+        | _ -> invalid_arg "Udp.getsockname passed a non-TCP socket"
 
       let shutdown server =
         if not server.closed then begin

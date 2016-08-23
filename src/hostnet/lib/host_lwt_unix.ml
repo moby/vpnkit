@@ -80,8 +80,10 @@ module Datagram = struct
 
   (* FIXME: deduplicate some of the common code here with Host_uwt *)
 
-  (* Look up by src * src_port * dst * dst_port *)
+  (* Look up by src * src_port *)
   let table = Hashtbl.create 7
+
+  let get_nat_table_size () = Hashtbl.length table
 
   let _ =
     let rec loop () =
@@ -108,8 +110,8 @@ module Datagram = struct
 
   let input ?userdesc ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
     let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string dst, dst_port) in
-    (if Hashtbl.mem table (src, src_port, dst, dst_port) then begin
-        Lwt.return (Some (Hashtbl.find table (src, src_port, dst, dst_port)))
+    (if Hashtbl.mem table (src, src_port) then begin
+        Lwt.return (Some (Hashtbl.find table (src, src_port)))
       end else begin
        let userdesc = match userdesc with
          | None -> ""
@@ -124,7 +126,7 @@ module Datagram = struct
          Lwt_unix.bind fd (Lwt_unix.ADDR_INET(Unix.inet_addr_any, 0));
          let last_use = Unix.gettimeofday () in
          let flow = { description; fd; last_use; reply} in
-         Hashtbl.replace table (src, src_port, dst, dst_port) flow;
+         Hashtbl.replace table (src, src_port) flow;
          (* Start a listener *)
          let buffer = Cstruct.create 1500 in
          let bytes = Bytes.make 1500 '\000' in
@@ -191,6 +193,12 @@ module Datagram = struct
 
     let of_bound_fd fd =
       make (Lwt_unix.of_unix_file_descr fd)
+
+    let getsockname { fd; _ } =
+      match Lwt_unix.getsockname fd with
+      | Lwt_unix.ADDR_INET(iaddr, port) ->
+        Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
+      | _ -> invalid_arg "Tcp.getsockname passed a non-TCP socket"
 
     let shutdown server =
       if not server.closed then begin
