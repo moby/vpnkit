@@ -34,7 +34,7 @@ let maximum_ip = function
   | hd::tl -> List.fold_left (fun acc x -> if compare acc x > 0 then acc else x) hd tl
 
 (* given some MACs and IPs, construct a usable DHCP configuration *)
-let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~domain_search =
+let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~get_domain_search =
   let open Dhcp_server.Config in
   (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
      intend only to serve IPs to one downstream host.
@@ -54,7 +54,7 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~domai
       let buffer = Cstruct.create 1024 in
       let _, n, _ = List.fold_left (fun (map, n, buffer) name ->
         Name.marshal map n buffer (Name.of_string name)
-      ) (Name.Map.empty, 0, buffer) domain_search in
+      ) (Name.Map.empty, 0, buffer) (get_domain_search ()) in
       Cstruct.(to_string (sub buffer 0 n)) in
     let options = [
       Dhcp_wire.Domain_name "local";

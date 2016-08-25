@@ -203,7 +203,7 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
         "192.168.65.3"; "192.168.65.4"; "192.168.65.5"; "192.168.65.6";
         "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
       ];
-      domain_search = [];
+      get_domain_search = (fun () -> []);
       pcap_settings = Active_config.Value(pcap, never) } in
 
   let config = match db_path with

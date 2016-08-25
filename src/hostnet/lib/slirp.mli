@@ -8,7 +8,7 @@ type config = {
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
   extra_dns_ip: Ipaddr.V4.t list;
-  domain_search: string list;
+  get_domain_search: unit -> string list;
   pcap_settings: pcap Active_config.values;
 }
 (** A slirp TCP/IP stack ready to accept connections *)
