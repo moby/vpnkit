@@ -74,8 +74,8 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~get_d
       options = options;
       hostname = "vpnkit"; (* it's us! *)
       hosts = [ hyperkit ];
-      default_lease_time = Int32.of_int (60 * 60 * 2); (* 2 hours, from charrua defaults *)
-      max_lease_time = Int32.of_int (60 * 60 * 24) ; (* 24 hours, from charrua defaults *)
+      default_lease_time = Int32.of_int 10; (* 10s *)
+      max_lease_time = Int32.of_int 10; (* 10s *)
       ip_addr = local_ip;
       mac_addr = server_macaddr;
       network = prefix;
