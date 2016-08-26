@@ -29,9 +29,13 @@ let test_dns_query server () =
       (fun stack ->
         let resolver = DNS.create stack in
         DNS.gethostbyname ~server resolver "www.google.com"
-        >>= fun ips ->
-        Log.info (fun f -> f "www.google.com has IPs: %s" (String.concat ", " (List.map Ipaddr.to_string ips)));
-        Lwt.return ()
+        >>= function
+        | (_ :: _) as ips ->
+          Log.info (fun f -> f "www.google.com has IPs: %s" (String.concat ", " (List.map Ipaddr.to_string ips)));
+          Lwt.return ()
+        | _ ->
+          Log.err (fun f -> f "Failed to lookup www.google.com");
+          failwith "Failed to lookup www.google.com"
       ) in
   Host.Main.run t
 
