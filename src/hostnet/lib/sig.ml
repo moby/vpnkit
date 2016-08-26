@@ -117,6 +117,15 @@ module type FILES = sig
 
   val read_file: string -> [ `Ok of string | `Error of [ `Msg of string ] ] Lwt.t
   (** Read a whole file into a string *)
+
+  type watch
+
+  val watch_file: string -> (unit -> unit) -> [ `Ok of watch | `Error of [ `Msg of string ] ]
+  (** [watch_file path callback] executes [callback] whenever the contents of
+      [path] may have changed. *)
+
+  val unwatch: watch -> unit
+  (** [unwatch watch] stops watching the path(s) associated with [watch] *)
 end
 
 module type HOST = sig

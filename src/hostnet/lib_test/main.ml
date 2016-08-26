@@ -253,7 +253,8 @@ module Slirp_uwt = Make(Host_uwt)
 let tests =
   (List.map (fun (name, test) -> name ^ " with Lwt_unix", test) Slirp_lwt_unix.suite) @
   (List.map (fun (name, test) -> name ^ " with Uwt", test) Slirp_uwt.suite) @
-  Resolver_test.suite
+  Resolver_test.suite @
+  Hosts_test.suite
 
 (* Run it *)
 let () =

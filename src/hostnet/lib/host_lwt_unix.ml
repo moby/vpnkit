@@ -555,6 +555,38 @@ let read_file path =
     ) (fun e ->
       Lwt.return (`Error (`Msg (Printf.sprintf "reading %s: %s" path (Printexc.to_string e))))
     )
+
+  type watch = unit Lwt.t
+
+  let watch_file path callback =
+    (* Poll the file every 5s seconds *)
+    let start () =
+      Lwt_unix.stat path
+      >>= function { Lwt_unix.st_mtime; _ } ->
+      callback ();
+      let rec poll st_mtime' =
+        Lwt_unix.stat path
+        >>= function { Lwt_unix.st_mtime; _ } ->
+        if st_mtime' <> st_mtime then callback ();
+        Lwt_unix.sleep 5.
+        >>= fun () ->
+        poll st_mtime in
+      poll st_mtime in
+    (* On failure, wait another 5s and try again *)
+    let rec loop () =
+      Lwt.catch start
+        (fun e ->
+          Log.err (fun f -> f "While watching %s: %s" path (Printexc.to_string e));
+          Lwt.return ()
+        )
+      >>= fun () ->
+      Lwt_unix.sleep 5.
+      >>= fun () ->
+      loop () in
+    let handle = loop () in
+    `Ok handle
+
+  let unwatch = Lwt.cancel
 end
 
 module Time = struct

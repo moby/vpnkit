@@ -49,6 +49,7 @@ module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 module Forward_unix = Forward.Make(Connect_unix)(Bind)
 module Forward_hvsock = Forward.Make(Connect_hvsock)(Bind)
 module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Main)
+module Hosts = Hosts.Make(Host.Files)
 
 let file_descr_of_int (x: int) : Unix.file_descr =
   if Sys.os_type <> "Unix"
@@ -143,7 +144,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
-let main_t socket_url port_control_url max_connections vsock_path db_path dns pcap debug =
+let main_t socket_url port_control_url max_connections vsock_path db_path dns hosts pcap debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -179,6 +180,12 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
     | None -> ()
     | Some dns ->
       Resolv_conf.set_default_dns [ (Ipaddr.V4 (Ipaddr.V4.of_string_exn dns)), 53 ] );
+
+  let etc_hosts_watch = match Hosts.watch ~path:hosts () with
+    | `Ok watch -> Some watch
+    | `Error (`Msg m) ->
+      Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
+      None in
 
   Lwt.async_exception_hook := (fun exn ->
     Log.err (fun f -> f "Lwt.async failure %s: %s"
@@ -258,17 +265,22 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns pc
       );
     let wait_forever, _ = Lwt.task () in
     wait_forever
+    >>= fun () ->
+    ( match etc_hosts_watch with
+      | Some watch -> Hosts.unwatch watch
+      | None -> () );
+    Lwt.return_unit
 
-let main socket_url port_control_url max_connections vsock_path db_path dns pcap debug =
+let main socket_url port_control_url max_connections vsock_path db_path dns hosts pcap debug =
   Host.Main.run
-    (main_t socket_url port_control_url max_connections vsock_path db_path dns pcap debug)
+    (main_t socket_url port_control_url max_connections vsock_path db_path dns hosts pcap debug)
 end
 
-let main socket port_control max_connections vsock_path db_path dns pcap select debug =
+let main socket port_control max_connections vsock_path db_path dns hosts pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control max_connections vsock_path db_path dns pcap debug
+    socket port_control max_connections vsock_path db_path dns hosts pcap debug
 
 open Cmdliner
 
@@ -330,6 +342,13 @@ let dns =
   in
   Arg.(value & opt (some string) None doc)
 
+let hosts =
+  let doc =
+    Arg.info ~doc:
+      "Path to /etc/hosts file" ["hosts"]
+  in
+  Arg.(value & opt string Hostnet.Hosts.default_etc_hosts_path doc)
+
 let pcap=
   let doc =
     Arg.info ~doc:
@@ -352,7 +371,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ max_connections $ vsock_path $ db_path $ dns $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ max_connections $ vsock_path $ db_path $ dns $ hosts $ pcap $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =

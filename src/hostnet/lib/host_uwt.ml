@@ -643,6 +643,27 @@ module Files = struct
       ) (fun e ->
           Lwt.return (`Error (`Msg (Printf.sprintf "reading %s: %s" path (Printexc.to_string e))))
         )
+
+  (* NOTE(djs55): Fs_event didn't work for me on MacOS *)
+  type watch = Uwt.Fs_poll.t
+
+  let unwatch w = Uwt.Fs_poll.close_noerr w
+
+  let watch_file path callback =
+    let cb _h res = match res with
+      | Result.Ok _ ->
+        callback ()
+      | Result.Error err ->
+        Log.err (fun f -> f "While watching %s: %s" path (Uwt.err_name err));
+        () in
+    match Uwt.Fs_poll.start path 5000 ~cb with
+      | Result.Ok handle ->
+        callback ();
+        `Ok handle
+      | Result.Error err ->
+        Log.err (fun f -> f "Starting to watch %s: %s" path (Uwt.err_name err));
+        `Error (`Msg (Uwt.strerror err))
+
 end
 
 module Time = struct
