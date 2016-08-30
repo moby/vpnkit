@@ -102,6 +102,11 @@ module Dhcp = struct
   let of_interest mac dest =
     Macaddr.compare dest mac = 0 || not (Macaddr.is_unicast dest)
 
+  (* With a short lease time we try to avoid spamming the logs with DHCP
+     messages. *)
+  let logged_bootrequest = ref false
+  let logged_bootreply = ref false
+
   let input net (config : Dhcp_server.Config.t) database buf =
     let open Dhcp_server in
     match (Dhcp_wire.pkt_of_buf buf (Cstruct.len buf)) with
@@ -122,7 +127,9 @@ module Dhcp = struct
         Lwt.return database
       | Input.Reply (reply, database) ->
         let open Dhcp_wire in
-        Log.debug (fun f -> f "%s from %s" (op_to_string pkt.op) (Macaddr.to_string (pkt.srcmac)));
+        if pkt.op <> Dhcp_wire.BOOTREQUEST || not !logged_bootrequest
+        then Log.info (fun f -> f "%s from %s" (op_to_string pkt.op) (Macaddr.to_string (pkt.srcmac)));
+        logged_bootrequest := !logged_bootrequest || (pkt.op = Dhcp_wire.BOOTREQUEST);
         Netif.write net (Dhcp_wire.buf_of_pkt reply)
         >>= fun () ->
         let domain = List.fold_left (fun acc x -> match x with
@@ -134,12 +141,13 @@ module Dhcp = struct
         let routers = List.fold_left (fun acc x -> match x with
           | Routers ys -> String.concat ", " (List.map Ipaddr.V4.to_string ys)
           | _ -> acc) "none" reply.options in
-        Log.debug (fun f -> f "%s to %s yiddr %s siddr %s dns %s router %s domain %s"
+        if reply.op <> Dhcp_wire.BOOTREPLY || not !logged_bootreply
+        then Log.info (fun f -> f "%s to %s yiddr %s siddr %s dns %s router %s domain %s"
           (op_to_string reply.op) (Macaddr.to_string (reply.dstmac))
           (Ipaddr.V4.to_string reply.yiaddr) (Ipaddr.V4.to_string reply.siaddr)
           dns routers domain
-                  );
-        Log.debug (fun f -> f "lease database updated");
+        );
+        logged_bootreply := !logged_bootreply || (reply.op = Dhcp_wire.BOOTREPLY);
         Lwt.return database
 
   let listen mac config net buf =
