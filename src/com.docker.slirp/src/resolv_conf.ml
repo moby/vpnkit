@@ -19,33 +19,33 @@ module Make(Files: Sig.FILES) = struct
 
   (* The current_dns settings are the ones we're using right now. Overrides
      via the database will be made here by `set` *)
-  let current_dns = ref !default_dns
+  let current_dns = ref { Resolver.resolvers = !default_dns; search = [] }
 
-  let set = function
+  let set x = match x.Resolver.resolvers with
     | _ :: _ as dns ->
       Log.info (fun f -> f "using DNS forwarders on %s"
                    (String.concat "; " (List.map (fun (ip, port) -> Ipaddr.to_string ip ^ "#" ^ (string_of_int port)) dns))
                );
-      current_dns := dns
+      current_dns := x
     | [] ->
       Log.info (fun f -> f "using default DNS on %s"
                    (String.concat "; " (List.map (fun (ip, port) -> Ipaddr.to_string ip ^ "#" ^ (string_of_int port)) !default_dns))
                );
-      current_dns := !default_dns
+      current_dns := { Resolver.resolvers = !default_dns; search = [] }
 
   let all_ipv4_servers config =
      all_servers config |>
      List.filter (fun (ip,_) -> match ip with Ipaddr.V4 _ -> true |_ -> false)
 
   let get () =
-    match !current_dns with
-    | _ :: _ as dns -> Lwt.return dns
+    match !current_dns.Resolver.resolvers with
+    | _ :: _ -> Lwt.return !current_dns
     | [] ->
       Files.read_file resolv_conf
       >>= function
       | `Error (`Msg m) ->
         Log.err (fun f -> f "Error reading %s: %s" resolv_conf m);
-        Lwt.return !default_dns
+        Lwt.return { Resolver.resolvers = !default_dns; search = [] }
       | `Ok txt ->
         let lines = Astring.String.cuts ~sep:"\n" txt in
         let config = List.rev @@ List.fold_left (fun acc x ->
@@ -59,6 +59,6 @@ module Make(Files: Sig.FILES) = struct
                 | _ -> acc
               end
           ) [] lines in
-        Lwt.return (all_ipv4_servers config)
+        Lwt.return ({ Resolver.resolvers = all_ipv4_servers config; search = []})
 
 end

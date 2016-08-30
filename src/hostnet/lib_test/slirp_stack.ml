@@ -9,10 +9,10 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module Resolv_conf = struct
-  let get () = Lwt.return [
+  let get () = Lwt.return { Resolver.resolvers = [
     Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.8.8"), 53;
     Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.4.4"), 53;
-  ]
+  ]; search = []}
   let set _ = ()
   let set_default_dns _ = ()
 end
@@ -76,6 +76,7 @@ let config =
     Slirp.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
     local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
     extra_dns_ip;
+    get_domain_search = (fun () -> []);
     pcap_settings = Active_config.Value(None, never);
   }
 

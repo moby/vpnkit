@@ -16,7 +16,7 @@ type configuration = {
   prefix: Ipaddr.V4.Prefix.t;
   client_macaddr: Macaddr.t;
   server_macaddr: Macaddr.t;
-  dhcp_configuration : Dhcp_server.Config.t;
+  get_dhcp_configuration : unit -> Dhcp_server.Config.t;
 }
 
 (* Compute the smallest IPv4 network which includes both [a_ip]
@@ -34,7 +34,7 @@ let maximum_ip = function
   | hd::tl -> List.fold_left (fun acc x -> if compare acc x > 0 then acc else x) hd tl
 
 (* given some MACs and IPs, construct a usable DHCP configuration *)
-let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip =
+let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~get_domain_search =
   let open Dhcp_server.Config in
   (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
      intend only to serve IPs to one downstream host.
@@ -47,32 +47,41 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip =
     let i32 = to_int32 highest in
     of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
   let prefix = smallest_prefix peer_ip [ local_ip; low_ip; high_ip ] 32 in
-  let options = [
-    Dhcp_wire.Domain_name "local";
-    Dhcp_wire.Routers [ local_ip ];
-    Dhcp_wire.Dns_servers (local_ip :: extra_dns_ip);
-    Dhcp_wire.Ntp_servers [ local_ip ];
-    Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
-    Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix)
-  ] in
-  let hyperkit : host = {
-    hostname = "hyperkit";
-    options = options;
-    hw_addr = Some client_macaddr;
-    fixed_addr = Some peer_ip;
-  } in
-  let dhcp_configuration : Dhcp_server.Config.t = {
-    options = options;
-    hostname = "vpnkit"; (* it's us! *)
-    hosts = [ hyperkit ];
-    default_lease_time = Int32.of_int (60 * 60 * 2); (* 2 hours, from charrua defaults *)
-    max_lease_time = Int32.of_int (60 * 60 * 24) ; (* 24 hours, from charrua defaults *)
-    ip_addr = local_ip;
-    mac_addr = server_macaddr;
-    network = prefix;
-    range = (low_ip, high_ip);
-  } in
-  { peer_ip; local_ip; extra_dns_ip; prefix; server_macaddr; client_macaddr; dhcp_configuration }
+  let get_dhcp_configuration () : Dhcp_server.Config.t =
+    (* The domain search is encoded using the scheme used for DNS names *)
+    let domain_search =
+      let open Dns in
+      let buffer = Cstruct.create 1024 in
+      let _, n, _ = List.fold_left (fun (map, n, buffer) name ->
+        Name.marshal map n buffer (Name.of_string name)
+      ) (Name.Map.empty, 0, buffer) (get_domain_search ()) in
+      Cstruct.(to_string (sub buffer 0 n)) in
+    let options = [
+      Dhcp_wire.Domain_name "local";
+      Dhcp_wire.Routers [ local_ip ];
+      Dhcp_wire.Dns_servers (local_ip :: extra_dns_ip);
+      Dhcp_wire.Ntp_servers [ local_ip ];
+      Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
+      Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix);
+      Dhcp_wire.Domain_search domain_search;
+    ] in
+    let hyperkit : host = {
+      hostname = "hyperkit";
+      options = options;
+      hw_addr = Some client_macaddr;
+      fixed_addr = Some peer_ip;
+    } in {
+      options = options;
+      hostname = "vpnkit"; (* it's us! *)
+      hosts = [ hyperkit ];
+      default_lease_time = Int32.of_int 10; (* 10s *)
+      max_lease_time = Int32.of_int 10; (* 10s *)
+      ip_addr = local_ip;
+      mac_addr = server_macaddr;
+      network = prefix;
+      range = (low_ip, high_ip);
+    } in
+  { peer_ip; local_ip; extra_dns_ip; prefix; server_macaddr; client_macaddr; get_dhcp_configuration }
 
 module Netif = Filter.Make(Vmnet)
 
@@ -144,7 +153,7 @@ module Dhcp = struct
       (match proto with
        | Some Wire_structs.IPv4 ->
          if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then begin
-           input net config.dhcp_configuration !database buf >>= fun db ->
+           input net (config.get_dhcp_configuration ()) !database buf >>= fun db ->
            database := db;
            Lwt.return_unit
          end

@@ -49,7 +49,7 @@ let input ~nth ~udp ~src ~dst ~src_port buf =
 
   Resolv_conf.get ()
   >>= fun all ->
-  match choose_server ~nth all with
+  match choose_server ~nth all.Resolver.resolvers with
   | Some (dst_str, (dst, dst_port)) ->
     Log.debug (fun f -> f "DNS[%s] Forwarding to %s (%s)" (tidstr_of_dns dns) (Ipaddr.to_string dst) dst_str);
     let reply buffer =

@@ -42,6 +42,7 @@ type config = {
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
   extra_dns_ip: Ipaddr.V4.t list;
+  get_domain_search: unit -> string list;
   pcap_settings: pcap Active_config.values;
 }
 
@@ -57,8 +58,8 @@ type stack = {
 
 let after_disconnect t = t.after_disconnect
 
-let connect x peer_ip local_ip extra_dns_ip =
-  let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip in
+let connect x peer_ip local_ip extra_dns_ip get_domain_search =
+  let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~get_domain_search in
         begin Tcpip_stack.connect ~config x
         >>= function
         | `Error (`Msg m) -> failwith m
@@ -176,7 +177,7 @@ let connect x peer_ip local_ip extra_dns_ip =
                     let nth, _ = List.fold_left (fun (nth, i) x ->
                       (if Ipaddr.V4.compare src_ip x = 0 then i else nth), i + 1
                     ) (0, 0) (local_ip :: extra_dns_ip) in
-                    match Dns_forward.choose_server ~nth all with
+                    match Dns_forward.choose_server ~nth all.Resolver.resolvers with
                     | Some (description, (Ipaddr.V4 ip, port)) ->
                       Lwt.return (":" ^ description, ip, port)
                     | _ ->
@@ -248,28 +249,40 @@ let connect x peer_ip local_ip extra_dns_ip =
     >>= fun pcap_settings ->
 
     (* Watch for DNS server overrides *)
+    let domain_search = ref [] in
+    let get_domain_search () = !domain_search in
     let dns_path = driver @ [ "slirp"; "dns" ] in
     Config.string_option config dns_path
     >>= fun string_dns_settings ->
+    Active_config.map
+      (function
+        | Some txt ->
+          let dns = Resolver.parse_resolvers txt in
+          begin match dns with
+          | Some { Resolver.search; _ } ->
+            domain_search := search;
+            Log.info (fun f -> f "updating search domains to %s" (String.concat " " !domain_search))
+          | _ -> ()
+          end;
+          Lwt.return dns
+        | None ->
+          Lwt.return None
+      ) string_dns_settings
+    >>= fun dns_settings ->
 
     let rec monitor_dns_settings settings =
       begin match Active_config.hd settings with
       | None ->
         Log.info (fun f -> f "remove resolver override");
-        Resolv_conf.set []
-      | Some txt ->
-        begin match Resolver.parse_resolvers txt with
-        | Some r ->
-          Log.info (fun f -> f "updating resolvers to %s" (String.concat "; " (List.map (fun (ip, port) -> Ipaddr.to_string ip ^ ":" ^ (string_of_int port)) r)));
-          Resolv_conf.set r
-        | None ->
-          Log.err (fun f -> f "failed to parse resolver key: %s" txt)
-        end
+        Resolv_conf.set { Resolver.resolvers = []; search = [] }
+      | Some r ->
+        Log.info (fun f -> f "updating resolvers to %s" (Resolver.to_string r));
+        Resolv_conf.set r
       end;
       Active_config.tl settings
       >>= fun settings ->
       monitor_dns_settings settings in
-    Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings string_dns_settings));
+    Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings dns_settings));
 
     let bind_path = driver @ [ "allowed-bind-address" ] in
     Config.string_option config bind_path
@@ -345,13 +358,14 @@ let connect x peer_ip local_ip extra_dns_ip =
     let local_ip = Active_config.hd host_ips in
     let extra_dns_ip = Active_config.hd extra_dns_ips in
 
-    Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s"
-      (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
+    Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s domain_search:%s"
+      (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip) (String.concat " " !domain_search)
     );
     let t = {
       peer_ip;
       local_ip;
       extra_dns_ip;
+      get_domain_search;
       pcap_settings;
     } in
     Lwt.return t
@@ -381,5 +395,5 @@ let connect x peer_ip local_ip extra_dns_ip =
               monitor_pcap_settings t.pcap_settings
             )
           );
-        connect x t.peer_ip t.local_ip t.extra_dns_ip
+        connect x t.peer_ip t.local_ip t.extra_dns_ip t.get_domain_search
 end
