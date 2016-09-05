@@ -133,6 +133,7 @@ let connect x peer_ip local_ip extra_dns_ip get_domain_search =
                         let for_primary_ip = Ipaddr.V4.compare dst local_ip = 0 in
                         let for_extra_dns = List.fold_left (||) false (List.map (fun ip -> Ipaddr.V4.compare dst ip = 0) extra_dns_ip) in
                         let for_us = for_primary_ip || for_extra_dns in
+                        let is_broadcast = Ipaddr.V4.compare dst Ipaddr.V4.broadcast = 0 in
                         if for_us && dst_port = 53 then begin
                           let primary_udp = Tcpip_stack.udpv4 s in
                           (* We need to find the corresponding `udp` value so we can send
@@ -142,6 +143,9 @@ let connect x peer_ip local_ip extra_dns_ip get_domain_search =
                             (if Ipaddr.V4.compare dst x = 0 then (i, udp') else (nth, udp)), i + 1
                           ) ((0, primary_udp), 0) ((local_ip, primary_udp) :: ips_to_udp) in
                           Dns_forwarder.input ~nth ~udp ~src ~dst ~src_port payload
+                        end else if is_broadcast && dst_port = 67 then begin
+                          (* DHCP is hooked inside the Tcpip_stack at a lower level *)
+                          Lwt.return_unit
                         end else if (not for_us) then begin
                           (* For any other IP, NAT as usual *)
                           Log.debug (fun f -> f "UDP %s:%d -> %s:%d len %d"
