@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-set -eu
+set -eux
 
 ### From ocaml-ci-scripts
 
@@ -18,7 +18,8 @@ fi
 export OPAM_LINT="false"
 export OPAMYES=1
 
-curl -fsSL -o "${OPAM_ARCH}.tar.xz" "${OPAM_URL}"
+echo $PATH
+appveyor DownloadFile "${OPAM_URL}" -FileName "${OPAM_ARCH}.tar.xz"
 tar -xf "${OPAM_ARCH}.tar.xz"
 "${OPAM_ARCH}/install.sh"
 
