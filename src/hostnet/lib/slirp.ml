@@ -168,14 +168,14 @@ let connect x peer_ip local_ip extra_dns_ip get_domain_search =
             );
             Tcpip_stack.listen_tcpv4_flow s ~on_flow_arrival:(
               fun ~src:(src_ip, src_port) ~dst:(dst_ip, dst_port) ->
-                let for_us src_ip = Ipaddr.V4.compare src_ip local_ip = 0 in
-                let for_extra_dns = List.fold_left (||) false (List.map (fun ip -> Ipaddr.V4.compare src_ip ip = 0) extra_dns_ip) in
-                let for_dns src_ip = for_us src_ip || for_extra_dns in
-                ( if for_dns src_ip && src_port = 53 then begin
+                let for_us dst_ip = Ipaddr.V4.compare dst_ip local_ip = 0 in
+                let for_extra_dns = List.fold_left (||) false (List.map (fun ip -> Ipaddr.V4.compare dst_ip ip = 0) extra_dns_ip) in
+                let for_dns dst_ip = for_us dst_ip || for_extra_dns in
+                ( if for_dns dst_ip && dst_port = 53 then begin
                     Resolv_conf.get ()
                     >>= fun all ->
                     let nth, _ = List.fold_left (fun (nth, i) x ->
-                      (if Ipaddr.V4.compare src_ip x = 0 then i else nth), i + 1
+                      (if Ipaddr.V4.compare dst_ip x = 0 then i else nth), i + 1
                     ) (0, 0) (local_ip :: extra_dns_ip) in
                     match Dns_forward.choose_server ~nth all.Resolver.resolvers with
                     | Some (description, (Ipaddr.V4 ip, port)) ->
@@ -183,12 +183,12 @@ let connect x peer_ip local_ip extra_dns_ip get_domain_search =
                     | _ ->
                       Log.err (fun f -> f "Failed to discover DNS server: assuming 127.0.01");
                       Lwt.return (":no DNS server", Ipaddr.V4.of_string_exn "127.0.0.1", 53)
-                  end else Lwt.return ("", src_ip, src_port)
-                ) >>= fun (description, src_ip, src_port) ->
+                  end else Lwt.return ("", dst_ip, dst_port)
+                ) >>= fun (description, dst_ip, dst_port) ->
                 (* If the traffic is for us, use a local IP address that is really
                    ours, rather than send traffic off to someone else (!) *)
-                let src_ip = if for_us src_ip then Ipaddr.V4.localhost else src_ip in
-                Socket.Stream.Tcp.connect (src_ip, src_port)
+                let dst_ip = if for_us dst_ip then Ipaddr.V4.localhost else dst_ip in
+                Socket.Stream.Tcp.connect (dst_ip, dst_port)
                 >>= function
                 | `Error (`Msg _) ->
                   return `Reject

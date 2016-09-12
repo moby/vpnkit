@@ -1,4 +1,0 @@
-Store data using OCaml notation
-This project uses type-conv to dump OCaml data structure using OCaml
-data notation. This kind of data dumping helps to write OCaml code
-generator, like OASIS.
