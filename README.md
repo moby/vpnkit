@@ -11,10 +11,13 @@ Building on Unix
 
 First install `wget`, `opam` using your package manager of choice.
 Install the OCaml library dependencies with:
+
 ```
 make depends
 ```
+
 Build the application using:
+
 ```
 make
 ```
