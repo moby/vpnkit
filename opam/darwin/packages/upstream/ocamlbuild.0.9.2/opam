@@ -15,7 +15,7 @@ bug-reports: "https://github.com/ocaml/ocamlbuild/issues"
 doc: "https://github.com/ocaml/ocamlbuild/blob/master/manual/manual.adoc"
 
 build: [
-  [make "-f" "configure.make" "Makefile.config"
+  [make "-f" "configure.make" "Makefile.config" "src/ocamlbuild_config.ml"
     "OCAMLBUILD_PREFIX=%{prefix}%"
     "OCAMLBUILD_BINDIR=%{bin}%"
     "OCAMLBUILD_LIBDIR=%{lib}%"
@@ -28,5 +28,5 @@ available: [ocaml-version >= "4.03"]
 depends: [ ]
 conflicts: [
   "base-ocamlbuild"
-  "ocamlfind" {< "1.5"}
+  "ocamlfind" {< "1.6.2"}
 ]

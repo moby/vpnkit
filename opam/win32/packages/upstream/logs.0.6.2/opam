@@ -19,6 +19,7 @@ depopts: [
   "fmt"
   "cmdliner"
   "lwt" ]
+conflicts: [ "cmdliner" {< "0.9.8"} ]
 build: [[
   "ocaml" "pkg/pkg.ml" "build"
           "--pinned" "%{pinned}%"
