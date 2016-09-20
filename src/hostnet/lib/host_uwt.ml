@@ -204,12 +204,12 @@ module Sockets = struct
         end;
         Lwt.return_unit
 
-      let recvfrom server buf =
+      let rec recvfrom server buf =
         Uwt.Udp.recv_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer server.fd
         >>= fun recv ->
         if recv.Uwt.Udp.is_partial then begin
-          Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping partial response");
-          Lwt.fail (Failure "Socket.Datagram.recvfrom partial response")
+          Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping partial response (buffer was %d bytes)" (Cstruct.len buf));
+          recvfrom server buf
         end else match recv.Uwt.Udp.sockaddr with
           | None ->
             Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping response from unknown sockaddr");
