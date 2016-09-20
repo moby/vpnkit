@@ -128,8 +128,8 @@ module Datagram = struct
          let flow = { description; fd; last_use; reply} in
          Hashtbl.replace table (src, src_port) flow;
          (* Start a listener *)
-         let buffer = Cstruct.create 1500 in
-         let bytes = Bytes.make 1500 '\000' in
+         let buffer = Cstruct.create Constants.max_udp_length in
+         let bytes = Bytes.make Constants.max_udp_length '\000' in
          let rec loop () =
            Lwt.catch
              (fun () ->

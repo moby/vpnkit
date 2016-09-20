@@ -108,14 +108,14 @@ module Sockets = struct
              let flow = { description; fd; last_use; reply} in
              Hashtbl.replace table (src, src_port) flow;
              (* Start a listener *)
-             let buf = Cstruct.create 1500 in
+             let buf = Cstruct.create Constants.max_udp_length in
              let rec loop () =
                Lwt.catch
                  (fun () ->
                     Uwt.Udp.recv_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer fd
                     >>= fun recv ->
                     if recv.Uwt.Udp.is_partial then begin
-                      Log.err (fun f -> f "Socket.Datagram.input %s: dropping partial response" description);
+                      Log.err (fun f -> f "Socket.Datagram.input %s: dropping partial response (buffer was %d)" description (Cstruct.len buf));
                       Lwt.return true
                     end else if recv.Uwt.Udp.sockaddr = None then begin
                       Log.err (fun f -> f "Socket.Datagram.input %s: dropping response from unknown sockaddr" description);

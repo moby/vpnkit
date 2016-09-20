@@ -162,8 +162,6 @@ let start_tcp_proxy description vsock_path_var remote_port server =
     );
   Lwt.return ()
 
-let max_udp_length = 2048 (* > 1500 the MTU of our link + header *)
-
 let max_vsock_header_length = 1024
 
 let conn_read flow buf =
@@ -184,9 +182,9 @@ let conn_write flow buf =
 
 let start_udp_proxy description vsock_path_var remote_port server =
   let open Lwt.Infix in
-  let from_internet_buffer = Cstruct.create max_udp_length in
+  let from_internet_buffer = Cstruct.create Constants.max_udp_length in
   (* We write to the internet using the from_vsock_buffer *)
-  let from_vsock_buffer = Cstruct.create max_udp_length in
+  let from_vsock_buffer = Cstruct.create Constants.max_udp_length in
   let handle fd =
     Active_list.Var.read vsock_path_var
     >>= fun _vsock_path ->
