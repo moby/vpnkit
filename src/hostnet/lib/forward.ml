@@ -184,7 +184,7 @@ let start_udp_proxy description vsock_path_var remote_port server =
   let open Lwt.Infix in
   let from_internet_buffer = Cstruct.create Constants.max_udp_length in
   (* We write to the internet using the from_vsock_buffer *)
-  let from_vsock_buffer = Cstruct.create Constants.max_udp_length in
+  let from_vsock_buffer = Cstruct.create (Constants.max_udp_length + max_vsock_header_length) in
   let handle fd =
     Active_list.Var.read vsock_path_var
     >>= fun _vsock_path ->
@@ -229,30 +229,37 @@ let start_udp_proxy description vsock_path_var remote_port server =
       conn_read v (Cstruct.sub from_vsock_buffer 0 2)
       >>= fun () ->
       let frame_length = Cstruct.LE.get_uint16 from_vsock_buffer 0 in
-      let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in
-      conn_read v rest
-      >>= fun () ->
-      (* uint16 IP address length *)
-      let ip_bytes_len = Cstruct.LE.get_uint16 rest 0 in
-      (* IP address bytes *)
-      let ip_bytes_string = Cstruct.(to_string (sub rest 2 ip_bytes_len)) in
-      let rest = Cstruct.shift rest (2 + ip_bytes_len) in
-      let ip =
-        let open Ipaddr in
-        if String.length ip_bytes_string = 4
-        then V4 (V4.of_bytes_exn ip_bytes_string)
-        else V6 (Ipaddr.V6.of_bytes_exn ip_bytes_string) in
-      (* uint16 Port *)
-      let port = Cstruct.LE.get_uint16 rest 0 in
-      let rest = Cstruct.shift rest 2 in
-      (* uint16 Zone length *)
-      let zone_length = Cstruct.LE.get_uint16 rest 0 in
-      let rest = Cstruct.shift rest (2 + zone_length) in
-      (* uint16 payload length *)
-      let payload_length = Cstruct.LE.get_uint16 rest 0 in
-      (* payload *)
-      let payload = Cstruct.sub rest 2 payload_length in
-      Lwt.return (payload, (ip, port)) in
+      if frame_length > (Cstruct.len from_vsock_buffer) then begin
+        Log.err (fun f -> f "UDP encapsulated frame length is %d but buffer has length %d: dropping"
+          frame_length (Cstruct.len from_vsock_buffer)
+        );
+        Lwt.return None
+      end else begin
+        let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in
+        conn_read v rest
+        >>= fun () ->
+        (* uint16 IP address length *)
+        let ip_bytes_len = Cstruct.LE.get_uint16 rest 0 in
+        (* IP address bytes *)
+        let ip_bytes_string = Cstruct.(to_string (sub rest 2 ip_bytes_len)) in
+        let rest = Cstruct.shift rest (2 + ip_bytes_len) in
+        let ip =
+          let open Ipaddr in
+          if String.length ip_bytes_string = 4
+          then V4 (V4.of_bytes_exn ip_bytes_string)
+          else V6 (Ipaddr.V6.of_bytes_exn ip_bytes_string) in
+        (* uint16 Port *)
+        let port = Cstruct.LE.get_uint16 rest 0 in
+        let rest = Cstruct.shift rest 2 in
+        (* uint16 Zone length *)
+        let zone_length = Cstruct.LE.get_uint16 rest 0 in
+        let rest = Cstruct.shift rest (2 + zone_length) in
+        (* uint16 payload length *)
+        let payload_length = Cstruct.LE.get_uint16 rest 0 in
+        (* payload *)
+        let payload = Cstruct.sub rest 2 payload_length in
+        Lwt.return (Some (payload, (ip, port)))
+      end in
     let rec from_internet v =
       Lwt.catch (fun () ->
         Socket.Datagram.Udp.recvfrom fd from_internet_buffer
@@ -273,10 +280,14 @@ let start_udp_proxy description vsock_path_var remote_port server =
       Lwt.catch
         (fun () ->
           read v
-          >>= fun (buf, address) ->
-          Socket.Datagram.Udp.sendto fd address buf
-          >>= fun () ->
-          Lwt.return true
+          >>= function
+          | None ->
+            Log.debug (fun f -> f "%s: shutting down from vsock thread: UDP stream desychronised" description);
+            Lwt.return false
+          | Some (buf, address) ->
+            Socket.Datagram.Udp.sendto fd address buf
+            >>= fun () ->
+            Lwt.return true
         ) (fun e ->
           Log.debug (fun f -> f "%s: shutting down from vsock thread: %s" description (Printexc.to_string e));
           Lwt.return false
