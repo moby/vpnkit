@@ -139,7 +139,7 @@ module Sockets = struct
            Log.debug (fun f -> f "Socket.Datagram.input %s: creating UDP NAT rule" description);
            register_connection description
            >>= fun idx ->
-           let fd = Uwt.Udp.init () in
+           let fd = try Uwt.Udp.init () with e -> deregister_connection idx; raise e in
            let sockaddr = make_sockaddr (Ipaddr.(V4 V4.any), 0) in
            let result = Uwt.Udp.bind ~mode:[ Uwt.Udp.Reuse_addr ] fd ~addr:sockaddr () in
            if not(Uwt.Int_result.is_ok result) then begin
@@ -220,7 +220,7 @@ module Sockets = struct
         let sockaddr = make_sockaddr(ip, port) in
         register_connection description
         >>= fun idx ->
-        let fd = Uwt.Udp.init () in
+        let fd = try Uwt.Udp.init () with e -> deregister_connection idx; raise e in
         let result = Uwt.Udp.bind ~mode:[ Uwt.Udp.Reuse_addr ] fd ~addr:sockaddr () in
         if not(Uwt.Int_result.is_ok result) then begin
           let error = Uwt.Int_result.to_error result in
@@ -313,7 +313,7 @@ module Sockets = struct
         let description = "tcp:" ^ (Ipaddr.V4.to_string ip) ^ ":" ^ (string_of_int port) in
         register_connection description
         >>= fun idx ->
-        let fd = Uwt.Tcp.init () in
+        let fd = try Uwt.Tcp.init () with e -> deregister_connection idx; raise e in
         Lwt.catch
           (fun () ->
              let sockaddr = make_sockaddr (Ipaddr.V4 ip, port) in
@@ -323,8 +323,8 @@ module Sockets = struct
           )
           (fun e ->
              (* FIXME(djs55): error handling *)
-             let _ = Uwt.Tcp.close fd in
              deregister_connection idx;
+             let _ = Uwt.Tcp.close fd in
              errorf "Socket.Tcp.connect %s: caught %s" description (Printexc.to_string e)
           )
 
@@ -423,7 +423,7 @@ module Sockets = struct
         let description = "tcp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
         register_connection description
         >>= fun idx ->
-        let fd = Uwt.Tcp.init () in
+        let fd = try Uwt.Tcp.init () with e -> deregister_connection idx; raise e in
         let addr = make_sockaddr (ip, port) in
         let result = Uwt.Tcp.bind fd ~addr () in
         if not(Uwt.Int_result.is_ok result) then begin
