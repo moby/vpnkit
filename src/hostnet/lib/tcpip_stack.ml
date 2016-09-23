@@ -64,22 +64,17 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~get_d
       Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
       Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix);
       Dhcp_wire.Domain_search domain_search;
-    ] in
-    let hyperkit : host = {
-      hostname = "hyperkit";
-      options = options;
-      hw_addr = Some client_macaddr;
-      fixed_addr = Some peer_ip;
-    } in {
+    ] in {
       options = options;
       hostname = "vpnkit"; (* it's us! *)
-      hosts = [ hyperkit ];
+      hosts = [ ];
       default_lease_time = Int32.of_int (60 * 60 * 2); (* 2 hours, from charrua defaults *)
       max_lease_time = Int32.of_int (60 * 60 * 24) ; (* 24 hours, from charrua defaults *)
       ip_addr = local_ip;
       mac_addr = server_macaddr;
       network = prefix;
-      range = (low_ip, high_ip);
+      (* FIXME: this needs https://github.com/haesbaert/charrua-core/pull/31 *)
+      range = (peer_ip, peer_ip); (* allow one dynamic client *)
     } in
   { peer_ip; local_ip; extra_dns_ip; prefix; server_macaddr; client_macaddr; get_dhcp_configuration }
 
@@ -184,12 +179,13 @@ let or_error name m =
 
 let connect ~config (ppp: Vmnet.t) =
   let open Infix in
-  let valid_sources = [ config.peer_ip; Ipaddr.V4.of_string_exn "0.0.0.0" ] in
+  let valid_subnets = [ config.prefix ] in
+  let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
   let arp_table = [
     config.peer_ip, config.client_macaddr;
     config.local_ip, config.server_macaddr;
   ] @ (List.map (fun ip -> ip, config.server_macaddr) config.extra_dns_ip) in
-  or_error "filter" @@ Netif.connect ~valid_sources ppp
+  or_error "filter" @@ Netif.connect ~valid_subnets ~valid_sources ppp
   >>= fun interface ->
   or_error "console" @@ Console_unix.connect "0"
   >>= fun console ->
