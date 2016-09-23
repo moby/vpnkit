@@ -96,12 +96,12 @@ let hvsock_connect_forever url sockaddr callback =
   aux ()
 
 let start_port_forwarding port_control_url max_connections vsock_path =
-  Log.info (fun f -> f "starting port_forwarding port_control_url:%s max_connections:%s vsock_path:%s"
+  Log.info (fun f -> f "starting port_forwarding port_control_url:%s vsock_path:%s"
     port_control_url
-    (match max_connections with None -> "None" | Some x -> "Some " ^ (string_of_int x))
     vsock_path);
   (* Start the 9P port forwarding server *)
   Connect_unix.vsock_path := vsock_path;
+  (match max_connections with None -> () | Some _ -> Log.warn (fun f -> f "The argument max-connections is nolonger supported, use the database key slirp/max-connections instead"));
   Host.Sockets.set_max_connections max_connections;
 
   let uri = Uri.of_string port_control_url in
@@ -316,7 +316,7 @@ let port_control_path =
 let max_connections =
   let doc =
     Arg.info ~doc:
-      "Maximum number of concurrent forwarded connections" [ "max-connections" ]
+      "This argument is deprecated: use the database key slirp/max-connections instead." [ "max-connections" ]
   in
   Arg.(value & opt (some int) None doc)
 

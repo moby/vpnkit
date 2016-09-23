@@ -248,6 +248,33 @@ let connect x peer_ip local_ip extra_dns_ip get_domain_search =
     Active_config.map parse_pcap string_pcap_settings
     >>= fun pcap_settings ->
 
+    let max_connections_path = driver @ [ "slirp"; "max-connections" ] in
+    Config.string_option config max_connections_path
+    >>= fun string_max_connections ->
+    let parse_max = function
+      | None -> Lwt.return None
+      | Some x -> Lwt.return (
+        try Some (int_of_string @@ String.trim x)
+        with _ ->
+          Log.err (fun f -> f "Failed to parse slirp/max-connections value: '%s'" x);
+          None
+      ) in
+    Active_config.map parse_max string_max_connections
+    >>= fun max_connections ->
+    let rec monitor_max_connections_settings settings =
+      begin match Active_config.hd settings with
+      | None ->
+        Log.info (fun f -> f "remove connection limit");
+        Host.Sockets.set_max_connections None
+      | Some limit ->
+        Log.info (fun f -> f "updating connection limit to %d" limit);
+        Host.Sockets.set_max_connections (Some limit)
+      end;
+      Active_config.tl settings
+      >>= fun settings ->
+      monitor_max_connections_settings settings in
+    Lwt.async (fun () -> log_exception_continue "monitor max connections settings" (fun () -> monitor_max_connections_settings max_connections));
+
     (* Watch for DNS server overrides *)
     let domain_search = ref [] in
     let get_domain_search () = !domain_search in
