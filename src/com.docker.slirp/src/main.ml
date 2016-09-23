@@ -102,8 +102,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     vsock_path);
   (* Start the 9P port forwarding server *)
   Connect_unix.vsock_path := vsock_path;
-  Connect_unix.set_max_connections max_connections;
-  Connect_hvsock.set_max_connections max_connections;
+  Host.Sockets.set_max_connections max_connections;
 
   let uri = Uri.of_string port_control_url in
   match Uri.scheme uri with
@@ -144,6 +143,10 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
+let on_debug_signal () =
+  Log.info (fun f -> f "Received debug signal (SIGUSR1)");
+  Host.Sockets.dump_connection_table ()
+
 let main_t socket_url port_control_url max_connections vsock_path db_path dns hosts pcap debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
@@ -171,6 +174,8 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns ho
      Happily on Windows there is no such thing as SIGPIPE so it's safe to catch
      the exception and throw it away. *)
   (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore with Invalid_argument _ -> ());
+  (* Add a debugging signal hook *)
+  (try Sys.set_signal Sys.sigusr1 (Sys.Signal_handle (fun _ -> on_debug_signal ())) with Invalid_argument _ -> ());
   Log.info (fun f -> f "vpnkit version %s with hostnet version %s %s uwt version %s hvsock version %s %s"
     Depends.version Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
   );
