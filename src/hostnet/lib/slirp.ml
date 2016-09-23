@@ -150,7 +150,7 @@ let connect x peer_ip local_ip extra_dns_ip get_domain_search =
                                        length
                                    );
                           let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:dst ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
-                          Socket.Datagram.input ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload ()
+                          Socket.Datagram.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload ()
                         end
                         else if for_us && dst_port = 123 then begin
                           (* port 123 is special -- proxy these requests to
@@ -159,7 +159,7 @@ let connect x peer_ip local_ip extra_dns_ip get_domain_search =
                           let localhost = Ipaddr.V4.localhost in
                           Log.debug (fun f -> f "UDP/123 request from port %d -- sending it to %a:%d" src_port Ipaddr.V4.pp_hum localhost dst_port);
                           let reply buf = Tcpip_stack.UDPV4.writev ~source_ip:local_ip ~source_port:dst_port ~dest_ip:src ~dest_port:src_port (Tcpip_stack.udpv4 s) [ buf ] in
-                          Socket.Datagram.input ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 localhost, dst_port) ~payload ()
+                          Socket.Datagram.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 localhost, dst_port) ~payload ()
                         end else Lwt.return_unit
                       end
                     | _ -> Lwt.return_unit

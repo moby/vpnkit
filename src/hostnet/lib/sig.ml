@@ -46,7 +46,7 @@ module type DATAGRAM = sig
 
   type reply = Cstruct.t -> unit Lwt.t
 
-  val input: ?userdesc:string -> reply:reply -> src:address -> dst:address -> payload:Cstruct.t -> unit -> unit Lwt.t
+  val input: ?userdesc:string -> oneshot:bool -> reply:reply -> src:address -> dst:address -> payload:Cstruct.t -> unit -> unit Lwt.t
 
   val get_nat_table_size: unit -> int
   (** Return the current number of allocated NAT table entries *)
