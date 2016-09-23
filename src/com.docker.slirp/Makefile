@@ -4,7 +4,7 @@ build: src/depends.ml
 src/depends.ml: src/depends.ml.in
 	opam config subst src/depends.ml
 	cp src/depends.ml src/depends.tmp
-	sed -e 's/%%HOSTNET_PINNED%%/$(shell opam info hostnet -f pinned)/g' src/depends.tmp src/depends.ml
+	sed -e 's/%%VERSION%%/$(shell git rev-parse HEAD)/g' src/depends.tmp > src/depends.ml
 	cp src/depends.ml src/depends.tmp
 	sed -e 's/%%HOSTNET_PINNED%%/$(shell opam info hostnet -f pinned)/g' src/depends.tmp > src/depends.ml
 	cp src/depends.ml src/depends.tmp
