@@ -179,12 +179,13 @@ let or_error name m =
 
 let connect ~config (ppp: Vmnet.t) =
   let open Infix in
-  let valid_sources = [ config.peer_ip; Ipaddr.V4.of_string_exn "0.0.0.0" ] in
+  let valid_subnets = [ config.prefix ] in
+  let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
   let arp_table = [
     config.peer_ip, config.client_macaddr;
     config.local_ip, config.server_macaddr;
   ] @ (List.map (fun ip -> ip, config.server_macaddr) config.extra_dns_ip) in
-  or_error "filter" @@ Netif.connect ~valid_sources ppp
+  or_error "filter" @@ Netif.connect ~valid_subnets ~valid_sources ppp
   >>= fun interface ->
   or_error "console" @@ Console_unix.connect "0"
   >>= fun console ->
