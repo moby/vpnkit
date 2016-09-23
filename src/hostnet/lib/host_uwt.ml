@@ -84,7 +84,7 @@ module Sockets = struct
         loop () in
       loop ()
 
-    let input ?userdesc ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
+    let input ?userdesc ~oneshot ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
       (if Hashtbl.mem table (src, src_port) then begin
           Lwt.return (Some (Hashtbl.find table (src, src_port)))
         end else begin
@@ -121,9 +121,16 @@ module Sockets = struct
                       Log.err (fun f -> f "Socket.Datagram.input %s: dropping response from unknown sockaddr" description);
                       Lwt.return true
                     end else begin
+                      if oneshot then begin
+                        (* Remove our flow entry immediately, clean up synchronously *)
+                        Log.debug (fun f -> f "Socket.Datagram %s: expiring UDP NAT rule immediately" flow.description);
+                        Hashtbl.remove table (src, src_port);
+                        let _ = Uwt.Udp.close fd in
+                        ()
+                      end;
                       flow.reply (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len)
                       >>= fun () ->
-                      Lwt.return true
+                      Lwt.return (not oneshot)
                     end
                  ) (function
                      | Uwt.Uwt_error(Uwt.ECANCELED, _, _) ->

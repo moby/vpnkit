@@ -108,7 +108,7 @@ module Datagram = struct
       loop () in
     loop ()
 
-  let input ?userdesc ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
+  let input ?userdesc ~oneshot ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
     let remote_sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string dst, dst_port) in
     (if Hashtbl.mem table (src, src_port) then begin
         Lwt.return (Some (Hashtbl.find table (src, src_port)))
@@ -138,9 +138,14 @@ module Datagram = struct
                 >>= fun (n, _) ->
                 Cstruct.blit_from_string bytes 0 buffer 0 n;
                 let response = Cstruct.sub buffer 0 n in
+                ( if oneshot then begin
+                    Hashtbl.remove table (src, src_port);
+                    Lwt_unix.close fd
+                  end else Lwt.return_unit )
+                >>= fun () ->
                 flow.reply response
                 >>= fun () ->
-                Lwt.return true
+                Lwt.return (not oneshot)
              ) (function
                  | Unix.Unix_error(Unix.EBADF, _, _) ->
                    (* fd has been closed by the GC *)
