@@ -435,6 +435,7 @@ let listen t callback =
     Lwt.return ();
   end else begin
     t.listening <- true;
+    let last_error_log = ref 0. in
     let rec loop () =
       let open Infix in
       Lwt.catch
@@ -458,7 +459,16 @@ let listen t callback =
                f "received\n%s" (Buffer.contents b)
              );
            let buf = Cstruct.concat bufs in
-           let callback buf = log_exception_continue "PPP.listen callback" (fun () -> callback buf) in
+           let callback buf =
+             Lwt.catch (fun () -> callback buf)
+               (fun e ->
+                 let now = Unix.gettimeofday () in
+                 if (now -. !last_error_log) > 30. then begin
+                   Log.err (fun f -> f "PPP.listen callback caught %s" (Printexc.to_string e));
+                   last_error_log := now;
+                 end;
+                 Lwt.return_unit
+                ) in
            Lwt.async (fun () -> callback buf);
            List.iter (fun callback -> Lwt.async (fun () -> callback buf)) t.listeners;
            Lwt.return (`Ok true)

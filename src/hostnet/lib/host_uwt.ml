@@ -72,9 +72,16 @@ module Sockets = struct
     let idx = next_connection_idx () in
     Hashtbl.replace connection_table idx description;
     idx
-  let register_connection description = match !max_connections with
+  let register_connection =
+    let last_error_log = ref 0. in
+    fun description -> match !max_connections with
     | Some m when Hashtbl.length connection_table >= m ->
-      Log.err (fun f -> f "exceeded maximum number of forwarded connections (%d)" m);
+      let now = Unix.gettimeofday () in
+      if (now -. !last_error_log) > 30. then begin
+        (* Avoid hammering the logging system *)
+        Log.err (fun f -> f "exceeded maximum number of forwarded connections (%d)" m);
+        last_error_log := now;
+      end;
       Lwt.fail Too_many_connections
     | _ ->
       let idx = register_connection_no_limit description in
