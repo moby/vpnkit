@@ -176,7 +176,7 @@ module Sockets = struct
                         Log.debug (fun f -> f "Socket.Datagram %s: expiring UDP NAT rule immediately" flow.description);
                         Hashtbl.remove table (src, src_port);
                         let _ = Uwt.Udp.close fd in
-                        ()
+                        deregister_connection idx
                       end;
                       flow.reply (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len)
                       >>= fun () ->
