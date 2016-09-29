@@ -26,7 +26,7 @@ depends: [
   "hvsock"
   "win-eventlog"
   "asl"
-  "datakit"
+  "datakit-client"
   "fd-send-recv" # to enable vmnet-client
   "ctypes" # to enable vmnet-client
 ]
