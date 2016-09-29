@@ -34,20 +34,13 @@ exception Too_many_connections
 
 let connection_table = Hashtbl.create 511
 let connections =
-  let connections =
-    Vfs.Dir.of_list
-      (fun () ->
-        Vfs.ok (
-          Hashtbl.fold
-            (fun _ c acc -> Vfs.Inode.dir c Vfs.Dir.empty :: acc)
-            connection_table []
-        )
-      ) in
   Vfs.Dir.of_list
     (fun () ->
-      Vfs.ok [
-        Vfs.Inode.dir "connections" connections
-      ]
+      Vfs.ok (
+        Hashtbl.fold
+          (fun _ c acc -> Vfs.Inode.dir c Vfs.Dir.empty :: acc)
+          connection_table []
+      )
     )
 let register_connection_no_limit description =
   let idx = next_connection_idx () in

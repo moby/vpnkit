@@ -189,7 +189,7 @@ let connect ~config (ppp: Vmnet.t) =
   ] @ (List.map (fun ip -> ip, config.server_macaddr) config.extra_dns_ip) in
   or_error "filter" @@ Filteredif.connect ~valid_subnets ~valid_sources ppp
   >>= fun filteredif ->
-  or_error "capture" @@ Netif.connect ~limit:1048576 filteredif
+  or_error "capture" @@ Netif.connect filteredif
   >>= fun interface ->
   or_error "console" @@ Console_unix.connect "0"
   >>= fun console ->
@@ -226,7 +226,7 @@ let connect ~config (ppp: Vmnet.t) =
 
   (* Hook in the DHCP server too *)
   Netif.add_listener interface (Dhcp.listen config.server_macaddr config interface);
-  Lwt.return (`Ok (stack, List.rev udps))
+  Lwt.return (`Ok (stack, List.rev udps, interface))
 
 (* FIXME: this is unnecessary, mirage-flow should be changed *)
 module TCPV4_half_close = struct
