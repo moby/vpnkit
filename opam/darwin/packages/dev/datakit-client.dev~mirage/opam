@@ -1,0 +1,23 @@
+opam-version: "1.2"
+maintainer:   "thomas@gazagnaire.org"
+authors:      ["Thomas Leonard" "Magnus Skjegstad"
+               "David Scott" "Thomas Gazagnaire"]
+license:      "ISC"
+homepage:     "https://github.com/docker/datakit"
+bug-reports:  "https://github.com/docker/datakit"
+dev-repo:     "https://github.com/docker/datakit.git"
+doc:          "https://docker.github.io/datakit/"
+
+build: [
+  "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "-n" "datakit-client"
+]
+
+depends: [
+  "ocamlfind"  {build}
+  "ocamlbuild" {build}
+  "topkg"      {build}
+  "base-bytes"
+  "astring" "logs" "uri" "rresult" "cstruct" "fmt"
+  "cmdliner"
+  "protocol-9p"
+]

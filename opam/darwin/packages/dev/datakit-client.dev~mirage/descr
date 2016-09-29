@@ -1,0 +1,6 @@
+Client bindings for the DataKit 9P service
+
+It revisits the UNIX pipeline concept, with a modern twist: streams of
+tree-structured data instead of raw text. DataKit allows you to define complex
+build pipelines over version-controlled data, using shell scripts interacting
+with the filesystem. 
