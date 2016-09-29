@@ -78,7 +78,9 @@ let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~get_d
     } in
   { peer_ip; local_ip; extra_dns_ip; prefix; server_macaddr; client_macaddr; get_dhcp_configuration }
 
-module Netif = Filter.Make(Vmnet)
+module Filteredif = Filter.Make(Vmnet)
+
+module Netif = Capture.Make(Filteredif)
 
 module Ethif1 = Ethif.Make(Netif)
 
@@ -185,7 +187,9 @@ let connect ~config (ppp: Vmnet.t) =
     config.peer_ip, config.client_macaddr;
     config.local_ip, config.server_macaddr;
   ] @ (List.map (fun ip -> ip, config.server_macaddr) config.extra_dns_ip) in
-  or_error "filter" @@ Netif.connect ~valid_subnets ~valid_sources ppp
+  or_error "filter" @@ Filteredif.connect ~valid_subnets ~valid_sources ppp
+  >>= fun filteredif ->
+  or_error "capture" @@ Netif.connect ~limit:1048576 filteredif
   >>= fun interface ->
   or_error "console" @@ Console_unix.connect "0"
   >>= fun console ->
