@@ -41,3 +41,8 @@ respect to the host's VPN configuration.
 VPNKit operates by reconstructing Ethernet traffic from the VM and translating it into the
 relevant socket API calls on OSX or Windows. This allows the host application to generate
 traffic without requiring low-level Ethernet bridging support.
+
+Design
+------
+
+- [DNS](docs/DNS.md): describes the DNS forwarder implementation
