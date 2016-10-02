@@ -3,9 +3,9 @@ maintainer: "contact@ocamlpro.com"
 build: [
   ["ocaml" "setup.ml" "-configure" "--prefix" prefix]
   ["ocaml" "setup.ml" "-build"]
-  ["ocaml" "setup.ml" "-install"]
 ]
 depends: [
   "ocamlfind"
   "ocamlbuild" {build}
 ]
+install: ["ocaml" "setup.ml" "-install"]

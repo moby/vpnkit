@@ -25,7 +25,7 @@ module Make(Socket: Sig.SOCKETS) = struct
   let register_connection = Socket.register_connection
   let deregister_connection = Socket.deregister_connection
   let set_max_connections = Socket.set_max_connections
-  let dump_connection_table = Socket.dump_connection_table
+  let connections = Socket.connections
 
   module Infix = struct
     let ( >>= ) m f = m >>= function

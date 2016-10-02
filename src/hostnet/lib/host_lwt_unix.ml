@@ -33,13 +33,22 @@ let next_connection_idx =
 exception Too_many_connections
 
 let connection_table = Hashtbl.create 511
-let dump_connection_table () =
-  Log.info (fun f -> f "There are %d open connections" (Hashtbl.length connection_table));
-  let i = ref 0 in
-  Hashtbl.iter (fun idx description ->
-    incr i;
-    Log.info (fun f -> f "%d: open connection %d: %s" (!i) idx description);
-  ) connection_table
+let connections =
+  let connections =
+    Vfs.Dir.of_list
+      (fun () ->
+        Vfs.ok (
+          Hashtbl.fold
+            (fun _ c acc -> Vfs.Inode.dir c Vfs.Dir.empty :: acc)
+            connection_table []
+        )
+      ) in
+  Vfs.Dir.of_list
+    (fun () ->
+      Vfs.ok [
+        Vfs.Inode.dir "connections" connections
+      ]
+    )
 let register_connection_no_limit description =
   let idx = next_connection_idx () in
   Hashtbl.replace connection_table idx description;

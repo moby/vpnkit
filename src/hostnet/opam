@@ -26,6 +26,7 @@ depends: [
   "tcpip" { = "999" }
   "pcap-format"
   "dns"
+  "datakit-client"
   "hashcons" {= "1.0.1"}
   "pcap-format" { >= "0.4.0" }
   "cmdliner"

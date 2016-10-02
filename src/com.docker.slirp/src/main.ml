@@ -95,6 +95,23 @@ let hvsock_connect_forever url sockaddr callback =
   Log.debug (fun f -> f "Waiting for connections on socket %s" url);
   aux ()
 
+let start_introspection introspection_url =
+  Log.info (fun f -> f "starting introspection intrspection_url:%s" introspection_url);
+  let module Server = Fs9p.Make(Host.Sockets.Stream.Unix) in
+  unix_listen introspection_url
+  >>= fun s ->
+  Host.Sockets.Stream.Unix.listen s
+    (fun flow ->
+      Server.accept ~root:Host.Sockets.connections flow
+      >>= function
+      | Result.Error (`Msg m) ->
+        Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+        Lwt.return ()
+      | Result.Ok () ->
+        Lwt.return_unit
+  );
+  Lwt.return_unit
+
 let start_port_forwarding port_control_url max_connections vsock_path =
   Log.info (fun f -> f "starting port_forwarding port_control_url:%s vsock_path:%s"
     port_control_url
@@ -143,11 +160,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
-let on_debug_signal () =
-  Log.info (fun f -> f "Received debug signal (SIGUSR1)");
-  Host.Sockets.dump_connection_table ()
-
-let main_t socket_url port_control_url max_connections vsock_path db_path dns hosts pcap debug =
+let main_t socket_url port_control_url introspection_url max_connections vsock_path db_path dns hosts pcap debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -174,8 +187,6 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns ho
      Happily on Windows there is no such thing as SIGPIPE so it's safe to catch
      the exception and throw it away. *)
   (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore with Invalid_argument _ -> ());
-  (* Add a debugging signal hook *)
-  (try Sys.set_signal Sys.sigusr1 (Sys.Signal_handle (fun _ -> on_debug_signal ())) with Invalid_argument _ -> ());
   Log.info (fun f -> f "vpnkit version %s with hostnet version %s %s uwt version %s hvsock version %s %s"
     Depends.version Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
   );
@@ -203,6 +214,13 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns ho
     log_exception_continue "start_port_server"
       (fun () ->
         start_port_forwarding port_control_url max_connections vsock_path
+      )
+    );
+
+  Lwt.async (fun () ->
+    log_exception_continue "start_introspection_server"
+      (fun () ->
+        start_introspection introspection_url
       )
     );
 
@@ -276,16 +294,16 @@ let main_t socket_url port_control_url max_connections vsock_path db_path dns ho
       | None -> () );
     Lwt.return_unit
 
-let main socket_url port_control_url max_connections vsock_path db_path dns hosts pcap debug =
+let main socket_url port_control_url introspection_url max_connections vsock_path db_path dns hosts pcap debug =
   Host.Main.run
-    (main_t socket_url port_control_url max_connections vsock_path db_path dns hosts pcap debug)
+    (main_t socket_url port_control_url introspection_url max_connections vsock_path db_path dns hosts pcap debug)
 end
 
-let main socket port_control max_connections vsock_path db_path dns hosts pcap select debug =
+let main socket port_control introspection_url max_connections vsock_path db_path dns hosts pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control max_connections vsock_path db_path dns hosts pcap debug
+    socket port_control introspection_url max_connections vsock_path db_path dns hosts pcap debug
 
 open Cmdliner
 
@@ -310,6 +328,18 @@ let port_control_path =
        hyperv-connect://vmid to connect to the default Hyper-V 'serviceid' on VM 'vmid'; \
        /var/tmp/com.docker.port.socket to listen on a Unix domain socket for incoming connections."
      [ "port" ]
+  in
+  Arg.(value & opt string "" doc)
+
+let introspection_path =
+  let doc =
+    Arg.info ~doc:
+      "The address on the host on which to serve a 9P filesystem which exposes internal daemon \
+       state. So far this allows active network connections to be listed, to help debug problems \
+       with the connection tracking. \
+      Possible values include: \
+       /var/tmp/com.docker.slirp.introspection.socket to listen on a Unix domain socket for incoming connections."
+     [ "introspection" ]
   in
   Arg.(value & opt string "" doc)
 
@@ -376,7 +406,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ max_connections $ vsock_path $ db_path $ dns $ hosts $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ introspection_path $ max_connections $ vsock_path $ db_path $ dns $ hosts $ pcap $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =
