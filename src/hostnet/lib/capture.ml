@@ -38,10 +38,24 @@ module Cstructs = struct
     let t' = shift t off in
     match t' with
     | x :: xs ->
+      (* Return a reference to the existing buffer *)
       if Cstruct.len x >= len
       then Cstruct.sub x 0 len
       else begin
-        failwith "not implemented"
+        (* Copy into a fresh buffer *)
+        let rec copy remaining frags =
+          if Cstruct.len remaining > 0
+          then match frags with
+            | [] ->
+              err "invalid bounds in Cstructs.%s %a off=%d len=%d" f pp_t t off len
+            | x :: xs ->
+              let to_copy = min (Cstruct.len x) (Cstruct.len remaining) in
+              Cstruct.blit x 0 remaining 0 to_copy;
+              (* either we've copied all of x, or we've filled the remaining buffer *)
+              copy (Cstruct.shift remaining to_copy) xs in
+        let result = Cstruct.create len in
+        copy result (x :: xs);
+        result
       end
     | [] ->
       err "invalid bounds in Cstructs.%s %a off=%d len=%d" f pp_t t off len
