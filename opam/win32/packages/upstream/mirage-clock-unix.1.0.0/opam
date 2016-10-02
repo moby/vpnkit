@@ -1,15 +1,14 @@
-opam-version: "1"
+opam-version: "1.2"
 maintainer: "anil@recoil.org"
 tags: [
   "org:mirage"
   "org:xapi-project"
 ]
-build: [
-  [make "unix-build"]
-  [make "unix-install"]
-]
+build: [make "unix-build"]
 remove: ["ocamlfind" "remove" "mirage-clock-unix"]
 depends: [
   "ocamlfind"
   "mirage-types" {>= "0.3.0"}
 ]
+install: [make "unix-install"]
+dev-repo: "git://github.com/mirage/mirage-clock"
