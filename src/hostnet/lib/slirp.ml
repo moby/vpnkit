@@ -74,6 +74,14 @@ let connect x peer_ip local_ip extra_dns_ip get_domain_search =
         >>= function
         | `Error (`Msg m) -> failwith m
         | `Ok (s, udps, capture) ->
+            let kib = 1024 in
+            let mib = 1024 * kib in
+            (* Capture 1 MiB of all traffic *)
+            Tcpip_stack.Netif.add_match ~t:capture ~name:"all.pcap" ~limit:mib
+              Capture.Match.all;
+            (* Capture 256 KiB of DNS traffic *)
+            Tcpip_stack.Netif.add_match ~t:capture ~name:"dns.pcap" ~limit:(256 * kib)
+              Capture.Match.(ethernet @@ ipv4 () @@ ((udp ~src:53 () all) or (udp ~dst:53 () all) or ((tcp ~src:53 () all) or (tcp ~dst:53 () all))));
             let ips_to_udp = List.combine extra_dns_ip udps in
             Vmnet.add_listener x (
               fun buf ->
