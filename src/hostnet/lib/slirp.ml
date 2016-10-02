@@ -54,16 +54,34 @@ module Socket = Host.Sockets
 
 type stack = {
   after_disconnect: unit Lwt.t;
+  capture: Tcpip_stack.Netif.t;
 }
 
 let after_disconnect t = t.after_disconnect
+
+let filesystem t =
+  Vfs.Dir.of_list
+    (fun () ->
+      Vfs.ok [
+        Vfs.Inode.dir "connections" Host.Sockets.connections;
+        Vfs.Inode.dir "capture" @@ Tcpip_stack.Netif.filesystem t.capture;
+      ]
+    )
 
 let connect x peer_ip local_ip extra_dns_ip get_domain_search =
   let config = Tcpip_stack.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~get_domain_search in
         begin Tcpip_stack.connect ~config x
         >>= function
         | `Error (`Msg m) -> failwith m
-        | `Ok (s, udps) ->
+        | `Ok (s, udps, capture) ->
+            let kib = 1024 in
+            let mib = 1024 * kib in
+            (* Capture 1 MiB of all traffic *)
+            Tcpip_stack.Netif.add_match ~t:capture ~name:"all.pcap" ~limit:mib
+              Capture.Match.all;
+            (* Capture 256 KiB of DNS traffic *)
+            Tcpip_stack.Netif.add_match ~t:capture ~name:"dns.pcap" ~limit:(256 * kib)
+              Capture.Match.(ethernet @@ ipv4 () @@ ((udp ~src:53 () all) or (udp ~dst:53 () all) or ((tcp ~src:53 () all) or (tcp ~dst:53 () all))));
             let ips_to_udp = List.combine extra_dns_ip udps in
             Vmnet.add_listener x (
               fun buf ->
@@ -218,7 +236,10 @@ let connect x peer_ip local_ip extra_dns_ip get_domain_search =
             Tcpip_stack.listen s
             >>= fun () ->
             Log.info (fun f -> f "TCP/IP ready");
-            Lwt.return { after_disconnect = Vmnet.after_disconnect x }
+            Lwt.return {
+              after_disconnect = Vmnet.after_disconnect x;
+              capture
+            }
         end
 
   let create config =

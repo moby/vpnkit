@@ -25,6 +25,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_C
 
   val after_disconnect: stack -> unit Lwt.t
   (** Waits until the stack has been disconnected *)
+
+  val filesystem: stack -> Vfs.Dir.t
+  (** A virtual filesystem which exposes internal state for debugging *)
 end
 
 val print_pcap: pcap -> string

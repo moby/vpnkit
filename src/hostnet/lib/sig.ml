@@ -161,6 +161,39 @@ module type HOST = sig
   end
 end
 
+module type MATCH = sig
+
+  type t = Cstruct.t list -> bool
+  (** A predicate which is true if we should record this ethernet frame *)
+
+  val all: t
+  (** Match all frames *)
+
+  val ethernet: t -> t
+  (** Matches all ethernet frames *)
+
+  val (or): t -> t -> t
+  (** [a or b] matches [a] or [b] *)
+
+  val ipv4:
+     ?src:Ipaddr.V4.t
+     -> ?dst:Ipaddr.V4.t
+     -> unit -> t -> t
+  (** Matches all IP frames *)
+
+  val tcp:
+     ?src:int
+  -> ?dst:int
+  -> unit -> t -> t
+  (** Matches all TCP frames *)
+
+  val udp:
+     ?src:int
+  -> ?dst:int
+  -> unit -> t -> t
+  (** Matches all UDP frames *)
+end
+
 module type VMNET = sig
   (** A virtual ethernet link to the VM *)
 

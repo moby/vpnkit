@@ -95,22 +95,27 @@ let hvsock_connect_forever url sockaddr callback =
   Log.debug (fun f -> f "Waiting for connections on socket %s" url);
   aux ()
 
-let start_introspection introspection_url =
-  Log.info (fun f -> f "starting introspection intrspection_url:%s" introspection_url);
-  let module Server = Fs9p.Make(Host.Sockets.Stream.Unix) in
-  unix_listen introspection_url
-  >>= fun s ->
-  Host.Sockets.Stream.Unix.listen s
-    (fun flow ->
-      Server.accept ~root:Host.Sockets.connections flow
-      >>= function
-      | Result.Error (`Msg m) ->
-        Log.err (fun f -> f "failed to establish 9P connection: %s" m);
-        Lwt.return ()
-      | Result.Ok () ->
+let start_introspection introspection_url root =
+  Lwt.async (fun () ->
+    log_exception_continue "start_introspection_server"
+      (fun () ->
+        Log.info (fun f -> f "starting introspection intrspection_url:%s" introspection_url);
+        let module Server = Fs9p.Make(Host.Sockets.Stream.Unix) in
+        unix_listen introspection_url
+        >>= fun s ->
+        Host.Sockets.Stream.Unix.listen s
+          (fun flow ->
+            Server.accept ~root flow
+            >>= function
+            | Result.Error (`Msg m) ->
+              Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+              Lwt.return ()
+            | Result.Ok () ->
+              Lwt.return_unit
+        );
         Lwt.return_unit
-  );
-  Lwt.return_unit
+      )
+  )
 
 let start_port_forwarding port_control_url max_connections vsock_path =
   Log.info (fun f -> f "starting port_forwarding port_control_url:%s vsock_path:%s"
@@ -217,13 +222,6 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
       )
     );
 
-  Lwt.async (fun () ->
-    log_exception_continue "start_introspection_server"
-      (fun () ->
-        start_introspection introspection_url
-      )
-    );
-
   let hardcoded_configuration =
     let never, _ = Lwt.task () in
     let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
@@ -263,6 +261,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
         Slirp_stack.connect stack conn
         >>= fun stack ->
         Log.info (fun f -> f "stack connected");
+        start_introspection introspection_url (Slirp_stack.filesystem stack);
         Slirp_stack.after_disconnect stack
         >>= fun () ->
         Log.info (fun f -> f "stack disconnected");
@@ -281,6 +280,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
         Slirp_stack.connect stack conn
         >>= fun stack ->
         Log.info (fun f -> f "stack connected");
+        start_introspection introspection_url (Slirp_stack.filesystem stack);
         Slirp_stack.after_disconnect stack
         >>= fun () ->
         Log.info (fun f -> f "stack disconnected");
