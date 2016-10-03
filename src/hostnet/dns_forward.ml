@@ -2,7 +2,7 @@ open Lwt.Infix
 
 let src =
   let src = Logs.Src.create "dns" ~doc:"Resolve DNS queries on the host" in
-  Logs.Src.set_level src (Some Logs.Debug);
+  Logs.Src.set_level src (Some Logs.Info);
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -50,7 +50,7 @@ let lookup_locally = function
       ) None !(Hosts.etc_hosts) with
       | None -> None
       | Some v4 ->
-        Log.debug (fun f -> f "DNS[%04x] %s is %s in in /etc/hosts" id (Dns.Name.to_string q_name) (Ipaddr.V4.to_string v4));
+        Log.info (fun f -> f "DNS[%04x] %s is %s in in /etc/hosts" id (Dns.Name.to_string q_name) (Ipaddr.V4.to_string v4));
         let answers = [ { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = A v4 } ] in
         Some { Dns.Packet.id; detail; questions = request.questions; authorities=[]; additionals; answers }
       end
@@ -63,7 +63,7 @@ let lookup_locally = function
       ) None !(Hosts.etc_hosts) with
       | None -> None
       | Some v6 ->
-        Log.debug (fun f -> f "DNS[%04x] %s is %s in in /etc/hosts" id (Dns.Name.to_string q_name) (Ipaddr.V6.to_string v6));
+        Log.info (fun f -> f "DNS[%04x] %s is %s in in /etc/hosts" id (Dns.Name.to_string q_name) (Ipaddr.V6.to_string v6));
         let answers = [ { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA v6 } ] in
         Some { Dns.Packet.id; detail; questions = request.questions; authorities=[]; additionals; answers }
       end
