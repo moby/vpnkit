@@ -16,7 +16,6 @@ remove: [
 build-test: [
   ["ocaml" "setup.ml" "-configure" "--enable-tests"]
   ["ocaml" "setup.ml" "-build"]
-  ["ocaml" "setup.ml" "-test"]
   ["ocaml" "setup.ml" "-test"] {os!="win32"}
   ["ocaml" "setup.ml" "-test" "-ocamlmod" "_build/src/ocamlmod.byte"] {os="win32"}
 ]

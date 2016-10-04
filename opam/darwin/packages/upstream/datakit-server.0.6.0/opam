@@ -4,12 +4,12 @@ authors:      ["Thomas Leonard" "Magnus Skjegstad"
                "David Scott" "Thomas Gazagnaire"]
 license:      "ISC"
 homepage:     "https://github.com/docker/datakit"
-bug-reports:  "https://github.com/docker/datakit"
+bug-reports:  "https://github.com/docker/datakit/issues"
 dev-repo:     "https://github.com/docker/datakit.git"
 doc:          "https://docker.github.io/datakit/"
 
 build: [
-  "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "-n" "datakit-client"
+  "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "-n" "datakit-server"
 ]
 
 depends: [
@@ -18,6 +18,6 @@ depends: [
   "topkg"      {build}
   "base-bytes"
   "astring" "logs" "uri" "rresult" "cstruct" "fmt"
-  "cmdliner"
-  "protocol-9p"
+  "protocol-9p" {>= "0.7.0"}
+  "sexplib" "mirage-types-lwt"
 ]
