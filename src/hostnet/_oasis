@@ -14,8 +14,8 @@ Library hostnet
   Path: lib
   Pack: true
   Findlibname: hostnet
-  Modules: Constants, Arp, Dns_forward, Filter, Capture, Slirp, Tcpip_stack,
-    Forward, Host_lwt_unix, Host_uwt, Resolver, Hosts, Vmnet, Sig
+  Modules: Constants, Arp, Dns_forward, Filter, Frame, Match, Capture, Mux, Slirp,
+    Forward, Host_lwt_unix, Host_uwt, Resolver, Hosts, Vmnet, Dhcp, Sig
   BuildDepends: cstruct, lwt.unix, logs, mirage-types.lwt, ipaddr, mirage-flow,
     ppx_sexp_conv, pcap-format, mirage-console.unix, tcpip.ethif,
     tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct,

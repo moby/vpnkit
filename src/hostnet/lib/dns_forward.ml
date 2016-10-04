@@ -73,6 +73,11 @@ let lookup_locally = function
 
 module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Resolv_conf: Sig.RESOLV_CONF) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) = struct
 
+let choose_server ~nth () =
+  Resolv_conf.get ()
+  >>= fun all ->
+  Lwt.return (choose_server ~nth all.Resolver.resolvers)
+
 let input ~nth ~udp ~src ~dst ~src_port buf =
   let src_str = Ipaddr.V4.to_string src in
   let dst_str = Ipaddr.V4.to_string dst in
@@ -97,9 +102,8 @@ let input ~nth ~udp ~src ~dst ~src_port buf =
       reply buf
     end
   | None ->
-    Resolv_conf.get ()
-    >>= fun all ->
-    begin match choose_server ~nth all.Resolver.resolvers with
+    choose_server ~nth ()
+    >>= function
     | Some (dst_str, (dst, dst_port)) ->
       Log.debug (fun f -> f "DNS[%s] Forwarding to %s (%s)" (tidstr_of_dns dns) (Ipaddr.to_string dst) dst_str);
       let reply buffer =
@@ -110,5 +114,4 @@ let input ~nth ~udp ~src ~dst ~src_port buf =
     | None ->
       Log.err (fun f -> f "DNS[%s] No upstream DNS server configured: dropping request" (tidstr_of_dns dns));
       Lwt.return_unit
-    end
 end

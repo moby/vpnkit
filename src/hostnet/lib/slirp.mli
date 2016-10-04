@@ -18,15 +18,15 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_C
   val create: Config.t -> config Lwt.t
   (** Initialise a TCP/IP stack, taking configuration from the Config.t *)
 
-  type stack
+  type t
 
-  val connect: config -> Vmnet.fd -> stack Lwt.t
+  val connect: config -> Vmnet.fd -> t Lwt.t
   (** Read and write ethernet frames on the given fd *)
 
-  val after_disconnect: stack -> unit Lwt.t
+  val after_disconnect: t -> unit Lwt.t
   (** Waits until the stack has been disconnected *)
 
-  val filesystem: stack -> Vfs.Dir.t
+  val filesystem: t -> Vfs.Dir.t
   (** A virtual filesystem which exposes internal state for debugging *)
 end
 
