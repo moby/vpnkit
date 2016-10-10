@@ -235,10 +235,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
               Lwt.return_unit
             )
 
-    let reject_new_flow port =
-      Log.err (fun f -> f "SYN packet was not intercepted for port %d" port);
-      None
-
     let input_tcp t ~id ~syn (ip, port) (buf: Cstruct.t) =
       if syn then begin
         if Tcp.Id.Set.mem id t.pending then begin
@@ -253,7 +249,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
                  >>= function
                  | `Error (`Msg m) ->
                    Log.err (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.V4.to_string ip) port m);
-                   Lwt.return reject_new_flow
+                   Lwt.return (fun _ -> None)
                  | `Ok socket ->
                    let t = Tcp.Flow.create id socket in
                    let listeners port =
@@ -270,7 +266,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
       end else begin
         Tcp.Flow.touch id;
         (* non-SYN packets are injected into the stack as normal *)
-        Stack_tcp.input t.tcp4 ~listeners:reject_new_flow ~src:id.Stack_tcp_wire.dest_ip ~dst:id.Stack_tcp_wire.local_ip buf
+        Stack_tcp.input t.tcp4 ~listeners:(fun _ -> None) ~src:id.Stack_tcp_wire.dest_ip ~dst:id.Stack_tcp_wire.local_ip buf
       end
 
     (* Send an ICMP destination reachable message in response to the given
