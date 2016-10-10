@@ -34,6 +34,7 @@ depends: [
   "hvsock"
   "asl"
   "win-eventlog"
+  "fd-send-recv"
   "logs"
   "fmt"
   "astring"
