@@ -1,5 +1,3 @@
-module Match: Sig.MATCH
-
 module Make(Input: Sig.VMNET): sig
   include Sig.VMNET
 

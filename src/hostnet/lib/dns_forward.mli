@@ -5,9 +5,10 @@ module Make
     (Socket: Sig.SOCKETS)
     (Time: V1_LWT.TIME) : sig
   val input: nth:int -> udp:Udp.t -> src:Ipaddr.V4.t -> dst:Ipaddr.V4.t -> src_port:int -> Cstruct.t -> unit Lwt.t
-end
 
-val choose_server: nth:int -> (Ipaddr.t * int) list -> (string * (Ipaddr.t * int)) option
-(** [choose_server nth servers] chooses an upstream server to use from
-    [servers]. The choice depends on which virtual server IP received the request
-    (nth).  Also returns a short descriptive string to include in the logs. *)
+  val choose_server: nth:int -> unit -> (string * (Ipaddr.t * int)) option Lwt.t
+  (** [choose_server nth ()] chooses an upstream server to use from the
+      currently-configured system resolver.
+      The choice depends on which virtual server IP received the request
+      (nth).  Also returns a short descriptive string to include in the logs. *)
+end
