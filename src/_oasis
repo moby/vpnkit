@@ -1,0 +1,58 @@
+OASISFormat: 0.4
+Name: usernet
+Version: 0.1
+Synopsis: a userspace ethernet to socket proxy
+Authors: David Scott (dave@recoil.org)
+License: ISC
+Plugins: META (0.4), DevFiles (0.4)
+AlphaFeatures: pure_interface
+BuildTools: ocamlbuild
+
+Description: proxy ethernet frames to and from sockets
+
+Executable slirp
+  Path: bin
+  CompiledObject: best
+  MainIs: main.ml
+  BuildDepends: cmdliner, ofs, logs.fmt, hostnet, hvsock, hvsock.lwt-unix,
+    datakit-server.fs9p, win-eventlog, asl, fd-send-recv
+
+Library hostnet
+  Path: hostnet
+  Pack: true
+  Findlibname: hostnet
+  Modules: Constants, Arp, Dns_forward, Filter, Frame, Match, Capture, Mux, Slirp,
+    Forward, Host_lwt_unix, Host_uwt, Resolver, Hosts, Vmnet, Dhcp, Sig
+  BuildDepends: cstruct, lwt.unix, logs, mirage-types.lwt, ipaddr, mirage-flow,
+    ppx_sexp_conv, pcap-format, mirage-console.unix, tcpip.ethif,
+    tcpip.arpv4, tcpip.ipv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct,
+    charrua-core.server, dns, dns.lwt, ofs, uwt, uwt.ext, uwt.preemptive,
+    lwt.preemptive, threads, astring, datakit-server.vfs
+
+Executable test
+  Path: hostnet_test
+  CompiledObject: best
+  MainIs: main.ml
+  Build$: flag(tests)
+  BuildDepends: hostnet, cmdliner, alcotest, lwt.unix, logs.fmt,
+    dns.mirage, lwt.preemptive, uwt.preemptive
+
+Test test
+  Run$:               flag(tests)
+  Command:            $test -q
+  WorkingDirectory:   lib_test
+
+Library ofs
+  Path: ofs
+  Findlibname: ofs
+  Modules: Active_list, Active_config
+  BuildDepends: protocol-9p, protocol-9p.unix, cstruct, cstruct.lwt, lwt.unix, io-page.unix, logs,
+    mirage-types.lwt, astring, named-pipe.lwt
+
+Document ofs
+  Title:                Ofs docs
+  Type:                 ocamlbuild (0.4)
+  BuildTools+:          ocamldoc
+  Install:              true
+  XOCamlbuildPath:      ofs
+  XOCamlbuildLibraries: ofs
