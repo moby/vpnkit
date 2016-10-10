@@ -1,0 +1,26 @@
+opam-version: "1.2"
+maintainer: "Vincent Hugot <vincent.hugot@gmail.com>"
+authors: [
+  "Vincent Hugot <vincent.hugot@gmail.com>"
+  "Simon Cruanes <simon.cruanes.2007@m4x.org"
+]
+homepage: "https://github.com/vincent-hugot/iTeML"
+bug-reports: "https://github.com/vincent-hugot/iTeML/issues"
+doc:
+  "https://github.com/vincent-hugot/iTeML/blob/master/README.adoc#introduction"
+tags: ["test" "property" "quickcheck"]
+dev-repo: "git@github.com:vincent-hugot/iTeML.git"
+build: [make "build"]
+install: [make "BIN=%{bin}%" "install"]
+remove: [
+  ["ocamlfind" "remove" "qcheck"]
+  ["rm" "%{bin}%/qtest"]
+]
+depends: [
+  "ocamlfind"
+  "ounit" {>= "2.0.0"}
+  "ocamlbuild" {build}
+  "base-bytes"
+]
+conflicts: "qcheck"
+available: [ocaml-version >= "4.00.0"]

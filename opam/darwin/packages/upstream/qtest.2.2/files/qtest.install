@@ -1,0 +1,4 @@
+bin: [
+  "?qtest/_build/qtest.byte" {"qtest"}
+  "?qtest/_build/qtest.native" {"qtest"}
+]
