@@ -2,6 +2,7 @@
 type t =
   | Ethernet: { src: Macaddr.t; dst: Macaddr.t; payload: t } -> t
   | Arp:      { op: [ `Request | `Reply | `Unknown ] } -> t
+  | Icmp:     { raw: Cstruct.t; payload: t } -> t
   | Ipv4:     { src: Ipaddr.V4.t; dst: Ipaddr.V4.t; dnf: bool; ihl: int; raw: Cstruct.t; payload: t } -> t
   | Udp:      { src: int; dst: int; len: int; payload: t } -> t
   | Tcp:      { src: int; dst: int; syn: bool; raw: Cstruct.t; payload: t } -> t
@@ -37,6 +38,14 @@ let parse buf =
           let raw = inner in
           let inner = Cstruct.sub inner (4 * ihl) (len - 4 * ihl) in
           ( match proto with
+            | 1 ->
+              let _ty     = Cstruct.get_uint8     inner 0 in
+              let _code   = Cstruct.get_uint8     inner 1 in
+              let _csum   = Cstruct.BE.get_uint16 inner 2 in
+              let _id     = Cstruct.BE.get_uint16 inner 4 in
+              let _seq    = Cstruct.BE.get_uint16 inner 6 in
+              let payload = Cstruct.shift         inner 8 in
+              Ok (Icmp { raw; payload = Payload payload })
             | 6 ->
               let src     = Cstruct.BE.get_uint16 inner 0 in
               let dst     = Cstruct.BE.get_uint16 inner 2 in

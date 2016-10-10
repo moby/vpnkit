@@ -79,11 +79,11 @@ module Make(Netif: V1_LWT.NETWORK) = struct
 
   let callback t buf =
     (* Does the packet match any of our rules? *)
-    match Wire_structs.parse_ethernet_frame buf with
-    | Some (Some Wire_structs.IPv4, _, payload) ->
-      let dst = Wire_structs.Ipv4_wire.get_ipv4_dst payload |> Ipaddr.V4.of_int32 in
+    let open Frame in
+    match parse buf with
+    | Ok (Ethernet { payload = Ipv4 { dst } }) ->
       if RuleMap.mem dst t.rules then begin
-        let port =  RuleMap.find dst t.rules in
+        let port = RuleMap.find dst t.rules in
         port.last_active_time <- Unix.gettimeofday ();
         port.callback buf
       end else begin
