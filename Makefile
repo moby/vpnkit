@@ -56,20 +56,19 @@ depends:
 	# Don't run all the unit tests of all upstream packages in the universe for speed
 	$(OPAMFLAGS) opam install $(shell ls -1 $(OPAM_REPO)/packages/upstream) -y
 	$(OPAMFLAGS) OPAMVERBOSE=1 opam install --deps-only slirp -y
-	# ... but install hostnet and tcpip with tests enabled
-	$(OPAMFLAGS) OPAMVERBOSE=1 opam reinstall tcpip hostnet -y -t
+	# ... but install tcpip with tests enabled
+	$(OPAMFLAGS) OPAMVERBOSE=1 opam reinstall tcpip -y -t
 
 com.docker.slirp.tgz:
-	cd src/com.docker.slirp && $(OPAMFLAGS) opam config exec -- $(MAKE) build stage
-	cp src/com.docker.slirp/com.docker.slirp.tgz .
+	cd src/ && $(OPAMFLAGS) opam config exec -- $(MAKE) build stage
+	cp src/com.docker.slirp.tgz .
 
 com.docker.slirp.exe:
-	cd src/com.docker.slirp && $(OPAMFLAGS) opam config exec -- $(MAKE)
-	cp src/com.docker.slirp/_build/src/main.native com.docker.slirp.exe
+	cd src/ && $(OPAMFLAGS) opam config exec -- $(MAKE)
+	cp src/_build/bin/main.native com.docker.slirp.exe
 
 install:
-	cp src/com.docker.slirp/com.docker.slirp.exe '$(EXEDIR)'
-	cp src/com.docker.slirp/register.ps1 '$(EXEDIR)'
+	cp src/com.docker.slirp.exe '$(EXEDIR)'
 
 uninstall:
 	@echo uninstall not implemented

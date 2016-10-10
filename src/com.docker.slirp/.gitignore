@@ -1,8 +1,0 @@
-_build/
-*~
-*~
-\.\#*
-\#*#
-*.install
-*.native
-*.byte
