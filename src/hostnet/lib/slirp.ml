@@ -346,6 +346,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
 
     (** Handle IPv4 datagrams by proxying them to a remote system *)
     let input_ipv4 t ipv4 = match ipv4 with
+      (* Respond to ICMP *)
+      | Ipv4 { raw; payload = Icmp _; _ } ->
+        let none ~src:_ ~dst:_ _ = Lwt.return_unit in
+        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default:(fun ~proto:_ -> none) raw
       (* UDP on port 53 -> DNS forwarder *)
       | Ipv4 { src; dst; payload = Udp { src = src_port; dst = 53; payload = Payload payload; _ }; _ } ->
         begin match index Ipaddr.V4.compare t.dns_ips dst with
@@ -426,6 +430,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
 
     (** Handle IPv4 datagrams by proxying them to a remote system *)
     let input_ipv4 t ipv4 = match ipv4 with
+      (* Respond to ICMP *)
+      | Ipv4 { raw; payload = Icmp _; _ } ->
+        let none ~src:_ ~dst:_ _ = Lwt.return_unit in
+        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default:(fun ~proto:_ -> none) raw
       | Ipv4 { src = dest_ip; dst = local_ip; payload = Tcp { src = dest_port; dst = local_port; syn; raw; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port; dest_ip; local_ip; dest_port } in
         Endpoint.input_tcp t.endpoint ~id ~syn (local_ip, local_port) raw
