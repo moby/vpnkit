@@ -274,7 +274,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
        when the do-not-fragment flag is set. *)
     let send_icmp_dst_unreachable t ~src ~dst ~src_port ~dst_port ~ihl raw =
       let would_fragment ~ip_header ~ip_payload =
-        let open Wire_structs.Ipv4_wire in
+        let open Icmpv4_wire in
         let header = Cstruct.create sizeof_icmpv4 in
         set_icmpv4_ty header 0x03;
         set_icmpv4_code header 0x04;
