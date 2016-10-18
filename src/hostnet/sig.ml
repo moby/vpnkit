@@ -203,6 +203,15 @@ module type RESOLV_CONF = sig
   val set_default_dns: (Ipaddr.t * int) list -> unit
 end
 
+module type RECORDER = sig
+  (** Allow ethernet packets to be recorded *)
+
+  type t
+
+  val record: t -> Cstruct.t list -> unit
+  (** Inject a packet and record it if it matches a rule. This is intended for
+      debugging: the packet will not be transmitted to the underlying network. *)
+end
 
 module type Connector = sig
   (** Make connections into the VM *)
