@@ -1,5 +1,6 @@
 module Make(Input: Sig.VMNET): sig
   include Sig.VMNET
+  include Sig.RECORDER with type t := t
 
   val connect: Input.t
     -> [ `Ok of t | `Error of error ] Lwt.t

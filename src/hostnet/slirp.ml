@@ -66,6 +66,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
 
   module Filteredif = Filter.Make(Vmnet)
   module Netif = Capture.Make(Filteredif)
+  module Recorder = (Netif: Sig.RECORDER with type t = Netif.t)
   module Switch = Mux.Make(Netif)
   module Dhcp = Dhcp.Make(Switch)
 
@@ -89,7 +90,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
     let shutdown_write = close
   end
 
-  module Dns_forwarder = Dns_forward.Make(Stack_ipv4)(Stack_udp)(Resolv_conf)(Host.Sockets)(Host.Time)
+  module Dns_forwarder = Dns_forward.Make(Stack_ipv4)(Stack_udp)(Resolv_conf)(Host.Sockets)(Host.Time)(Recorder)
 
   let is_dns =
     let open Match in
@@ -171,6 +172,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
   module Endpoint = struct
 
     type t = {
+      recorder:                 Recorder.t;
       netif:                    Switch.Port.t;
       ethif:                    Stack_ethif.t;
       arp:                      Stack_arpv4.t;
@@ -185,7 +187,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
     let touch t =
       t.last_active_time <- Unix.gettimeofday ()
 
-    let create switch arp_table ip =
+    let create recorder switch arp_table ip =
       let netif = Switch.port switch ip in
       let open Infix in
       or_error "Stack_ethif.connect" @@ Stack_ethif.connect netif
@@ -209,7 +211,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
 
       let pending = Tcp.Id.Set.empty in
       let last_active_time = Unix.gettimeofday () in
-      let tcp_stack = { netif; ethif; arp; ipv4; udp4; tcp4; pending; last_active_time } in
+      let tcp_stack = { recorder; netif; ethif; arp; ipv4; udp4; tcp4; pending; last_active_time } in
       Lwt.return (`Ok tcp_stack)
 
     let callback t tcpv4 = match t.Tcp.Flow.socket with
@@ -350,7 +352,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
         begin match index Ipaddr.V4.compare t.dns_ips dst with
           | Some nth ->
             let udp = t.endpoint.Endpoint.udp4 in
-            Dns_forwarder.input ~nth ~udp ~src ~dst ~src_port payload
+            let recorder = t.endpoint.Endpoint.recorder in
+            Dns_forwarder.input ~nth ~udp ~recorder ~src ~dst ~src_port payload
           | None ->
             Log.err (fun f -> f "DNS IP %s not recognised" (Ipaddr.V4.to_string dst));
             Lwt.return_unit
@@ -562,7 +565,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
           then Lwt.return (`Ok (IPMap.find ip t.endpoints))
           else begin
             let open Infix in
-            Endpoint.create switch arp_table ip
+            Endpoint.create interface switch arp_table ip
             >>= fun endpoint ->
             t.endpoints <- IPMap.add ip endpoint t.endpoints;
             Lwt.return (`Ok endpoint)
