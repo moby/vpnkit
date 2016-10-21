@@ -34,6 +34,11 @@ let or_failwith name m =
   | `Error _ -> Lwt.fail (Failure (Printf.sprintf "Failed to connect %s device" name))
   | `Ok x -> Lwt.return x
 
+let or_failwith_result name m =
+  m >>= function
+  | Result.Error _ -> Lwt.fail (Failure (Printf.sprintf "Failed to connect %s device" name))
+  | Result.Ok x -> Lwt.return x
+
 let or_error name m =
   m >>= function
   | `Error _ -> Lwt.return (`Error (`Msg (Printf.sprintf "Failed to connect %s device" name)))
@@ -799,7 +804,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
     Lwt.return t
 
   let connect t client =
-    or_failwith "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr client
+    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr client
     >>= fun x ->
     Log.debug (fun f -> f "accepted vmnet connection");
 

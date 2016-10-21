@@ -1,3 +1,5 @@
+module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
+
 open Lwt
 open Sexplib.Std
 
@@ -64,7 +66,7 @@ module Init = struct
     let version = get_msg_version rest in
     let commit = Cstruct.to_string @@ get_msg_commit rest in
     let rest = Cstruct.shift rest sizeof_msg in
-    `Ok ({ magic; version; commit }, rest)
+    Result.Ok ({ magic; version; commit }, rest)
 end
 
 module Command = struct
@@ -105,8 +107,8 @@ module Command = struct
     | 1 ->
       let uuid = Cstruct.(to_string (sub rest 1 36)) in
       let rest = Cstruct.shift rest 37 in
-      `Ok (Ethernet uuid, rest)
-    | n -> `Error (`Msg (Printf.sprintf "Unknown command: %d" n))
+      Result.Ok (Ethernet uuid, rest)
+    | n -> Result.Error (`Msg (Printf.sprintf "Unknown command: %d" n))
 end
 
 module Vif = struct
@@ -144,9 +146,9 @@ module Vif = struct
     let max_packet_size = get_msg_max_packet_size rest in
     try
       let client_macaddr = Macaddr.of_bytes_exn @@ Cstruct.to_string @@ get_msg_macaddr rest in
-      `Ok ({ mtu; max_packet_size; client_macaddr }, Cstruct.shift rest sizeof_msg)
+      Result.Ok ({ mtu; max_packet_size; client_macaddr }, Cstruct.shift rest sizeof_msg)
     with _ ->
-      `Error (`Msg (Printf.sprintf "Failed to parse MAC: [%s]" (Cstruct.to_string @@ get_msg_macaddr rest)))
+      Result.Error (`Msg (Printf.sprintf "Failed to parse MAC: [%s]" (Cstruct.to_string @@ get_msg_macaddr rest)))
 
 end
 
@@ -164,13 +166,7 @@ module Packet = struct
 
   let unmarshal rest =
     let t = get_msg_len rest in
-    `Ok (t, Cstruct.shift rest sizeof)
-end
-
-module Infix = struct
-  let ( >>= ) m f = m >>= function
-    | `Ok x -> f x
-    | `Error x -> Lwt.return (`Error x)
+    Result.Ok (t, Cstruct.shift rest sizeof)
 end
 
 module Make(C: CONN) = struct
@@ -201,7 +197,7 @@ type t = {
 }
 
 
-let error_of_failure f = Lwt.catch f (fun e -> Lwt.return (`Error (`Msg (Printexc.to_string e))))
+let error_of_failure f = Lwt.catch f (fun e -> Lwt_result.fail (`Msg (Printexc.to_string e)))
 
 let get_fd t = match t.fd with
   | Some fd -> fd
@@ -214,7 +210,7 @@ let server_negotiate t =
       Channel.read_exactly ~len:Init.sizeof fd
       >>= fun bufs ->
       let buf = Cstruct.concat bufs in
-      let open Infix in
+      let open Lwt_result.Infix in
       Lwt.return (Init.unmarshal buf)
       >>= fun (init, _) ->
       Log.info (fun f -> f "PPP.negotiate: received %s" (Init.to_string init));
@@ -226,7 +222,7 @@ let server_negotiate t =
       Channel.read_exactly ~len:Command.sizeof fd
       >>= fun bufs ->
       let buf = Cstruct.concat bufs in
-      let open Infix in
+      let open Lwt_result.Infix in
       Lwt.return (Command.unmarshal buf)
       >>= fun (command, _) ->
       Log.info (fun f -> f "PPP.negotiate: received %s" (Command.to_string command));
@@ -238,7 +234,7 @@ let server_negotiate t =
       Channel.write_buffer fd buf;
       Channel.flush fd
       >>= fun () ->
-      Lwt.return (`Ok ())
+      Lwt_result.return ()
     )
 
 let client_negotiate t =
@@ -254,7 +250,7 @@ let client_negotiate t =
       Channel.read_exactly ~len:Init.sizeof fd
       >>= fun bufs ->
       let buf = Cstruct.concat bufs in
-      let open Infix in
+      let open Lwt_result.Infix in
       Lwt.return (Init.unmarshal buf)
       >>= fun (init, _) ->
       Log.info (fun f -> f "Client.negotiate: received %s" (Init.to_string init));
@@ -268,11 +264,11 @@ let client_negotiate t =
       Channel.read_exactly ~len:Vif.sizeof fd
       >>= fun bufs ->
       let buf = Cstruct.concat bufs in
-      let open Infix in
+      let open Lwt_result.Infix in
       Lwt.return (Vif.unmarshal buf)
       >>= fun (vif, _) ->
       Log.info (fun f -> f "Client.negotiate: vif %s" (Vif.to_string vif));
-      Lwt.return (`Ok ())
+      Lwt_result.return ()
     )
 
 (* Use blocking I/O here so we can avoid Using Lwt_unix or Uwt. Ideally we
@@ -343,20 +339,20 @@ let make ~client_macaddr ~server_macaddr fd =
 type fd = C.flow
 
 let of_fd ~client_macaddr ~server_macaddr flow =
-  let open Infix in
+  let open Lwt_result.Infix in
   let channel = Channel.create flow in
   let t = make ~client_macaddr ~server_macaddr channel in
   server_negotiate t
   >>= fun () ->
-  Lwt.return (`Ok t)
+  Lwt_result.return t
 
 let client_of_fd ~client_macaddr ~server_macaddr flow =
-  let open Infix in
+  let open Lwt_result.Infix in
   let channel = Channel.create flow in
   let t = make ~client_macaddr ~server_macaddr channel in
   client_negotiate t
   >>= fun () ->
-  Lwt.return (`Ok t)
+  Lwt_result.return t
 
 let disconnect t = match t.fd with
   | None -> Lwt.return ()
@@ -437,7 +433,7 @@ let listen t callback =
     t.listening <- true;
     let last_error_log = ref 0. in
     let rec loop () =
-      let open Infix in
+      let open Lwt_result.Infix in
       Lwt.catch
         (fun () ->
            let open Lwt.Infix in
@@ -445,7 +441,7 @@ let listen t callback =
            Channel.read_exactly ~len:Packet.sizeof fd
            >>= fun bufs ->
            let read_header = Cstruct.concat bufs in
-           let open Infix in
+           let open Lwt_result.Infix in
            Lwt.return (Packet.unmarshal read_header)
            >>= fun (len, _) ->
            let open Lwt.Infix in
@@ -471,20 +467,20 @@ let listen t callback =
                 ) in
            Lwt.async (fun () -> callback buf);
            List.iter (fun callback -> Lwt.async (fun () -> callback buf)) t.listeners;
-           Lwt.return (`Ok true)
+           Lwt_result.return true
         ) (function
             | End_of_file ->
               Log.info (fun f -> f "PPP.listen: closing connection");
-              Lwt.return (`Ok false);
+              Lwt_result.return false
             | e ->
               Log.err (fun f -> f "PPP.listen: caught unexpected %s: disconnecting" (Printexc.to_string e));
               let open Lwt.Infix in
               disconnect t
               >>= fun () ->
-              Lwt.return (`Ok false)
+              Lwt_result.return false
           )
       >>= fun continue ->
-      if continue then loop () else Lwt.return (`Ok ()) in
+      if continue then loop () else Lwt_result.return () in
     Lwt.async @@ loop;
     Lwt.return ();
   end

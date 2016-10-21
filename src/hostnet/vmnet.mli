@@ -20,13 +20,13 @@ val after_disconnect: t -> unit Lwt.t
 
 val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
 
-val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.flow -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
+val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.flow -> t Error.t
 (** [of_fd ~client_macaddr ~server_macaddr fd] negotiates with the client over
     [fd]. The client uses [client_macaddr] as the source address of all its ethernet
     frames. The server uses [server_macaddr] as the source address of all its
     ethernet frames. *)
 
-val client_of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.flow -> [ `Ok of t | `Error of [ `Msg of string ] ] Lwt.t
+val client_of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.flow -> t Error.t
 
 val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 (** [start_capture t ?size_limit filename] closes any existing pcap capture
@@ -47,7 +47,7 @@ module Init : sig
   val default: t
 
   val marshal: t -> Cstruct.t -> Cstruct.t
-  val unmarshal: Cstruct.t -> [ `Ok of t * Cstruct.t  | `Error of [ `Msg of string ]]
+  val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) Result.result
 end
 
 module Command : sig
@@ -60,5 +60,5 @@ module Command : sig
     val sizeof: int
 
     val marshal: t -> Cstruct.t -> Cstruct.t
-    val unmarshal: Cstruct.t -> [ `Ok of t * Cstruct.t  | `Error of [ `Msg of string ]]
+    val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) Result.result
 end
