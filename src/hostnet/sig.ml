@@ -130,7 +130,7 @@ module type FILES = sig
 
   type watch
 
-  val watch_file: string -> (unit -> unit) -> [ `Ok of watch | `Error of [ `Msg of string ] ]
+  val watch_file: string -> (unit -> unit) -> (watch, [ `Msg of string ]) Result.result
   (** [watch_file path callback] executes [callback] whenever the contents of
       [path] may have changed. *)
 

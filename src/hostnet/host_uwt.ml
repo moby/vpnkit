@@ -816,10 +816,10 @@ module Files = struct
     match Uwt.Fs_poll.start path 5000 ~cb with
       | Result.Ok handle ->
         callback ();
-        `Ok handle
+        Result.Ok handle
       | Result.Error err ->
         Log.err (fun f -> f "Starting to watch %s: %s" path (Uwt.err_name err));
-        `Error (`Msg (Uwt.strerror err))
+        Result.Error (`Msg (Uwt.strerror err))
 
 end
 

@@ -713,7 +713,7 @@ let read_file path =
       >>= fun () ->
       loop () in
     let handle = loop () in
-    `Ok handle
+    Result.Ok handle
 
   let unwatch = Lwt.cancel
 end

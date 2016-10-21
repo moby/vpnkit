@@ -205,8 +205,8 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
       Resolv_conf.set_default_dns [ (Ipaddr.V4 (Ipaddr.V4.of_string_exn dns)), 53 ] );
 
   let etc_hosts_watch = match Hosts.watch ~path:hosts () with
-    | `Ok watch -> Some watch
-    | `Error (`Msg m) ->
+    | Result.Ok watch -> Some watch
+    | Result.Error (`Msg m) ->
       Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
       None in
 
