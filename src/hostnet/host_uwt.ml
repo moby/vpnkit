@@ -789,7 +789,7 @@ module Files = struct
                 Uwt.Fs.read file ~buf:frag
                 >>= function
                 | 0 ->
-                  Lwt.return (`Ok (Buffer.contents buffer))
+                  Lwt_result.return (Buffer.contents buffer)
                 | n ->
                   Buffer.add_substring buffer frag 0 n;
                   loop () in
@@ -798,7 +798,7 @@ module Files = struct
                Uwt.Fs.close file
              )
       ) (fun e ->
-          Lwt.return (`Error (`Msg (Printf.sprintf "reading %s: %s" path (Printexc.to_string e))))
+          Lwt_result.fail (`Msg (Printf.sprintf "reading %s: %s" path (Printexc.to_string e)))
         )
 
   (* NOTE(djs55): Fs_event didn't work for me on MacOS *)

@@ -125,7 +125,7 @@ end
 module type FILES = sig
   (** An OS-based file reading implementation *)
 
-  val read_file: string -> [ `Ok of string | `Error of [ `Msg of string ] ] Lwt.t
+  val read_file: string -> string Error.t
   (** Read a whole file into a string *)
 
   type watch
