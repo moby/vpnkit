@@ -22,6 +22,12 @@ let log_exception_continue description f =
 let make_sockaddr (ip, port) =
   Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port)
 
+let string_of_address (dst, dst_port) =
+  Ipaddr.to_string dst ^ ":" ^ (string_of_int dst_port)
+
+let sockaddr_of_address (dst, dst_port) =
+  Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string dst, dst_port)
+
 module Common = struct
   (** FLOW boilerplate *)
 
@@ -225,6 +231,104 @@ module Sockets = struct
     module Udp = struct
       include Common
 
+      type flow = {
+        idx: int option;
+        description: string;
+        mutable fd: Uwt.Udp.t option;
+        read_buffer_size: int;
+        mutable already_read: Cstruct.t option;
+        sockaddr: Unix.sockaddr;
+        address: address;
+      }
+
+      type address = Ipaddr.t * int
+
+      let string_of_flow t = Printf.sprintf "udp -> %s" (string_of_address t.address)
+
+      let of_fd ?idx ?(read_buffer_size = Constants.max_udp_length) ?(already_read = None) ~description sockaddr address fd =
+        { idx; description; fd = Some fd; read_buffer_size; already_read; sockaddr; address }
+
+      let connect ?read_buffer_size address =
+        let description = "udp:" ^ (string_of_address address) in
+        register_connection description
+        >>= fun idx ->
+        let fd = try Uwt.Udp.init () with e -> deregister_connection idx; raise e in
+        Lwt.catch
+          (fun () ->
+             let sockaddr = make_sockaddr address in
+             let result = Uwt.Udp.bind fd ~addr:(Unix.ADDR_INET(Unix.inet_addr_any, 0)) () in
+             if not(Uwt.Int_result.is_ok result) then begin
+               let error = Uwt.Int_result.to_error result in
+               Log.err (fun f -> f "Socket.Udp.connect(%s): %s" (string_of_address address) (Uwt.strerror error));
+               deregister_connection idx;
+               Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
+             end else Lwt_result.return (of_fd ~idx ?read_buffer_size ~description sockaddr address fd)
+          )
+          (fun e ->
+             (* FIXME(djs55): error handling *)
+             deregister_connection idx;
+             let _ = Uwt.Udp.close fd in
+             errorf "Socket.Udp.connect %s: caught %s" description (Printexc.to_string e)
+          )
+
+      let rec read t = match t.fd, t.already_read with
+        | None, _ -> Lwt.return `Eof
+        | Some _, Some data when Cstruct.len data > 0 ->
+          t.already_read <- Some (Cstruct.sub data 0 0); (* next read is `Eof *)
+          Lwt.return (`Ok data)
+        | Some _, Some _ ->
+          Lwt.return `Eof
+        | Some fd, None ->
+          let buf = Cstruct.create t.read_buffer_size in
+          Lwt.catch
+            (fun () ->
+              Uwt.Udp.recv_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer fd
+              >>= fun recv ->
+              if recv.Uwt.Udp.is_partial then begin
+                Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping partial response (buffer was %d bytes)" (Cstruct.len buf));
+                read t
+              end else Lwt.return (`Ok (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len))
+            ) (fun e ->
+              Log.err (fun f -> f "%s: recvfrom caught %s returning Eof"
+                (string_of_flow t)
+                (Printexc.to_string e)
+              );
+              Lwt.return `Eof
+            )
+
+      (* Since we map individual datagrams onto calls to `read` and the framing
+         is assumed to be important, we don't implement `read_into` since it
+         would split datagrams. *)
+      let read_into _t _buf = Lwt.return (`Error (`Msg "read_into does not work with Udp"))
+
+      let write t buf = match t.fd with
+        | None -> Lwt.return `Eof
+        | Some fd ->
+          Lwt.catch
+            (fun () ->
+               Uwt.Udp.send_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer fd t.sockaddr
+               >>= fun () ->
+               Lwt.return (`Ok ())
+            ) (fun e ->
+                Log.err (fun f -> f "Socket.TCPV4.write %s: caught %s returning Eof" t.description (Printexc.to_string e));
+                Lwt.return `Eof
+              )
+
+      let writev t bufs = write t (Cstruct.concat bufs)
+
+      let close t = match t.fd with
+        | None -> Lwt.return_unit
+        | Some fd ->
+          t.fd <- None;
+          Log.debug (fun f -> f "%s: close" (string_of_flow t));
+          (* FIXME(djs55): errors *)
+          let _ = Uwt.Udp.close fd in
+          (match t.idx with Some idx -> deregister_connection idx | None -> ());
+          Lwt.return_unit
+
+      let shutdown_read _t = Lwt.return_unit
+      let shutdown_write _t = Lwt.return_unit
+
       type server = {
         idx: int;
         fd: Uwt.Udp.t;
@@ -247,7 +351,7 @@ module Sockets = struct
           Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
         end else Lwt.return { idx; fd; closed = false }
 
-      let of_bound_fd fd =
+      let of_bound_fd ?read_buffer_size:_ fd =
         match Uwt.Udp.openudp fd with
         | Uwt.Ok fd ->
           let description = match Uwt.Udp.getsockname fd with
@@ -281,24 +385,60 @@ module Sockets = struct
         end;
         Lwt.return_unit
 
-      let rec recvfrom server buf =
-        Uwt.Udp.recv_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer server.fd
-        >>= fun recv ->
-        if recv.Uwt.Udp.is_partial then begin
-          Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping partial response (buffer was %d bytes)" (Cstruct.len buf));
-          recvfrom server buf
-        end else match recv.Uwt.Udp.sockaddr with
-          | None ->
-            Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping response from unknown sockaddr");
-            Lwt.fail (Failure "Socket.Datagram.recvfrom unknown sender")
-          | Some address ->
-            begin match address with
-              | Unix.ADDR_INET(ip, port) ->
-                let address = Ipaddr.of_string_exn @@ Unix.string_of_inet_addr ip, port in
-                Lwt.return (recv.Uwt.Udp.recv_len, address)
-              | _ ->
-                assert false
-            end
+    let rec recvfrom server buf =
+      Uwt.Udp.recv_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer server.fd
+      >>= fun recv ->
+      if recv.Uwt.Udp.is_partial then begin
+        Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping partial response (buffer was %d bytes)" (Cstruct.len buf));
+        recvfrom server buf
+      end else match recv.Uwt.Udp.sockaddr with
+        | None ->
+          Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping response from unknown sockaddr");
+          Lwt.fail (Failure "Socket.Datagram.recvfrom unknown sender")
+        | Some address ->
+          begin match address with
+            | Unix.ADDR_INET(ip, port) ->
+              let address = Ipaddr.of_string_exn @@ Unix.string_of_inet_addr ip, port in
+              Lwt.return (recv.Uwt.Udp.recv_len, address)
+            | _ ->
+              assert false
+          end
+
+      let listen t flow_cb =
+        let buffer = Cstruct.create Constants.max_udp_length in
+        let rec loop () =
+          Lwt.catch
+            (fun () ->
+              (* Lwt on Win32 doesn't support Lwt_bytes.recvfrom *)
+              recvfrom t buffer
+              >>= fun (n, address) ->
+              let data = Cstruct.sub buffer 0 n in
+              (* construct a flow with this buffer available for reading *)
+              (* No new fd so no new idx *)
+              let description = Printf.sprintf "udp:%s" (string_of_address address) in
+              let flow = of_fd ~description ~read_buffer_size:0 ~already_read:(Some data) (sockaddr_of_address address) address t.fd in
+              Lwt.async
+                (fun () ->
+                  Lwt.catch
+                    (fun () -> flow_cb flow)
+                    (fun e ->
+                      Log.info (fun f -> f "Udp.listen callback caught: %s"
+                        (Printexc.to_string e)
+                      );
+                      Lwt.return_unit
+                    )
+                );
+              Lwt.return true
+            ) (fun e ->
+              Log.err (fun f -> f "Udp.listen caught %s shutting down server"
+                (Printexc.to_string e)
+              );
+              Lwt.return false
+            )
+          >>= function
+          | false -> Lwt.return_unit
+          | true -> loop () in
+        Lwt.async loop
 
       let sendto server (ip, port) buf =
         let sockaddr = Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port) in

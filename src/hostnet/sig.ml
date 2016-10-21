@@ -51,23 +51,6 @@ module type DATAGRAM = sig
   val get_nat_table_size: unit -> int
   (** Return the current number of allocated NAT table entries *)
 
-  module Udp: sig
-    type server
-
-    val of_bound_fd: Unix.file_descr -> server
-
-    val bind: address -> server Lwt.t
-
-    val getsockname: server -> address
-    (** Query the address the server is bound to *)
-
-    val recvfrom: server -> Cstruct.t -> (int * address) Lwt.t
-
-    val sendto: server -> address -> Cstruct.t -> unit Lwt.t
-
-    val shutdown: server -> unit Lwt.t
-  end
-
 end
 
 
@@ -90,6 +73,21 @@ module type SOCKETS = sig
 
     include DATAGRAM
       with type address := address
+
+    module Udp: sig
+      type address = Ipaddr.t * int
+
+      include FLOW_CLIENT
+        with type address := address
+
+      include FLOW_SERVER
+        with type address := address
+         and type flow := flow
+
+      val recvfrom: server -> Cstruct.t -> (int * address) Lwt.t
+
+      val sendto: server -> address -> Cstruct.t -> unit Lwt.t
+    end
   end
   module Stream: sig
     module Tcp: sig

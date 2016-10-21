@@ -65,9 +65,20 @@ let register_connection =
 let deregister_connection idx =
   Hashtbl.remove connection_table idx
 
+let address_of_sockaddr = function
+  | Lwt_unix .ADDR_INET(ip, port) ->
+      ( try Some (Ipaddr.of_string_exn @@ Unix.string_of_inet_addr ip, port) with _ -> None )
+  | _ -> None
+
 let string_of_sockaddr = function
   | Lwt_unix.ADDR_INET(ip, port) -> Unix.string_of_inet_addr ip ^ ":" ^ (string_of_int port)
   | Lwt_unix.ADDR_UNIX path -> path
+
+let string_of_address (dst, dst_port) =
+  Ipaddr.to_string dst ^ ":" ^ (string_of_int dst_port)
+
+let sockaddr_of_address (dst, dst_port) =
+  Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string dst, dst_port)
 
 let unix_bind_one pf ty ip port =
   let protocol = match pf, ty with
@@ -244,6 +255,105 @@ module Datagram = struct
 
   module Udp = struct
 
+    (* FLOW boilerplate *)
+    type 'a io = 'a Lwt.t
+    type buffer = Cstruct.t
+    type error = [
+      | `Msg of string
+    ]
+    let error_message = function
+      | `Msg x -> x
+
+    type flow = {
+      mutable idx: int option;
+      description: string;
+      mutable fd: Lwt_unix.file_descr option;
+      read_buffer_size: int;
+      mutable already_read: Cstruct.t option;
+      sockaddr: Unix.sockaddr;
+      address: address;
+    }
+
+    type address = Ipaddr.t * int
+
+    let string_of_flow t = Printf.sprintf "udp -> %s" (string_of_address t.address)
+
+    let of_fd ?idx ~description ?(read_buffer_size = Constants.max_udp_length) ?(already_read = None) sockaddr address fd =
+      { idx; description; fd = Some fd; read_buffer_size; already_read; sockaddr; address }
+
+    let connect ?read_buffer_size address =
+      let description = "udp:" ^ (string_of_address address) in
+      register_connection description
+      >>= fun idx ->
+      let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+      (* Win32 requires all sockets to be bound however macOS and Linux don't *)
+      (try Lwt_unix.bind fd (Lwt_unix.ADDR_INET(Unix.inet_addr_any, 0)) with _ -> ());
+      let sockaddr = sockaddr_of_address address in
+      Lwt.return (Result.Ok (of_fd ~idx ~description ?read_buffer_size sockaddr address fd))
+
+    let read t = match t.fd, t.already_read with
+      | None, _ -> Lwt.return `Eof
+      | Some _, Some data when Cstruct.len data > 0 ->
+        t.already_read <- Some (Cstruct.sub data 0 0); (* next read is `Eof *)
+        Lwt.return (`Ok data)
+      | Some _, Some _ ->
+        Lwt.return `Eof
+      | Some fd, None ->
+        let buffer = Cstruct.create t.read_buffer_size in
+        let bytes = Bytes.make t.read_buffer_size '\000' in
+        Lwt.catch
+          (fun () ->
+            (* Lwt on Win32 doesn't support Lwt_bytes.recvfrom *)
+            Lwt_unix.recvfrom fd bytes 0 (Bytes.length bytes) []
+            >>= fun (n, _) ->
+            Cstruct.blit_from_bytes bytes 0 buffer 0 n;
+            let response = Cstruct.sub buffer 0 n in
+            Lwt.return (`Ok response)
+          ) (fun e ->
+            Log.err (fun f -> f "%s: recvfrom caught %s returning Eof"
+              (string_of_flow t)
+              (Printexc.to_string e)
+            );
+            Lwt.return `Eof
+          )
+
+    (* Since we map individual datagrams onto calls to `read` and the framing
+       is assumed to be important, we don't implement `read_into` since it
+       would split datagrams. *)
+    let read_into _t _buf = Lwt.return (`Error (`Msg "read_into does not work with Udp"))
+
+    let write t buf = match t.fd with
+      | None -> Lwt.return `Eof
+      | Some fd ->
+        Lwt.catch
+          (fun () ->
+            (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
+            let bytes = Bytes.make (Cstruct.len buf) '\000' in
+            Cstruct.blit_to_bytes buf 0 bytes 0 (Cstruct.len buf);
+            Lwt_unix.sendto fd bytes 0 (Bytes.length bytes) [] t.sockaddr
+            >>= fun _n ->
+            Lwt.return (`Ok ())
+          ) (fun e ->
+            Log.err (fun f -> f "%s: sendto caught %s returning Eof"
+              (string_of_flow t)
+              (Printexc.to_string e)
+            );
+            Lwt.return `Eof
+          )
+
+    let writev t bufs = write t (Cstruct.concat bufs)
+
+    let close t = match t.fd with
+      | None -> Lwt.return_unit
+      | Some fd ->
+        t.fd <- None;
+        Log.debug (fun f -> f "%s: close" (string_of_flow t));
+        (match t.idx with Some idx -> deregister_connection idx | None -> ());
+        Lwt_unix.close fd
+
+    let shutdown_read _t = Lwt.return_unit
+    let shutdown_write _t = Lwt.return_unit
+
     type server = {
       idx: int;
       fd: Lwt_unix.file_descr;
@@ -257,7 +367,7 @@ module Datagram = struct
       >>= fun (idx, fd) ->
       Lwt.return (make ~idx fd)
 
-    let of_bound_fd fd =
+    let of_bound_fd ?read_buffer_size:_ fd =
       let description = match Unix.getsockname fd with
         | Lwt_unix.ADDR_INET(iaddr, port) ->
           "udp:" ^ (Unix.string_of_inet_addr iaddr) ^ ":" ^ (string_of_int port)
@@ -280,6 +390,48 @@ module Datagram = struct
         deregister_connection server.idx;
         Lwt.return_unit
       end else Lwt.return_unit
+
+    let listen t flow_cb =
+      let buffer = Cstruct.create Constants.max_udp_length in
+      let bytes = Bytes.make Constants.max_udp_length '\000' in
+      let rec loop () =
+        Lwt.catch
+          (fun () ->
+            (* Lwt on Win32 doesn't support Lwt_bytes.recvfrom *)
+            Lwt_unix.recvfrom t.fd bytes 0 (Bytes.length bytes) []
+            >>= fun (n, sockaddr) ->
+            Cstruct.blit_from_bytes bytes 0 buffer 0 n;
+            let data = Cstruct.sub buffer 0 n in
+            (* construct a flow with this buffer available for reading *)
+            ( match address_of_sockaddr sockaddr with
+              | Some address -> Lwt.return address
+              | None -> Lwt.fail (Failure "failed to discover incoming socket address")
+            ) >>= fun address ->
+            (* No new fd so no new idx *)
+            let description = Printf.sprintf "udp:%s" (string_of_address address) in
+            let flow = of_fd ~description ~read_buffer_size:0 ~already_read:(Some data) sockaddr address t.fd in
+            Lwt.async
+              (fun () ->
+                Lwt.catch
+                  (fun () -> flow_cb flow)
+                  (fun e ->
+                    Log.info (fun f -> f "Udp.listen callback caught: %s"
+                      (Printexc.to_string e)
+                    );
+                    Lwt.return_unit
+                  )
+              );
+            Lwt.return true
+          ) (fun e ->
+            Log.err (fun f -> f "Udp.listen caught %s shutting down server"
+              (Printexc.to_string e)
+            );
+            Lwt.return false
+          )
+        >>= function
+        | false -> Lwt.return_unit
+        | true -> loop () in
+      Lwt.async loop
 
     let recvfrom server buf =
       (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
