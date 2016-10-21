@@ -93,7 +93,7 @@ module type SOCKETS = sig
   end
   module Stream: sig
     module Tcp: sig
-      type address = Ipaddr.V4.t * int
+      type address = Ipaddr.t * int
 
       include FLOW_CLIENT
         with type address := address

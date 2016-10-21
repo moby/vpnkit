@@ -255,12 +255,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
                ( Host.Sockets.Stream.Tcp.connect (ip, port)
                  >>= function
                  | Result.Error (`Msg m) ->
-                   Log.err (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.V4.to_string ip) port m);
+                   Log.err (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.to_string ip) port m);
                    Lwt.return (fun _ -> None)
                  | Result.Ok socket ->
                    let t = Tcp.Flow.create id socket in
                    let listeners port =
-                     Log.debug (fun f -> f "%s:%d handshake complete" (Ipaddr.V4.to_string ip) port);
+                     Log.debug (fun f -> f "%s:%d handshake complete" (Ipaddr.to_string ip) port);
                      Some (fun flow -> callback t flow)  in
                    Lwt.return listeners )
                >>= fun listeners ->
@@ -369,7 +369,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
         begin match index Ipaddr.V4.compare t.dns_ips dst with
           | Some nth ->
             begin Dns_forwarder.choose_server ~nth () >>= function
-              | Some (_, (Ipaddr.V4 ip, port)) ->
+              | Some (_, (ip, port)) ->
                 Endpoint.input_tcp t.endpoint ~id ~syn (ip, port) raw
               | _ ->
                 (* no IPv4 servers configured *)
@@ -401,7 +401,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
       (* TCP to local ports *)
       | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = dst_port; syn; raw; payload = Payload _; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port = dst_port; dest_ip = src; local_ip = dst; dest_port = src_port } in
-        Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4.localhost, dst_port) raw
+        Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 Ipaddr.V4.localhost, dst_port) raw
       | _ ->
         Lwt.return_unit
 
@@ -439,7 +439,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
         Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default:(fun ~proto:_ -> none) raw
       | Ipv4 { src = dest_ip; dst = local_ip; payload = Tcp { src = dest_port; dst = local_port; syn; raw; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port; dest_ip; local_ip; dest_port } in
-        Endpoint.input_tcp t.endpoint ~id ~syn (local_ip, local_port) raw
+        Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 local_ip, local_port) raw
       | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
         let description = Printf.sprintf "%s:%d -> %s:%d"
             (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in

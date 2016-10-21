@@ -92,7 +92,7 @@ let unix_bind_one pf ty ip port =
     )
 
 let unix_bind ty (local_ip, local_port) =
-  unix_bind_one Lwt_unix.PF_INET ty Ipaddr.(V4 local_ip) local_port
+  unix_bind_one Lwt_unix.PF_INET ty local_ip local_port
   >>= fun (idx, fd) ->
   let local_port = match local_port, Lwt_unix.getsockname fd with
     | 0, Unix.ADDR_INET(_, local_port) -> local_port
@@ -103,8 +103,8 @@ let unix_bind ty (local_ip, local_port) =
      best-effort bind to the ::1 address. *)
   Lwt.catch
     (fun () ->
-      if Ipaddr.V4.compare local_ip Ipaddr.V4.localhost = 0
-      || Ipaddr.V4.compare local_ip Ipaddr.V4.any = 0
+      if Ipaddr.compare local_ip (Ipaddr.V4 Ipaddr.V4.localhost) = 0
+      || Ipaddr.compare local_ip (Ipaddr.V4 Ipaddr.V4.any) = 0
       then begin
         Log.info (fun f -> f "attempting a best-effort bind of ::1:%d" local_port);
         unix_bind_one Lwt_unix.PF_INET6 ty Ipaddr.(V6 V6.localhost) local_port
@@ -527,11 +527,11 @@ module Stream = struct
   module Tcp = struct
     include Fd
 
-    type address = Ipaddr.V4.t * int
+    type address = Ipaddr.t * int
 
     let connect ?read_buffer_size (ip, port) =
-      let description = Ipaddr.V4.to_string ip ^ ":" ^ (string_of_int port) in
-      let sockaddr = Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.V4.to_string ip, port) in
+      let description = Ipaddr.to_string ip ^ ":" ^ (string_of_int port) in
+      let sockaddr = Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port) in
       connect description ?read_buffer_size Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM sockaddr
 
     let bind (ip, port) =
@@ -544,7 +544,7 @@ module Stream = struct
       | (_idx, fd) :: _ ->
         match Lwt_unix.getsockname fd with
         | Lwt_unix.ADDR_INET(iaddr, port) ->
-          Ipaddr.V4.of_string_exn (Unix.string_of_inet_addr iaddr), port
+          Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
         | _ -> invalid_arg "Tcp.getsockname passed a non-TCP socket"
   end
 

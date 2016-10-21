@@ -124,13 +124,16 @@ module Make(Socket: Sig.SOCKETS) = struct
       include Socket.Stream.Tcp
 
       let bind (local_ip, local_port) =
-        if local_port < 1024 && not is_windows then begin
-          request_privileged_port local_ip local_port true
-          >>= function
-          | Result.Error (`Msg x) -> Lwt.fail (Failure x)
-          | Result.Ok fd ->
-            Lwt.return (Socket.Stream.Tcp.of_bound_fd fd)
-        end else bind (local_ip, local_port)
+        match local_ip with
+        | Ipaddr.V4 ipv4 ->
+          if local_port < 1024 && not is_windows then begin
+            request_privileged_port ipv4 local_port true
+            >>= function
+            | Result.Error (`Msg x) -> Lwt.fail (Failure x)
+            | Result.Ok fd ->
+              Lwt.return (Socket.Stream.Tcp.of_bound_fd fd)
+          end else bind (local_ip, local_port)
+        | _ -> bind (local_ip, local_port)
     end
 
     module Unix = Socket.Stream.Unix

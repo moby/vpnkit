@@ -311,7 +311,7 @@ module Sockets = struct
     module Tcp = struct
       include Common
 
-      type address = Ipaddr.V4.t * int
+      type address = Ipaddr.t * int
 
       type flow = {
         idx: int;
@@ -328,13 +328,13 @@ module Sockets = struct
         { idx; description; fd; read_buffer; read_buffer_size; closed }
 
       let connect ?(read_buffer_size = default_read_buffer_size) (ip, port) =
-        let description = "tcp:" ^ (Ipaddr.V4.to_string ip) ^ ":" ^ (string_of_int port) in
+        let description = "tcp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
         register_connection description
         >>= fun idx ->
         let fd = try Uwt.Tcp.init () with e -> deregister_connection idx; raise e in
         Lwt.catch
           (fun () ->
-             let sockaddr = make_sockaddr (Ipaddr.V4 ip, port) in
+             let sockaddr = make_sockaddr (ip, port) in
              Uwt.Tcp.connect fd ~addr:sockaddr
              >>= fun () ->
              Lwt_result.return (of_fd ~idx ~read_buffer_size ~description fd)
@@ -434,7 +434,7 @@ module Sockets = struct
         | (_, fd) :: _ ->
           match Uwt.Tcp.getsockname_exn fd with
           | Unix.ADDR_INET(iaddr, port) ->
-            Ipaddr.V4.of_string_exn (Unix.string_of_inet_addr iaddr), port
+            Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
           | _ -> invalid_arg "Tcp.getsockname passed a non-TCP socket"
 
       let bind_one (ip, port) =
@@ -453,7 +453,7 @@ module Sockets = struct
         end else Lwt.return (idx, fd)
 
       let bind (ip, port) =
-        bind_one (Ipaddr.V4 ip, port)
+        bind_one (ip, port)
         >>= fun (idx, fd) ->
         ( match Uwt.Tcp.getsockname fd with
           | Uwt.Ok sockaddr ->
@@ -462,7 +462,7 @@ module Sockets = struct
               | _ -> assert false
             end
           | Uwt.Error error ->
-            let msg = Printf.sprintf "Socket.Tcp.bind(%s, %d): %s" (Ipaddr.V4.to_string ip) port (Uwt.strerror error) in
+            let msg = Printf.sprintf "Socket.Tcp.bind(%s, %d): %s" (Ipaddr.to_string ip) port (Uwt.strerror error) in
             Log.err (fun f -> f "%s" msg);
             deregister_connection idx;
             Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", "")) )
@@ -472,8 +472,8 @@ module Sockets = struct
            best-effort bind to the ::1 address. *)
         Lwt.catch
           (fun () ->
-             if Ipaddr.V4.compare ip Ipaddr.V4.localhost = 0
-             || Ipaddr.V4.compare ip Ipaddr.V4.any = 0
+             if Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.localhost) = 0
+             || Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.any) = 0
              then begin
                Log.info (fun f -> f "attempting a best-effort bind of ::1:%d" local_port);
                bind_one (Ipaddr.(V6 V6.localhost), local_port)
