@@ -1,3 +1,5 @@
+module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
+
 open Lwt.Infix
 
 let src =
@@ -325,7 +327,7 @@ module Stream = struct
     let error_message = function
       | `Msg x -> x
 
-    let errorf fmt = Printf.ksprintf (fun s -> Lwt.return (`Error (`Msg s))) fmt
+    let errorf fmt = Printf.ksprintf (fun s -> Lwt_result.fail (`Msg s)) fmt
 
     let of_fd ~idx ?(read_buffer_size = default_read_buffer_size) ~description fd =
       let read_buffer = Cstruct.create read_buffer_size in
@@ -429,7 +431,7 @@ module Stream = struct
            Log.debug (fun f -> f "%s: connecting" description);
            Lwt_unix.connect fd sockaddr
            >>= fun () ->
-           Lwt.return (`Ok (of_fd ~idx ~read_buffer_size ~description fd))
+           Lwt_result.return (of_fd ~idx ~read_buffer_size ~description fd)
         )
         (fun e ->
            Lwt_unix.close fd
@@ -561,7 +563,7 @@ module Stream = struct
         Named_pipe_lwt.Client.openpipe path
         >>= fun p ->
         let fd = Named_pipe_lwt.Client.to_fd p in
-        Lwt.return (`Ok (of_fd ~idx ?read_buffer_size ~description fd))
+        Lwt_result.return (of_fd ~idx ?read_buffer_size ~description fd)
       end else begin
         let sockaddr = Unix.ADDR_UNIX path in
         connect description ?read_buffer_size Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM sockaddr

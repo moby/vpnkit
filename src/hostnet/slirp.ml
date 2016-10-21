@@ -249,10 +249,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
             (fun () ->
                ( Host.Sockets.Stream.Tcp.connect (ip, port)
                  >>= function
-                 | `Error (`Msg m) ->
+                 | Result.Error (`Msg m) ->
                    Log.err (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.V4.to_string ip) port m);
                    Lwt.return (fun _ -> None)
-                 | `Ok socket ->
+                 | Result.Ok socket ->
                    let t = Tcp.Flow.create id socket in
                    let listeners port =
                      Log.debug (fun f -> f "%s:%d handshake complete" (Ipaddr.V4.to_string ip) port);

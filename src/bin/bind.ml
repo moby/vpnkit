@@ -1,3 +1,5 @@
+module Lwt_result = Hostnet.Hostnet_lwt_result (* remove when new Lwt is released *)
+
 let src =
   let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
   Logs.Src.set_level src (Some Logs.Debug);
@@ -89,15 +91,17 @@ module Make(Socket: Sig.SOCKETS) = struct
 
   (* This implementation is OSX-only *)
   let request_privileged_port local_ip local_port sock_stream =
-    let open Infix in
     Socket.Stream.Unix.connect "/var/tmp/com.docker.vmnetd.socket"
-    >>= fun flow ->
-    Lwt.finalize
-      (fun () ->
-         of_fd flow
-         >>= fun c ->
-         bind_ipv4 c (local_ip, local_port, sock_stream)
-      ) (fun () -> Socket.Stream.Unix.close flow)
+    >>= function
+    | Result.Error (`Msg m) -> Lwt.return (`Error (`Msg m))
+    | Result.Ok flow ->
+      let open Infix in
+      Lwt.finalize
+        (fun () ->
+           of_fd flow
+           >>= fun c ->
+           bind_ipv4 c (local_ip, local_port, sock_stream)
+        ) (fun () -> Socket.Stream.Unix.close flow)
 
   module Datagram = struct
     type address = Socket.Datagram.address

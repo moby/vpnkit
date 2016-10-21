@@ -1,3 +1,5 @@
+module Lwt_result = Hostnet.Hostnet_lwt_result (* remove when new Lwt is released *)
+
 open Lwt
 open Hostnet
 
@@ -237,10 +239,10 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
   let config = match db_path with
     | Some db_path ->
       let reconnect () =
+        let open Lwt_result.Infix in
         Host.Sockets.Stream.Unix.connect db_path
-        >>= function
-        | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
-        | `Ok x -> Lwt.return (Result.Ok x) in
+        >>= fun x ->
+        Lwt_result.return x in
       Some (Config.create ~reconnect ())
     | None ->
       Log.warn (fun f -> f "no database: using hardcoded network configuration values");

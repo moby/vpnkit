@@ -4,7 +4,7 @@ module type FLOW_CLIENT = sig
   type address
 
   val connect: ?read_buffer_size:int -> address
-    -> [ `Ok of flow | `Error of [ `Msg of string ] ] Lwt.t
+    -> flow Error.t
   (** [connect address] creates a connection to [address] and returns
       he connected flow. *)
 

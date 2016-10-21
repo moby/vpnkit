@@ -1,3 +1,5 @@
+module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
+
 open Lwt.Infix
 
 let src =
@@ -30,7 +32,7 @@ module Common = struct
   let error_message = function
     | `Msg x -> x
 
-  let errorf fmt = Printf.ksprintf (fun s -> Lwt.return (`Error (`Msg s))) fmt
+  let errorf fmt = Printf.ksprintf (fun s -> Lwt_result.fail (`Msg s)) fmt
 
   let ip_port_of_sockaddr sockaddr =
     try
@@ -335,7 +337,7 @@ module Sockets = struct
              let sockaddr = make_sockaddr (Ipaddr.V4 ip, port) in
              Uwt.Tcp.connect fd ~addr:sockaddr
              >>= fun () ->
-             Lwt.return (`Ok (of_fd ~idx ~read_buffer_size ~description fd))
+             Lwt_result.return (of_fd ~idx ~read_buffer_size ~description fd)
           )
           (fun e ->
              (* FIXME(djs55): error handling *)
@@ -591,7 +593,7 @@ module Sockets = struct
             Uwt.Pipe.connect fd ~path
             >>= fun () ->
             let description = path in
-            Lwt.return (`Ok (of_fd ~idx ~read_buffer_size ~description fd))
+            Lwt_result.return (of_fd ~idx ~read_buffer_size ~description fd)
           ) (fun e ->
             deregister_connection idx;
             Lwt.fail e
