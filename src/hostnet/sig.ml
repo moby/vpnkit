@@ -182,17 +182,6 @@ module type VMNET = sig
   val stop_capture: t -> unit Lwt.t
 end
 
-module type TCPIP = sig
-  (** A TCP/IP stack *)
-
-  include V1_LWT.STACKV4
-    with type IPV4.prefix = Ipaddr.V4.t
-     and type IPV4.uipaddr = Ipaddr.t
-
-  module TCPV4_half_close : Mirage_flow_s.SHUTDOWNABLE
-    with type flow = TCPV4.flow
-end
-
 module type RESOLV_CONF = sig
   (** The system DNS configuration *)
 
