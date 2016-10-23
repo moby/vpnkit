@@ -21,13 +21,13 @@ Library hostnet
   Path: hostnet
   Pack: true
   Findlibname: hostnet
-  Modules: Error, Constants, Arp, Dns_forward, Filter, Frame, Match, Capture, Mux, Slirp,
-    Hostnet_lwt_result, Forward, Host_lwt_unix, Host_uwt, Resolver, Hosts, Vmnet, Dhcp, Sig
+  Modules: Error, Constants, Arp, Hostnet_dns, Filter, Frame, Match, Capture, Mux, Slirp,
+    Hostnet_lwt_result, Forward, Host_lwt_unix, Host_uwt, Hosts, Vmnet, Dhcp, Sig
   BuildDepends: cstruct, lwt.unix, logs, mirage-types.lwt, ipaddr, mirage-flow,
     ppx_sexp_conv, pcap-format, mirage-console.unix, tcpip.ethif,
     tcpip.arpv4, tcpip.ipv4, tcpip.icmpv4, tcpip.udp, tcpip.tcp, tcpip.stack-direct,
     charrua-core.server, dns, dns.lwt, ofs, uwt, uwt.ext, uwt.preemptive,
-    lwt.preemptive, threads, astring, datakit-server.vfs
+    lwt.preemptive, threads, astring, datakit-server.vfs, dns-forward
 
 Executable test
   Path: hostnet_test

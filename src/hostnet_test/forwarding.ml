@@ -36,10 +36,10 @@ module ForwardServer = struct
     let port = Cstruct.LE.get_uint16 header 7 in
     assert (Cstruct.get_uint8 header 0 == 1); (* TCP only *)
 
-    Host.Sockets.Stream.Tcp.connect (ip, port)
+    Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 ip, port)
     >>= function
-    | `Error (`Msg x) -> failwith x
-    | `Ok remote ->
+    | Result.Error (`Msg x) -> failwith x
+    | Result.Ok remote ->
       Lwt.finalize
         (fun () ->
           Mirage_flow.proxy (module Clock) (module Host.Sockets.Stream.Tcp) flow (module Host.Sockets.Stream.Tcp) remote ()
@@ -51,7 +51,7 @@ module ForwardServer = struct
         )
 
   let port =
-    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4.localhost, 0)
+    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
     >>= fun server ->
     let _, local_port = Host.Sockets.Stream.Tcp.getsockname server in
     Host.Sockets.Stream.Tcp.listen server accept;
@@ -73,10 +73,10 @@ module Forward = Forward.Make(struct
   let connect () =
     ForwardServer.port
     >>= fun port ->
-    Host.Sockets.Stream.Tcp.connect (Ipaddr.V4.localhost, port)
+    Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 Ipaddr.V4.localhost, port)
     >>= function
-    | `Error (`Msg m) -> failwith m
-    | `Ok x ->
+    | Result.Error (`Msg m) -> failwith m
+    | Result.Ok x ->
     Lwt.return x
 end)(Host.Sockets)
 
@@ -91,7 +91,7 @@ module PortsServer = struct
   let with_server f =
     let ports = Ports.make () in
     Ports.set_context ports "";
-    Host.Sockets.Stream.Tcp.bind (localhost, ports_port)
+    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, ports_port)
     >>= fun server ->
     Host.Sockets.Stream.Tcp.listen server
       (fun conn ->
@@ -110,10 +110,10 @@ end
 
 module LocalClient = struct
   let connect (ip, port) =
-    Host.Sockets.Stream.Tcp.connect (ip, port)
+    Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 ip, port)
     >>= function
-    | `Ok fd -> Lwt.return fd
-    | `Error (`Msg m) -> failwith m
+    | Result.Ok fd -> Lwt.return fd
+    | Result.Error (`Msg m) -> failwith m
   let disconnect fd = Host.Sockets.Stream.Tcp.close fd
 end
 
@@ -144,7 +144,7 @@ module LocalServer = struct
     Channel.flush ch
 
   let create () =
-    Host.Sockets.Stream.Tcp.bind (localhost, 0)
+    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
     >>= fun server ->
     let _, local_port = Host.Sockets.Stream.Tcp.getsockname server in
     Host.Sockets.Stream.Tcp.listen server accept;
@@ -173,10 +173,10 @@ module ForwardControl = struct
   }
 
   let connect () =
-    Host.Sockets.Stream.Tcp.connect (localhost, ports_port)
+    Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 localhost, ports_port)
     >>= function
-    | `Error (`Msg m) -> failwith m
-    | `Ok flow ->
+    | Result.Error (`Msg m) -> failwith m
+    | Result.Ok flow ->
     Client.connect flow ()
     >>*= fun ninep ->
     Lwt.return { ninep }

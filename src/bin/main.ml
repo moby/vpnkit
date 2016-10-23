@@ -46,7 +46,7 @@ module Main(Host: Sig.HOST) = struct
 module Connect_unix = Connect.Make_unix(Host)
 module Connect_hvsock = Connect.Make_hvsock(Host)
 module Bind = Bind.Make(Host.Sockets)
-module Resolv_conf = Resolv_conf.Make(Host.Files)
+module Dns_policy = Hostnet_dns.Policy(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 module Forward_unix = Forward.Make(Connect_unix)(Bind)
 module Forward_hvsock = Forward.Make(Connect_hvsock)(Bind)
@@ -201,8 +201,12 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
 
   ( match dns with
     | None -> ()
-    | Some dns ->
-      Resolv_conf.set_default_dns [ (Ipaddr.V4 (Ipaddr.V4.of_string_exn dns)), 53 ] );
+    | Some ip ->
+      let open Dns_forward.Config in
+      let servers = Server.Set.of_list [
+          { Server.address = { Address.ip = Ipaddr.of_string_exn ip; port = 53 }; zones = Domain.Set.empty }
+      ] in
+      Dns_policy.add ~priority:1 ~config:{ servers; search = [] } );
 
   let etc_hosts_watch = match Hosts.watch ~path:hosts () with
     | Result.Ok watch -> Some watch
@@ -251,7 +255,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
   let uri = Uri.of_string socket_url in
   match Uri.scheme uri with
   | Some "hyperv-connect" ->
-    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Resolv_conf)(Host) in
+    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Dns_policy)(Host) in
     let sockaddr = hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid (Uri.of_string socket_url) in
     hvsock_connect_forever socket_url sockaddr
       (fun fd ->
@@ -270,7 +274,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
         Lwt.return ()
       )
   | _ ->
-    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Resolv_conf)(Host) in
+    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)(Host) in
     unix_listen socket_url
     >>= fun server ->
     Host.Sockets.Stream.Unix.listen server

@@ -8,6 +8,8 @@ module type FLOW_CLIENT = sig
   (** [connect address] creates a connection to [address] and returns
       he connected flow. *)
 
+  val getclientname: flow -> address
+  (** Query the address the client is bound to *)
 
   val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
   (** Completely fills the given buffer with data from [fd] *)
@@ -180,14 +182,31 @@ module type VMNET = sig
   val stop_capture: t -> unit Lwt.t
 end
 
-module type RESOLV_CONF = sig
-  (** The system DNS configuration *)
+module type DNS_POLICY = sig
+  (** Policy settings
 
-  val get : unit -> Resolver.t Lwt.t
+    DNS configuration is taken from 4 places, lowest to highest priority:
 
-  val set : Resolver.t -> unit
+    - 0: a built-in default of the Google public DNS servers
+    - 1: a default configuration (from a command-line argument or a configuration
+      file)
+    - 2: the `/etc/resolv.conf` file if present
+    - 3: the database key `slirp/dns`
 
-  val set_default_dns: (Ipaddr.t * int) list -> unit
+    If configuration with a higher priority is found then it completely overrides
+    lower priority configuration.
+  *)
+
+  type priority = int (** higher is more important *)
+
+  val add: priority:priority -> config:Dns_forward.Config.t -> unit
+  (** Add some configuration at the given priority level *)
+
+  val remove: priority:priority -> unit
+  (** Remove the configuration at the given priority level *)
+
+  val config: unit -> Dns_forward.Config.t
+  (** Return the currently active DNS configuration *)
 end
 
 module type RECORDER = sig

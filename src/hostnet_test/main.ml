@@ -181,7 +181,7 @@ module DevNullServer = struct
     Channel.flush ch
 
   let create () =
-    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4.localhost, 0)
+    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
     >>= fun server ->
     let _, local_port = Host.Sockets.Stream.Tcp.getsockname server in
     Host.Sockets.Stream.Tcp.listen server accept;
@@ -318,7 +318,6 @@ module Slirp_uwt = Make(Host_uwt)
 let tests =
   (List.map (fun (name, test) -> name ^ " with Lwt_unix", test) Slirp_lwt_unix.suite) @
   (List.map (fun (name, test) -> name ^ " with Uwt", test) Slirp_uwt.suite) @
-  Resolver_test.suite @
   Hosts_test.suite
 
 (* Run it *)

@@ -75,6 +75,7 @@ module Make_hvsock(Host: Sig.HOST) = struct
       let flow = F.connect fd in
       Lwt.return { idx; flow }
 
+  let getclientname _ = failwith "Hyper-V socket implementation lacks getsockname"
   let read_into t = F.read_into t.flow
   let read t = F.read t.flow
   let write t = F.write t.flow
