@@ -173,7 +173,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       let touch id =
         if Id.Map.mem id !all
         then (Id.Map.find id !all).last_active_time <- Unix.gettimeofday ()
-        else Log.err (fun f -> f "flow %s is not registered" (string_of_id id))
     end
   end
 
