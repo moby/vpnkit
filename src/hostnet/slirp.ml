@@ -765,10 +765,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let default_peer = "192.168.65.2" in
     let default_host = "192.168.65.1" in
-    let default_dns_extra = [
-      "192.168.65.3"; "192.168.65.4"; "192.168.65.5"; "192.168.65.6";
-      "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
-    ] in
+    let default_dns_extra = [] in
     Config.string config ~default:default_peer peer_ips_path
     >>= fun string_peer_ips ->
     Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips

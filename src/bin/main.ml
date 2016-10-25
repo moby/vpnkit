@@ -233,10 +233,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
     let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
     { Slirp.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
       local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
-      extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
-        "192.168.65.3"; "192.168.65.4"; "192.168.65.5"; "192.168.65.6";
-        "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
-      ];
+      extra_dns_ip = [];
       get_domain_search = (fun () -> []);
       pcap_settings = Active_config.Value(pcap, never) } in
 
