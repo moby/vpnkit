@@ -87,6 +87,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   module Stack_ethif = Ethif.Make(Switch.Port)
   module Stack_arpv4 = Arp.Make(Stack_ethif)
   module Stack_ipv4 = Ipv4.Make(Stack_ethif)(Stack_arpv4)
+  module Stack_icmpv4 = Icmpv4.Make(Stack_ipv4)
   module Stack_tcp_wire = Tcp.Wire.Make(Stack_ipv4)
   module Stack_udp = Udp.Make(Stack_ipv4)
   module Stack_tcp = struct
@@ -190,6 +191,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       ethif:                    Stack_ethif.t;
       arp:                      Stack_arpv4.t;
       ipv4:                     Stack_ipv4.t;
+      icmpv4:                   Stack_icmpv4.t;
       udp4:                     Stack_udp.t;
       tcp4:                     Stack_tcp.t;
       mutable pending:          Tcp.Id.Set.t;
@@ -209,6 +211,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       >>= fun arp ->
       or_error "Stack_ipv4.connect" @@ Stack_ipv4.connect ethif arp
       >>= fun ipv4 ->
+      or_error "Stack_icmpv4.connect" @@ Stack_icmpv4.connect ipv4
+      >>= fun icmpv4 ->
       or_error "Stack_udp.connect" @@ Stack_udp.connect ipv4
       >>= fun udp4 ->
       or_error "Stack_tcp.connect" @@ Stack_tcp.connect ipv4
@@ -224,7 +228,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
       let pending = Tcp.Id.Set.empty in
       let last_active_time = Unix.gettimeofday () in
-      let tcp_stack = { recorder; netif; ethif; arp; ipv4; udp4; tcp4; pending; last_active_time } in
+      let tcp_stack = { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; pending; last_active_time } in
       Lwt.return (`Ok tcp_stack)
 
     let intercept_tcp_syn t ~id ~syn on_syn_callback (buf: Cstruct.t) =
@@ -359,7 +363,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (* Respond to ICMP *)
       | Ipv4 { raw; payload = Icmp _; _ } ->
         let none ~src:_ ~dst:_ _ = Lwt.return_unit in
-        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default:(fun ~proto:_ -> none) raw
+        let default ~proto:_ = Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 in
+        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
       (* UDP on port 53 -> DNS forwarder *)
       | Ipv4 { src; dst; payload = Udp { src = src_port; dst = 53; payload = Payload payload; _ }; _ } ->
         let udp = t.endpoint.Endpoint.udp4 in
@@ -410,7 +415,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
-           | _ -> Lwt.return_unit
+           | _ ->
+              Lwt.return_unit
         )
       >>= fun () ->
 
@@ -430,7 +436,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (* Respond to ICMP *)
       | Ipv4 { raw; payload = Icmp _; _ } ->
         let none ~src:_ ~dst:_ _ = Lwt.return_unit in
-        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default:(fun ~proto:_ -> none) raw
+        let default ~proto:_ = Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 in
+        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
       | Ipv4 { src = dest_ip; dst = local_ip; payload = Tcp { src = dest_port; dst = local_port; syn; raw; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port; dest_ip; local_ip; dest_port } in
         Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 local_ip, local_port) raw
@@ -446,7 +453,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           let reply buf = Stack_udp.write ~source_port:dst_port ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
           Host.Sockets.Datagram.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload ()
         end
-      | _ -> Lwt.return_unit
+      | _ ->
+        Lwt.return_unit
 
     let create endpoint =
       let tcp_stack = { endpoint } in
@@ -459,7 +467,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
-           | _ -> Lwt.return_unit
+           | _ ->
+            Lwt.return_unit
         )
       >>= fun () ->
 
