@@ -13,6 +13,10 @@ let client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 
+let default_peer = "192.168.65.2"
+let default_host = "192.168.65.1"
+let default_dns_extra = []
+
 let mtu = 1452 (* packets above this size with DNF set will get ICMP errors *)
 
 let log_exception_continue description f =
@@ -98,7 +102,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   module Dns_forwarder = Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Time)(Recorder)
 
   (* Global variable containing the global DNS configuration *)
-  let dns = ref (Dns_forwarder.create @@ Dns_policy.config ())
+  let dns =
+    let rewrite_local_ip = Ipaddr.V4.of_string_exn default_host in
+    ref (Dns_forwarder.create ~rewrite_local_ip @@ Dns_policy.config ())
 
   let is_dns =
     let open Match in
@@ -692,32 +698,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       ) string_dns_settings
     >>= fun dns_settings ->
 
-    let rec monitor_dns_settings settings =
-      begin match Active_config.hd settings with
-        | None ->
-          Log.info (fun f -> f "remove resolver override");
-          Dns_policy.remove ~priority:3;
-          !dns >>= fun t ->
-          Dns_forwarder.destroy t
-          >>= fun () ->
-          dns := Dns_forwarder.create (Dns_policy.config ());
-          Lwt.return_unit
-        | Some (config: Dns_forward.Config.t) ->
-          let open Dns_forward in
-          Log.info (fun f -> f "updating resolvers to %s" (Config.to_string config));
-          Dns_policy.add ~priority:3 ~config;
-          !dns >>= fun t ->
-          Dns_forwarder.destroy t
-          >>= fun () ->
-          dns := Dns_forwarder.create (Dns_policy.config ());
-          Lwt.return_unit
-      end
-      >>= fun () ->
-      Active_config.tl settings
-      >>= fun settings ->
-      monitor_dns_settings settings in
-    Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings dns_settings));
-
     let bind_path = driver @ [ "allowed-bind-address" ] in
     Config.string_option config bind_path
     >>= fun string_allowed_bind_address ->
@@ -762,9 +742,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         Lwt.return default
       end else Lwt.return some in
 
-    let default_peer = "192.168.65.2" in
-    let default_host = "192.168.65.1" in
-    let default_dns_extra = [] in
     Config.string config ~default:default_peer peer_ips_path
     >>= fun string_peer_ips ->
     Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips
@@ -788,6 +765,32 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let peer_ip = Active_config.hd peer_ips in
     let local_ip = Active_config.hd host_ips in
     let extra_dns_ip = Active_config.hd extra_dns_ips in
+
+    let rec monitor_dns_settings settings =
+      begin match Active_config.hd settings with
+        | None ->
+          Log.info (fun f -> f "remove resolver override");
+          Dns_policy.remove ~priority:3;
+          !dns >>= fun t ->
+          Dns_forwarder.destroy t
+          >>= fun () ->
+          dns := Dns_forwarder.create ~rewrite_local_ip:local_ip (Dns_policy.config ());
+          Lwt.return_unit
+        | Some (config: Dns_forward.Config.t) ->
+          let open Dns_forward in
+          Log.info (fun f -> f "updating resolvers to %s" (Config.to_string config));
+          Dns_policy.add ~priority:3 ~config;
+          !dns >>= fun t ->
+          Dns_forwarder.destroy t
+          >>= fun () ->
+          dns := Dns_forwarder.create ~rewrite_local_ip:local_ip (Dns_policy.config ());
+          Lwt.return_unit
+      end
+      >>= fun () ->
+      Active_config.tl settings
+      >>= fun settings ->
+      monitor_dns_settings settings in
+    Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings dns_settings));
 
     Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s domain_search:%s"
                  (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip) (String.concat " " !domain_search)
