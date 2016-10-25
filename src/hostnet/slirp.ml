@@ -357,9 +357,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (* UDP on port 53 -> DNS forwarder *)
       | Ipv4 { src; dst; payload = Udp { src = src_port; dst = 53; payload = Payload payload; _ }; _ } ->
         let udp = t.endpoint.Endpoint.udp4 in
-        let recorder = t.endpoint.Endpoint.recorder in
         !dns >>= fun t ->
-        Dns_forwarder.handle_udp ~t ~udp ~recorder ~src ~dst ~src_port payload
+        Dns_forwarder.handle_udp ~t ~udp ~src ~dst ~src_port payload
       (* TCP to port 53 -> DNS forwarder *)
       | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = 53; syn; raw; payload = Payload _; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port = 53; dest_ip = src; local_ip = dst; dest_port = src_port } in
@@ -515,6 +514,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun (filteredif: Filteredif.t) ->
     or_failwith "capture" @@ Netif.connect filteredif
     >>= fun interface ->
+    Dns_forwarder.set_recorder interface;
 
     let kib = 1024 in
     let mib = 1024 * kib in

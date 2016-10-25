@@ -15,7 +15,9 @@ module Make
 
   val create: Dns_forward.Config.t -> t Lwt.t
 
-  val handle_udp: t:t -> udp:Udp.t -> recorder:Recorder.t -> src:Ipaddr.V4.t -> dst:Ipaddr.V4.t -> src_port:int -> Cstruct.t -> unit Lwt.t
+  val set_recorder: Recorder.t -> unit
+
+  val handle_udp: t:t -> udp:Udp.t -> src:Ipaddr.V4.t -> dst:Ipaddr.V4.t -> src_port:int -> Cstruct.t -> unit Lwt.t
 
   val handle_tcp: t:t -> (int -> (Tcp.flow -> unit Lwt.t) option) Lwt.t
 

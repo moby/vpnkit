@@ -121,49 +121,56 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     dns_udp_resolver: Dns_udp_resolver.t;
   }
 
+  let recorder = ref None
+  let set_recorder r = recorder := Some r
+
   let destroy t =
     Dns_tcp_resolver.destroy t.dns_tcp_resolver
     >>= fun () ->
     Dns_udp_resolver.destroy t.dns_udp_resolver
 
-  let record_udp ~source_ip ~source_port ~dest_ip ~dest_port ~recorder bufs =
-    (* This is from mirage-tcpip-- ideally we would use a simpler packet creation fn *)
-    let frame = Io_page.to_cstruct (Io_page.get 1) in
-    let smac = "\000\000\000\000\000\000" in
-    Wire_structs.set_ethernet_src smac 0 frame;
-    Wire_structs.set_ethernet_ethertype frame 0x0800;
-    let buf = Cstruct.shift frame Wire_structs.sizeof_ethernet in
-    Wire_structs.Ipv4_wire.set_ipv4_hlen_version buf ((4 lsl 4) + (5));
-    Wire_structs.Ipv4_wire.set_ipv4_tos buf 0;
-    Wire_structs.Ipv4_wire.set_ipv4_ttl buf 38;
-    let proto = Wire_structs.Ipv4_wire.protocol_to_int `UDP in
-    Wire_structs.Ipv4_wire.set_ipv4_proto buf proto;
-    Wire_structs.Ipv4_wire.set_ipv4_src buf (Ipaddr.V4.to_int32 source_ip);
-    Wire_structs.Ipv4_wire.set_ipv4_dst buf (Ipaddr.V4.to_int32 dest_ip);
-    let header_len = Wire_structs.sizeof_ethernet + Wire_structs.Ipv4_wire.sizeof_ipv4 in
+  let record_udp ~source_ip ~source_port ~dest_ip ~dest_port bufs =
+    match !recorder with
+    | Some recorder ->
+      (* This is from mirage-tcpip-- ideally we would use a simpler packet creation fn *)
+      let frame = Io_page.to_cstruct (Io_page.get 1) in
+      let smac = "\000\000\000\000\000\000" in
+      Wire_structs.set_ethernet_src smac 0 frame;
+      Wire_structs.set_ethernet_ethertype frame 0x0800;
+      let buf = Cstruct.shift frame Wire_structs.sizeof_ethernet in
+      Wire_structs.Ipv4_wire.set_ipv4_hlen_version buf ((4 lsl 4) + (5));
+      Wire_structs.Ipv4_wire.set_ipv4_tos buf 0;
+      Wire_structs.Ipv4_wire.set_ipv4_ttl buf 38;
+      let proto = Wire_structs.Ipv4_wire.protocol_to_int `UDP in
+      Wire_structs.Ipv4_wire.set_ipv4_proto buf proto;
+      Wire_structs.Ipv4_wire.set_ipv4_src buf (Ipaddr.V4.to_int32 source_ip);
+      Wire_structs.Ipv4_wire.set_ipv4_dst buf (Ipaddr.V4.to_int32 dest_ip);
+      let header_len = Wire_structs.sizeof_ethernet + Wire_structs.Ipv4_wire.sizeof_ipv4 in
 
-    let frame = Cstruct.set_len frame (header_len + Wire_structs.sizeof_udp) in
-    let udp_buf = Cstruct.shift frame header_len in
-    Wire_structs.set_udp_source_port udp_buf source_port;
-    Wire_structs.set_udp_dest_port udp_buf dest_port;
-    Wire_structs.set_udp_length udp_buf (Wire_structs.sizeof_udp + Cstruct.lenv bufs);
-    Wire_structs.set_udp_checksum udp_buf 0;
-    let csum = Ip.checksum frame (udp_buf :: bufs) in
-    Wire_structs.set_udp_checksum udp_buf csum;
-    (* Ip.writev *)
-    let bufs = frame :: bufs in
-    let tlen = Cstruct.lenv bufs - Wire_structs.sizeof_ethernet in
-    let dmac = String.make 6 '\000' in
-    (* Ip.adjust_output_header *)
-    Wire_structs.set_ethernet_dst dmac 0 frame;
-    let buf = Cstruct.sub frame Wire_structs.sizeof_ethernet Wire_structs.Ipv4_wire.sizeof_ipv4 in
-    (* Set the mutable values in the ipv4 header *)
-    Wire_structs.Ipv4_wire.set_ipv4_len buf tlen;
-    Wire_structs.Ipv4_wire.set_ipv4_id buf (Random.int 65535); (* TODO *)
-    Wire_structs.Ipv4_wire.set_ipv4_csum buf 0;
-    let checksum = Tcpip_checksum.ones_complement buf in
-    Wire_structs.Ipv4_wire.set_ipv4_csum buf checksum;
-    Recorder.record recorder bufs
+      let frame = Cstruct.set_len frame (header_len + Wire_structs.sizeof_udp) in
+      let udp_buf = Cstruct.shift frame header_len in
+      Wire_structs.set_udp_source_port udp_buf source_port;
+      Wire_structs.set_udp_dest_port udp_buf dest_port;
+      Wire_structs.set_udp_length udp_buf (Wire_structs.sizeof_udp + Cstruct.lenv bufs);
+      Wire_structs.set_udp_checksum udp_buf 0;
+      let csum = Ip.checksum frame (udp_buf :: bufs) in
+      Wire_structs.set_udp_checksum udp_buf csum;
+      (* Ip.writev *)
+      let bufs = frame :: bufs in
+      let tlen = Cstruct.lenv bufs - Wire_structs.sizeof_ethernet in
+      let dmac = String.make 6 '\000' in
+      (* Ip.adjust_output_header *)
+      Wire_structs.set_ethernet_dst dmac 0 frame;
+      let buf = Cstruct.sub frame Wire_structs.sizeof_ethernet Wire_structs.Ipv4_wire.sizeof_ipv4 in
+      (* Set the mutable values in the ipv4 header *)
+      Wire_structs.Ipv4_wire.set_ipv4_len buf tlen;
+      Wire_structs.Ipv4_wire.set_ipv4_id buf (Random.int 65535); (* TODO *)
+      Wire_structs.Ipv4_wire.set_ipv4_csum buf 0;
+      let checksum = Tcpip_checksum.ones_complement buf in
+      Wire_structs.Ipv4_wire.set_ipv4_csum buf checksum;
+      Recorder.record recorder bufs
+    | None ->
+      () (* nowhere to log packet *)
 
   let create config =
     let open Dns_forward.Config.Address in
@@ -187,7 +194,7 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     | None -> Printf.sprintf "Unparsable DNS packet length %d" len
     | Some request -> Dns.Packet.to_string request
 
-  let handle_udp ~t ~udp ~recorder ~src ~dst ~src_port buf =
+  let handle_udp ~t ~udp ~src ~dst ~src_port buf =
     (* FIXME: need to record the upstream request *)
     Dns_udp_resolver.answer buf t.dns_udp_resolver
     >>= function
@@ -196,7 +203,7 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
       Lwt.return_unit
     | Result.Ok buffer ->
       (* Synthesize a packet from the remote to the host i.e. dst *)
-      record_udp ~source_ip:dst ~source_port:53 ~dest_ip:src ~dest_port:src_port ~recorder [ buffer ];
+      record_udp ~source_ip:dst ~source_port:53 ~dest_ip:src ~dest_port:src_port [ buffer ];
       Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer
 
   let handle_tcp ~t =
