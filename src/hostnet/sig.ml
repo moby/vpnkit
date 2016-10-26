@@ -1,3 +1,12 @@
+
+module type READ_INTO = sig
+  type flow
+  type error
+
+  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
+  (** Completely fills the given buffer with data from [fd] *)
+end
+
 module type FLOW_CLIENT = sig
   include Mirage_flow_s.SHUTDOWNABLE
 
@@ -7,17 +16,14 @@ module type FLOW_CLIENT = sig
     -> flow Error.t
   (** [connect address] creates a connection to [address] and returns
       he connected flow. *)
-
-  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
-  (** Completely fills the given buffer with data from [fd] *)
 end
-
 
 module type CONN = sig
   include V1_LWT.FLOW
 
-  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
-  (** Completely fills the given buffer with data from [fd] *)
+  include READ_INTO
+    with type flow := flow
+     and type error := error
 end
 
 module type FLOW_SERVER = sig
@@ -103,6 +109,10 @@ module type SOCKETS = sig
       include FLOW_CLIENT
         with type address := address
 
+      include READ_INTO
+        with type flow := flow
+         and type error := error
+
       include FLOW_SERVER
         with type address := address
          and type flow := flow
@@ -113,6 +123,10 @@ module type SOCKETS = sig
 
       include FLOW_CLIENT
         with type address := address
+
+      include READ_INTO
+        with type flow := flow
+         and type error := error
 
       include FLOW_SERVER
         with type address := address
@@ -231,4 +245,8 @@ module type Connector = sig
 
   val connect: unit -> flow Lwt.t
   (** Connect to the port multiplexing service in the VM *)
+
+  include READ_INTO
+    with type flow := flow
+     and type error := error
 end

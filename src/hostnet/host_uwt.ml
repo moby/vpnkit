@@ -296,11 +296,6 @@ module Sockets = struct
               Lwt.return `Eof
             )
 
-      (* Since we map individual datagrams onto calls to `read` and the framing
-         is assumed to be important, we don't implement `read_into` since it
-         would split datagrams. *)
-      let read_into _t _buf = Lwt.return (`Error (`Msg "read_into does not work with Udp"))
-
       let write t buf = match t.fd with
         | None -> Lwt.return `Eof
         | Some fd ->
