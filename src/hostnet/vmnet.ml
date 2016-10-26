@@ -18,13 +18,6 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
-module type CONN = sig
-  include V1_LWT.FLOW
-
-  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
-  (** Completely fills the given buffer with data from [fd] *)
-end
-
 let default_mtu = 1500
 
 let ethernet_header_length = 14 (* no VLAN *)
@@ -169,7 +162,7 @@ module Packet = struct
     Result.Ok (t, Cstruct.shift rest sizeof)
 end
 
-module Make(C: CONN) = struct
+module Make(C: Sig.CONN) = struct
 
 module Channel = Channel.Make(C)
 

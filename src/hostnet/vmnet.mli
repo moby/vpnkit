@@ -1,11 +1,4 @@
-module type CONN = sig
-  include V1_LWT.FLOW
-
-  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
-  (** Completely fills the given buffer with data from [fd] *)
-end
-
-module Make(C: CONN): sig
+module Make(C: Sig.CONN): sig
 (** Accept connections and talk to clients via the vmnetd protocol, exposing
     the packets as a Mirage NETWORK interface *)
 

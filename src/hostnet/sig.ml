@@ -12,6 +12,14 @@ module type FLOW_CLIENT = sig
   (** Completely fills the given buffer with data from [fd] *)
 end
 
+
+module type CONN = sig
+  include V1_LWT.FLOW
+
+  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
+  (** Completely fills the given buffer with data from [fd] *)
+end
+
 module type FLOW_SERVER = sig
   type server
   (* A server bound to some address *)
