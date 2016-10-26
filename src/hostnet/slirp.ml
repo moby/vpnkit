@@ -104,8 +104,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
   (* Global variable containing the global DNS configuration *)
   let dns =
-    let rewrite_local_ip = Ipaddr.V4.of_string_exn default_host in
-    ref (Dns_forwarder.create ~rewrite_local_ip @@ Dns_policy.config ())
+    let ip = Ipaddr.V4 (Ipaddr.V4.of_string_exn default_host) in
+    let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
+    ref (Dns_forwarder.create ~local_address @@ Dns_policy.config ())
 
   let is_dns =
     let open Match in
@@ -776,6 +777,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let extra_dns_ip = Active_config.hd extra_dns_ips in
 
     let rec monitor_dns_settings settings =
+      let local_address = { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 } in
       begin match Active_config.hd settings with
         | None ->
           Log.info (fun f -> f "remove resolver override");
@@ -783,7 +785,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           !dns >>= fun t ->
           Dns_forwarder.destroy t
           >>= fun () ->
-          dns := Dns_forwarder.create ~rewrite_local_ip:local_ip (Dns_policy.config ());
+          dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
           Lwt.return_unit
         | Some (config: Dns_forward.Config.t) ->
           let open Dns_forward in
@@ -792,7 +794,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           !dns >>= fun t ->
           Dns_forwarder.destroy t
           >>= fun () ->
-          dns := Dns_forwarder.create ~rewrite_local_ip:local_ip (Dns_policy.config ());
+          dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
           Lwt.return_unit
       end
       >>= fun () ->

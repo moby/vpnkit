@@ -8,9 +8,6 @@ module type FLOW_CLIENT = sig
   (** [connect address] creates a connection to [address] and returns
       he connected flow. *)
 
-  val getclientname: flow -> address
-  (** Query the address the client is bound to *)
-
   val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
   (** Completely fills the given buffer with data from [fd] *)
 end

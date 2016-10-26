@@ -129,14 +129,9 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     >>= fun () ->
     Dns_udp_resolver.destroy t.dns_udp_resolver
 
-  let rewrite_ip ?(rewrite_local_ip = Ipaddr.V4.any) ip =
-    if Ipaddr.V4.compare ip Ipaddr.V4.any = 0 then rewrite_local_ip else ip
-
-  let record_udp ?rewrite_local_ip ~source_ip ~source_port ~dest_ip ~dest_port bufs =
+  let record_udp ~source_ip ~source_port ~dest_ip ~dest_port bufs =
     match !recorder with
     | Some recorder ->
-      let source_ip = rewrite_ip ?rewrite_local_ip source_ip in
-      let dest_ip = rewrite_ip ?rewrite_local_ip dest_ip in
       (* This is from mirage-tcpip-- ideally we would use a simpler packet creation fn *)
       let frame = Io_page.to_cstruct (Io_page.get 1) in
       let smac = "\000\000\000\000\000\000" in
@@ -177,15 +172,16 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     | None ->
       () (* nowhere to log packet *)
 
-  let create ?rewrite_local_ip config =
+  let create ~local_address config =
     let open Dns_forward.Config.Address in
-    let message_cb ~src ~dst ~buf = match src, dst with
-    | { ip = Ipaddr.V4 source_ip; port = source_port }, { ip = Ipaddr.V4 dest_ip; port = dest_port } ->
-      record_udp ?rewrite_local_ip ~source_ip ~source_port ~dest_ip ~dest_port [ buf ];
-      Lwt.return_unit
-    | _ ->
-      (* We don't know how to marshal IPv6 yet *)
-      Lwt.return_unit in
+    let message_cb ?(src = local_address) ?(dst = local_address) ~buf () =
+      match src, dst with
+      | { ip = Ipaddr.V4 source_ip; port = source_port }, { ip = Ipaddr.V4 dest_ip; port = dest_port } ->
+        record_udp ~source_ip ~source_port ~dest_ip ~dest_port [ buf ];
+        Lwt.return_unit
+      | _ ->
+        (* We don't know how to marshal IPv6 yet *)
+        Lwt.return_unit in
     Dns_udp_resolver.create ~local_names_cb ~message_cb config
     >>= fun dns_udp_resolver ->
     Dns_tcp_resolver.create ~local_names_cb ~message_cb config

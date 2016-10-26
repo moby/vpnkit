@@ -291,15 +291,6 @@ module Datagram = struct
       let sockaddr = sockaddr_of_address address in
       Lwt.return (Result.Ok (of_fd ~idx ~description ?read_buffer_size sockaddr address fd))
 
-    let getclientname { fd; _ } = match fd with
-      | None -> failwith "Udp.getclientname flow is closed"
-      | Some fd ->
-        begin match Lwt_unix.getsockname fd with
-        | Lwt_unix.ADDR_INET(iaddr, port) ->
-          Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
-        | _ -> invalid_arg "Udp.getclientname passed a non-INET socket"
-        end
-
     let read t = match t.fd, t.already_read with
       | None, _ -> Lwt.return `Eof
       | Some _, Some data when Cstruct.len data > 0 ->
@@ -601,12 +592,6 @@ module Stream = struct
            errorf "%s: Lwt_unix.connect: caught %s" description (Printexc.to_string e)
         )
 
-    let getclientname { fd; _ } =
-      match Lwt_unix.getsockname fd with
-      | Lwt_unix.ADDR_INET(iaddr, port) ->
-        Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
-      | _ -> invalid_arg "Tcp.getclientname passed a non-INET socket"
-
     type server = {
       mutable listening_fds: (int * Lwt_unix.file_descr) list;
       read_buffer_size: int;
@@ -722,8 +707,6 @@ module Stream = struct
 
     let is_win32 = Sys.os_type = "win32"
 
-    let getclientname _ = "undefined"
-    
     let connect ?read_buffer_size path =
       let description = "unix:" ^ path in
       if is_win32 then begin

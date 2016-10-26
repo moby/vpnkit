@@ -13,11 +13,10 @@ module Make
   type t
   (** A DNS proxy instance with a fixed configuration *)
 
-  val create: ?rewrite_local_ip:Ipaddr.V4.t -> Dns_forward.Config.t -> t Lwt.t
+  val create: local_address:Dns_forward.Config.Address.t -> Dns_forward.Config.t -> t Lwt.t
   (** Create a DNS forwarding instance based on the given configuration.
-      If ?rewrite_local_ip is not None, we will rewrite DNS requests sent via
-      host sockets with the IP address of 0.0.0.0 to the given IP. This is
-      intended to make the resulting .pcap trace easier to read and analyse. *)
+      The parameter [~local_address] will be used in any .pcap trace as the
+      source address of DNS requests sent from this host. *)
 
   val set_recorder: Recorder.t -> unit
 

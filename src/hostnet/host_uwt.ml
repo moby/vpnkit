@@ -271,15 +271,6 @@ module Sockets = struct
              errorf "Socket.Udp.connect %s: caught %s" description (Printexc.to_string e)
           )
 
-      let getclientname { fd; _ } = match fd with
-        | None -> failwith "getclientname: flow is closed"
-        | Some fd ->
-          begin match Uwt.Udp.getsockname_exn fd with
-          | Unix.ADDR_INET(iaddr, port) ->
-            Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
-          | _ -> invalid_arg "Udp.getclientname passed a non-INET socket"
-          end
-
       let rec read t = match t.fd, t.already_read with
         | None, _ -> Lwt.return `Eof
         | Some _, Some data when Cstruct.len data > 0 ->
@@ -494,12 +485,6 @@ module Sockets = struct
              let _ = Uwt.Tcp.close fd in
              errorf "Socket.Tcp.connect %s: caught %s" description (Printexc.to_string e)
           )
-
-      let getclientname { fd; _ } =
-        match Uwt.Tcp.getsockname_exn fd with
-        | Unix.ADDR_INET(iaddr, port) ->
-          Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
-        | _ -> invalid_arg "Tcp.getclientname passed a non-INET socket"
 
       let shutdown_read _ =
         Lwt.return ()
@@ -727,8 +712,6 @@ module Sockets = struct
         mutable read_buffer: Cstruct.t;
         mutable closed: bool;
       }
-
-      let getclientname _ = "undefined"
 
       let of_fd ~idx ?(read_buffer_size = default_read_buffer_size) ~description fd =
         let read_buffer = Cstruct.create read_buffer_size in
