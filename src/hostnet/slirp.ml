@@ -364,7 +364,11 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (* Respond to ICMP *)
       | Ipv4 { raw; payload = Icmp _; _ } ->
         let none ~src:_ ~dst:_ _ = Lwt.return_unit in
-        let default ~proto:_ = Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 in
+        let default ~proto ~src ~dst buf = match proto with
+          | 1 (* ICMP *) ->
+            Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
+          | _ ->
+            Lwt.return_unit in
         Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
       (* UDP on port 53 -> DNS forwarder *)
       | Ipv4 { src; dst; payload = Udp { src = src_port; dst = 53; payload = Payload payload; _ }; _ } ->
@@ -437,7 +441,11 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (* Respond to ICMP *)
       | Ipv4 { raw; payload = Icmp _; _ } ->
         let none ~src:_ ~dst:_ _ = Lwt.return_unit in
-        let default ~proto:_ = Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 in
+        let default ~proto ~src ~dst buf = match proto with
+          | 1 (* ICMP *) ->
+            Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
+          | _ ->
+            Lwt.return_unit in
         Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
       | Ipv4 { src = dest_ip; dst = local_ip; payload = Tcp { src = dest_port; dst = local_port; syn; raw; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port; dest_ip; local_ip; dest_port } in
