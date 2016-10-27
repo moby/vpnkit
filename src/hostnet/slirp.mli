@@ -13,7 +13,7 @@ type config = {
 }
 (** A slirp TCP/IP stack ready to accept connections *)
 
-module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conv: Sig.RESOLV_CONF)(Host: Sig.HOST): sig
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST): sig
 
   val create: Config.t -> config Lwt.t
   (** Initialise a TCP/IP stack, taking configuration from the Config.t *)

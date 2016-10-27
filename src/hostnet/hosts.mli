@@ -12,7 +12,7 @@ module Make(Files: Sig.FILES): sig
 
   type watch
 
-  val watch: ?path:string -> unit -> [ `Ok of watch | `Error of [ `Msg of string ] ]
+  val watch: ?path:string -> unit -> (watch, [ `Msg of string ]) Result.result
   (** Start watching the hosts file, updating the [etc_hosts] binding in the
       background. The [?path] argument allows the location of the hosts file
       to be overriden. *)

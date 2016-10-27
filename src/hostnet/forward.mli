@@ -1,7 +1,7 @@
 
 module Port : sig
   type t = [
-    | `Tcp of Ipaddr.V4.t * int
+    | `Tcp of Ipaddr.t * int
     | `Udp of Ipaddr.t * int
   ]
 

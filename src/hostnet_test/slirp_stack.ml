@@ -8,29 +8,42 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Resolv_conf = struct
-  let get () = Lwt.return { Resolver.resolvers = [
-    Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.8.8"), 53;
-    Ipaddr.V4 (Ipaddr.V4.of_string_exn "8.8.4.4"), 53;
-  ]; search = []}
-  let set _ = ()
-  let set_default_dns _ = ()
+module Dns_policy = struct
+  let config_of_ips ips =
+    let open Dns_forward.Config in
+    let servers = Server.Set.of_list (
+      List.map (fun (ip, port) ->
+        { Server.address = { Address.ip; port = 53 }; zones = Domain.Set.empty }
+      ) ips) in
+    { servers; search = [] }
+
+  let config () =
+    let ips = [
+      Ipaddr.of_string_exn "8.8.8.8", 53;
+      Ipaddr.of_string_exn "8.8.4.4", 53;
+    ] in
+    config_of_ips ips
+
+  let add ~priority:_ ~config:_ = ()
+  let remove ~priority:_ = ()
+  type priority = int
 end
 
 module Make(Host: Sig.HOST) = struct
 module VMNET = Vmnet.Make(Host.Sockets.Stream.Tcp)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
-module Slirp_stack = Slirp.Make(Config)(VMNET)(Resolv_conf)(Host)
+module Slirp_stack = Slirp.Make(Config)(VMNET)(Dns_policy)(Host)
 
 module Client = struct
   module Netif = VMNET
   module Ethif1 = Ethif.Make(Netif)
   module Arpv41 = Arpv4.Make(Ethif1)(Clock)(Host.Time)
   module Ipv41 = Ipv4.Make(Ethif1)(Arpv41)
+  module Icmpv41 = Icmpv4.Make(Ipv41)
   module Udp1 = Udp.Make(Ipv41)
   module Tcp1 = Tcp.Flow.Make(Ipv41)(Host.Time)(Clock)(Random)
   include Tcpip_stack_direct.Make(Console_unix)(Host.Time)
-      (Random)(Netif)(Ethif1)(Arpv41)(Ipv41)(Udp1)(Tcp1)
+      (Random)(Netif)(Ethif1)(Arpv41)(Ipv41)(Icmpv41)(Udp1)(Tcp1)
   let or_error name m =
     let open Lwt.Infix in
     m >>= function
@@ -46,6 +59,8 @@ module Client = struct
     >>= fun arp ->
     or_error "ipv4" @@ Ipv41.connect ethif arp
     >>= fun ipv4 ->
+    or_error "icmpv4" @@ Icmpv41.connect ipv4
+    >>= fun icmpv4 ->
     or_error "udp" @@ Udp1.connect ipv4
     >>= fun udp4 ->
     or_error "tcp" @@ Tcp1.connect ipv4
@@ -56,7 +71,7 @@ module Client = struct
       interface;
       mode = `DHCP;
     } in
-    or_error "stack" @@ connect cfg ethif arp ipv4 udp4 tcp4
+    or_error "stack" @@ connect cfg ethif arp ipv4 icmpv4 udp4 tcp4
     >>= fun stack ->
     Lwt.return stack
 end
@@ -81,7 +96,7 @@ let config =
   }
 
 let start_stack () =
-  Host.Sockets.Stream.Tcp.bind (Ipaddr.V4.localhost, 0)
+  Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
   >>= fun server ->
   let _, port = Host.Sockets.Stream.Tcp.getsockname server in
   Host.Sockets.Stream.Tcp.listen server
@@ -101,21 +116,21 @@ let stack_port = start_stack ()
 let with_stack f =
   stack_port
   >>= fun port ->
-  Host.Sockets.Stream.Tcp.connect (Ipaddr.V4.localhost, port)
+  Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 Ipaddr.V4.localhost, port)
   >>= function
-  | `Error (`Msg x) -> failwith x
-  | `Ok flow ->
+  | Result.Error (`Msg x) -> failwith x
+  | Result.Ok flow ->
   Log.info (fun f -> f "Made a loopback connection");
   let client_macaddr = Hostnet.Slirp.client_macaddr in
   let server_macaddr = Hostnet.Slirp.server_macaddr in
   VMNET.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr flow
   >>= function
-  | `Error (`Msg x ) ->
+  | Result.Error (`Msg x ) ->
     (* Server will close when it gets EOF *)
     Host.Sockets.Stream.Tcp.close flow
     >>= fun () ->
     failwith x
-  | `Ok client' ->
+  | Result.Ok client' ->
     Lwt.finalize (fun () ->
       Log.info (fun f -> f "Initialising client TCP/IP stack");
       Client.connect client'

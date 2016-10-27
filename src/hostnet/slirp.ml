@@ -13,6 +13,10 @@ let client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 
+let default_peer = "192.168.65.2"
+let default_host = "192.168.65.1"
+let default_dns_extra = []
+
 let mtu = 1452 (* packets above this size with DNF set will get ICMP errors *)
 
 let log_exception_continue description f =
@@ -33,6 +37,11 @@ let or_failwith name m =
   m >>= function
   | `Error _ -> Lwt.fail (Failure (Printf.sprintf "Failed to connect %s device" name))
   | `Ok x -> Lwt.return x
+
+let or_failwith_result name m =
+  m >>= function
+  | Result.Error _ -> Lwt.fail (Failure (Printf.sprintf "Failed to connect %s device" name))
+  | Result.Ok x -> Lwt.return x
 
 let or_error name m =
   m >>= function
@@ -61,7 +70,7 @@ type config = {
   pcap_settings: pcap Active_config.values;
 }
 
-module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_CONF)(Host: Sig.HOST) = struct
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST) = struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
 
   module Filteredif = Filter.Make(Vmnet)
@@ -78,6 +87,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
   module Stack_ethif = Ethif.Make(Switch.Port)
   module Stack_arpv4 = Arp.Make(Stack_ethif)
   module Stack_ipv4 = Ipv4.Make(Stack_ethif)(Stack_arpv4)
+  module Stack_icmpv4 = Icmpv4.Make(Stack_ipv4)
   module Stack_tcp_wire = Tcp.Wire.Make(Stack_ipv4)
   module Stack_udp = Udp.Make(Stack_ipv4)
   module Stack_tcp = struct
@@ -90,7 +100,13 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
     let shutdown_write = close
   end
 
-  module Dns_forwarder = Dns_forward.Make(Stack_ipv4)(Stack_udp)(Resolv_conf)(Host.Sockets)(Host.Time)(Recorder)
+  module Dns_forwarder = Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Time)(Recorder)
+
+  (* Global variable containing the global DNS configuration *)
+  let dns =
+    let ip = Ipaddr.V4 (Ipaddr.V4.of_string_exn default_host) in
+    let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
+    ref (Dns_forwarder.create ~local_address @@ Dns_policy.config ())
 
   let is_dns =
     let open Match in
@@ -165,7 +181,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
       let touch id =
         if Id.Map.mem id !all
         then (Id.Map.find id !all).last_active_time <- Unix.gettimeofday ()
-        else Log.err (fun f -> f "flow %s is not registered" (string_of_id id))
     end
   end
 
@@ -177,6 +192,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
       ethif:                    Stack_ethif.t;
       arp:                      Stack_arpv4.t;
       ipv4:                     Stack_ipv4.t;
+      icmpv4:                   Stack_icmpv4.t;
       udp4:                     Stack_udp.t;
       tcp4:                     Stack_tcp.t;
       mutable pending:          Tcp.Id.Set.t;
@@ -196,6 +212,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
       >>= fun arp ->
       or_error "Stack_ipv4.connect" @@ Stack_ipv4.connect ethif arp
       >>= fun ipv4 ->
+      or_error "Stack_icmpv4.connect" @@ Stack_icmpv4.connect ipv4
+      >>= fun icmpv4 ->
       or_error "Stack_udp.connect" @@ Stack_udp.connect ipv4
       >>= fun udp4 ->
       or_error "Stack_tcp.connect" @@ Stack_tcp.connect ipv4
@@ -211,33 +229,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
 
       let pending = Tcp.Id.Set.empty in
       let last_active_time = Unix.gettimeofday () in
-      let tcp_stack = { recorder; netif; ethif; arp; ipv4; udp4; tcp4; pending; last_active_time } in
+      let tcp_stack = { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; pending; last_active_time } in
       Lwt.return (`Ok tcp_stack)
 
-    let callback t tcpv4 = match t.Tcp.Flow.socket with
-      | None ->
-        Log.err (fun f -> f "%s callback called on closed socket" (Tcp.Flow.to_string t));
-        Lwt.return_unit
-      | Some socket ->
-        Lwt.finalize
-          (fun () ->
-             Mirage_flow.proxy (module Clock) (module Stack_tcp) tcpv4 (module Host.Sockets.Stream.Tcp) socket ()
-             >>= function
-             | `Error (`Msg m) ->
-               Log.err (fun f -> f "%s proxy failed with %s" (Tcp.Flow.to_string t) m);
-               Lwt.return_unit
-             | `Ok (_l_stats, _r_stats) ->
-               Lwt.return_unit
-          ) (fun () ->
-              Log.debug (fun f -> f "closing flow %s" (string_of_id t.Tcp.Flow.id));
-              t.Tcp.Flow.socket <- None;
-              Tcp.Flow.remove t.Tcp.Flow.id;
-              Host.Sockets.Stream.Tcp.close socket
-              >>= fun () ->
-              Lwt.return_unit
-            )
-
-    let input_tcp t ~id ~syn (ip, port) (buf: Cstruct.t) =
+    let intercept_tcp_syn t ~id ~syn on_syn_callback (buf: Cstruct.t) =
       if syn then begin
         if Tcp.Id.Set.mem id t.pending then begin
           (* This can happen if the `connect` blocks for a few seconds *)
@@ -247,17 +242,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
           t.pending <- Tcp.Id.Set.add id t.pending;
           Lwt.finalize
             (fun () ->
-               ( Host.Sockets.Stream.Tcp.connect (ip, port)
-                 >>= function
-                 | `Error (`Msg m) ->
-                   Log.err (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.V4.to_string ip) port m);
-                   Lwt.return (fun _ -> None)
-                 | `Ok socket ->
-                   let t = Tcp.Flow.create id socket in
-                   let listeners port =
-                     Log.debug (fun f -> f "%s:%d handshake complete" (Ipaddr.V4.to_string ip) port);
-                     Some (fun flow -> callback t flow)  in
-                   Lwt.return listeners )
+               on_syn_callback ()
                >>= fun listeners ->
                Stack_tcp.input t.tcp4 ~listeners ~src:id.Stack_tcp_wire.dest_ip ~dst:id.Stack_tcp_wire.local_ip buf
             ) (fun () ->
@@ -270,6 +255,45 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
         (* non-SYN packets are injected into the stack as normal *)
         Stack_tcp.input t.tcp4 ~listeners:(fun _ -> None) ~src:id.Stack_tcp_wire.dest_ip ~dst:id.Stack_tcp_wire.local_ip buf
       end
+
+    let input_tcp t ~id ~syn (ip, port) (buf: Cstruct.t) =
+      intercept_tcp_syn t ~id ~syn
+        (fun () ->
+          Host.Sockets.Stream.Tcp.connect (ip, port)
+          >>= function
+          | Result.Error (`Msg m) ->
+            Log.err (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.to_string ip) port m);
+            Lwt.return (fun _ -> None)
+          | Result.Ok socket ->
+            let t = Tcp.Flow.create id socket in
+            let listeners port =
+              Log.debug (fun f -> f "%s:%d handshake complete" (Ipaddr.to_string ip) port);
+              Some (fun flow ->
+                match t.Tcp.Flow.socket with
+                  | None ->
+                    Log.err (fun f -> f "%s callback called on closed socket" (Tcp.Flow.to_string t));
+                    Lwt.return_unit
+                  | Some socket ->
+                    Lwt.finalize
+                      (fun () ->
+                         Mirage_flow.proxy (module Clock) (module Stack_tcp) flow (module Host.Sockets.Stream.Tcp) socket ()
+                         >>= function
+                         | `Error (`Msg m) ->
+                           Log.err (fun f -> f "%s proxy failed with %s" (Tcp.Flow.to_string t) m);
+                           Lwt.return_unit
+                         | `Ok (_l_stats, _r_stats) ->
+                           Lwt.return_unit
+                      ) (fun () ->
+                          Log.debug (fun f -> f "closing flow %s" (string_of_id t.Tcp.Flow.id));
+                          t.Tcp.Flow.socket <- None;
+                          Tcp.Flow.remove t.Tcp.Flow.id;
+                          Host.Sockets.Stream.Tcp.close socket
+                          >>= fun () ->
+                          Lwt.return_unit
+                        )
+                  )  in
+            Lwt.return listeners
+        ) buf
 
     (* Send an ICMP destination reachable message in response to the given
        packet. This can be used to indicate the packet would have been fragmented
@@ -335,45 +359,30 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
     }
     (** Represents the local machine including NTP and DNS servers *)
 
-    let index compare =
-      let rec loop i xs y = match xs with
-        | [] -> None
-        | x :: xs -> if compare x y = 0 then Some i else loop (i + 1) xs y in
-      loop 0
-
     (** Handle IPv4 datagrams by proxying them to a remote system *)
     let input_ipv4 t ipv4 = match ipv4 with
       (* Respond to ICMP *)
       | Ipv4 { raw; payload = Icmp _; _ } ->
         let none ~src:_ ~dst:_ _ = Lwt.return_unit in
-        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default:(fun ~proto:_ -> none) raw
+        let default ~proto ~src ~dst buf = match proto with
+          | 1 (* ICMP *) ->
+            Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
+          | _ ->
+            Lwt.return_unit in
+        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
       (* UDP on port 53 -> DNS forwarder *)
       | Ipv4 { src; dst; payload = Udp { src = src_port; dst = 53; payload = Payload payload; _ }; _ } ->
-        begin match index Ipaddr.V4.compare t.dns_ips dst with
-          | Some nth ->
-            let udp = t.endpoint.Endpoint.udp4 in
-            let recorder = t.endpoint.Endpoint.recorder in
-            Dns_forwarder.input ~nth ~udp ~recorder ~src ~dst ~src_port payload
-          | None ->
-            Log.err (fun f -> f "DNS IP %s not recognised" (Ipaddr.V4.to_string dst));
-            Lwt.return_unit
-        end
+        let udp = t.endpoint.Endpoint.udp4 in
+        !dns >>= fun t ->
+        Dns_forwarder.handle_udp ~t ~udp ~src ~dst ~src_port payload
       (* TCP to port 53 -> DNS forwarder *)
       | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = 53; syn; raw; payload = Payload _; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port = 53; dest_ip = src; local_ip = dst; dest_port = src_port } in
-        begin match index Ipaddr.V4.compare t.dns_ips dst with
-          | Some nth ->
-            begin Dns_forwarder.choose_server ~nth () >>= function
-              | Some (_, (Ipaddr.V4 ip, port)) ->
-                Endpoint.input_tcp t.endpoint ~id ~syn (ip, port) raw
-              | _ ->
-                (* no IPv4 servers configured *)
-                Lwt.return_unit
-            end
-          | None ->
-            Log.err (fun f -> f "DNS IP %s not recognised" (Ipaddr.V4.to_string dst));
-            Lwt.return_unit
-        end
+        Endpoint.intercept_tcp_syn t.endpoint ~id ~syn
+          (fun () ->
+            !dns >>= fun t ->
+            Dns_forwarder.handle_tcp ~t
+          ) raw
       (* UDP to port 123: localhost NTP *)
       | Ipv4 { src; payload = Udp { src = src_port; dst = 123; payload = Payload payload; _ }; _ } ->
         let localhost = Ipaddr.V4.localhost in
@@ -396,7 +405,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
       (* TCP to local ports *)
       | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = dst_port; syn; raw; payload = Payload _; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port = dst_port; dest_ip = src; local_ip = dst; dest_port = src_port } in
-        Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4.localhost, dst_port) raw
+        Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 Ipaddr.V4.localhost, dst_port) raw
       | _ ->
         Lwt.return_unit
 
@@ -411,7 +420,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
-           | _ -> Lwt.return_unit
+           | _ ->
+              Lwt.return_unit
         )
       >>= fun () ->
 
@@ -431,10 +441,15 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
       (* Respond to ICMP *)
       | Ipv4 { raw; payload = Icmp _; _ } ->
         let none ~src:_ ~dst:_ _ = Lwt.return_unit in
-        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default:(fun ~proto:_ -> none) raw
+        let default ~proto ~src ~dst buf = match proto with
+          | 1 (* ICMP *) ->
+            Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
+          | _ ->
+            Lwt.return_unit in
+        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
       | Ipv4 { src = dest_ip; dst = local_ip; payload = Tcp { src = dest_port; dst = local_port; syn; raw; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port; dest_ip; local_ip; dest_port } in
-        Endpoint.input_tcp t.endpoint ~id ~syn (local_ip, local_port) raw
+        Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 local_ip, local_port) raw
       | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
         let description = Printf.sprintf "%s:%d -> %s:%d"
             (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in
@@ -447,7 +462,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
           let reply buf = Stack_udp.write ~source_port:dst_port ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
           Host.Sockets.Datagram.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload ()
         end
-      | _ -> Lwt.return_unit
+      | _ ->
+        Lwt.return_unit
 
     let create endpoint =
       let tcp_stack = { endpoint } in
@@ -460,7 +476,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
-           | _ -> Lwt.return_unit
+           | _ ->
+            Lwt.return_unit
         )
       >>= fun () ->
 
@@ -521,6 +538,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
     >>= fun (filteredif: Filteredif.t) ->
     or_failwith "capture" @@ Netif.connect filteredif
     >>= fun interface ->
+    Dns_forwarder.set_recorder interface;
 
     let kib = 1024 in
     let mib = 1024 * kib in
@@ -685,32 +703,18 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
     Active_config.map
       (function
         | Some txt ->
-          let dns = Resolver.parse_resolvers txt in
-          begin match dns with
-            | Some { Resolver.search; _ } ->
-              domain_search := search;
-              Log.info (fun f -> f "updating search domains to %s" (String.concat " " !domain_search))
-            | _ -> ()
-          end;
-          Lwt.return dns
+          let open Dns_forward in
+          begin match Config.of_string txt with
+          | Result.Ok config ->
+            Lwt.return (Some config)
+          | Result.Error (`Msg m) ->
+            Log.err (fun f -> f "failed to parse %s: %s" (String.concat "/" dns_path) m);
+            Lwt.return None
+          end
         | None ->
           Lwt.return None
       ) string_dns_settings
     >>= fun dns_settings ->
-
-    let rec monitor_dns_settings settings =
-      begin match Active_config.hd settings with
-        | None ->
-          Log.info (fun f -> f "remove resolver override");
-          Resolv_conf.set { Resolver.resolvers = []; search = [] }
-        | Some r ->
-          Log.info (fun f -> f "updating resolvers to %s" (Resolver.to_string r));
-          Resolv_conf.set r
-      end;
-      Active_config.tl settings
-      >>= fun settings ->
-      monitor_dns_settings settings in
-    Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings dns_settings));
 
     let bind_path = driver @ [ "allowed-bind-address" ] in
     Config.string_option config bind_path
@@ -756,12 +760,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
         Lwt.return default
       end else Lwt.return some in
 
-    let default_peer = "192.168.65.2" in
-    let default_host = "192.168.65.1" in
-    let default_dns_extra = [
-      "192.168.65.3"; "192.168.65.4"; "192.168.65.5"; "192.168.65.6";
-      "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
-    ] in
     Config.string config ~default:default_peer peer_ips_path
     >>= fun string_peer_ips ->
     Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer)) string_peer_ips
@@ -786,6 +784,33 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
     let local_ip = Active_config.hd host_ips in
     let extra_dns_ip = Active_config.hd extra_dns_ips in
 
+    let rec monitor_dns_settings settings =
+      let local_address = { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 } in
+      begin match Active_config.hd settings with
+        | None ->
+          Log.info (fun f -> f "remove resolver override");
+          Dns_policy.remove ~priority:3;
+          !dns >>= fun t ->
+          Dns_forwarder.destroy t
+          >>= fun () ->
+          dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
+          Lwt.return_unit
+        | Some (config: Dns_forward.Config.t) ->
+          let open Dns_forward in
+          Log.info (fun f -> f "updating resolvers to %s" (Config.to_string config));
+          Dns_policy.add ~priority:3 ~config;
+          !dns >>= fun t ->
+          Dns_forwarder.destroy t
+          >>= fun () ->
+          dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
+          Lwt.return_unit
+      end
+      >>= fun () ->
+      Active_config.tl settings
+      >>= fun settings ->
+      monitor_dns_settings settings in
+    Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings dns_settings));
+
     Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s domain_search:%s"
                  (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip) (String.concat " " !domain_search)
              );
@@ -799,7 +824,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Resolv_conf: Sig.RESOLV_C
     Lwt.return t
 
   let connect t client =
-    or_failwith "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr client
+    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr client
     >>= fun x ->
     Log.debug (fun f -> f "accepted vmnet connection");
 

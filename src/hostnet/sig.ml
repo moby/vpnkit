@@ -1,16 +1,29 @@
+
+module type READ_INTO = sig
+  type flow
+  type error
+
+  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
+  (** Completely fills the given buffer with data from [fd] *)
+end
+
 module type FLOW_CLIENT = sig
   include Mirage_flow_s.SHUTDOWNABLE
 
   type address
 
   val connect: ?read_buffer_size:int -> address
-    -> [ `Ok of flow | `Error of [ `Msg of string ] ] Lwt.t
+    -> flow Error.t
   (** [connect address] creates a connection to [address] and returns
       he connected flow. *)
+end
 
+module type CONN = sig
+  include V1_LWT.FLOW
 
-  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
-  (** Completely fills the given buffer with data from [fd] *)
+  include READ_INTO
+    with type flow := flow
+     and type error := error
 end
 
 module type FLOW_SERVER = sig
@@ -51,23 +64,6 @@ module type DATAGRAM = sig
   val get_nat_table_size: unit -> int
   (** Return the current number of allocated NAT table entries *)
 
-  module Udp: sig
-    type server
-
-    val of_bound_fd: Unix.file_descr -> server
-
-    val bind: address -> server Lwt.t
-
-    val getsockname: server -> address
-    (** Query the address the server is bound to *)
-
-    val recvfrom: server -> Cstruct.t -> (int * address) Lwt.t
-
-    val sendto: server -> address -> Cstruct.t -> unit Lwt.t
-
-    val shutdown: server -> unit Lwt.t
-  end
-
 end
 
 
@@ -90,13 +86,32 @@ module type SOCKETS = sig
 
     include DATAGRAM
       with type address := address
-  end
-  module Stream: sig
-    module Tcp: sig
-      type address = Ipaddr.V4.t * int
+
+    module Udp: sig
+      type address = Ipaddr.t * int
 
       include FLOW_CLIENT
         with type address := address
+
+      include FLOW_SERVER
+        with type address := address
+         and type flow := flow
+
+      val recvfrom: server -> Cstruct.t -> (int * address) Lwt.t
+
+      val sendto: server -> address -> Cstruct.t -> unit Lwt.t
+    end
+  end
+  module Stream: sig
+    module Tcp: sig
+      type address = Ipaddr.t * int
+
+      include FLOW_CLIENT
+        with type address := address
+
+      include READ_INTO
+        with type flow := flow
+         and type error := error
 
       include FLOW_SERVER
         with type address := address
@@ -108,6 +123,10 @@ module type SOCKETS = sig
 
       include FLOW_CLIENT
         with type address := address
+
+      include READ_INTO
+        with type flow := flow
+         and type error := error
 
       include FLOW_SERVER
         with type address := address
@@ -125,12 +144,12 @@ end
 module type FILES = sig
   (** An OS-based file reading implementation *)
 
-  val read_file: string -> [ `Ok of string | `Error of [ `Msg of string ] ] Lwt.t
+  val read_file: string -> string Error.t
   (** Read a whole file into a string *)
 
   type watch
 
-  val watch_file: string -> (unit -> unit) -> [ `Ok of watch | `Error of [ `Msg of string ] ]
+  val watch_file: string -> (unit -> unit) -> (watch, [ `Msg of string ]) Result.result
   (** [watch_file path callback] executes [callback] whenever the contents of
       [path] may have changed. *)
 
@@ -175,32 +194,38 @@ module type VMNET = sig
   type fd
 
   val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t
-    -> fd -> [ `Ok of t | `Error of [ `Msg of string]] Lwt.t
+    -> fd -> t Error.t
 
   val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 
   val stop_capture: t -> unit Lwt.t
 end
 
-module type TCPIP = sig
-  (** A TCP/IP stack *)
+module type DNS_POLICY = sig
+  (** Policy settings
 
-  include V1_LWT.STACKV4
-    with type IPV4.prefix = Ipaddr.V4.t
-     and type IPV4.uipaddr = Ipaddr.t
+    DNS configuration is taken from 4 places, lowest to highest priority:
 
-  module TCPV4_half_close : Mirage_flow_s.SHUTDOWNABLE
-    with type flow = TCPV4.flow
-end
+    - 0: a built-in default of the Google public DNS servers
+    - 1: a default configuration (from a command-line argument or a configuration
+      file)
+    - 2: the `/etc/resolv.conf` file if present
+    - 3: the database key `slirp/dns`
 
-module type RESOLV_CONF = sig
-  (** The system DNS configuration *)
+    If configuration with a higher priority is found then it completely overrides
+    lower priority configuration.
+  *)
 
-  val get : unit -> Resolver.t Lwt.t
+  type priority = int (** higher is more important *)
 
-  val set : Resolver.t -> unit
+  val add: priority:priority -> config:Dns_forward.Config.t -> unit
+  (** Add some configuration at the given priority level *)
 
-  val set_default_dns: (Ipaddr.t * int) list -> unit
+  val remove: priority:priority -> unit
+  (** Remove the configuration at the given priority level *)
+
+  val config: unit -> Dns_forward.Config.t
+  (** Return the currently active DNS configuration *)
 end
 
 module type RECORDER = sig
@@ -220,4 +245,8 @@ module type Connector = sig
 
   val connect: unit -> flow Lwt.t
   (** Connect to the port multiplexing service in the VM *)
+
+  include READ_INTO
+    with type flow := flow
+     and type error := error
 end

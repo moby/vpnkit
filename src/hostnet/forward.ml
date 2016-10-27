@@ -43,7 +43,7 @@ end
 module Port = struct
   module M = struct
     type t = [
-      | `Tcp of Ipaddr.V4.t * Int16.t
+      | `Tcp of Ipaddr.t * Int16.t
       | `Udp of Ipaddr.t * Int16.t
     ]
     let compare = compare
@@ -53,7 +53,7 @@ module Port = struct
   module Set = Set.Make(M)
 
   let to_string = function
-    | `Tcp (addr, port) -> Printf.sprintf "tcp:%s:%d" (Ipaddr.V4.to_string addr) port
+    | `Tcp (addr, port) -> Printf.sprintf "tcp:%s:%d" (Ipaddr.to_string addr) port
     | `Udp (addr, port) -> Printf.sprintf "udp:%s:%d" (Ipaddr.to_string addr) port
 
   let of_string x =
@@ -62,7 +62,7 @@ module Port = struct
         | [ proto; ip; port ] ->
           let port = int_of_string port in
           begin match String.lowercase_ascii proto with
-            | "tcp" -> Result.return (`Tcp (Ipaddr.V4.of_string_exn ip, port))
+            | "tcp" -> Result.return (`Tcp (Ipaddr.of_string_exn ip, port))
             | "udp" -> Result.return (`Udp (Ipaddr.of_string_exn ip, port))
             | _ -> Result.errorf "unknown protocol: should be tcp or udp"
           end
@@ -111,7 +111,8 @@ let check_bind_allowed ip = match !allowed_addresses with
 let write_forwarding_header description remote remote_port =
   (* Matches the Go definition *)
   let proto, ip, port = match remote_port with
-    | `Tcp(ip, port) -> 1, Ipaddr.V4.to_bytes ip, port
+    | `Tcp(Ipaddr.V4 ip, port) -> 1, Ipaddr.V4.to_bytes ip, port
+    | `Tcp(Ipaddr.V6 ip, port) -> 1, Ipaddr.V6.to_bytes ip, port
     | `Udp(Ipaddr.V4 ip, port) -> 2, Ipaddr.V4.to_bytes ip, port
     | `Udp(Ipaddr.V6 ip, port) -> 2, Ipaddr.V6.to_bytes ip, port in
   let header = Cstruct.create (1 + 2 + 4 + 2) in
@@ -316,7 +317,7 @@ let start vsock_path_var t =
   | `Tcp (local_ip, local_port)  ->
     Lwt.catch
       (fun () ->
-        check_bind_allowed (Ipaddr.V4 local_ip)
+        check_bind_allowed local_ip
         >>= fun () ->
         Socket.Stream.Tcp.bind (local_ip, local_port)
         >>= fun server ->
@@ -333,13 +334,13 @@ let start vsock_path_var t =
         Lwt.return (Result.Ok t)
       ) (function
         | Unix.Unix_error(Unix.EADDRINUSE, _, _) ->
-          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: port is already allocated" (Ipaddr.V4.to_string local_ip) local_port)))
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: port is already allocated" (Ipaddr.to_string local_ip) local_port)))
         | Unix.Unix_error(Unix.EADDRNOTAVAIL, _, _) ->
-          Lwt.return (Result.Error (`Msg (Printf.sprintf "listen tcp %s:%d: bind: cannot assign requested address" (Ipaddr.V4.to_string local_ip) local_port)))
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "listen tcp %s:%d: bind: cannot assign requested address" (Ipaddr.to_string local_ip) local_port)))
         | Unix.Unix_error(Unix.EPERM, _, _) ->
-          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: permission denied" (Ipaddr.V4.to_string local_ip) local_port)))
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: permission denied" (Ipaddr.to_string local_ip) local_port)))
         | e ->
-          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d: unexpected error %s" (Ipaddr.V4.to_string local_ip) local_port (Printexc.to_string e))))
+          Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d: unexpected error %s" (Ipaddr.to_string local_ip) local_port (Printexc.to_string e))))
       )
     | `Udp (local_ip, local_port) ->
       Lwt.catch

@@ -1,3 +1,5 @@
+module Lwt_result = Hostnet.Hostnet_lwt_result (* remove when new Lwt is released *)
+
 open Lwt
 open Hostnet
 
@@ -44,7 +46,7 @@ module Main(Host: Sig.HOST) = struct
 module Connect_unix = Connect.Make_unix(Host)
 module Connect_hvsock = Connect.Make_hvsock(Host)
 module Bind = Bind.Make(Host.Sockets)
-module Resolv_conf = Resolv_conf.Make(Host.Files)
+module Dns_policy = Hostnet_dns.Policy(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 module Forward_unix = Forward.Make(Connect_unix)(Bind)
 module Forward_hvsock = Forward.Make(Connect_hvsock)(Bind)
@@ -199,12 +201,16 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
 
   ( match dns with
     | None -> ()
-    | Some dns ->
-      Resolv_conf.set_default_dns [ (Ipaddr.V4 (Ipaddr.V4.of_string_exn dns)), 53 ] );
+    | Some ip ->
+      let open Dns_forward.Config in
+      let servers = Server.Set.of_list [
+          { Server.address = { Address.ip = Ipaddr.of_string_exn ip; port = 53 }; zones = Domain.Set.empty }
+      ] in
+      Dns_policy.add ~priority:1 ~config:{ servers; search = [] } );
 
   let etc_hosts_watch = match Hosts.watch ~path:hosts () with
-    | `Ok watch -> Some watch
-    | `Error (`Msg m) ->
+    | Result.Ok watch -> Some watch
+    | Result.Error (`Msg m) ->
       Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
       None in
 
@@ -227,20 +233,17 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
     let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
     { Slirp.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
       local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
-      extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
-        "192.168.65.3"; "192.168.65.4"; "192.168.65.5"; "192.168.65.6";
-        "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
-      ];
+      extra_dns_ip = [];
       get_domain_search = (fun () -> []);
       pcap_settings = Active_config.Value(pcap, never) } in
 
   let config = match db_path with
     | Some db_path ->
       let reconnect () =
+        let open Lwt_result.Infix in
         Host.Sockets.Stream.Unix.connect db_path
-        >>= function
-        | `Error (`Msg x) -> Lwt.return (Result.Error (`Msg x))
-        | `Ok x -> Lwt.return (Result.Ok x) in
+        >>= fun x ->
+        Lwt_result.return x in
       Some (Config.create ~reconnect ())
     | None ->
       Log.warn (fun f -> f "no database: using hardcoded network configuration values");
@@ -249,7 +252,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
   let uri = Uri.of_string socket_url in
   match Uri.scheme uri with
   | Some "hyperv-connect" ->
-    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Resolv_conf)(Host) in
+    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Dns_policy)(Host) in
     let sockaddr = hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid (Uri.of_string socket_url) in
     hvsock_connect_forever socket_url sockaddr
       (fun fd ->
@@ -268,7 +271,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
         Lwt.return ()
       )
   | _ ->
-    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Resolv_conf)(Host) in
+    let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)(Host) in
     unix_listen socket_url
     >>= fun server ->
     Host.Sockets.Stream.Unix.listen server
