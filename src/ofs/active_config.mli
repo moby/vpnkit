@@ -10,6 +10,9 @@ val tl: 'a values -> 'a values Lwt.t
 val map: ('a -> 'b Lwt.t) -> 'a values -> 'b values Lwt.t
 (** Transform an infinite stream of values *)
 
+val iter: ('a -> unit Lwt.t) -> 'a values -> unit Lwt.t
+(** Iterate over all values in the stream *)
+
 type path = string list
 
 module type S = sig
