@@ -706,6 +706,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           let open Dns_forward in
           begin match Config.of_string txt with
           | Result.Ok config ->
+            domain_search := config.Config.search;
             Lwt.return (Some config)
           | Result.Error (`Msg m) ->
             Log.err (fun f -> f "failed to parse %s: %s" (String.concat "/" dns_path) m);
