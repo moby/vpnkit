@@ -24,7 +24,7 @@ clean:
 
 stage:
 	mkdir -p _build/root/Contents/MacOS
-	mv main.native com.docker.slirp
+	cp main.native com.docker.slirp
 	mv com.docker.slirp _build/root/Contents/MacOS/com.docker.slirp
 	dylibbundler -od -b \
 	  -x _build/root/Contents/MacOS/com.docker.slirp \
