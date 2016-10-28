@@ -67,6 +67,7 @@ type config = {
   local_ip: Ipaddr.V4.t;
   extra_dns_ip: Ipaddr.V4.t list;
   get_domain_search: unit -> string list;
+  get_domain_name: unit -> string;
   pcap_settings: pcap Active_config.values;
 }
 
@@ -529,7 +530,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun () ->
     delete_unused_endpoints t ()
 
-  let connect x peer_ip local_ip extra_dns_ip get_domain_search =
+  let connect x peer_ip local_ip extra_dns_ip get_domain_search get_domain_name =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
     let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
@@ -563,7 +564,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     (* Listen on local IPs *)
     let local_ips = local_ip :: extra_dns_ip in
 
-    let dhcp = Dhcp.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip ~get_domain_search switch in
+    let dhcp = Dhcp.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip
+      ~extra_dns_ip ~get_domain_search ~get_domain_name switch in
 
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
@@ -717,6 +719,20 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       ) string_dns_settings
     >>= fun dns_settings ->
 
+    let domain_name = ref "local" in
+    let get_domain_name () = !domain_name in
+    let domain_name_path = driver @ [ "slirp"; "domain" ] in
+    Config.string config ~default:(!domain_name) domain_name_path
+    >>= fun domain_name_settings ->
+    Lwt.async
+      (fun () ->
+        Active_config.iter
+          (fun x ->
+            domain_name := x;
+            Lwt.return_unit
+          ) domain_name_settings
+      );
+
     let bind_path = driver @ [ "allowed-bind-address" ] in
     Config.string_option config bind_path
     >>= fun string_allowed_bind_address ->
@@ -820,6 +836,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       local_ip;
       extra_dns_ip;
       get_domain_search;
+      get_domain_name;
       pcap_settings;
     } in
     Lwt.return t
@@ -847,5 +864,5 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
              monitor_pcap_settings t.pcap_settings
           )
       );
-    connect x t.peer_ip t.local_ip t.extra_dns_ip t.get_domain_search
+    connect x t.peer_ip t.local_ip t.extra_dns_ip t.get_domain_search t.get_domain_name
 end

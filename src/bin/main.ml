@@ -235,6 +235,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
       local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
       extra_dns_ip = [];
       get_domain_search = (fun () -> []);
+      get_domain_name = (fun () -> "local");
       pcap_settings = Active_config.Value(pcap, never) } in
 
   let config = match db_path with

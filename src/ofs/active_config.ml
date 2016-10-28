@@ -38,6 +38,13 @@ let rec map f = function Value(first, next) ->
     map f next in
   return (Value(first', next'))
 
+let rec iter f = function Value(first, next) ->
+  f first
+  >>= fun () ->
+  next
+  >>= fun next ->
+  iter f next
+
 type path = string list
 
 let changes values =
