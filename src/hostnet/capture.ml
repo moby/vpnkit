@@ -133,18 +133,18 @@ module Make(Input: Sig.VMNET) = struct
     stats: stats;
   }
 
+  let add_match ~t ~name ~limit ~predicate =
+    let packets = Queue.create () in
+    let nr_bytes = 0 in
+    let rule = { predicate; limit; packets; nr_bytes } in
+    Hashtbl.replace t.rules name rule
+
   let connect input =
     let rules = Hashtbl.create 7 in
     let stats = {
       rx_bytes = 0L; rx_pkts = 0l; tx_bytes = 0L; tx_pkts = 0l;
     } in
     Lwt.return (`Ok { input; rules; stats })
-
-  let add_match ~t ~name ~limit ~predicate =
-    let packets = Queue.create () in
-    let nr_bytes = 0 in
-    let rule = { predicate; limit; packets; nr_bytes } in
-    Hashtbl.replace t.rules name rule
 
   let filesystem t =
     Vfs.Dir.of_list
