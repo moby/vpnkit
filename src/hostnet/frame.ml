@@ -7,6 +7,7 @@ type t =
   | Udp:      { src: int; dst: int; len: int; payload: t } -> t
   | Tcp:      { src: int; dst: int; syn: bool; raw: Cstruct.t; payload: t } -> t
   | Payload:  Cstruct.t -> t
+  | Unknown:  t
 
 open Result
 let ( >>= ) m f = match m with
@@ -70,7 +71,8 @@ let parse bufs =
           let op = match code with 1 -> `Request | 2 -> `Reply | _ -> `Unknown in
           Ok (Arp { op })
         | _ ->
-          Error (`Msg (Printf.sprintf "unknown ethertype %d" ethertype)) )
+          (* This is going to be quite common e.g. with IPv6 *)
+          Ok Unknown )
       >>= fun payload ->
       Ok (Ethernet { src; dst; payload })
 
