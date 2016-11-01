@@ -280,7 +280,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                          Mirage_flow.proxy (module Clock) (module Stack_tcp) flow (module Host.Sockets.Stream.Tcp) socket ()
                          >>= function
                          | `Error (`Msg m) ->
-                           Log.err (fun f -> f "%s proxy failed with %s" (Tcp.Flow.to_string t) m);
+                           Log.debug (fun f -> f "%s proxy failed with %s" (Tcp.Flow.to_string t) m);
                            Lwt.return_unit
                          | `Ok (_l_stats, _r_stats) ->
                            Lwt.return_unit
