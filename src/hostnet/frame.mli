@@ -8,5 +8,5 @@ type t =
   | Tcp:      { src: int; dst: int; syn: bool; raw: Cstruct.t; payload: t } -> t
   | Payload:  Cstruct.t -> t
 
-val parse: Cstruct.t -> (t, [ `Msg of string]) Result.result
-(** [parse buffer] parses the frame in [buffer] *)
+val parse: Cstructs.t -> (t, [ `Msg of string]) Result.result
+(** [parse buffers] parses the frame in [buffers] *)

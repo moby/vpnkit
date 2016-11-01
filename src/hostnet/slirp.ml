@@ -417,7 +417,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       Switch.Port.listen endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
-           match parse buf with
+           match parse [ buf ] with
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
@@ -473,7 +473,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       Switch.Port.listen endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
-           match parse buf with
+           match parse [ buf ] with
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
@@ -596,7 +596,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     Switch.listen switch
       (fun buf ->
          let open Frame in
-         match parse buf with
+         match parse [ buf ] with
          | Ok (Ethernet { payload = Ipv4 { payload = Udp { dst = 67; _ }; _ }; _ })
          | Ok (Ethernet { payload = Ipv4 { payload = Udp { dst = 68; _ }; _ }; _ }) ->
            Dhcp.callback dhcp buf

@@ -13,52 +13,52 @@ let ( >>= ) m f = match m with
   | Ok x -> f x
   | Error x -> Error x
 
-let parse buf =
-  if Cstruct.len buf < 14
+let parse bufs =
+  if Cstructs.len bufs < 14
   then Error (`Msg "too short to be an ethernet frame")
   else begin
-    let ethertype  = Cstruct.BE.get_uint16 buf 12 in
-    let dst_option = Cstruct.sub buf 0 6 |> Cstruct.to_string |> Macaddr.of_bytes in
-    let src_option = Cstruct.sub buf 6 6 |> Cstruct.to_string |> Macaddr.of_bytes in
+    let ethertype  = Cstructs.BE.get_uint16 bufs 12 in
+    let dst_option = Cstructs.sub bufs 0 6 |> Cstructs.to_string |> Macaddr.of_bytes in
+    let src_option = Cstructs.sub bufs 6 6 |> Cstructs.to_string |> Macaddr.of_bytes in
     match dst_option, src_option with
     | None, _ -> Error (`Msg "failed to parse ethernet destination MAC")
     | _, None -> Error (`Msg "failed to parse ethernet source MAC")
     | Some src, Some dst ->
-      let inner = Cstruct.shift buf 14 in
+      let inner = Cstructs.shift bufs 14 in
       ( match ethertype with
         | 0x0800 ->
-          let vihl  = Cstruct.get_uint8     inner 0 in
-          let len   = Cstruct.BE.get_uint16 inner (1 + 1) in
-          let off   = Cstruct.BE.get_uint16 inner (1 + 1 + 2 + 2) in
-          let proto = Cstruct.get_uint8     inner (1 + 1 + 2 + 2 + 2 + 1) in
-          let src   = Cstruct.BE.get_uint32 inner (1 + 1 + 2 + 2 + 2 + 1 + 1 + 2) |> Ipaddr.V4.of_int32 in
-          let dst   = Cstruct.BE.get_uint32 inner (1 + 1 + 2 + 2 + 2 + 1 + 1 + 2 + 4) |> Ipaddr.V4.of_int32 in
+          let vihl  = Cstructs.get_uint8     inner 0 in
+          let len   = Cstructs.BE.get_uint16 inner (1 + 1) in
+          let off   = Cstructs.BE.get_uint16 inner (1 + 1 + 2 + 2) in
+          let proto = Cstructs.get_uint8     inner (1 + 1 + 2 + 2 + 2 + 1) in
+          let src   = Cstructs.BE.get_uint32 inner (1 + 1 + 2 + 2 + 2 + 1 + 1 + 2) |> Ipaddr.V4.of_int32 in
+          let dst   = Cstructs.BE.get_uint32 inner (1 + 1 + 2 + 2 + 2 + 1 + 1 + 2 + 4) |> Ipaddr.V4.of_int32 in
           let dnf = ((off lsr 8) land 0x40) <> 0 in
           let ihl = vihl land 0xf in
-          let raw = inner in
-          let inner = Cstruct.sub inner (4 * ihl) (len - 4 * ihl) in
+          let raw = Cstructs.to_cstruct inner in
+          let inner = Cstructs.sub inner (4 * ihl) (len - 4 * ihl) in
           ( match proto with
             | 1 ->
-              let _ty     = Cstruct.get_uint8     inner 0 in
-              let _code   = Cstruct.get_uint8     inner 1 in
-              let _csum   = Cstruct.BE.get_uint16 inner 2 in
-              let _id     = Cstruct.BE.get_uint16 inner 4 in
-              let _seq    = Cstruct.BE.get_uint16 inner 6 in
-              let payload = Cstruct.shift         inner 8 in
+              let _ty     = Cstructs.get_uint8     inner 0 in
+              let _code   = Cstructs.get_uint8     inner 1 in
+              let _csum   = Cstructs.BE.get_uint16 inner 2 in
+              let _id     = Cstructs.BE.get_uint16 inner 4 in
+              let _seq    = Cstructs.BE.get_uint16 inner 6 in
+              let payload = Cstructs.shift         inner 8 |> Cstructs.to_cstruct in
               Ok (Icmp { raw; payload = Payload payload })
             | 6 ->
-              let src     = Cstruct.BE.get_uint16 inner 0 in
-              let dst     = Cstruct.BE.get_uint16 inner 2 in
-              let offres  = Cstruct.get_uint8     inner (2 + 2 + 4 + 4) in
-              let flags   = Cstruct.get_uint8     inner (2 + 2 + 4 + 4 + 1) in
-              let payload = Cstruct.shift         inner ((offres lsr 4) * 4) in
+              let src     = Cstructs.BE.get_uint16 inner 0 in
+              let dst     = Cstructs.BE.get_uint16 inner 2 in
+              let offres  = Cstructs.get_uint8     inner (2 + 2 + 4 + 4) in
+              let flags   = Cstructs.get_uint8     inner (2 + 2 + 4 + 4 + 1) in
+              let payload = Cstructs.shift         inner ((offres lsr 4) * 4) |> Cstructs.to_cstruct in
               let syn = (flags land (1 lsl 1)) > 0 in
-              Ok (Tcp { src; dst; syn; raw = inner; payload = Payload payload })
+              Ok (Tcp { src; dst; syn; raw = Cstructs.to_cstruct inner; payload = Payload payload })
             | 17 ->
-              let src     = Cstruct.BE.get_uint16 inner 0 in
-              let dst     = Cstruct.BE.get_uint16 inner 2 in
-              let len     = Cstruct.BE.get_uint16 inner 4 in
-              let payload = Cstruct.shift         inner 8 in
+              let src     = Cstructs.BE.get_uint16 inner 0 in
+              let dst     = Cstructs.BE.get_uint16 inner 2 in
+              let len     = Cstructs.BE.get_uint16 inner 4 in
+              let payload = Cstructs.shift         inner 8 |> Cstructs.to_cstruct in
               let len = len - 8 in (* subtract header length *)
               Ok (Udp { src; dst; len; payload = Payload payload })
             | _ ->
@@ -66,7 +66,7 @@ let parse buf =
           >>= fun payload ->
           Ok (Ipv4 { src; dst; dnf; ihl; raw; payload })
         | 0x0806 ->
-          let code    = Cstruct.BE.get_uint16 inner 6 in
+          let code    = Cstructs.BE.get_uint16 inner 6 in
           let op = match code with 1 -> `Request | 2 -> `Reply | _ -> `Unknown in
           Ok (Arp { op })
         | _ ->

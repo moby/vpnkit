@@ -23,6 +23,28 @@ let rec shift t x =
     then Cstruct.shift y x :: ys
     else shift ys (x - y')
 
+let to_string t =
+  let b = Buffer.create 20 in
+  List.iter (fun x -> Buffer.add_string b @@ Cstruct.to_string x) t;
+  Buffer.contents b
+
+let sub t off len =
+  let t' = shift t off in
+  (* trim the length *)
+  let rec trim acc ts remaining = match remaining, ts with
+    | 0, _ -> List.rev acc
+    | n, [] -> err "invalid bounds in Cstructs.sub %a off=%d len=%d" pp_t t off len
+    | n, t :: ts ->
+      let to_take = min (Cstruct.len t) n in
+      (* either t is consumed and we only need ts, or t has data remaining in which
+         case we're finished *)
+      trim (Cstruct.sub t 0 to_take :: acc) ts (remaining - to_take) in
+  trim [] t' len
+
+let to_cstruct = function
+  | [ common_case ] -> common_case
+  | uncommon_case -> Cstruct.concat uncommon_case
+
 (* Return a Cstruct.t representing (off, len) by either returning a reference
    or making a copy if the value is split across two fragments. Ideally this
    would return a string rather than a Cstruct.t for efficiency *)
