@@ -23,7 +23,7 @@ module Make(Input: Sig.VMNET) = struct
   }
 
   type rule = {
-    predicate: Match.t;
+    predicate: Frame.t -> bool;
     limit: int;
     packets: packet Queue.t;
     mutable nr_bytes: int;
@@ -140,7 +140,7 @@ module Make(Input: Sig.VMNET) = struct
     } in
     Lwt.return (`Ok { input; rules; stats })
 
-  let add_match ~t ~name ~limit predicate =
+  let add_match ~t ~name ~limit ~predicate =
     let packets = Queue.create () in
     let nr_bytes = 0 in
     let rule = { predicate; limit; packets; nr_bytes } in
@@ -162,7 +162,9 @@ module Make(Input: Sig.VMNET) = struct
   let record t bufs =
     Hashtbl.iter
       (fun name rule ->
-        if Match.bufs rule.predicate bufs then push rule bufs
+        match Frame.parse bufs with
+        | Result.Ok f -> if rule.predicate f then push rule bufs
+        | Result.Error _ -> ()
       ) t.rules
 
   let write t buf =
