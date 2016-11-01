@@ -23,7 +23,7 @@ let log_exception_continue description f =
   Lwt.catch
     (fun () -> f ())
     (fun e ->
-       Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
+       Log.debug (fun f -> f "%s: caught %s" description (Printexc.to_string e));
        Lwt.return ()
     )
 
@@ -263,7 +263,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           Host.Sockets.Stream.Tcp.connect (ip, port)
           >>= function
           | Result.Error (`Msg m) ->
-            Log.err (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.to_string ip) port m);
+            Log.debug (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.to_string ip) port m);
             Lwt.return (fun _ -> None)
           | Result.Ok socket ->
             let t = Tcp.Flow.create id socket in
