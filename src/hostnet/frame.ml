@@ -80,7 +80,7 @@ let parse bufs =
                 let len = len - 8 in (* subtract header length *)
                 Ok (Udp { src; dst; len; payload = Payload payload })
               | _ ->
-                Error (`Msg (Printf.sprintf "unknown IPv4 protocol type %d" proto)) )
+                Ok Unknown )
             >>= fun payload ->
             Ok (Ipv4 { src; dst; dnf; ihl; raw; payload })
           | 0x0806 ->
