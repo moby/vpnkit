@@ -2,7 +2,7 @@ open Lwt
 
 let src =
   let src = Logs.Src.create "usernet" ~doc:"Mirage TCP/IP <-> socket proxy" in
-  Logs.Src.set_level src (Some Logs.Debug);
+  Logs.Src.set_level src (Some Logs.Info);
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
