@@ -139,12 +139,18 @@ module Make(Input: Sig.VMNET) = struct
     let rule = { predicate; limit; packets; nr_bytes } in
     Hashtbl.replace t.rules name rule
 
+  let bad_pcap = "bad.pcap"
+
   let connect input =
     let rules = Hashtbl.create 7 in
     let stats = {
       rx_bytes = 0L; rx_pkts = 0l; tx_bytes = 0L; tx_pkts = 0l;
     } in
-    Lwt.return (`Ok { input; rules; stats })
+    let t = { input; rules; stats } in
+    (* Add a special capture rule for packets for which there is an error
+       processing the packet captures. Ideally there should be no matches! *)
+    add_match ~t ~name:bad_pcap ~limit:1048576 ~predicate:(fun _ -> false);
+    Lwt.return (`Ok t)
 
   let filesystem t =
     Vfs.Dir.of_list
@@ -160,12 +166,17 @@ module Make(Input: Sig.VMNET) = struct
   let after_disconnect t = Input.after_disconnect t.input
 
   let record t bufs =
-    Hashtbl.iter
-      (fun name rule ->
-        match Frame.parse bufs with
-        | Result.Ok f -> if rule.predicate f then push rule bufs
-        | Result.Error _ -> ()
-      ) t.rules
+    try
+      Hashtbl.iter
+        (fun name rule ->
+          match Frame.parse bufs with
+          | Result.Ok f -> if rule.predicate f then push rule bufs
+          | Result.Error (`Msg m) -> failwith m
+        ) t.rules
+    with e ->
+      Log.err (fun f -> f "caught %s matching packet" (Printexc.to_string e));
+      let rule = Hashtbl.find t.rules bad_pcap in
+      push rule bufs
 
   let write t buf =
     record t [ buf ];
