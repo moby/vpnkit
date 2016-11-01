@@ -14,11 +14,15 @@ let ( >>= ) m f = match m with
   | Ok x -> f x
   | Error x -> Error x
 
+let need_space_for bufs n description =
+  if Cstructs.len bufs < n
+  then Error (`Msg (Printf.sprintf "buffer is too short for %s: needed %d bytes but only have %d" description n (Cstructs.len bufs)))
+  else Ok ()
+
 let parse bufs =
   try
-    if Cstructs.len bufs < 14
-    then Error (`Msg "too short to be an ethernet frame")
-    else begin
+    need_space_for bufs 14 "ethernet frame"
+    >>= fun () ->
       let ethertype  = Cstructs.BE.get_uint16 bufs 12 in
       let dst_option = Cstructs.sub bufs 0 6 |> Cstructs.to_string |> Macaddr.of_bytes in
       let src_option = Cstructs.sub bufs 6 6 |> Cstructs.to_string |> Macaddr.of_bytes in
@@ -29,6 +33,8 @@ let parse bufs =
         let inner = Cstructs.shift bufs 14 in
         ( match ethertype with
           | 0x0800 ->
+            need_space_for inner 16 "IP datagram"
+            >>= fun () ->
             let vihl  = Cstructs.get_uint8     inner 0 in
             let len   = Cstructs.BE.get_uint16 inner (1 + 1) in
             let off   = Cstructs.BE.get_uint16 inner (1 + 1 + 2 + 2) in
@@ -38,9 +44,13 @@ let parse bufs =
             let dnf = ((off lsr 8) land 0x40) <> 0 in
             let ihl = vihl land 0xf in
             let raw = Cstructs.to_cstruct inner in
+            need_space_for inner (4 * ihl) "IP options"
+            >>= fun () ->
             let inner = Cstructs.sub inner (4 * ihl) (len - 4 * ihl) in
             ( match proto with
               | 1 ->
+                need_space_for inner 8 "ICMP message"
+                >>= fun () ->
                 let _ty     = Cstructs.get_uint8     inner 0 in
                 let _code   = Cstructs.get_uint8     inner 1 in
                 let _csum   = Cstructs.BE.get_uint16 inner 2 in
@@ -49,14 +59,20 @@ let parse bufs =
                 let payload = Cstructs.shift         inner 8 |> Cstructs.to_cstruct in
                 Ok (Icmp { raw; payload = Payload payload })
               | 6 ->
+                need_space_for inner 14 "TCP header"
+                >>= fun () ->
                 let src     = Cstructs.BE.get_uint16 inner 0 in
                 let dst     = Cstructs.BE.get_uint16 inner 2 in
                 let offres  = Cstructs.get_uint8     inner (2 + 2 + 4 + 4) in
                 let flags   = Cstructs.get_uint8     inner (2 + 2 + 4 + 4 + 1) in
+                need_space_for inner ((offres lsr 4) * 4) "TCP options"
+                >>= fun () ->
                 let payload = Cstructs.shift         inner ((offres lsr 4) * 4) |> Cstructs.to_cstruct in
                 let syn = (flags land (1 lsl 1)) > 0 in
                 Ok (Tcp { src; dst; syn; raw = Cstructs.to_cstruct inner; payload = Payload payload })
               | 17 ->
+                need_space_for inner 8 "UDP header"
+                >>= fun () ->
                 let src     = Cstructs.BE.get_uint16 inner 0 in
                 let dst     = Cstructs.BE.get_uint16 inner 2 in
                 let len     = Cstructs.BE.get_uint16 inner 4 in
@@ -68,6 +84,8 @@ let parse bufs =
             >>= fun payload ->
             Ok (Ipv4 { src; dst; dnf; ihl; raw; payload })
           | 0x0806 ->
+            need_space_for inner 2 "ARP header"
+            >>= fun () ->
             let code    = Cstructs.BE.get_uint16 inner 6 in
             let op = match code with 1 -> `Request | 2 -> `Reply | _ -> `Unknown in
             Ok (Arp { op })
@@ -76,6 +94,5 @@ let parse bufs =
             Ok Unknown )
         >>= fun payload ->
         Ok (Ethernet { src; dst; payload })
-    end
   with e ->
     Error (`Msg ("Failed to parse ethernet frame: " ^ (Printexc.to_string e)))
