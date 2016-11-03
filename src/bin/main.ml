@@ -204,7 +204,10 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
     | Some ip ->
       let open Dns_forward.Config in
       let servers = Server.Set.of_list [
-          { Server.address = { Address.ip = Ipaddr.of_string_exn ip; port = 53 }; zones = Domain.Set.empty }
+        {
+          Server.address = { Address.ip = Ipaddr.of_string_exn ip; port = 53 };
+          zones = Domain.Set.empty; timeout_ms = Some 2000; order = 0;
+        }
       ] in
       Dns_policy.add ~priority:1 ~config:{ servers; search = [] } );
 

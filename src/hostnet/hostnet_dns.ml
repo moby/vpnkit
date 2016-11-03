@@ -14,7 +14,8 @@ module Policy(Files: Sig.FILES) = struct
     let open Dns_forward.Config in
     let servers = Server.Set.of_list (
       List.map (fun (ip, port) ->
-        { Server.address = { Address.ip; port = 53 }; zones = Domain.Set.empty }
+        { Server.address = { Address.ip; port = 53 }; zones = Domain.Set.empty;
+        timeout_ms = Some 2000; order = 0 }
       ) ips) in
     { servers; search = [] }
 
