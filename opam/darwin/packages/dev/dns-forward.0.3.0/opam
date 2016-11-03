@@ -24,7 +24,8 @@ depends: [
   "dns"
   "rresult" "astring" "fmt"
   "cstruct"     {>= "2.2"}
-  "result" "lwt"
+  "result"
+  "lwt"         {>= "2.6.0"}
   "logs"        {>= "0.5.0"}
   "mtime"
   "sexplib"
