@@ -80,7 +80,7 @@ module Make(Netif: V1_LWT.NETWORK) = struct
   let callback t buf =
     (* Does the packet match any of our rules? *)
     let open Frame in
-    match parse buf with
+    match parse [ buf ] with
     | Ok (Ethernet { payload = Ipv4 { dst } }) ->
       if RuleMap.mem dst t.rules then begin
         let port = RuleMap.find dst t.rules in

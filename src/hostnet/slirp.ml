@@ -109,9 +109,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
     ref (Dns_forwarder.create ~local_address @@ Dns_policy.config ())
 
-  let is_dns =
-    let open Match in
-    ethernet @@ ipv4 () @@ ((udp ~src:53 () all) or (udp ~dst:53 () all) or ((tcp ~src:53 () all) or (tcp ~dst:53 () all)))
+  let is_dns = let open Frame in function
+    | Ethernet { payload = Ipv4 { payload = Udp { src = 53; _ }; _ }; _ }
+    | Ethernet { payload = Ipv4 { payload = Udp { dst = 53; _ }; _ }; _ }
+    | Ethernet { payload = Ipv4 { payload = Tcp { src = 53; _ }; _ }; _ }
+    | Ethernet { payload = Ipv4 { payload = Tcp { dst = 53; _ }; _ }; _ } -> true
+    | _ -> false
 
   let string_of_id id =
     Printf.sprintf "TCP %s:%d > %s:%d"
@@ -417,7 +420,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       Switch.Port.listen endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
-           match parse buf with
+           match parse [ buf ] with
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
@@ -473,7 +476,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       Switch.Port.listen endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
-           match parse buf with
+           match parse [ buf ] with
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
@@ -544,9 +547,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let kib = 1024 in
     let mib = 1024 * kib in
     (* Capture 1 MiB of all traffic *)
-    Netif.add_match ~t:interface ~name:"all.pcap" ~limit:mib Match.all;
+    Netif.add_match ~t:interface ~name:"all.pcap" ~limit:mib ~predicate:(fun _ -> true);
     (* Capture 256 KiB of DNS traffic *)
-    Netif.add_match ~t:interface ~name:"dns.pcap" ~limit:(256 * kib) is_dns;
+    Netif.add_match ~t:interface ~name:"dns.pcap" ~limit:(256 * kib) ~predicate:is_dns;
 
     Switch.connect interface
     >>= fun switch ->
@@ -596,7 +599,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     Switch.listen switch
       (fun buf ->
          let open Frame in
-         match parse buf with
+         match parse [ buf ] with
          | Ok (Ethernet { payload = Ipv4 { payload = Udp { dst = 67; _ }; _ }; _ })
          | Ok (Ethernet { payload = Ipv4 { payload = Udp { dst = 68; _ }; _ }; _ }) ->
            Dhcp.callback dhcp buf
