@@ -1,0 +1,31 @@
+--- ./Makefile
++++ ./Makefile
+@@ -1,5 +1,11 @@
+ 
+ VERSION=$(shell grep Version: _oasis | awk '{ print $$2 }')
++CC:= $(shell $(OCAMLC) -config 2>/dev/null | awk '/^bytecomp_c_compiler/ {for(i=2;i<=NF;i++) printf "%s " ,$$i}')
++ifeq ($(OS_TYPE),$(filter $(OS_TYPE),Win32 Cygwin))
++EXT_EXE=.exe
++else
++EXT_EXE=
++endif
+ 
+ build:
+ 	ocamlbuild -use-ocamlfind all.otarget
+@@ -8,14 +14,14 @@
+ 
+ install:
+ 	ocamlfind install qcheck $(TO_INSTALL)
+-	cp qtest.native $(BIN)/qtest
++	cp qtest.native $(BIN)/qtest$(EXT_EXE)
+ 
+ clean:
+ 	ocamlbuild -clean
+ 
+ uninstall:
+ 	ocamlfind remove qcheck
+-	rm $(BIN)/qtest
++	rm $(BIN)/qtest$(EXT_EXE)
+ 
+ push_doc: doc
+ 	scp -r qcheck.docdir/* cedeela.fr:~/simon/root/software/qcheck

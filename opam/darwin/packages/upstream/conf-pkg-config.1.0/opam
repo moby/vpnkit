@@ -18,4 +18,5 @@ depexts: [
   [["oraclelinux"] ["pkgconfig"]]
   [["alpine"] ["pkgconfig"]]
   [["osx" "homebrew"] ["pkg-config"]]
+  [["freebsd"] ["pkgconf"]]
 ]

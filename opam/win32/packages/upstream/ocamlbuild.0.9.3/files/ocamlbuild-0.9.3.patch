@@ -1,0 +1,195 @@
+--- ./META
++++ ./META
+@@ -2,5 +2,7 @@
+ requires = "unix"
+ version = "0.9.3"
+ description = "ocamlbuild support library"
++directory= "^ocamlbuild"
+ archive(byte) = "ocamlbuildlib.cma"
+ archive(native) = "ocamlbuildlib.cmxa"
++
+--- ./src/command.ml
++++ ./src/command.ml
+@@ -148,9 +148,10 @@
+   let self = string_of_command_spec_with_calls call_with_tags call_with_target resolve_virtuals in
+   let b = Buffer.create 256 in
+   (* The best way to prevent bash from switching to its windows-style
+-   * quote-handling is to prepend an empty string before the command name. *)
++   * quote-handling is to prepend an empty string before the command name.
++   * space seems to work, too - and the ouput is nicer *)
+   if Sys.os_type = "Win32" then
+-    Buffer.add_string b "''";
++    Buffer.add_string b " ";
+   let first = ref true in
+   let put_space () =
+     if !first then
+--- ./src/findlib.ml
++++ ./src/findlib.ml
+@@ -66,9 +66,6 @@
+     (fun command -> lexer & Lexing.from_string & run_and_read command)
+     command
+ 
+-let run_and_read command =
+-  Printf.ksprintf run_and_read command
+-
+ let rec query name =
+   try
+     Hashtbl.find packages name
+@@ -135,7 +132,8 @@
+   with Not_found -> s
+ 
+ let list () =
+-  List.map before_space (split_nl & run_and_read "%s list" ocamlfind)
++  let cmd = Shell.quote_filename_if_needed ocamlfind ^ " list" in
++  List.map before_space (split_nl & run_and_read cmd)
+ 
+ (* The closure algorithm is easy because the dependencies are already closed
+ and sorted for each package. We only have to make the union. We could also
+--- ./src/main.ml
++++ ./src/main.ml
+@@ -161,6 +161,9 @@
+               Tags.mem "traverse" tags
+               || List.exists (Pathname.is_prefix path_name) !Options.include_dirs
+               || List.exists (Pathname.is_prefix path_name) target_dirs)
++            && ((* beware: !Options.build_dir is an absolute directory *)
++              Pathname.normalize !Options.build_dir
++              <> Pathname.normalize (Pathname.pwd/path_name))
+           end
+         end
+       end
+--- ./src/my_std.ml
++++ ./src/my_std.ml
+@@ -275,7 +275,7 @@
+   match Sys.os_type with
+   | "Win32" -> fun cmd ->
+       if cmd = "" then 0 else
+-      let cmd = "bash --norc -c "^Filename.quote cmd in
++      let cmd = "bash --norc --noprofile -c "^Filename.quote cmd in
+       Sys.command cmd
+   | _ -> fun cmd -> if cmd = "" then 0 else Sys.command cmd
+ 
+--- ./src/ocamlbuild_unix_plugin.ml
++++ ./src/ocamlbuild_unix_plugin.ml
+@@ -48,6 +48,14 @@
+   end
+ 
+ let run_and_open s kont =
++  let s =
++    (* Be consistent! My_unix.run_and_open uses My_std.sys_command and
++       sys_command uses bash. *)
++    if Sys.win32 then
++      "bash --norc --noprofile -c " ^ Filename.quote s
++    else
++      s
++  in
+   let ic = Unix.open_process_in s in
+   let close () =
+     match Unix.close_process_in ic with
+--- ./src/options.ml
++++ ./src/options.ml
+@@ -158,11 +158,33 @@
+     build_dir := Filename.concat (Sys.getcwd ()) s
+   else
+     build_dir := s
++
++let slashify p =
++  match Sys.os_type with
++  | "Win32" ->
++    let len = String.length p in
++    let b = Bytes.create len in
++    for i = 0 to len - 1 do
++      Bytes.set b i (match p.[i] with
++        | '\\' ->  '/'
++        | x -> x )
++    done;
++    Bytes.to_string b
++  | _ -> p
++
++let sb () =
++  match Sys.os_type with
++  | "Win32" ->
++    (try set_binary_mode_out stdout true with _ -> ());
++  | _ -> ()
++
++
+ let spec = ref (
+     let print_version () =
++      sb ();
+       Printf.printf "ocamlbuild %s\n%!" Ocamlbuild_config.version; raise Exit_OK
+     in
+-    let print_vnum () = print_endline Ocamlbuild_config.version; raise Exit_OK in
++    let print_vnum () = sb (); print_endline Ocamlbuild_config.version; raise Exit_OK in
+   Arg.align
+   [
+    "-version", Unit print_version , " Display the version";
+@@ -235,8 +257,8 @@
+    "-build-dir", String set_build_dir, "<path> Set build directory (implies no-links)";
+    "-install-lib-dir", Set_string Ocamlbuild_where.libdir, "<path> Set the install library directory";
+    "-install-bin-dir", Set_string Ocamlbuild_where.bindir, "<path> Set the install binary directory";
+-   "-where", Unit (fun () -> print_endline !Ocamlbuild_where.libdir; raise Exit_OK), " Display the install library directory";
+-   "-which", String (fun cmd -> print_endline (find_tool cmd); raise Exit_OK), "<command> Display path to the tool command";
++   "-where", Unit (fun () -> sb (); print_endline (slashify !Ocamlbuild_where.libdir); raise Exit_OK), " Display the install library directory";
++   "-which", String (fun cmd -> sb (); print_endline (slashify (find_tool cmd)); raise Exit_OK), "<command> Display path to the tool command";
+    "-ocamlc", set_cmd ocamlc, "<command> Set the OCaml bytecode compiler";
+    "-ocamlopt", set_cmd ocamlopt, "<command> Set the OCaml native compiler";
+    "-ocamldep", set_cmd ocamldep, "<command> Set the OCaml dependency tool";
+--- ./src/pathname.ml
++++ ./src/pathname.ml
+@@ -84,6 +84,27 @@
+   | x :: xs -> x :: normalize_list xs
+ 
+ let normalize x =
++  let x =
++    if Sys.win32 = false then
++      x
++    else
++      let len = String.length x in
++      let b = Bytes.create len in
++      let use_bs = ref false in
++      for i = 0 to pred len do
++        match x.[i] with
++        | '\\' -> Bytes.set b i '/'
++        | c -> Bytes.set b i c
++      done;
++      if len > 1 then (
++        let c1 = Bytes.get b 0 in
++        let c2 = Bytes.get b 1 in
++        if c2 = ':' && c1 >= 'a' && c1 <= 'z' &&
++           ( len = 2 || Bytes.get b 2 = '/') then
++          Bytes.set b 0 (Char.uppercase_ascii c1)
++      );
++      Bytes.unsafe_to_string b
++  in
+   if Glob.eval not_normal_form_re x then
+     let root, paths = split x in
+     join root (normalize_list paths)
+--- ./src/shell.ml
++++ ./src/shell.ml
+@@ -24,12 +24,26 @@
+     | 'a'..'z' | 'A'..'Z' | '0'..'9' | '.' | '-' | '/' | '_' | ':' | '@' | '+' | ',' -> loop (pos + 1)
+     | _ -> false in
+   loop 0
++
++let generic_quote quotequote s =
++  let l = String.length s in
++  let b = Buffer.create (l + 20) in
++  Buffer.add_char b '\'';
++  for i = 0 to l - 1 do
++    if s.[i] = '\''
++    then Buffer.add_string b quotequote
++    else Buffer.add_char b  s.[i]
++  done;
++  Buffer.add_char b '\'';
++  Buffer.contents b
++let unix_quote = generic_quote "'\\''"
++
+ let quote_filename_if_needed s =
+   if is_simple_filename s then s
+   (* We should probably be using [Filename.unix_quote] except that function
+    * isn't exported. Users on Windows will have to live with not being able to
+    * install OCaml into c:\o'caml. Too bad. *)
+-  else if Sys.os_type = "Win32" then Printf.sprintf "'%s'" s
++  else if Sys.os_type = "Win32" then unix_quote s
+   else Filename.quote s
+ let chdir dir =
+   reset_filesys_cache ();
