@@ -1,9 +1,9 @@
 opam-version: "1.2"
-maintainer: "Sylvain Le Gall <gildor@ocamlcore.org>"
+maintainer: "Sylvain Le Gall <sylvain+ocaml@le-gall.net>"
 authors: [ "Sylvain Le Gall" ]
 license: "LGPL-2.1 with OCaml linking exception"
 homepage: "http://oasis.forge.ocamlcore.org/"
-dev-repo: "git://github.com/gildor478/oasis.git"
+dev-repo: "https://github.com/gildor478/oasis.git"
 bug-reports: "http://oasis.forge.ocamlcore.org/"
 build: [
   ["ocaml" "setup.ml" "-configure" "--prefix" prefix]

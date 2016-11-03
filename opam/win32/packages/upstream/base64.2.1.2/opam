@@ -1,0 +1,24 @@
+opam-version: "1.2"
+maintainer: "mirageos-devel@lists.xenproject.org"
+authors: [ "Thomas Gazagnaire"
+           "Anil Madhavapeddy"
+           "Peter Zotov" ]
+license: "ISC"
+homepage: "https://github.com/mirage/ocaml-base64"
+doc: "http://mirage.github.io/ocaml-base64/"
+bug-reports: "https://github.com/mirage/ocaml-base64/issues"
+dev-repo: "https://github.com/mirage/ocaml-base64.git"
+depends: [
+  "base-bytes"
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "topkg" {build}
+  "bos" {test}
+  "rresult" {test}
+  "alcotest" {test}
+]
+build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "false" ]
+build-test: [
+  [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "true" ]
+  [ "ocaml" "pkg/pkg.ml" "test" ]
+]

@@ -1,0 +1,53 @@
+opam-version: "1.2"
+name: "ocamlbuild"
+maintainer: "Gabriel Scherer <gabriel.scherer@gmail.com>"
+version: "0.9.3"
+
+authors: [
+  "Nicolas Pouillard"
+  "Berke Durak"
+]
+
+license: "LGPL-2 with OCaml linking exception"
+dev-repo: "https://github.com/ocaml/ocamlbuild.git"
+homepage: "https://github.com/ocaml/ocamlbuild/"
+bug-reports: "https://github.com/ocaml/ocamlbuild/issues"
+doc: "https://github.com/ocaml/ocamlbuild/blob/master/manual/manual.adoc"
+
+build: [
+  [make "-f" "configure.make" "all"
+    "OCAMLBUILD_PREFIX=%{prefix}%"
+    "OCAMLBUILD_BINDIR=%{bin}%"
+    "OCAMLBUILD_LIBDIR=%{lib}%"
+    "OCAML_NATIVE=%{ocaml-native}%"
+    "OCAML_NATIVE_TOOLS=%{ocaml-native}%"]  { os != "win32" }
+  [make "check-if-preinstalled" "all" "opam-install"]  { os != "win32" }
+  [make "-f" "configure.make" "Makefile.config" "src/ocamlbuild_config.ml"
+    "OCAMLBUILD_PREFIX=%{prefix}%"
+    "OCAMLBUILD_BINDIR=%{bin}%"
+    "OCAMLBUILD_LIBDIR=%{lib}%/ocaml"
+    "OCAML_NATIVE=%{ocaml-native}%"
+    "OCAML_NATIVE_TOOLS=%{ocaml-native}%"] { os = "win32" }
+  [make "all"] { os = "win32" }
+]
+
+# this is an ugly workaround because oasis has the old
+# standard hardcoded in its source code (windows only) and therefore
+# in dozens of existing setup.ml files
+install: [
+  [make "install"] { os = "win32" }
+  ["mkdir" "-p" "%{lib}%/ocamlbuild"] { os = "win32" }
+  ["install" "-m" "0644" "META" "%{lib}%/ocamlbuild"] { os = "win32" }
+]
+remove: [
+  ["rm" "-f" "%{bin}%/ocamlbuild.byte.exe" "%{bin}%/ocamlbuild.exe" "%{bin}%/ocamlbuild.native.exe"] { os = "win32" }
+  ["rm" "-rf" "%{lib}%/ocaml/ocamlbuild"] { os = "win32" }
+  ["rm" "-rf" "%{lib}%/ocamlbuild"] { os = "win32" }
+]
+
+available: [ocaml-version >= "4.03"]
+conflicts: [
+  "base-ocamlbuild"
+  "ocamlfind" {< "1.6.2"}
+]
+patches: "ocamlbuild-0.9.3.patch" {os = "win32"}

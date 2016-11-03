@@ -19,4 +19,5 @@ depexts: [
   [["alpine"] ["pkgconfig"]]
   [["osx" "homebrew"] ["pkg-config"]]
   [["win32" "cygwinports"] ["pkg-config"]]
+  [["freebsd"] ["pkgconf"]]
 ]

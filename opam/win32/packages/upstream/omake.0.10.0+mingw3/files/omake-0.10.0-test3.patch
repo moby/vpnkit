@@ -1,0 +1,708 @@
+--- ./lib/build/C.om
++++ ./lib/build/C.om
+@@ -99,7 +99,7 @@
+     empty = $(array)
+     match $(cc)
+     case $"\(.*\)-g?cc"
+-        fullcmd = $(concat $(empty), $1 $(command))
++        fullcmd = $(concat -, $1 $(command))
+         if $(exists-in-path $(fullcmd))
+             return $(fullcmd)
+         else
+@@ -149,13 +149,25 @@
+         DEFAULT_CC += /nologo
+         export
+ 
++    # archiver
++    if $(not $(equal $(CCOMPTYPE), msvc))
++      DEFAULT_AR = $(toolchain-derive $(DEFAULT_CC), ar, ar)
++      DEFAULT_RANLIB = $(toolchain-derive $(DEFAULT_CC), ranlib, ranlib)
++      export
++    else
++      DEFAULT_AR = lib /nologo /debugtype:CV
++      DEFAULT_RANLIB = echo ranlib
++      export
++    DEFAULT_AR_FOUND = $(CheckProg $(nth 0, $(DEFAULT_AR)))
++    DEFAULT_RANLIB_FOUND = $(CheckProg $(nth 0, $(DEFAULT_RANLIB)))
++
+     # C++ compiler
+ 
+     if $(equal $(CCOMPTYPE), msvc)
+         DEFAULT_CXX = cl /nologo
+         export
+     else
+-        DEFAULT_CXX = $(toolchain-derive $(DEFAULT_CC), g++, `$(toolchain-derive $(DEFAULT_CC), c++, $(if $(GXX_FOUND1), g++, c++)))
++        DEFAULT_CXX = $(toolchain-derive $(DEFAULT_CC), g++, $`(toolchain-derive $(DEFAULT_CC), c++, $(if $(GXX_FOUND1), g++, c++)))
+         export
+ 
+     DEFAULT_CXX_FOUND = $(CheckProg $(nth 0, $(DEFAULT_CXX)))
+@@ -260,8 +272,8 @@
+     public.CFLAGS = $(OS_CFLAGS)
+     public.CXXFLAGS = $(OS_CFLAGS)
+     public.AR(name) =
+-        return(ar cq $(name))
+-    public.RANLIB = ranlib
++        return($(DEFAULT_AR) cq $(name))
++    public.RANLIB = $(DEFAULT_RANLIB)
+     public.LD = $(DEFAULT_LD)
+     public.INCLUDES[] = .
+     public.INCLUDES_OPT = -I
+@@ -404,7 +416,7 @@
+     export
+ else
+     .SCANNER: scan-c-%.c: %.c /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(INCLUDES), $&)
+-        $(CC) $(CFLAGS) $(PREFIXED_INCLUDES) -MM $<
++        $(CC) $(CFLAGS) $(PREFIXED_INCLUDES) -MM $< | omake-mmtranslate.exe
+ 
+ #    # Include default rule for backwards-compatibility
+ #    .SCANNER: %$(EXT_OBJ): %.c /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(INCLUDES), $&)
+@@ -412,7 +424,7 @@
+ 
+     foreach(CXX_EXT => ..., $(CXX_EXTS))
+         .SCANNER: scan-cxx-%$(CXX_EXT): %$(CXX_EXT) /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(INCLUDES), $&)
+-            $(CXX) $(CXXFLAGS) $(PREFIXED_INCLUDES) -MM $<
++            $(CXX) $(CXXFLAGS) $(PREFIXED_INCLUDES) -MM $< | omake-mmtranslate.exe
+ 
+ #        # Include default rule for backwards-compatibility
+ #        .SCANNER: %$(EXT_OBJ): %$(CXX_EXT) /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(INCLUDES), $&)
+--- ./mk/osconfig_mingw.mk
++++ ./mk/osconfig_mingw.mk
+@@ -21,9 +21,9 @@
+ #
+ # C configuration
+ #
+-CC := $(shell sh -c "$(OCAMLC) -config | grep bytecomp_c_compiler | awk '{print $$2}'")
++CC := $(shell sh -c "$(OCAMLC) -config | awk '/^bytecomp_c_compiler/ {print $$2}'")
+ CFLAGS = -I"$(STDLIB)" -I"$(STDLIB)/caml" 
+-AR = ar cq
++AR := $(shell sh -c "$(OCAMLC) -config | awk '/^ranlib:/ {print $$2}' | sed 's|ranlib|ar|'") cq
+ AROUT =
+ EXT_OBJ = .o
+ EXT_LIB = .a
+@@ -33,7 +33,7 @@
+ OCAMLFLAGS = -thread -w +a-4-32-30-42-40-41 -g $(OCAMLFLAGS_EXTRA)
+ THREADSLIB = threads.cma
+ THREADSLIB_OPT = threads.cmxa
+-PREFERRED = .byte
++PREFERRED = .opt
+ STDLIB := $(shell $(OCAMLC) -where)
+ 
+ .SUFFIXES: .mll .mly .mli .ml .c .cmi .cmo .cmx .cma .cmxa .o
+--- ./src/build/omake_rule.ml
++++ ./src/build/omake_rule.ml
+@@ -1214,7 +1214,7 @@
+ and eval_shell_output venv pos loc e =
+   let pos = string_pos "eval_shell_output" pos in
+   let tmpname = Filename.temp_file "omake" ".shell" in
+-  let fd = Lm_unix_util.openfile tmpname [Unix.O_RDWR; Unix.O_CREAT; Unix.O_TRUNC] 0o600 in
++  let fd = Lm_unix_util.openfile tmpname [Unix.O_RDWR; Unix.O_CREAT; Unix.O_TRUNC; Unix.O_SHARE_DELETE] 0o600 in
+   let channel = Lm_channel.create tmpname Lm_channel.PipeChannel Lm_channel.OutChannel false (Some fd) in
+   let channel = Omake_env.venv_add_channel venv channel in
+   let venv = Omake_env.venv_add_var venv Omake_var.stdout_var (ValChannel (OutChannel, channel)) in
+--- ./src/clib/fam_inotify.c
++++ ./src/clib/fam_inotify.c
+@@ -416,7 +416,7 @@
+ }
+ #else /* FAM_INOTIFY */
+ 
+-#if defined(WIN32) || defined(_WIN32)
++#if (defined(WIN32) || defined(_WIN32)) && !defined(__MINGW32__)
+ /* Disable the "translation unit is empty" warning */
+ #pragma warning( disable : 4206 )
+ #endif
+--- ./src/clib/fam_kqueue.c
++++ ./src/clib/fam_kqueue.c
+@@ -598,7 +598,7 @@
+ 
+ #else /* FAM_KQUEUE */
+ 
+-#if defined(WIN32) || defined(_WIN32)
++#if (defined(WIN32) || defined(_WIN32)) && !defined(__MINGW32__)
+ /* Disable the "translation unit is empty" warning */
+ #pragma warning( disable : 4206 )
+ #endif
+--- ./src/clib/fam_win32.c
++++ ./src/clib/fam_win32.c
+@@ -35,7 +35,9 @@
+ #ifdef FAM_ENABLED
+ 
+ /* Disable some of the warnings */
++#if !defined(__MINGW32__)
+ #pragma warning( disable : 4127 4996 )
++#endif
+ 
+ #ifndef _WIN32_WINNT
+ #define _WIN32_WINNT 0x0400
+--- ./src/clib/lm_compat_win32.c
++++ ./src/clib/lm_compat_win32.c
+@@ -38,7 +38,9 @@
+ 
+ #ifdef WIN32
+ /* Disable some of the warnings */
++#if !defined(__MINGW32__)
+ #pragma warning( disable : 4100 4201 ) 
++#endif
+ 
+ #include <windows.h>
+ #include <tlhelp32.h>
+--- ./src/clib/lm_ctype.c
++++ ./src/clib/lm_ctype.c
+@@ -40,8 +40,10 @@
+ 
+ #ifdef WIN32 
+ #include <windows.h>
++#if !defined(__MINGW32__)
+ /* Disable some of the warnings */
+ #pragma warning( disable : 4100 )
++#endif
+ #endif /* WIN32 */
+ 
+ /*
+--- ./src/clib/lm_fs_case_sensitive.c
++++ ./src/clib/lm_fs_case_sensitive.c
+@@ -48,6 +48,10 @@
+ /* Other various includes */
+ #include <memory.h>
+ #include <errno.h>
++#include <string.h>
++#ifdef _WIN32
++#define strdup _strdup
++#endif
+ 
+ typedef struct vol_caps_buf {
+     unsigned long size;
+@@ -66,7 +70,11 @@
+ value lm_fs_case_sensitive(value path_val) {
+     CAMLparam1(path_val);
+     struct statfs stat;
+-    char *path = String_val(path_val);
++    char *path = strdup(String_val(path_val));
++    value o_ret = Val_false;
++    if ( path == NULL ){
++      caml_raise_out_of_memory();
++    }
+     
+     do {
+         caml_enter_blocking_section();
+@@ -81,7 +89,8 @@
+         
+         if (getattrlist(stat.f_mntonname, &alist, &buffer, sizeof(buffer), 0))
+             break;
+-        
++        free(path);
++        path = NULL;
+         caml_leave_blocking_section();
+         if (!(alist.volattr & ATTR_VOL_CAPABILITIES))
+             caml_failwith("Couldn't get volume capabilities");
+@@ -98,16 +107,17 @@
+         }
+         
+     } while (0);
++    free(path);
+     caml_leave_blocking_section();
+     caml_failwith(strerror(errno));
+-    CAMLreturn(Val_false);  /* For the compiler's sake */
++    CAMLreturn(o_ret);
+ }
+ 
+ #else /* not DETECT_FS_CASE_SENSITIVE_GETATTRLIST */
+ 
+-#ifdef _WIN32
++#if defined(_WIN32) && !defined(__MINGW32__)
+ #pragma warning( disable : 4100 )
+-#endif /* _WIN32 */
++#endif /* _WIN32 && !__MINGW32__*/
+ 
+ value lm_fs_case_sensitive_available(value _unit) {
+     return Val_false;
+--- ./src/clib/lm_heap.c
++++ ./src/clib/lm_heap.c
+@@ -38,7 +38,13 @@
+ #include <caml/fail.h>
+ #include <caml/custom.h>
+ 
+-#if defined(WIN32) || defined(_WIN32)
++#ifdef ARCH_INTNAT_PRINTF_FORMAT
++#define FL ARCH_INTNAT_PRINTF_FORMAT
++#else
++#define FL "l"
++#endif
++
++#if (defined(WIN32) || defined(_WIN32)) && !defined(__MINGW32__)
+ /* Disable some of the warnings */
+ #pragma warning( disable : 4146 )
+ #endif
+@@ -67,14 +73,14 @@
+     }
+     p2 = pointers[i];
+     if((p2 != p) && (Tag_val(p) != Infix_tag)) {
+-        fprintf(stderr, "%s: illegal pointer: 0x%08lx < 0x%08lx < 0x%08lx, size = %lud, tag = %d\n", 
++        fprintf(stderr, "%s: illegal pointer: 0x%08"FL"x < 0x%08"FL"x < 0x%08"FL"x, size = %"FL"ud, tag = %d\n",
+                 name,
+-                (unsigned long) p2, (unsigned long) p, (unsigned long) pointers[i + 1],
++                (uintnat) p2, (uintnat) p, (uintnat) pointers[i + 1],
+                 Wosize_val(p), Tag_val(p));
+-        fprintf(stderr, "points into: 0x%08lx: index = %d, size = %lud, tag = %d\n",
+-                (unsigned long) p2, i, Wosize_val(p2), Tag_val(p2));
+-        fprintf(stderr, "from block: 0x%08lx: size = %lud, tag = %d, field = %d\n",
+-                (unsigned long) v, Wosize_val(v), Tag_val(v), index);
++        fprintf(stderr, "points into: 0x%08"FL"x: index = %d, size = %"FL"ud, tag = %d\n",
++                (uintnat) p2, i, Wosize_val(p2), Tag_val(p2));
++        fprintf(stderr, "from block: 0x%08"FL"x: size = %"FL"ud, tag = %d, field = %d\n",
++                (uintnat) v, Wosize_val(v), Tag_val(v), index);
+         fflush(stderr);
+         abort();
+     }
+@@ -93,15 +99,15 @@
+     ptr = caml_young_ptr;
+     end = caml_young_end;
+ 
+-    fprintf(stderr, "AAA: %s: [0x%08lx, 0x%08lx, 0x%08lx, 0x%08lx] (%ld/%ld/%ld bytes)\n",
++    fprintf(stderr, "AAA: %s: [0x%08"FL"x, 0x%08"FL"x, 0x%08"FL"x, 0x%08"FL"x] (%"FL"d/%"FL"d/%"FL"d bytes)\n",
+             name,
+-            (unsigned long) caml_young_start,
+-            (unsigned long) caml_young_ptr,
+-            (unsigned long) caml_young_limit,
+-            (unsigned long) caml_young_end, 
+-            ((unsigned long) caml_young_end) - (unsigned long) caml_young_ptr,
+-            ((unsigned long) caml_young_end) - (unsigned long) caml_young_limit,
+-            ((unsigned long) caml_young_end) - (unsigned long) caml_young_start);
++            (uintnat) caml_young_start,
++            (uintnat) caml_young_ptr,
++            (uintnat) caml_young_limit,
++            (uintnat) caml_young_end,
++            ((uintnat) caml_young_end) - (uintnat) caml_young_ptr,
++            ((uintnat) caml_young_end) - (uintnat) caml_young_limit,
++            ((uintnat) caml_young_end) - (uintnat) caml_young_start);
+     fflush(stderr);
+ 
+     /*
+@@ -112,8 +118,8 @@
+     while(v < caml_young_end) {
+         pointers[index++] = (char *) v;
+         size = Wosize_val(v);
+-        fprintf(stderr, "%s: 0x%08lx: size %lud, tag = %d\n",
+-                name, (unsigned long) v, size, Tag_val(v));
++        fprintf(stderr, "%s: 0x%08"FL"x: size %"FL"ud, tag = %d\n",
++                name, (uintnat) v, size, Tag_val(v));
+         found = 0;
+         for(i = 0; i != 10; i++) {
+             next = &Field(v, size + i);
+@@ -121,12 +127,12 @@
+                 p = *next;
+ #define Debug_free_minor 0xD700D6D7ul
+                 if(p == Debug_free_minor) {
+-                    fprintf(stderr, "\tnext[%d]:0x%08lx = 0x%08lx\n", i, (unsigned long) next, (unsigned long) p);
++                    fprintf(stderr, "\tnext[%d]:0x%08"FL"x = 0x%08"FL"x\n", i, (uintnat) next, (uintnat) p);
+                     found = 1;
+                 }
+                 else if(found)
+-                    fprintf(stderr, "\tnext[%d]:0x%08lx = 0x%08lx, size = %lud, tag = %d\n",
+-                            i, (unsigned long) next, (unsigned long) p, Wosize_hd(p), Tag_hd(p));
++                    fprintf(stderr, "\tnext[%d]:0x%08"FL"x = 0x%08"FL"x, size = %"FL"ud, tag = %d\n",
++                            i, (uintnat) next, (uintnat) p, Wosize_hd(p), Tag_hd(p));
+             }
+         }
+         fflush(stderr);
+@@ -146,7 +152,7 @@
+     while(v < caml_young_end) {
+         size = Wosize_val(v);
+         if(Tag_val(v) < No_scan_tag) {
+-            fprintf(stderr, "%s: scanning 0x%08lx: size %lud, tag = %d\n", name, (unsigned long) v, size, Tag_val(v));
++            fprintf(stderr, "%s: scanning 0x%08"FL"x: size %"FL"ud, tag = %d\n", name, (uintnat) v, size, Tag_val(v));
+             fflush(stderr);
+             for(i = 0; i != size; i++) {
+                 char *p = (char *) Field(v, i);
+@@ -177,15 +183,15 @@
+     ptr = caml_young_ptr;
+     end = caml_young_end;
+ 
+-    fprintf(stderr, "AAA: %s: [0x%08lx, 0x%08lx, 0x%08lx, 0x%08lx] (%ld/%ld/%ld bytes)\n",
++    fprintf(stderr, "AAA: %s: [0x%08"FL"x, 0x%08"FL"x, 0x%08"FL"x, 0x%08"FL"x] (%"FL"d/%"FL"d/%"FL"d bytes)\n",
+             name,
+-            (unsigned long) caml_young_start,
+-            (unsigned long) caml_young_ptr,
+-            (unsigned long) caml_young_limit,
+-            (unsigned long) caml_young_end, 
+-            ((unsigned long) caml_young_end) - (unsigned long) caml_young_ptr,
+-            ((unsigned long) caml_young_end) - (unsigned long) caml_young_limit,
+-            ((unsigned long) caml_young_end) - (unsigned long) caml_young_start);
++            (uintnat) caml_young_start,
++            (uintnat) caml_young_ptr,
++            (uintnat) caml_young_limit,
++            (uintnat) caml_young_end,
++            ((uintnat) caml_young_end) - (uintnat) caml_young_ptr,
++            ((uintnat) caml_young_end) - (uintnat) caml_young_limit,
++            ((uintnat) caml_young_end) - (uintnat) caml_young_start);
+ 
+     fflush(stderr);
+ 
+@@ -196,7 +202,7 @@
+     while(v < caml_young_end) {
+         hd = Hd_val(v);
+         if(hd == Debug_free_minor) {
+-            fprintf(stderr, "Bogus pointer: 0x%08lx\n", (unsigned long) v);
++            fprintf(stderr, "Bogus pointer: 0x%08"FL"x\n", (uintnat) v);
+             fflush(stderr);
+             v += sizeof(header_t);
+         }
+@@ -205,8 +211,8 @@
+             for(i = 0; i != size; i++) {
+                 char *p = (char *) Field(v, i);
+                 if(p >= caml_young_end && p < caml_young_ptr) {
+-                    fprintf(stderr, "%s: Found a bogus pointer: 0x%08lx[%d] = 0x%08lx\n",
+-                            name, (unsigned long) v, i, (unsigned long) p);
++                    fprintf(stderr, "%s: Found a bogus pointer: 0x%08"FL"x[%d] = 0x%08"FL"x\n",
++                            name, (uintnat) v, i, (uintnat) p);
+                     fflush(stderr);
+                     abort();
+                 }
+--- ./src/clib/lm_notify.c
++++ ./src/clib/lm_notify.c
+@@ -42,7 +42,9 @@
+ #ifdef WIN32 
+ #include <windows.h>
+ /* Disable some of the warnings */
++#if !defined(__MINGW32__)
+ #pragma warning( disable : 4100 4189 4127 4702 4996 )
++#endif /* !__MINGW32__ */
+ #endif /* WIN32 */
+ 
+ #ifdef FAM_PSEUDO
+@@ -55,6 +57,12 @@
+ #include <sys/select.h>
+ #endif /* FAM_PSEUDO */
+ 
++#include <stdlib.h>
++#include <string.h>
++#ifdef _WIN32
++#define strdup _strdup
++#endif
++
+ /*
+  * Custom blocks.
+  */
+@@ -84,6 +92,19 @@
+      }                                       \
+   } while(0)
+ 
++#define CheckCodeFree(fmt, expr, to_free)    \
++  do {                                       \
++     enter_blocking_section();               \
++     code = expr;                            \
++     leave_blocking_section();               \
++     if(code < 0) {                          \
++         char buffer[256];                   \
++         ErrFmt(buffer, fmt);                \
++         free(to_free);                      \
++         failwith(buffer);                   \
++     }                                       \
++  } while(0)
++
+ static int fam_connection_compare(value v1, value v2)
+ {
+     FAMConnection *info1 = FAMConnection_val(v1);
+@@ -96,24 +117,34 @@
+ #endif /* !FAM_PSEUDO */
+ }
+ 
+-static long fam_connection_hash(value v)
++static intnat fam_connection_hash(value v)
+ {
+-    return (long) FAMConnection_val(v);
++    return (intnat) FAMConnection_val(v);
+ }
+ 
+-static void fam_connection_finalize(value v_info)
++static void fam_connection_finalize_real(value v_info,int x)
+ {
+     FAMInfo *info;
+ 
+     info = FAMInfo_val(v_info);
+     if(info->is_open) {
++        if ( x == 1 ){
+         int code;
+         CheckCode("om_notify_close", FAMClose(info->fc));
++        }
++        else {
++            FAMClose(info->fc);
++        }
+         free(info->fc);
+         info->is_open = 0;
+     }
+ }
+ 
++static void fam_connection_finalize(value v_info)
++{
++    fam_connection_finalize_real(v_info,0);
++}
++
+ /*
+  * Pass info in a custom block.
+  */
+@@ -123,7 +154,10 @@
+     fam_connection_compare,
+     fam_connection_hash,
+     custom_serialize_default,
+-    custom_deserialize_default
++    custom_deserialize_default,
++#if defined(custom_compare_ext_default)
++    custom_compare_ext_default,
++#endif
+ };
+ 
+ /*
+@@ -164,7 +198,7 @@
+  */
+ value om_notify_close(value v_fc)
+ {
+-    fam_connection_finalize(v_fc);
++    fam_connection_finalize_real(v_fc,1);
+     return Val_unit;
+ }
+ 
+@@ -197,23 +231,27 @@
+ value om_notify_monitor_directory(value v_fc, value v_name, value v_recursive)
+ {
+     CAMLparam3(v_fc, v_name, v_recursive);
+-    const char *name;
++    char *name;
+     FAMConnection *fc;
+     FAMRequest request;
+     int code, recursive;
+ 
+     fc = FAMConnection_val(v_fc);
+-    name = String_val(v_name);
++    name = strdup(String_val(v_name));
++    if ( name == NULL ){
++      caml_raise_out_of_memory();
++    }
+     recursive = Int_val(v_recursive);
+     if(recursive) {
+ #ifdef WIN32
+-        CheckCode("om_notify_monitor_directory", FAMMonitorDirectoryTree(fc, name, &request, 0));
++        CheckCodeFree("om_notify_monitor_directory", FAMMonitorDirectoryTree(fc, name, &request, 0),name);
+ #else /* WIN32 */
+         failwith("om_notify_monitor_directory: recursive monitoring is not allowed");
+ #endif /* !WIN32 */
+     }
+     else
+-        CheckCode("om_notify_monitor_directory", FAMMonitorDirectory(fc, name, &request, 0));
++        CheckCodeFree("om_notify_monitor_directory", FAMMonitorDirectory(fc, name, &request, 0),name);
++    free(name);
+     CAMLreturn(Val_int(request.reqnum));
+ }
+ 
+--- ./src/clib/lm_printf.c
++++ ./src/clib/lm_printf.c
+@@ -15,7 +15,9 @@
+ #ifdef WIN32 
+ #include <windows.h>
+ /* Disable some of the warnings */
++#if !defined(__MINGW32__)
+ #pragma warning( disable : 4996)
++#endif /* !__MINGW32__ */
+ #endif /* WIN32 */
+ 
+ /*
+--- ./src/clib/lm_terminfo.c
++++ ./src/clib/lm_terminfo.c
+@@ -7,7 +7,7 @@
+ #include <caml/alloc.h>
+ #include <caml/memory.h>
+ 
+-#ifdef WIN32
++#if defined(WIN32) && !defined(__MINGW32__)
+ #   pragma warning (disable: 4127 4189 4702 4996)
+ #endif
+ 
+--- ./src/clib/lm_termsize.c
++++ ./src/clib/lm_termsize.c
+@@ -28,7 +28,9 @@
+ #endif
+ #ifdef WIN32
+ #   include <Windows.h>
++#if !defined(__MINGW32__)
+ #   pragma warning (disable: 4127 4189 4702)
++#endif /* !__MINGW32__ */
+ #else
+ #   include <unistd.h>
+ #   include <sys/ioctl.h>
+--- ./src/clib/lm_uname_ext.c
++++ ./src/clib/lm_uname_ext.c
+@@ -37,8 +37,10 @@
+ 
+ #ifdef WIN32
+ #include <windows.h>
++#if !defined(__MINGW32__)
+ /* Disable some of the warnings */
+ #pragma warning( disable : 4127 4189 4702 4996 )
++#endif
+ 
+ /*
+  * Fake utsname.
+--- ./src/clib/lm_unix_cutil.c
++++ ./src/clib/lm_unix_cutil.c
+@@ -8,7 +8,13 @@
+ #include <caml/custom.h>
+ #include <caml/fail.h>
+ 
+-#if defined(WIN32) || defined(_WIN32)
++#ifdef ARCH_INTNAT_PRINTF_FORMAT
++#define FL ARCH_INTNAT_PRINTF_FORMAT
++#else
++#define FL "l"
++#endif
++
++#if (defined(WIN32) || defined(_WIN32)) && !defined(__MINGW32__)
+ /* Disable some of the warnings */
+ #pragma warning( disable : 4100 4201 4127 4189 4702 4716 4996 )
+ #endif
+@@ -53,7 +59,7 @@
+ {
+     int sp;
+ 
+-    fprintf(stderr, "Stack pointer: 0x%08lx\n", (unsigned long) &sp);
++    fprintf(stderr, "Stack pointer: 0x%08"FL"x\n", (uintnat) &sp);
+     return Val_unit;
+ }
+ 
+@@ -68,7 +74,7 @@
+  */
+ value int_of_fd(value fd)
+ {
+-    return Val_long((long) *(HANDLE *)Data_custom_val(fd));
++    return Val_long((intnat) *(HANDLE *)Data_custom_val(fd));
+ }
+ 
+ /*
+@@ -177,7 +183,7 @@
+                     (LPTSTR) &lpMsgBuf,
+                     0, NULL);
+ 
+-                sprintf(szBuf, "lockf_win32 failed with error %d: %s", error, lpMsgBuf); 
++                sprintf(szBuf, "lockf_win32 failed with error %lu: %s", error, (char*)lpMsgBuf);
+                 LocalFree(lpMsgBuf);
+ 
+                 failwith(szBuf);
+--- ./src/clib/omake_shell_sys.c
++++ ./src/clib/omake_shell_sys.c
+@@ -38,8 +38,10 @@
+ #ifdef WIN32
+ #include <caml/signals.h>
+ 
++#if !defined(__MINGW32__)
+ /* Disable some of the warnings */
+ #pragma warning( disable : 4127 4189 4702 4706 4996 )
++#endif
+ 
+ #ifndef _WIN32_WINNT
+ #define _WIN32_WINNT 0x0400
+@@ -188,7 +190,7 @@
+     /* Check for special characters */
+     extra = 0;
+     escaped = 0;
+-    while(c = *strp++) {
++    while ((c = *strp++) != 0) {
+         switch(c) {
+         case '"':
+             escaped++;
+@@ -221,7 +223,7 @@
+     char c;
+ 
+     *dstp++ = '"';
+-    while(c = *srcp) {
++    while ((c = *srcp) != 0) {
+         if(c == '"')
+             *dstp++ = '\\';
+         *dstp++ = c;
+@@ -760,7 +762,9 @@
+     /* Collect the processes and their handles */
+     ncount = 1;
+     handles[0] = state->changed;
+-    for(processpp = &state->processes; processp = *processpp; processpp = &(*processpp)->next) {
++    for(processpp = &state->processes;
++        (processp = *processpp) != NULL;
++        processpp = &(*processpp)->next) {
+         if((pgrp && processp->pgrp != pgrp)
+            || (pgrp == 0 && processp->pgrp == INIT_PID)
+            || (leader && processp->pid != processp->pgrp)
+@@ -795,7 +799,7 @@
+ 
+         /* See if something has changed */
+         if(index == WAIT_OBJECT_0) {
+-            for(processpp = &state->processes; processp = *processpp; processpp = &(*processpp)->next) {
++          for(processpp = &state->processes; (processp = *processpp) != NULL; processpp = &(*processpp)->next) {
+                 if(processp->pgrp == pgrp && processp->changed)
+                     goto done;
+             }
+@@ -814,7 +818,7 @@
+ 
+     /* Adjust process */
+     pid = processes[index];
+-    for(processpp = &state->processes; processp = *processpp; processpp = &(*processpp)->next) {
++    for(processpp = &state->processes; (processp = *processpp) != NULL; processpp = &(*processpp)->next) {
+         if(processp->pid == pid)
+             break;
+     }
+@@ -849,6 +853,7 @@
+     fprintf(stderr, "+++ wait: pid=%d, group=%d, status=%d\n", processp->pid, processp->pgrp, processp->status);
+ #endif
+     tuple = caml_alloc_small(3, 0);
++    Field(tuple, 0) = Val_true;
+     Field(tuple, 1) = Val_int(processp->pid);
+     Field(tuple, 2) = Val_int(processp->code);
+     switch(processp->status) {
+@@ -856,7 +861,6 @@
+         Field(tuple, 0) = Val_false;
+         break;
+     case STATUS_EXITED:
+-        Field(tuple, 0) = Val_true;
+         CloseHandle(processp->handle);
+         *processpp = processp->next;
+         free(processp);
+@@ -1092,7 +1096,7 @@
+         ExitProcess(1);
+         break;
+     default:
+-        fprintf(stderr, "console_ctrl_handler: unknown code: %d\n", code);
++        fprintf(stderr, "console_ctrl_handler: unknown code: %lu\n", code);
+         fflush(stderr);
+         rval = FALSE;
+         break;
+--- ./src/clib/readline.c
++++ ./src/clib/readline.c
+@@ -52,8 +52,10 @@
+ #ifdef WIN32
+ #  include <caml/signals.h>
+ #  include <windows.h>
++#if !defined(__MINGW32__)
+    /* Disable some of the warnings */
+ #  pragma warning( disable : 4100 4127 4505 4702 4996 4189)
++#endif
+ #else
+ #  include <unistd.h>
+ #  include <string.h>
+--- ./src/env/OMakefile
++++ ./src/env/OMakefile
+@@ -41,7 +41,7 @@
+ LocalOCamlGeneratedFiles($(GENERATED_FILES))
+ 
+ omake_ast_parse.mly: $(GENPARSE)$(EXE) omake_ast_parse.input
+-    ./$(GENPARSE) -o $@ omake_ast_parse.input
++    ./$(GENPARSE)$(EXE) -o $@ omake_ast_parse.input
+ 
+ clean:
+     $(CLEAN) $(GENERATED_FILES) $(GENPARSE)$(EXE) $(GENPARSE).opt $(GENPARSE).run
+--- ./src/libmojave/lm_filename_util.ml
++++ ./src/libmojave/lm_filename_util.ml
+@@ -238,7 +238,8 @@
+          let root = DriveRoot (Char.lowercase name.[0]) in
+          let path = String.sub name 3 (len - 3) in
+             AbsolutePath (root, path)
+-      else if len >= 1 && name.[0] = '/' then
++      else if len >= 1 && (name.[0] = '/'
++                          || has_drive_letters && name.[0] = '\\') then
+          let root = NullRoot in
+          let path = String.sub name 1 (len - 1) in
+             AbsolutePath (root, path)
