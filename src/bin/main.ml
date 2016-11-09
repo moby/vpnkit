@@ -119,6 +119,18 @@ let start_introspection introspection_url root =
       )
   )
 
+let start_diagnostics diagnostics_url flow_cb =
+  Lwt.async (fun () ->
+    log_exception_continue "start_diagnostics_server"
+      (fun () ->
+        Log.info (fun f -> f "starting diagnostics diagnostics_url:%s" diagnostics_url);
+        unix_listen diagnostics_url
+        >>= fun s ->
+        Host.Sockets.Stream.Unix.listen s flow_cb;
+        Lwt.return_unit
+      )
+  )
+
 let start_port_forwarding port_control_url max_connections vsock_path =
   Log.info (fun f -> f "starting port_forwarding port_control_url:%s vsock_path:%s"
     port_control_url
@@ -167,7 +179,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
-let main_t socket_url port_control_url introspection_url max_connections vsock_path db_path dns hosts pcap debug =
+let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -269,6 +281,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
         >>= fun stack ->
         Log.info (fun f -> f "stack connected");
         start_introspection introspection_url (Slirp_stack.filesystem stack);
+        start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
         Slirp_stack.after_disconnect stack
         >>= fun () ->
         Log.info (fun f -> f "stack disconnected");
@@ -288,6 +301,7 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
         >>= fun stack ->
         Log.info (fun f -> f "stack connected");
         start_introspection introspection_url (Slirp_stack.filesystem stack);
+        start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
         Slirp_stack.after_disconnect stack
         >>= fun () ->
         Log.info (fun f -> f "stack disconnected");
@@ -301,16 +315,16 @@ let main_t socket_url port_control_url introspection_url max_connections vsock_p
       | None -> () );
     Lwt.return_unit
 
-let main socket_url port_control_url introspection_url max_connections vsock_path db_path dns hosts pcap debug =
+let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug =
   Host.Main.run
-    (main_t socket_url port_control_url introspection_url max_connections vsock_path db_path dns hosts pcap debug)
+    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug)
 end
 
-let main socket port_control introspection_url max_connections vsock_path db_path dns hosts pcap select debug =
+let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control introspection_url max_connections vsock_path db_path dns hosts pcap debug
+    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug
 
 open Cmdliner
 
@@ -345,8 +359,21 @@ let introspection_path =
        state. So far this allows active network connections to be listed, to help debug problems \
        with the connection tracking. \
       Possible values include: \
-       /var/tmp/com.docker.slirp.introspection.socket to listen on a Unix domain socket for incoming connections."
+       /var/tmp/com.docker.slirp.introspection.socket to listen on a Unix domain socket for incoming connections or \
+       \\\\\\\\.\\\\pipe\\\\introspection to listen on a Windows named pipe"
      [ "introspection" ]
+  in
+  Arg.(value & opt string "" doc)
+
+let diagnostics_path =
+  let doc =
+    Arg.info ~doc:
+      "The address on the host on which to serve a .tar file containing internal daemon \
+       diagnostics which can be used to help debug problems \
+      Possible values include: \
+       /var/tmp/com.docker.slirp.diagnostics.socket to listen on a Unix domain socket for incoming connections or \
+       \\\\\\\\.\\\\pipe\\\\diagnostics to listen on a Windows named pipe"
+     [ "diagnostics" ]
   in
   Arg.(value & opt string "" doc)
 
@@ -413,7 +440,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ introspection_path $ max_connections $ vsock_path $ db_path $ dns $ hosts $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ dns $ hosts $ pcap $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =

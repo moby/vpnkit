@@ -29,6 +29,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
   val filesystem: t -> Vfs.Dir.t
   (** A virtual filesystem which exposes internal state for debugging *)
+
+  val diagnostics: t -> Host.Sockets.Stream.Unix.flow -> unit Lwt.t
+  (** Output diagnostics in .tar format over a local Unix socket or named pipe *)
 end
 
 val print_pcap: pcap -> string

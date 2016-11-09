@@ -19,6 +19,7 @@ depends: [
   "ocamlbuild" {build}
   "oasis" {build}
   "result"
+  "tar-format"
   "ipaddr"
   "lwt"
   "uwt" { = "0.0.3" }
