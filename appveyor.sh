@@ -33,3 +33,4 @@ make depends
 make
 make OSS-LICENSES
 make COMMIT
+make test
