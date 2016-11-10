@@ -5,6 +5,7 @@ machine:
     OPAMYES: "1"
     OPAMJOBS: "2"
     MACOSX_DEPLOYMENT_TARGET: "10.10"
+    CUSTOM_OPAM: "1"
 general:
   artifacts:
   - com.docker.slirp.tgz

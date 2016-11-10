@@ -5,6 +5,7 @@ environment:
   CYG_ROOT: "C:\\cygwin"
   CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
   CYGWIN: "winsymlinks:native"
+  CUSTOM_OPAM: "1"
 
 install:
   - cmd: git config core.symlinks true

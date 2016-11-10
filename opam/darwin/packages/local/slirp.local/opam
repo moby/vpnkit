@@ -1,1 +1,46 @@
-../../../../../src/opam
+opam-version: "1.2"
+maintainer: "David Scott <dave.scott@docker.com>"
+authors: [ "David Scott <dave.scott@docker.com>" ]
+
+build: [
+  ["oasis" "setup"]
+  ["./configure" "--prefix" prefix]
+  ["oasis" "-build"]
+]
+build-test: [
+  ["./configure" "--enable-tests"]
+  ["oasis" "-test"]
+]
+install: [make "install"]
+remove: ["ocamlfind" "remove" "hostnet"]
+
+depends: [
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "oasis" {build}
+  "result"
+  "ipaddr"
+  "lwt"
+  "uwt"
+  "tcpip" { = "999" }
+  "pcap-format"
+  "dns"
+  "dns-forward"
+  "datakit-server"
+  "hashcons" {= "1.0.1"}
+  "pcap-format" { >= "0.4.0" }
+  "cmdliner"
+  "charrua-core" { >= "0.3" }
+  "named-pipe"
+  "hvsock"
+  "asl"
+  "win-eventlog"
+  "fd-send-recv"
+  "logs"
+  "fmt"
+  "astring"
+  "mirage-flow" { >= "1.1.0" }
+  "mirage-types-lwt" { = "999" }
+  "ounit"
+  "alcotest"
+]
