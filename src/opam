@@ -5,11 +5,11 @@ authors: [ "David Scott <dave.scott@docker.com>" ]
 build: [
   ["oasis" "setup"]
   ["./configure" "--prefix" prefix]
-  [make]
+  ["ocaml" "setup.ml" "-build"]
 ]
 build-test: [
   ["./configure" "--enable-tests"]
-  [make "test"]
+  ["ocaml" "setup.ml" "-test"]
 ]
 install: [make "install"]
 remove: ["ocamlfind" "remove" "hostnet"]
@@ -21,8 +21,8 @@ depends: [
   "result"
   "ipaddr"
   "lwt"
-  "uwt"
-  "tcpip" { = "999" }
+  "uwt" { = "0.0.3" }
+  "tcpip" { >= "2.8.0" & < "3.0.0" }
   "pcap-format"
   "dns"
   "dns-forward"
@@ -40,7 +40,7 @@ depends: [
   "fmt"
   "astring"
   "mirage-flow" { >= "1.1.0" }
-  "mirage-types-lwt" { = "999" }
+  "mirage-types-lwt"
   "ounit"
   "alcotest"
 ]

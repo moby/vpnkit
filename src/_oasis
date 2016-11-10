@@ -40,7 +40,7 @@ Executable test
 Test test
   Run$:               flag(tests)
   Command:            $test -q
-  WorkingDirectory:   lib_test
+  WorkingDirectory:   hostnet_test
 
 Library ofs
   Path: ofs
