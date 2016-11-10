@@ -63,28 +63,39 @@ module Make(Host: Sig.HOST) = struct
   end
 
   module UdpServer = struct
+    module PortSet = Set.Make(struct type t = int let compare = Pervasives.compare end)
+
     type t = {
       port: int;
       mutable highest: int; (* highest packet payload received *)
+      mutable seen_source_ports: PortSet.t; (* all source addresses seen *)
       c: unit Lwt_condition.t;
     }
     let make stack port =
       let highest = 0 in
       let c = Lwt_condition.create () in
-      let t = { port; highest; c } in
+      let seen_source_ports = PortSet.empty in
+      let t = { port; highest; seen_source_ports; c } in
       Client.listen_udpv4 stack ~port
         (fun ~src ~dst ~src_port buffer ->
            t.highest <- max t.highest (Cstruct.get_uint8 buffer 0);
+           t.seen_source_ports <- PortSet.add src_port t.seen_source_ports;
            Log.debug (fun f -> f "Received UDP %d -> %d highest %d" src_port port t.highest);
            Lwt_condition.signal c ();
            Lwt.return_unit
         );
       t
-    let rec wait_for ~timeout ~highest t =
+    let rec wait_for_data ~timeout ~highest t =
       if t.highest < highest then begin
         Lwt.pick [ Lwt_condition.wait t.c; Host.Time.sleep 1. ]
         >>= fun () ->
         Lwt.return (t.highest >= highest)
+      end else Lwt.return true
+    let rec wait_for_ports ~timeout ~num t =
+      if PortSet.cardinal t.seen_source_ports < num then begin
+        Lwt.pick [ Lwt_condition.wait t.c; Host.Time.sleep 1. ]
+        >>= fun () ->
+        Lwt.return (PortSet.cardinal t.seen_source_ports >= num)
       end else Lwt.return true
   end
 
@@ -107,7 +118,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for ~timeout:1. ~highest:1 server
+                  UdpServer.wait_for_data ~timeout:1. ~highest:1 server
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -139,7 +150,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port1 local_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port1 ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for ~timeout:1. ~highest:1 server1
+                  UdpServer.wait_for_data ~timeout:1. ~highest:1 server1
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -155,10 +166,10 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port2 local_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port2 ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for ~timeout:1. ~highest:2 server2
+                  UdpServer.wait_for_data ~timeout:1. ~highest:2 server2
                   >>= fun ok2 ->
                   (* The server should "multicast" the packet to the original "connection" *)
-                  UdpServer.wait_for ~timeout:1. ~highest:2 server1
+                  UdpServer.wait_for_data ~timeout:1. ~highest:2 server1
                   >>= fun ok1 ->
                   if ok1 && ok2 then Lwt.return_unit else loop (remaining - 1) in
                 loop 5
@@ -190,7 +201,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port1 dest_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port1 ~dest_ip:Ipaddr.V4.localhost ~dest_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for ~timeout:1. ~highest:1 server1
+                  UdpServer.wait_for_data ~timeout:1. ~highest:1 server1
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -211,7 +222,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" source_port dest_port (Cstruct.get_uint8 buffer 0));
                   Host.Sockets.Datagram.Udp.sendto client address buffer
                   >>= fun () ->
-                  UdpServer.wait_for ~timeout:1. ~highest:2 server1
+                  UdpServer.wait_for_data ~timeout:1. ~highest:2 server1
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -242,7 +253,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for ~timeout:1. ~highest:1 server
+                  UdpServer.wait_for_data ~timeout:1. ~highest:1 server
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -260,7 +271,7 @@ module Make(Host: Sig.HOST) = struct
                        Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port (Cstruct.get_uint8 buffer 0));
                        Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                        >>= fun () ->
-                       UdpServer.wait_for ~timeout:1. ~highest:2 server
+                       UdpServer.wait_for_data ~timeout:1. ~highest:2 server
                        >>= function
                        | true -> Lwt.return_unit
                        | false -> loop (remaining - 1) in
@@ -273,10 +284,45 @@ module Make(Host: Sig.HOST) = struct
         ) in
     Host.Main.run t
 
+  (* If we have two physical servers but send data from the same source port,
+     we should see both physical server source ports *)
+  let test_source_ports () =
+    let t =
+      EchoServer.with_server
+        (fun { EchoServer.local_port = local_port1 } ->
+          EchoServer.with_server
+            (fun { EchoServer.local_port = local_port2 } ->
+               with_stack
+                 (fun stack ->
+                    let buffer = Cstruct.create 1024 in
+                    let udpv4 = Client.udpv4 stack in
+                    (* This is the port we shall send from *)
+                    let virtual_port = 1024 in
+                    let server = UdpServer.make stack virtual_port in
+                    let rec loop remaining =
+                    Printf.fprintf stderr "remaining=%d\n%!" remaining;
+                      if remaining = 0 then failwith "Timed-out before both UDP ports were seen";
+                      Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port1 (Cstruct.get_uint8 buffer 0));
+                      Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port1 udpv4 buffer
+                      >>= fun () ->
+                      Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port2 (Cstruct.get_uint8 buffer 0));
+                      Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port2 udpv4 buffer
+                      >>= fun () ->
+                      UdpServer.wait_for_ports ~timeout:1. ~num:2 server
+                      >>= function
+                      | true -> Lwt.return_unit
+                      | false -> loop (remaining - 1) in
+                    loop 5
+                  )
+            )
+        ) in
+    Host.Main.run t
+
   let suite = [
     "Shared NAT rule", `Quick, test_shared_nat_rule;
     "1 UDP connection", `Quick, test_udp;
     "2 UDP connections", `Quick, test_udp_2;
     "NAT punch", `Quick, test_nat_punch;
+    "Source ports", `Quick, test_source_ports;
   ]
 end
