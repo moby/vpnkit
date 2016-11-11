@@ -252,7 +252,11 @@ module Sockets = struct
         let description = "udp:" ^ (string_of_address address) in
         register_connection description
         >>= fun idx ->
-        let fd = try Uwt.Udp.init () with e -> deregister_connection idx; raise e in
+        let fd =
+          try match fst @@ address with
+            | Ipaddr.V4 _ -> Uwt.Udp.init_ipv4_exn ()
+            | Ipaddr.V6 _ -> Uwt.Udp.init_ipv6_exn ()
+          with e -> deregister_connection idx; raise e in
         Lwt.catch
           (fun () ->
              let sockaddr = make_sockaddr address in
@@ -467,7 +471,11 @@ module Sockets = struct
         let description = "tcp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
         register_connection description
         >>= fun idx ->
-        let fd = try Uwt.Tcp.init () with e -> deregister_connection idx; raise e in
+        let fd =
+          try match ip with
+            | Ipaddr.V4 _ -> Uwt.Tcp.init_ipv4_exn ()
+            | Ipaddr.V6 _ -> Uwt.Tcp.init_ipv6_exn ()
+          with e -> deregister_connection idx; raise e in
         Lwt.catch
           (fun () ->
              let sockaddr = make_sockaddr (ip, port) in
