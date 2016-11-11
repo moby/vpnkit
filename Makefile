@@ -79,7 +79,7 @@ com.docker.slirp.tgz: src/bin/depends.ml src/setup.data
 		-x _build/root/Contents/MacOS/com.docker.slirp \
 		-d _build/root/Contents/Resources/lib \
 		-p @executable_path/../Resources/lib
-	tar -C src/_build/root -cvzf ../com.docker.slirp.tgz Contents
+	tar -C src/_build/root -cvzf com.docker.slirp.tgz Contents
 
 com.docker.slirp.exe: src/bin/depends.ml src/setup.data
 	cd src/ && $(OPAMFLAGS) opam config exec -- ocaml setup.ml -build
