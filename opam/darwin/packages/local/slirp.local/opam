@@ -21,7 +21,7 @@ depends: [
   "result"
   "ipaddr"
   "lwt"
-  "uwt"
+  "uwt" {= "0.0.3"}
   "tcpip" { = "999" }
   "pcap-format"
   "dns"
