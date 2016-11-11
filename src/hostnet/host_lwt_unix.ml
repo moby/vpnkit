@@ -752,40 +752,42 @@ module Stream = struct
             if server.closed
             then Lwt.return_unit
             else begin
-              let p = Named_pipe_lwt.Server.create server.path in
-              Named_pipe_lwt.Server.connect p
-              >>= function
-              | false ->
-                Log.err (fun f -> f "Named-pipe connection failed on %s" server.path);
-                Lwt.return ()
-              | true ->
-                let description = "named-pipe:" ^ server.path in
-                let read_buffer_size = server.read_buffer_size in
-                let fd = Named_pipe_lwt.Server.to_fd p in
-                Lwt.catch
-                  (fun () ->
-                    register_connection description
-                    >>= fun idx ->
-                    Lwt.return (Some (of_fd ~idx ~read_buffer_size ~description fd))
-                  ) (fun _e ->
-                    Lwt_unix.close fd
-                    >>= fun () ->
-                    Lwt.return None
-                  )
-                 >>= function
-                 | None -> Lwt.return_unit
-                 | Some flow ->
-                  Lwt.async
+              Lwt.catch
+                (fun () ->
+                  let p = Named_pipe_lwt.Server.create server.path in
+                  Named_pipe_lwt.Server.connect p
+                  >>= fun () ->
+                  let description = "named-pipe:" ^ server.path in
+                  let read_buffer_size = server.read_buffer_size in
+                  let fd = Named_pipe_lwt.Server.to_fd p in
+                  Lwt.catch
                     (fun () ->
-                      Lwt.finalize
-                        (fun () ->
-                          log_exception_continue "Socket.Stream.Unix"
-                            (fun () ->
-                              cb flow
-                            )
-                        ) (fun () -> close flow)
-                    );
-                loop ()
+                      register_connection description
+                      >>= fun idx ->
+                      Lwt.return (Some (of_fd ~idx ~read_buffer_size ~description fd))
+                    ) (fun _e ->
+                      Lwt_unix.close fd
+                      >>= fun () ->
+                      Lwt.return None
+                    )
+                   >>= function
+                   | None -> Lwt.return_unit
+                   | Some flow ->
+                    Lwt.async
+                      (fun () ->
+                        Lwt.finalize
+                          (fun () ->
+                            log_exception_continue "Socket.Stream.Unix"
+                              (fun () ->
+                                cb flow
+                              )
+                          ) (fun () -> close flow)
+                      );
+                  loop ()
+                ) (fun e ->
+                  Log.err (fun f -> f "Named-pipe connection failed on %s: %s" server.path (Printexc.to_string e));
+                  Lwt.return ()
+                )
             end in
         Lwt.async
           (fun () ->

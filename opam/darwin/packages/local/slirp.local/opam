@@ -31,7 +31,7 @@ depends: [
   "pcap-format" { >= "0.4.0" }
   "cmdliner"
   "charrua-core" { >= "0.3" }
-  "named-pipe"
+  "named-pipe" { >= "0.4.0" }
   "hvsock"
   "asl"
   "win-eventlog"
