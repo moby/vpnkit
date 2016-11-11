@@ -387,7 +387,6 @@ module Datagram = struct
       end else Lwt.return_unit
 
     let listen t flow_cb =
-      let buffer = Cstruct.create Constants.max_udp_length in
       let bytes = Bytes.make Constants.max_udp_length '\000' in
       let rec loop () =
         Lwt.catch
@@ -395,8 +394,10 @@ module Datagram = struct
             (* Lwt on Win32 doesn't support Lwt_bytes.recvfrom *)
             Lwt_unix.recvfrom t.fd bytes 0 (Bytes.length bytes) []
             >>= fun (n, sockaddr) ->
-            Cstruct.blit_from_bytes bytes 0 buffer 0 n;
-            let data = Cstruct.sub buffer 0 n in
+            (* Allocate a fresh buffer because the packet will be processed
+               in a background thread *)
+            let data = Cstruct.create n in
+            Cstruct.blit_from_bytes bytes 0 data 0 n;
             (* construct a flow with this buffer available for reading *)
             ( match address_of_sockaddr sockaddr with
               | Some address -> Lwt.return address

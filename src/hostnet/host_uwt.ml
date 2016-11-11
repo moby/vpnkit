@@ -400,11 +400,12 @@ module Sockets = struct
           end
 
       let listen t flow_cb =
-        let buffer = Cstruct.create Constants.max_udp_length in
         let rec loop () =
           Lwt.catch
             (fun () ->
-              (* Lwt on Win32 doesn't support Lwt_bytes.recvfrom *)
+              (* Allocate a fresh buffer because the packet will be processed
+                 in a background thread *)
+              let buffer = Cstruct.create Constants.max_udp_length in
               recvfrom t buffer
               >>= fun (n, address) ->
               let data = Cstruct.sub buffer 0 n in
