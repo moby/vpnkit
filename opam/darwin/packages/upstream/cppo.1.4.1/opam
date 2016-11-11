@@ -6,13 +6,21 @@ dev-repo: "https://github.com/mjambon/cppo.git"
 bug-reports: "https://github.com/mjambon/cppo/issues"
 license: "BSD-3-Clause"
 build: [
-  [make] {ocaml-native}
-  [make "all" "ocamlbuild"] {!ocaml-native}
+  [make "all"] {!ocaml-native}
+  [make "opt"] {ocaml-native}
+  [make "ocamlbuild"]
 ]
+
 install: [
   [make "install-lib"]
 ]
+
 remove: [
   ["ocamlfind" "remove" "cppo_ocamlbuild"]
 ]
-depends: ["ocamlfind" "ocamlbuild"]
+
+depends: [
+  "ocamlfind"
+  "ocamlbuild"
+  "base-bytes"
+]

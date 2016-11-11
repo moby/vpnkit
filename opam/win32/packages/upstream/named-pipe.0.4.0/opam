@@ -1,0 +1,28 @@
+opam-version: "1.2"
+maintainer:   "dave@recoil.org"
+authors:      [ "David Scott" "Thomas Gazagnaire"]
+license:      "ISC"
+homepage:     "https://github.com/mirage/ocaml-named-pipe"
+dev-repo:     "https://github.com/mirage/ocaml-named-pipe.git"
+bug-reports:  "https://github.com/mirage/ocaml-named-pipe/issues"
+doc:          "https://mirage.github.io/ocaml-named-pipe/"
+
+build: ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%"]
+build-test:[
+  ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "true"]
+  ["ocaml" "pkg/pkg.ml" "test"]
+]
+
+depends: [
+  "ocamlfind"   {build}
+  "ocamlbuild"  {build & >= "0.9.3"}
+  "topkg"       {build & >= "0.8.1"}
+  "ocb-stubblr" {build & >= "0.1.0"}
+  "base-bytes"
+  "lwt" {>= "2.4.7"}
+  "base-unix"
+  "cmdliner"
+  "alcotest" {test & >= "0.4.0"}
+]
+
+available: [ ocaml-version >= "3.12.1" ]

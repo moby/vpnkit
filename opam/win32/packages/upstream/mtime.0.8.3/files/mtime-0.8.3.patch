@@ -1,3 +1,28 @@
+--- ./myocamlbuild.ml
++++ ./myocamlbuild.ml
+@@ -20,6 +20,11 @@
+   in
+   rule "js_of_ocaml: .byte -> .js" ~dep ~prod f
+ 
++let lib s =
++  match !Ocamlbuild_plugin.Options.ext_lib with
++  | "" -> s ^ ".a"
++  | x -> s ^ "." ^ x
++
+ let () =
+   dispatch begin function
+   | After_rules ->
+@@ -29,8 +34,8 @@
+       flag ["link"; "library"; "ocaml"; "native"; "use_mtime"]
+         (S ([A "-cclib"; A "-lmtime_stubs"] @ system_support_lib));
+       flag ["link"; "ocaml"; "link_mtime"]
+-        (A "src-os/libmtime_stubs.a");
++        (A (lib "src-os/libmtime_stubs"));
+       dep ["link"; "ocaml"; "use_mtime"]
+-        ["src-os/libmtime_stubs.a"];
++        [lib "src-os/libmtime_stubs"];
+   | _ -> ()
+   end
 --- ./src-os/mtime_stubs.c
 +++ ./src-os/mtime_stubs.c
 @@ -18,6 +18,8 @@
