@@ -82,8 +82,8 @@ let sockaddr_of_address (dst, dst_port) =
 
 let unix_bind_one pf ty ip port =
   let protocol = match pf, ty with
-    | Unix.PF_INET, Unix.SOCK_STREAM -> "tcp:"
-    | Unix.PF_INET, Unix.SOCK_DGRAM  -> "udp:"
+    | (Unix.PF_INET | Unix.PF_INET6), Unix.SOCK_STREAM -> "tcp:"
+    | (Unix.PF_INET | Unix.PF_INET6), Unix.SOCK_DGRAM  -> "udp:"
     | _, _ -> "unknown:" in
   let description = protocol ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
   register_connection description
@@ -103,7 +103,10 @@ let unix_bind_one pf ty ip port =
     )
 
 let unix_bind ty (local_ip, local_port) =
-  unix_bind_one Lwt_unix.PF_INET ty local_ip local_port
+  let pf = match local_ip with
+    | Ipaddr.V4 _ -> Lwt_unix.PF_INET
+    | Ipaddr.V6 _ -> Lwt_unix.PF_INET6 in
+  unix_bind_one pf ty local_ip local_port
   >>= fun (idx, fd) ->
   let local_port = match local_port, Lwt_unix.getsockname fd with
     | 0, Unix.ADDR_INET(_, local_port) -> local_port
@@ -193,7 +196,10 @@ module Datagram = struct
          Log.debug (fun f -> f "Socket.Datagram.input %s: creating UDP NAT rule" description);
          register_connection description
          >>= fun idx ->
-         let fd = try Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 with e -> deregister_connection idx; raise e in
+         let pf = match dst with
+           | Ipaddr.V4 _ -> Lwt_unix.PF_INET
+           | Ipaddr.V6 _ -> Lwt_unix.PF_INET6 in
+         let fd = try Lwt_unix.socket pf Lwt_unix.SOCK_DGRAM 0 with e -> deregister_connection idx; raise e in
          (try Lwt_unix.bind fd (Lwt_unix.ADDR_INET(Unix.inet_addr_any, 0)) with _ -> ());
          let last_use = Unix.gettimeofday () in
          let flow = { idx; description; fd; last_use; reply} in
@@ -285,7 +291,10 @@ module Datagram = struct
       let description = "udp:" ^ (string_of_address address) in
       register_connection description
       >>= fun idx ->
-      let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM 0 in
+      let pf = match fst address with
+        | Ipaddr.V4 _ -> Lwt_unix.PF_INET
+        | Ipaddr.V6 _ -> Lwt_unix.PF_INET6 in
+      let fd = Lwt_unix.socket pf Lwt_unix.SOCK_DGRAM 0 in
       (* Win32 requires all sockets to be bound however macOS and Linux don't *)
       (try Lwt_unix.bind fd (Lwt_unix.ADDR_INET(Unix.inet_addr_any, 0)) with _ -> ());
       let sockaddr = sockaddr_of_address address in
@@ -358,7 +367,10 @@ module Datagram = struct
     let make ~idx fd = { idx; fd; closed = false }
 
     let bind (ip, port) =
-      unix_bind_one Lwt_unix.PF_INET Lwt_unix.SOCK_DGRAM ip port
+      let pf = match ip with
+        | Ipaddr.V4 _ -> Lwt_unix.PF_INET
+        | Ipaddr.V6 _ -> Lwt_unix.PF_INET6 in
+      unix_bind_one pf Lwt_unix.SOCK_DGRAM ip port
       >>= fun (idx, fd) ->
       Lwt.return (make ~idx fd)
 
@@ -680,7 +692,10 @@ module Stream = struct
     let connect ?read_buffer_size (ip, port) =
       let description = Ipaddr.to_string ip ^ ":" ^ (string_of_int port) in
       let sockaddr = Unix.ADDR_INET (Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port) in
-      connect description ?read_buffer_size Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM sockaddr
+      let pf = match ip with
+        | Ipaddr.V4 _ -> Lwt_unix.PF_INET
+        | Ipaddr.V6 _ -> Lwt_unix.PF_INET6 in
+      connect description ?read_buffer_size pf Lwt_unix.SOCK_STREAM sockaddr
 
     let bind (ip, port) =
       unix_bind Lwt_unix.SOCK_STREAM (ip, port)

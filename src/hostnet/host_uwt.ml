@@ -233,6 +233,7 @@ module Sockets = struct
 
       type flow = {
         idx: int option;
+        label: string;
         description: string;
         mutable fd: Uwt.Udp.t option;
         read_buffer_size: int;
@@ -246,20 +247,27 @@ module Sockets = struct
       let string_of_flow t = Printf.sprintf "udp -> %s" (string_of_address t.address)
 
       let of_fd ?idx ?(read_buffer_size = Constants.max_udp_length) ?(already_read = None) ~description sockaddr address fd =
-        { idx; description; fd = Some fd; read_buffer_size; already_read; sockaddr; address }
+        let label = match fst address with
+          | Ipaddr.V4 _ -> "UDPv4"
+          | Ipaddr.V6 _ -> "UDPv6" in
+        { idx; label; description; fd = Some fd; read_buffer_size; already_read; sockaddr; address }
 
       let connect ?read_buffer_size address =
         let description = "udp:" ^ (string_of_address address) in
         register_connection description
         >>= fun idx ->
-        let fd = try Uwt.Udp.init () with e -> deregister_connection idx; raise e in
+        let label, fd =
+          try match fst @@ address with
+            | Ipaddr.V4 _ -> "UDPv4", Uwt.Udp.init_ipv4_exn ()
+            | Ipaddr.V6 _ -> "UDPv6", Uwt.Udp.init_ipv6_exn ()
+          with e -> deregister_connection idx; raise e in
         Lwt.catch
           (fun () ->
              let sockaddr = make_sockaddr address in
              let result = Uwt.Udp.bind fd ~addr:(Unix.ADDR_INET(Unix.inet_addr_any, 0)) () in
              if not(Uwt.Int_result.is_ok result) then begin
                let error = Uwt.Int_result.to_error result in
-               Log.err (fun f -> f "Socket.Udp.connect(%s): %s" (string_of_address address) (Uwt.strerror error));
+               Log.err (fun f -> f "Socket.%s.connect(%s): %s" label (string_of_address address) (Uwt.strerror error));
                deregister_connection idx;
                Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
              end else Lwt_result.return (of_fd ~idx ?read_buffer_size ~description sockaddr address fd)
@@ -268,7 +276,7 @@ module Sockets = struct
              (* FIXME(djs55): error handling *)
              deregister_connection idx;
              let _ = Uwt.Udp.close fd in
-             errorf "Socket.Udp.connect %s: caught %s" description (Printexc.to_string e)
+             errorf "Socket.%s.connect %s: caught %s" label description (Printexc.to_string e)
           )
 
       let rec read t = match t.fd, t.already_read with
@@ -285,11 +293,12 @@ module Sockets = struct
               Uwt.Udp.recv_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer fd
               >>= fun recv ->
               if recv.Uwt.Udp.is_partial then begin
-                Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping partial response (buffer was %d bytes)" (Cstruct.len buf));
+                Log.err (fun f -> f "Socket.%s.recvfrom: dropping partial response (buffer was %d bytes)" t.label (Cstruct.len buf));
                 read t
               end else Lwt.return (`Ok (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len))
             ) (fun e ->
-              Log.err (fun f -> f "%s: recvfrom caught %s returning Eof"
+              Log.err (fun f -> f "Socket.%s.recvfrom: %s caught %s returning Eof"
+                t.label
                 (string_of_flow t)
                 (Printexc.to_string e)
               );
@@ -305,7 +314,8 @@ module Sockets = struct
                >>= fun () ->
                Lwt.return (`Ok ())
             ) (fun e ->
-                Log.err (fun f -> f "Socket.TCPV4.write %s: caught %s returning Eof" t.description (Printexc.to_string e));
+                Log.err (fun f -> f "Socket.%s.write %s: caught %s returning Eof"
+                  t.label t.description (Printexc.to_string e));
                 Lwt.return `Eof
               )
 
@@ -315,7 +325,7 @@ module Sockets = struct
         | None -> Lwt.return_unit
         | Some fd ->
           t.fd <- None;
-          Log.debug (fun f -> f "%s: close" (string_of_flow t));
+          Log.debug (fun f -> f "Socket.%s.close: %s" t.label (string_of_flow t));
           (* FIXME(djs55): errors *)
           let _ = Uwt.Udp.close fd in
           (match t.idx with Some idx -> deregister_connection idx | None -> ());
@@ -326,11 +336,12 @@ module Sockets = struct
 
       type server = {
         idx: int;
+        label: string;
         fd: Uwt.Udp.t;
         mutable closed: bool;
       }
 
-      let make ~idx fd = { idx; fd; closed = false }
+      let make ~idx ~label fd = { idx; label; fd; closed = false }
 
       let bind (ip, port) =
         let description = "udp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
@@ -339,42 +350,51 @@ module Sockets = struct
         >>= fun idx ->
         let fd = try Uwt.Udp.init () with e -> deregister_connection idx; raise e in
         let result = Uwt.Udp.bind ~mode:[ Uwt.Udp.Reuse_addr ] fd ~addr:sockaddr () in
+        let label = match ip with
+          | Ipaddr.V4 _ -> "UDPv4"
+          | Ipaddr.V6 _ -> "UDPv6" in
+        let t = make ~idx ~label fd in
         if not(Uwt.Int_result.is_ok result) then begin
           let error = Uwt.Int_result.to_error result in
-          Log.err (fun f -> f "Socket.Udp.bind(%s, %d): %s" (Ipaddr.to_string ip) port (Uwt.strerror error));
+          Log.err (fun f -> f "Socket.%s.bind(%s, %d): %s" t.label (Ipaddr.to_string ip) port (Uwt.strerror error));
           deregister_connection idx;
           Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
-        end else Lwt.return { idx; fd; closed = false }
+        end else Lwt.return t
 
       let of_bound_fd ?read_buffer_size:_ fd =
         match Uwt.Udp.openudp fd with
         | Uwt.Ok fd ->
-          let description = match Uwt.Udp.getsockname fd with
+          let label, description = match Uwt.Udp.getsockname fd with
             | Uwt.Ok sockaddr ->
                begin match ip_port_of_sockaddr sockaddr with
-               | Some (Some ip, port) -> "udp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port)
-               | _ -> "unknown incoming UDP"
+               | Some (Some ip, port) ->
+                 "udp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port),
+                 begin match ip with
+                   | Ipaddr.V4 _ -> "UDPv4"
+                   | Ipaddr.V6 _ -> "UDPv6"
+                 end
+               | _ -> "unknown incoming UDP", "UDP?"
                end
-            | Uwt.Error error -> "getpeername failed: " ^ (Uwt.strerror error) in
+            | Uwt.Error error -> "Socket.UDP?.of_bound_fd: getpeername failed: " ^ (Uwt.strerror error), "UDP?" in
           let idx = register_connection_no_limit description in
-          make ~idx fd
+          make ~idx ~label fd
         | Uwt.Error error ->
-          let msg = Printf.sprintf "Socket.Datagram.of_bound_fd failed with %s" (Uwt.strerror error) in
-          Log.err (fun f -> f "%s" msg);
+          let msg = Printf.sprintf "Socket.UDP?.of_bound_fd failed with %s" (Uwt.strerror error) in
+          Log.err (fun f -> f "Socket.UDP?.of_bound_fd: %s" msg);
           failwith msg
 
-      let getsockname { fd; _ } =
+      let getsockname { label; fd; _ } =
         match Uwt.Udp.getsockname_exn fd with
         | Unix.ADDR_INET(iaddr, port) ->
           Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
-        | _ -> invalid_arg "Udp.getsockname passed a non-TCP socket"
+        | _ -> invalid_arg (Printf.sprintf "Socket.%s.getsockname: passed a non-TCP socket" label)
 
       let shutdown server =
         if not server.closed then begin
           server.closed <- true;
           let result = Uwt.Udp.close server.fd in
           if not(Uwt.Int_result.is_ok result) then begin
-            Log.err (fun f -> f "Socket.Datagram: close returned %s" (Uwt.strerror (Uwt.Int_result.to_error result)));
+            Log.err (fun f -> f "Socket.%s: close returned %s" server.label (Uwt.strerror (Uwt.Int_result.to_error result)));
           end;
           deregister_connection server.idx;
         end;
@@ -384,12 +404,12 @@ module Sockets = struct
       Uwt.Udp.recv_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer server.fd
       >>= fun recv ->
       if recv.Uwt.Udp.is_partial then begin
-        Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping partial response (buffer was %d bytes)" (Cstruct.len buf));
+        Log.err (fun f -> f "Socket.%s.recvfrom: dropping partial response (buffer was %d bytes)" server.label (Cstruct.len buf));
         recvfrom server buf
       end else match recv.Uwt.Udp.sockaddr with
         | None ->
-          Log.err (fun f -> f "Socket.Datagram.recvfrom: dropping response from unknown sockaddr");
-          Lwt.fail (Failure "Socket.Datagram.recvfrom unknown sender")
+          Log.err (fun f -> f "Socket.%s.recvfrom: dropping response from unknown sockaddr" server.label);
+          Lwt.fail (Failure (Printf.sprintf "Socket.%s.recvfrom unknown sender" server.label))
         | Some address ->
           begin match address with
             | Unix.ADDR_INET(ip, port) ->
@@ -418,16 +438,16 @@ module Sockets = struct
                   Lwt.catch
                     (fun () -> flow_cb flow)
                     (fun e ->
-                      Log.info (fun f -> f "Udp.listen callback caught: %s"
-                        (Printexc.to_string e)
+                      Log.info (fun f -> f "Socket.%s.listen callback caught: %s"
+                        t.label (Printexc.to_string e)
                       );
                       Lwt.return_unit
                     )
                 );
               Lwt.return true
             ) (fun e ->
-              Log.err (fun f -> f "Udp.listen caught %s shutting down server"
-                (Printexc.to_string e)
+              Log.err (fun f -> f "Socket.%s.listen caught %s shutting down server"
+                t.label(Printexc.to_string e)
               );
               Lwt.return false
             )
@@ -451,6 +471,7 @@ module Sockets = struct
 
       type flow = {
         idx: int;
+        label: string;
         description: string;
         fd: Uwt.Tcp.t;
         read_buffer_size: int;
@@ -458,40 +479,44 @@ module Sockets = struct
         mutable closed: bool;
       }
 
-      let of_fd ~idx ?(read_buffer_size = default_read_buffer_size) ~description fd =
+      let of_fd ~idx ~label ?(read_buffer_size = default_read_buffer_size) ~description fd =
         let read_buffer = Cstruct.create read_buffer_size in
         let closed = false in
-        { idx; description; fd; read_buffer; read_buffer_size; closed }
+        { idx; label; description; fd; read_buffer; read_buffer_size; closed }
 
       let connect ?(read_buffer_size = default_read_buffer_size) (ip, port) =
         let description = "tcp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
         register_connection description
         >>= fun idx ->
-        let fd = try Uwt.Tcp.init () with e -> deregister_connection idx; raise e in
+        let label, fd =
+          try match ip with
+            | Ipaddr.V4 _ -> "TCPv4", Uwt.Tcp.init_ipv4_exn ()
+            | Ipaddr.V6 _ -> "TCPv6", Uwt.Tcp.init_ipv6_exn ()
+          with e -> deregister_connection idx; raise e in
         Lwt.catch
           (fun () ->
              let sockaddr = make_sockaddr (ip, port) in
              Uwt.Tcp.connect fd ~addr:sockaddr
              >>= fun () ->
-             Lwt_result.return (of_fd ~idx ~read_buffer_size ~description fd)
+             Lwt_result.return (of_fd ~idx ~label ~read_buffer_size ~description fd)
           )
           (fun e ->
              (* FIXME(djs55): error handling *)
              deregister_connection idx;
              let _ = Uwt.Tcp.close fd in
-             errorf "Socket.Tcp.connect %s: caught %s" description (Printexc.to_string e)
+             errorf "Socket.%s.connect %s: caught %s" label description (Printexc.to_string e)
           )
 
       let shutdown_read _ =
         Lwt.return ()
 
-      let shutdown_write { description; fd; closed; _ } =
+      let shutdown_write { label; description; fd; closed; _ } =
         try
           if not closed then Uwt.Tcp.shutdown fd else Lwt.return ()
         with
         | Uwt.Uwt_error(Uwt.ENOTCONN, _, _) -> Lwt.return ()
         | e ->
-          Log.err (fun f -> f "Socket.TCPV4.shutdown_write %s: caught %s returning Eof" description (Printexc.to_string e));
+          Log.err (fun f -> f "Socket.%s.shutdown_write %s: caught %s returning Eof" label description (Printexc.to_string e));
           Lwt.return ()
 
       let read_into t buf =
@@ -518,7 +543,7 @@ module Sockets = struct
                t.read_buffer <- Cstruct.shift t.read_buffer n;
                Lwt.return (`Ok results)
           ) (fun e ->
-              Log.err (fun f -> f "Socket.TCPV4.read %s: caught %s returning Eof" t.description (Printexc.to_string e));
+              Log.err (fun f -> f "Socket.%s.read %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
               Lwt.return `Eof
             )
 
@@ -529,7 +554,7 @@ module Sockets = struct
              >>= fun () ->
              Lwt.return (`Ok ())
           ) (fun e ->
-              Log.err (fun f -> f "Socket.TCPV4.write %s: caught %s returning Eof" t.description (Printexc.to_string e));
+              Log.err (fun f -> f "Socket.%s.write %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
               Lwt.return `Eof
             )
 
@@ -544,7 +569,7 @@ module Sockets = struct
                  loop bufs in
              loop bufs
           ) (fun e ->
-              Log.err (fun f -> f "Socket.TCPV4.writev %s: caught %s returning Eof" t.description (Printexc.to_string e));
+              Log.err (fun f -> f "Socket.%s.writev %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
               Lwt.return `Eof
             )
 
@@ -558,20 +583,26 @@ module Sockets = struct
         end else Lwt.return ()
 
       type server = {
+        label: string;
         mutable listening_fds: (int * Uwt.Tcp.t) list;
         read_buffer_size: int;
       }
 
-      let make ?(read_buffer_size = default_read_buffer_size) listening_fds =
-        { listening_fds; read_buffer_size }
-
-      let getsockname server = match server.listening_fds with
+      let getsockname' = function
         | [] -> failwith "Tcp.getsockname: socket is closed"
         | (_, fd) :: _ ->
           match Uwt.Tcp.getsockname_exn fd with
           | Unix.ADDR_INET(iaddr, port) ->
             Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
           | _ -> invalid_arg "Tcp.getsockname passed a non-TCP socket"
+
+      let make ?(read_buffer_size = default_read_buffer_size) listening_fds =
+        let label = match getsockname' listening_fds with
+          | Ipaddr.V4 _, _ -> "TCPv4"
+          | Ipaddr.V6 _, _ -> "TCPv6" in
+        { label; listening_fds; read_buffer_size }
+
+      let getsockname server = getsockname' server.listening_fds
 
       let bind_one (ip, port) =
         let description = "tcp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
@@ -580,17 +611,20 @@ module Sockets = struct
         let fd = try Uwt.Tcp.init () with e -> deregister_connection idx; raise e in
         let addr = make_sockaddr (ip, port) in
         let result = Uwt.Tcp.bind fd ~addr () in
+        let label = match ip with
+          | Ipaddr.V4 _ -> "TCPv4"
+          | Ipaddr.V6 _ -> "TCPv6" in
         if not(Uwt.Int_result.is_ok result) then begin
           let error = Uwt.Int_result.to_error result in
-          let msg = Printf.sprintf "Socket.Tcp.bind(%s, %d): %s" (Ipaddr.to_string ip) port (Uwt.strerror error) in
-          Log.err (fun f -> f "%s" msg);
+          let msg = Printf.sprintf "Socket.%s.bind(%s, %d): %s" label (Ipaddr.to_string ip) port (Uwt.strerror error) in
+          Log.err (fun f -> f "Socket.%s.bind: %s" label msg);
           deregister_connection idx;
           Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
-        end else Lwt.return (idx, fd)
+        end else Lwt.return (idx, label, fd)
 
       let bind (ip, port) =
         bind_one (ip, port)
-        >>= fun (idx, fd) ->
+        >>= fun (idx, label, fd) ->
         ( match Uwt.Tcp.getsockname fd with
           | Uwt.Ok sockaddr ->
             begin match ip_port_of_sockaddr sockaddr with
@@ -598,8 +632,8 @@ module Sockets = struct
               | _ -> assert false
             end
           | Uwt.Error error ->
-            let msg = Printf.sprintf "Socket.Tcp.bind(%s, %d): %s" (Ipaddr.to_string ip) port (Uwt.strerror error) in
-            Log.err (fun f -> f "%s" msg);
+            let msg = Printf.sprintf "Socket.%s.bind(%s, %d): %s" label (Ipaddr.to_string ip) port (Uwt.strerror error) in
+            Log.err (fun f -> f "Socket.%s.bind: %s" label msg);
             deregister_connection idx;
             Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", "")) )
         >>= fun local_port ->
@@ -613,7 +647,7 @@ module Sockets = struct
              then begin
                Log.info (fun f -> f "attempting a best-effort bind of ::1:%d" local_port);
                bind_one (Ipaddr.(V6 V6.localhost), local_port)
-               >>= fun (idx, fd) ->
+               >>= fun (idx, _, fd) ->
                Lwt.return [ idx, fd ]
              end else begin
                Lwt.return []
@@ -656,13 +690,18 @@ module Sockets = struct
                    if Uwt.Int_result.is_error t then begin
                      ignore(Uwt_io.printl "accept error");
                    end else begin
-                     let description = match Uwt.Tcp.getpeername client with
+                     let label, description = match Uwt.Tcp.getpeername client with
                        | Uwt.Ok sockaddr ->
                          begin match ip_port_of_sockaddr sockaddr with
-                           | Some (Some ip, port) -> "tcp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port)
-                           | _ -> "unknown incoming TCP"
+                           | Some (Some ip, port) ->
+                            "tcp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port),
+                              begin match ip with
+                              | Ipaddr.V4 _ -> "TCPv4"
+                              | Ipaddr.V6 _ -> "TCPv6"
+                              end
+                           | _ -> "unknown incoming TCP", "TCP"
                          end
-                       | Uwt.Error error -> "getpeername failed: " ^ (Uwt.strerror error) in
+                       | Uwt.Error error -> "getpeername failed: " ^ (Uwt.strerror error), "TCP" in
 
                      Lwt.async
                        (fun () ->
@@ -670,7 +709,7 @@ module Sockets = struct
                            (fun () ->
                              register_connection description
                              >>= fun idx ->
-                             Lwt.return (Some (of_fd ~idx ~description client))
+                             Lwt.return (Some (of_fd ~idx ~label ~description client))
                            ) (fun _e ->
                              ignore (Uwt.Tcp.close client);
                              Lwt.return_none
