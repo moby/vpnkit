@@ -512,6 +512,69 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
          ]
       )
 
+  let diagnostics t flow =
+    let module C = Channel.Make(Host.Sockets.Stream.Unix) in
+    let module Writer = Tar.HeaderWriter(Lwt)(struct
+      type out_channel = C.t
+      type 'a t = 'a Lwt.t
+      let really_write oc buf =
+        C.write_buffer oc buf;
+        C.flush oc
+    end) in
+    let c = C.create flow in
+
+    (* Operator which logs Vfs errors and returns *)
+    let (>>?=) m f = m >>= function
+      | Result.Ok x -> f x
+      | Result.Error err ->
+        Log.err (fun l -> l "diagnostics error: %a" Vfs.Error.pp err);
+        Lwt.return_unit in
+
+    let rec tar pwd dir =
+      Vfs.Dir.ls dir
+      >>?= fun inodes ->
+      Lwt_list.iter_s
+        (fun inode ->
+          match Vfs.Inode.kind inode with
+          | `Dir dir ->
+            tar (Filename.concat pwd @@ Vfs.Inode.basename inode) dir
+          | `File file ->
+            (* Buffer the whole file temporarily in memory so we can calculate
+               the exact length needed by the tar header. Note the `stat`
+               won't be accurate because the file can change after we open it.
+               If there was an `fstat` API this could be fixed. *)
+            Vfs.File.open_ file
+            >>?= fun fd ->
+            let copy () =
+              let fragments = ref [] in
+              let rec aux offset =
+                let count = 1048576 in
+                Vfs.File.read fd ~offset ~count
+                >>?= fun buf ->
+                fragments := buf :: !fragments;
+                let len = Int64.of_int @@ Cstruct.len buf in
+                if len = 0L
+                then Lwt.return_unit
+                else aux (Int64.add offset len) in
+              aux 0L
+              >>= fun () ->
+              Lwt.return (List.rev !fragments) in
+            copy ()
+            >>= fun fragments ->
+            let length = List.fold_left (+) 0 (List.map Cstruct.len fragments) in
+            let header = Tar.Header.make (Filename.concat pwd @@ Vfs.Inode.basename inode) (Int64.of_int length) in
+            Writer.write header c
+            >>= fun () ->
+            List.iter (C.write_buffer c) fragments;
+            C.write_buffer c (Tar.Header.zero_padding header);
+            C.flush c
+        ) inodes in
+    tar "" (filesystem t)
+    >>= fun () ->
+    C.write_buffer c Tar.Header.zero_block;
+    C.write_buffer c Tar.Header.zero_block;
+    C.flush c
+
   (* If no traffic is received for 5 minutes, delete the endpoint and
      the switch port. *)
   let rec delete_unused_endpoints t () =
