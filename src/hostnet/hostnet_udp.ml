@@ -35,7 +35,10 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     max_idle_time: float;
     background_gc_t: unit Lwt.t;
     table: (address, flow) Hashtbl.t; (* src -> flow *)
+    mutable send_reply: (datagram -> unit Lwt.t) option;
   }
+
+  let set_send_reply ~t ~send_reply = t.send_reply <- Some send_reply
 
   let get_nat_table_size t = Hashtbl.length t.table
 
@@ -70,7 +73,8 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
   let create ?(max_idle_time = 60.) () =
     let table = Hashtbl.create 7 in
     let background_gc_t = start_background_gc table max_idle_time in
-    { max_idle_time; background_gc_t; table }
+    let send_reply = None in
+    { max_idle_time; background_gc_t; table; send_reply }
 
   let input ~t ~reply ~datagram:{ src = src, src_port; dst = dst, dst_port; payload } () =
     (if Hashtbl.mem t.table (src, src_port) then begin

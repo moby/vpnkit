@@ -671,6 +671,24 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           end
         ) in
 
+    (* Send a UDP datagram *)
+    let send_reply = function
+      | { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 dst, dst_port; payload } ->
+        begin
+          find_endpoint src
+          >>= function
+          | `Error (`Msg m) ->
+            Log.err (fun f -> f "Failed to create an endpoint for %s: %s" (Ipaddr.V4.to_string dst) m);
+            Lwt.return_unit
+          | `Ok endpoint ->
+            Stack_udp.write ~source_port:src_port ~dest_ip:dst ~dest_port:dst_port endpoint.Endpoint.udp4 payload
+        end
+      | { Hostnet_udp.src = src, src_port; dst = dst, dst_port; _ } ->
+        Log.err (fun f -> f "Failed to send non-IPv4 UDP datagram %s:%d -> %s:%d" (Ipaddr.to_string src) src_port (Ipaddr.to_string dst) dst_port);
+        Lwt.return_unit in
+
+    Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
+
     (* Add a listener which looks for new flows *)
     Switch.listen switch
       (fun buf ->

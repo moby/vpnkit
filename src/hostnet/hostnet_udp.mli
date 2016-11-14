@@ -24,6 +24,10 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME): sig
   (** Create a UDP NAT implementation which will keep "NAT rules" alive until
       they become idle for the given [?max_idle_time] *)
 
+  val set_send_reply: t:t -> send_reply:(datagram -> unit Lwt.t) -> unit
+  (** Register a reply callback which will be used to send datagrams to the
+      NAT client. *)
+
   val input: t:t -> reply:reply -> datagram:datagram -> unit -> unit Lwt.t
 
   val get_nat_table_size: t -> int
