@@ -395,7 +395,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         let localhost = Ipaddr.V4.localhost in
         Log.debug (fun f -> f "UDP/123 request from port %d -- sending it to %a:%d" src_port Ipaddr.V4.pp_hum localhost 123);
         let reply buf = Stack_udp.write ~source_port:123 ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
-        Udp_nat.input ~t:t.udp_nat ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 localhost, 123) ~payload ()
+        Udp_nat.input ~t:t.udp_nat ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 localhost, 123) ~payload ()
       (* UDP to any other port: localhost *)
       | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
         let description = Printf.sprintf "%s:%d -> %s:%d"
@@ -407,7 +407,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
         end else begin
           let reply buf = Stack_udp.write ~source_port:dst_port ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
-          Udp_nat.input ~t:t.udp_nat ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.(V4 V4.localhost), dst_port) ~payload ()
+          Udp_nat.input ~t:t.udp_nat ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.(V4 V4.localhost), dst_port) ~payload ()
         end
       (* TCP to local ports *)
       | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = dst_port; syn; raw; payload = Payload _; _ }; _ } ->
@@ -468,7 +468,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
         end else begin
           let reply buf = Stack_udp.write ~source_port:dst_port ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
-          Udp_nat.input ~t:t.udp_nat ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload ()
+          Udp_nat.input ~t:t.udp_nat ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload ()
         end
       | _ ->
         Lwt.return_unit

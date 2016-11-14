@@ -66,7 +66,7 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     let background_gc_t = start_background_gc table max_idle_time in
     { max_idle_time; background_gc_t; table }
 
-  let input ~t ?userdesc ~oneshot ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
+  let input ~t ?userdesc ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
     (if Hashtbl.mem t.table (src, src_port) then begin
         Lwt.return (Some (Hashtbl.find t.table (src, src_port)))
       end else begin
@@ -94,16 +94,9 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
                   (fun () ->
                      Udp.recvfrom server buf
                      >>= fun (n, _from) ->
-                     ( if oneshot then begin
-                           (* Remove our flow entry immediately, clean up synchronously *)
-                           Log.debug (fun f -> f "Hostnet_udp %s: expiring UDP NAT rule immediately" flow.description);
-                           Hashtbl.remove t.table (src, src_port);
-                           Udp.shutdown server
-                         end else Lwt.return_unit )
-                     >>= fun () ->
                      flow.reply (Cstruct.sub buf 0 n)
                      >>= fun () ->
-                     Lwt.return (not oneshot)
+                     Lwt.return true
                   ) (function
                       | Uwt.Uwt_error(Uwt.ECANCELED, _, _) ->
                         (* fd has been closed by the GC *)
