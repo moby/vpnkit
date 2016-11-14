@@ -360,6 +360,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   module Local = struct
     type t = {
       endpoint: Endpoint.t;
+      udp_nat: Udp_nat.t;
       dns_ips: Ipaddr.V4.t list;
     }
     (** Represents the local machine including NTP and DNS servers *)
@@ -393,7 +394,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         let localhost = Ipaddr.V4.localhost in
         Log.debug (fun f -> f "UDP/123 request from port %d -- sending it to %a:%d" src_port Ipaddr.V4.pp_hum localhost 123);
         let reply buf = Stack_udp.write ~source_port:123 ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
-        Udp_nat.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 localhost, 123) ~payload ()
+        Udp_nat.input ~t:t.udp_nat ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 localhost, 123) ~payload ()
       (* UDP to any other port: localhost *)
       | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
         let description = Printf.sprintf "%s:%d -> %s:%d"
@@ -405,7 +406,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
         end else begin
           let reply buf = Stack_udp.write ~source_port:dst_port ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
-          Udp_nat.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.(V4 V4.localhost), dst_port) ~payload ()
+          Udp_nat.input ~t:t.udp_nat ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.(V4 V4.localhost), dst_port) ~payload ()
         end
       (* TCP to local ports *)
       | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = dst_port; syn; raw; payload = Payload _; _ }; _ } ->
@@ -414,8 +415,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       | _ ->
         Lwt.return_unit
 
-    let create endpoint dns_ips =
-      let tcp_stack = { endpoint; dns_ips } in
+    let create endpoint udp_nat dns_ips =
+      let tcp_stack = { endpoint; udp_nat; dns_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -438,6 +439,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     type t = {
       endpoint:        Endpoint.t;
+      udp_nat:         Udp_nat.t;
     }
     (** Represents a remote system by proxying data to and from sockets *)
 
@@ -465,13 +467,13 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
         end else begin
           let reply buf = Stack_udp.write ~source_port:dst_port ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
-          Udp_nat.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload ()
+          Udp_nat.input ~t:t.udp_nat ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload ()
         end
       | _ ->
         Lwt.return_unit
 
-    let create endpoint =
-      let tcp_stack = { endpoint } in
+    let create endpoint udp_nat =
+      let tcp_stack = { endpoint; udp_nat } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -659,7 +661,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           end
         ) in
 
-    let _udp_nat = Udp_nat.create () in
+    let udp_nat = Udp_nat.create () in
 
     (* Add a listener which looks for new flows *)
     Switch.listen switch
@@ -680,7 +682,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                find_endpoint dst
                >>= fun endpoint ->
                Log.debug (fun f -> f "creating local TCP/IP proxy for %s" (Ipaddr.V4.to_string dst));
-               Local.create endpoint local_ips
+               Local.create endpoint udp_nat local_ips
              end >>= function
              | `Error (`Msg m) ->
                Log.err (fun f -> f "Failed to create a TCP/IP stack: %s" m);
@@ -694,7 +696,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                find_endpoint dst
                >>= fun endpoint ->
                Log.debug (fun f -> f "create remote TCP/IP proxy for %s" (Ipaddr.V4.to_string dst));
-               Remote.create endpoint
+               Remote.create endpoint udp_nat
              end >>= function
              | `Error (`Msg m) ->
                Log.err (fun f -> f "Failed to create a TCP/IP stack: %s" m);

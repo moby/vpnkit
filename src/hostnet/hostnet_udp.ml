@@ -67,7 +67,7 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     let background_gc_t = start_background_gc max_idle_time in
     { max_idle_time; background_gc_t }
 
-  let input ?userdesc ~oneshot ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
+  let input ~t:_ ?userdesc ~oneshot ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
     (if Hashtbl.mem table (src, src_port) then begin
         Lwt.return (Some (Hashtbl.find table (src, src_port)))
       end else begin
