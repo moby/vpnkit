@@ -659,7 +659,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           end
         ) in
 
-    Udp_nat.start_background_gc ();
+    let _udp_nat = Udp_nat.create () in
 
     (* Add a listener which looks for new flows *)
     Switch.listen switch

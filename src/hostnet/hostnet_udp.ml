@@ -16,6 +16,11 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
 
   module Udp = Sockets.Datagram.Udp
 
+  type t = {
+    max_idle_time: float;
+    background_gc_t: unit Lwt.t;
+  }
+
   type flow = {
     description: string;
     server: Udp.server;
@@ -30,13 +35,13 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
 
   let get_nat_table_size () = Hashtbl.length table
 
-  let start_background_gc () =
+  let start_background_gc max_idle_time =
     let rec loop () =
-      Time.sleep 60.
+      Time.sleep max_idle_time
       >>= fun () ->
       let now = Unix.gettimeofday () in
       let to_shutdown = Hashtbl.fold (fun k flow acc ->
-          if now -. flow.last_use > 60. then begin
+          if now -. flow.last_use > max_idle_time then begin
             Log.debug (fun f -> f "Hostnet_udp %s: expiring UDP NAT rule" flow.description);
             (k, flow) :: acc
           end else acc
@@ -56,7 +61,11 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
         ) to_shutdown
       >>= fun () ->
       loop () in
-    Lwt.async loop
+    loop ()
+
+  let create ?(max_idle_time = 60.) () =
+    let background_gc_t = start_background_gc max_idle_time in
+    { max_idle_time; background_gc_t }
 
   let input ?userdesc ~oneshot ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
     (if Hashtbl.mem table (src, src_port) then begin
