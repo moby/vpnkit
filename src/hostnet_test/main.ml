@@ -10,6 +10,10 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Make(Host: Sig.HOST) = struct
 
+let run ?(timeout=60.) t =
+  let timeout = Host.Time.sleep timeout >>= fun () -> Lwt.fail (Failure "timeout") in
+  Host.Main.run @@ Lwt.pick [ timeout; t ]
+
 module Slirp_stack = Slirp_stack.Make(Host)
 open Slirp_stack
 
@@ -21,7 +25,7 @@ let test_dhcp_query () =
         Log.info (fun f -> f "Got an IP: %s" (String.concat ", " ips));
         Lwt.return ()
       ) in
-  Host.Main.run t
+  run t
 
 let test_dns_query server () =
   let t =
@@ -37,7 +41,7 @@ let test_dns_query server () =
           Log.err (fun f -> f "Failed to lookup www.google.com");
           failwith "Failed to lookup www.google.com"
       ) in
-  Host.Main.run t
+  run t
 
 let test_etc_hosts_query server () =
   let test_name = "vpnkit.is.cool.yes.really" in
@@ -66,7 +70,7 @@ let test_etc_hosts_query server () =
             failwith "failed to lookup name from /etc/hosts"
           end
       ) in
-  Host.Main.run t
+  run t
 
 let test_max_connections () =
   let t =
@@ -96,7 +100,7 @@ let test_max_connections () =
             Lwt.return_unit
           )
       ) in
-  Host.Main.run t
+  run ~timeout:240.0 t
 
 let test_http_fetch () =
   let t =
@@ -147,7 +151,7 @@ let test_http_fetch () =
           Log.err (fun f -> f "Failed to look up an IPv4 address for www.google.com");
           failwith "http_fetch dns"
       ) in
-  Host.Main.run t
+  run t
 
 module DevNullServer = struct
   (* Accept local TCP connections, throw away all incoming data and then return
@@ -272,7 +276,7 @@ let test_stream_data connections length () =
                 ) (count connections)
           )
       ) in
-  Host.Main.run t
+  run t
 
 let test_dhcp = [
   "Simple query", `Quick, test_dhcp_query;

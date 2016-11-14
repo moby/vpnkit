@@ -10,6 +10,10 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Make(Host: Sig.HOST) = struct
 
+  let run ?(timeout=60.) t =
+    let timeout = Host.Time.sleep timeout >>= fun () -> Lwt.fail (Failure "timeout") in
+    Host.Main.run @@ Lwt.pick [ timeout; t ]
+
   module Slirp_stack = Slirp_stack.Make(Host)
   open Slirp_stack
 
@@ -114,7 +118,7 @@ module Make(Host: Sig.HOST) = struct
                 loop 5
              )
         ) in
-    Host.Main.run t
+    run t
 
   (* Start a local UDP mult-echo server, send traffic to it from one source port,
      wait for the response, send traffic to it from another source port, expect
@@ -164,7 +168,7 @@ module Make(Host: Sig.HOST) = struct
                 loop 5
              )
         ) in
-    Host.Main.run t
+    run t
 
   (* Start a local UDP echo server, send some traffic to it over the virtual interface.
      Send traffic to the outside address on a second physical interface, check that
@@ -218,7 +222,7 @@ module Make(Host: Sig.HOST) = struct
                 loop 5
              )
         ) in
-    Host.Main.run t
+    run t
 
   (* The NAT table rule should be associated with the virtual address, rather
      than physical address. Check if we have 2 physical servers we have only a
@@ -271,7 +275,7 @@ module Make(Host: Sig.HOST) = struct
                   )
              )
         ) in
-    Host.Main.run t
+    run t
 
   let suite = [
     "Shared NAT rule", `Quick, test_shared_nat_rule;
