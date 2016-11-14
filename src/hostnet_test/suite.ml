@@ -315,22 +315,3 @@ let suite = [
   "UDP", N.suite;
 ]
 end
-
-module Slirp_lwt_unix = Make(Host_lwt_unix)
-module Slirp_uwt = Make(Host_uwt)
-
-let tests =
-  (List.map (fun (name, test) -> name ^ " with Lwt_unix", test) Slirp_lwt_unix.suite) @
-  (List.map (fun (name, test) -> name ^ " with Uwt", test) Slirp_uwt.suite) @
-  Hosts_test.suite
-
-(* Run it *)
-let () =
-  Logs.set_reporter (Logs_fmt.reporter ());
-  Lwt.async_exception_hook := (fun exn ->
-    Log.err (fun f -> f "Lwt.async failure %s: %s"
-      (Printexc.to_string exn)
-      (Printexc.get_backtrace ())
-    )
-  );
-  Alcotest.run "Hostnet" tests
