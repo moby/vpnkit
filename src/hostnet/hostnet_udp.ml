@@ -26,10 +26,11 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     description: string;
     server: Udp.server;
     mutable last_use: float;
-    (* For protocols like NTP the source port keeps changing, so we send
-       replies to the last source port we saw. *)
-    mutable reply: reply;
   }
+
+  (* For every src, src_port behind the NAT we create one listening socket
+     on the external network. We translate the source address on the way out
+     but preserve them on the way in. *)
 
   type t = {
     max_idle_time: float;
@@ -76,7 +77,7 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     let send_reply = None in
     { max_idle_time; background_gc_t; table; send_reply }
 
-  let input ~t ~reply ~datagram:{ src = src, src_port; dst = dst, dst_port; payload } () =
+  let input ~t ~datagram:{ src = src, src_port; dst = dst, dst_port; payload } () =
     (if Hashtbl.mem t.table (src, src_port) then begin
         Lwt.return (Some (Hashtbl.find t.table (src, src_port)))
       end else begin
@@ -92,7 +93,7 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
               Udp.bind (Ipaddr.(V4 V4.any), 0)
               >>= fun server ->
               let last_use = Unix.gettimeofday () in
-              let flow = { description; server; last_use; reply} in
+              let flow = { description; server; last_use } in
               Hashtbl.replace t.table (src, src_port) flow;
               (* Start a listener *)
               let buf = Cstruct.create Constants.max_udp_length in
@@ -100,8 +101,18 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
                 Lwt.catch
                   (fun () ->
                      Udp.recvfrom server buf
-                     >>= fun (n, _from) ->
-                     flow.reply (Cstruct.sub buf 0 n)
+                     >>= fun (n, from) ->
+                     (* The from address should be the true external address so
+                        the client behind the NAT can tell different peers apart.
+                        It is not necessarily the same as the original external address
+                        that we created the rule for -- it's possible for a client
+                        to send data to a rendezvous server, which then communicates
+                        the NAT IP and port to other peers who can then communicate
+                        with the client behind the NAT. *)
+                     let reply = { src = from; dst = src, src_port; payload = Cstruct.sub buf 0 n } in
+                     ( match t.send_reply with
+                       | Some fn -> fn reply
+                       | None -> Lwt.return_unit )
                      >>= fun () ->
                      Lwt.return true
                   ) (function
@@ -127,7 +138,6 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
      end) >>= function
     | None -> Lwt.return ()
     | Some flow ->
-      flow.reply <- reply;
       Lwt.catch
         (fun () ->
            Udp.sendto flow.server (dst, dst_port) payload
