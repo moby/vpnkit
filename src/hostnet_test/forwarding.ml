@@ -14,6 +14,10 @@ let (>>*=) m f = m >>= function
 
 module Make(Host: Sig.HOST) = struct
 
+let run ?(timeout=60.) t =
+  let timeout = Host.Time.sleep timeout >>= fun () -> Lwt.fail (Failure "timeout") in
+  Host.Main.run @@ Lwt.pick [ timeout; t ]
+
 module Channel = Channel.Make(Host.Sockets.Stream.Tcp)
 
 module ForwardServer = struct
@@ -269,7 +273,7 @@ let test_one_forward () =
               )
           )
       ) in
-  Host.Main.run t
+  run t
 
 let test_10_connections () =
   let t =
@@ -305,7 +309,7 @@ let test_10_connections () =
               )
           )
       ) in
-  Host.Main.run t
+  run t
 
 let test = [
   "Test one port forward", `Quick, test_one_forward;

@@ -29,17 +29,29 @@ Library hostnet
     charrua-core.server, dns, dns.lwt, ofs, uwt, uwt.ext, uwt.preemptive,
     lwt.preemptive, threads, astring, datakit-server.vfs, dns-forward, tar
 
-Executable test
+Executable test_lwt
   Path: hostnet_test
   CompiledObject: best
-  MainIs: main.ml
+  MainIs: main_lwt.ml
   Build$: flag(tests)
   BuildDepends: hostnet, cmdliner, alcotest, lwt.unix, logs.fmt,
-    dns.mirage, lwt.preemptive, uwt.preemptive
+    dns.mirage, lwt.preemptive
 
-Test test
+Executable test_uwt
+  Path: hostnet_test
+  CompiledObject: best
+  MainIs: main_uwt.ml
+  Build$: flag(tests)
+  BuildDepends: hostnet, cmdliner, alcotest, logs.fmt, dns.mirage, uwt.preemptive
+
+Test test_lwt
   Run$:               flag(tests)
-  Command:            $test -q
+  Command:            $test_lwt -q
+  WorkingDirectory:   hostnet_test
+
+Test test_uwt
+  Run$:               flag(tests)
+  Command:            $test_uwt -q
   WorkingDirectory:   hostnet_test
 
 Library ofs
