@@ -12,6 +12,12 @@ type reply = Cstruct.t -> unit Lwt.t
 
 type address = Ipaddr.t * int
 
+type datagram = {
+  src: address;
+  dst: address;
+  payload: Cstruct.t;
+}
+
 module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
 
   module Udp = Sockets.Datagram.Udp
@@ -66,7 +72,7 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     let background_gc_t = start_background_gc table max_idle_time in
     { max_idle_time; background_gc_t; table }
 
-  let input ~t ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
+  let input ~t ~reply ~datagram:{ src = src, src_port; dst = dst, dst_port; payload } () =
     (if Hashtbl.mem t.table (src, src_port) then begin
         Lwt.return (Some (Hashtbl.find t.table (src, src_port)))
       end else begin
