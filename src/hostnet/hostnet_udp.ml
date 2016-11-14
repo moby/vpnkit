@@ -66,14 +66,11 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     let background_gc_t = start_background_gc table max_idle_time in
     { max_idle_time; background_gc_t; table }
 
-  let input ~t ?userdesc ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
+  let input ~t ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
     (if Hashtbl.mem t.table (src, src_port) then begin
         Lwt.return (Some (Hashtbl.find t.table (src, src_port)))
       end else begin
-       let userdesc = match userdesc with
-         | None -> ""
-         | Some x -> String.concat "" [ " ("; x; ")" ] in
-       let description = "udp:" ^ (String.concat "" [ Ipaddr.to_string src; ":"; string_of_int src_port; "-"; Ipaddr.to_string dst; ":"; string_of_int dst_port; userdesc ]) in
+       let description = "udp:" ^ (String.concat "" [ Ipaddr.to_string src; ":"; string_of_int src_port; "-"; Ipaddr.to_string dst; ":"; string_of_int dst_port ]) in
        if Ipaddr.compare dst Ipaddr.(V4 V4.broadcast) = 0 then begin
          Log.debug (fun f -> f "Hostnet_udp %s: ignoring broadcast packet" description);
          Lwt.return None
