@@ -268,7 +268,6 @@ module Sockets = struct
              if not(Uwt.Int_result.is_ok result) then begin
                let error = Uwt.Int_result.to_error result in
                Log.err (fun f -> f "Socket.%s.connect(%s): %s" label (string_of_address address) (Uwt.strerror error));
-               deregister_connection idx;
                Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
              end else Lwt_result.return (of_fd ~idx ?read_buffer_size ~description sockaddr address fd)
           )
