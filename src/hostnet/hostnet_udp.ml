@@ -16,11 +16,6 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
 
   module Udp = Sockets.Datagram.Udp
 
-  type t = {
-    max_idle_time: float;
-    background_gc_t: unit Lwt.t;
-  }
-
   type flow = {
     description: string;
     server: Udp.server;
@@ -30,12 +25,15 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     mutable reply: reply;
   }
 
-  (* Look up by src * src_port *)
-  let table = Hashtbl.create 7
+  type t = {
+    max_idle_time: float;
+    background_gc_t: unit Lwt.t;
+    table: (address, flow) Hashtbl.t; (* src -> flow *)
+  }
 
-  let get_nat_table_size () = Hashtbl.length table
+  let get_nat_table_size t = Hashtbl.length t.table
 
-  let start_background_gc max_idle_time =
+  let start_background_gc table max_idle_time =
     let rec loop () =
       Time.sleep max_idle_time
       >>= fun () ->
@@ -64,12 +62,13 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     loop ()
 
   let create ?(max_idle_time = 60.) () =
-    let background_gc_t = start_background_gc max_idle_time in
-    { max_idle_time; background_gc_t }
+    let table = Hashtbl.create 7 in
+    let background_gc_t = start_background_gc table max_idle_time in
+    { max_idle_time; background_gc_t; table }
 
-  let input ~t:_ ?userdesc ~oneshot ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
-    (if Hashtbl.mem table (src, src_port) then begin
-        Lwt.return (Some (Hashtbl.find table (src, src_port)))
+  let input ~t ?userdesc ~oneshot ~reply ~src:(src, src_port) ~dst:(dst, dst_port) ~payload () =
+    (if Hashtbl.mem t.table (src, src_port) then begin
+        Lwt.return (Some (Hashtbl.find t.table (src, src_port)))
       end else begin
        let userdesc = match userdesc with
          | None -> ""
@@ -87,7 +86,7 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
               >>= fun server ->
               let last_use = Unix.gettimeofday () in
               let flow = { description; server; last_use; reply} in
-              Hashtbl.replace table (src, src_port) flow;
+              Hashtbl.replace t.table (src, src_port) flow;
               (* Start a listener *)
               let buf = Cstruct.create Constants.max_udp_length in
               let rec loop () =
@@ -98,7 +97,7 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
                      ( if oneshot then begin
                            (* Remove our flow entry immediately, clean up synchronously *)
                            Log.debug (fun f -> f "Hostnet_udp %s: expiring UDP NAT rule immediately" flow.description);
-                           Hashtbl.remove table (src, src_port);
+                           Hashtbl.remove t.table (src, src_port);
                            Udp.shutdown server
                          end else Lwt.return_unit )
                      >>= fun () ->

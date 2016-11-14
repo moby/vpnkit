@@ -16,10 +16,6 @@ type config = {
 
 module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST): sig
 
-  module Udp_nat: sig
-    val get_nat_table_size: unit -> int
-  end
-
   val create: Config.t -> config Lwt.t
   (** Initialise a TCP/IP stack, taking configuration from the Config.t *)
 
@@ -36,6 +32,11 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
   val diagnostics: t -> Host.Sockets.Stream.Unix.flow -> unit Lwt.t
   (** Output diagnostics in .tar format over a local Unix socket or named pipe *)
+
+  module Debug: sig
+    val get_nat_table_size: t -> int
+    (** Return the number of active NAT table entries *)
+  end
 end
 
 val print_pcap: pcap -> string

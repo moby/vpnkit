@@ -98,7 +98,7 @@ module Make(Host: Sig.HOST) = struct
       EchoServer.with_server
         (fun { EchoServer.local_port } ->
            with_stack
-             (fun stack ->
+             (fun _ stack ->
                 let buffer = Cstruct.create 1024 in
                 (* Send '1' *)
                 Cstruct.set_uint8 buffer 0 1;
@@ -128,7 +128,7 @@ module Make(Host: Sig.HOST) = struct
       EchoServer.with_server
         (fun { EchoServer.local_port } ->
            with_stack
-             (fun stack ->
+             (fun _ stack ->
                 let buffer = Cstruct.create 1024 in
                 (* Send '1' *)
                 Cstruct.set_uint8 buffer 0 1;
@@ -178,7 +178,7 @@ module Make(Host: Sig.HOST) = struct
       EchoServer.with_server
         (fun echoserver ->
            with_stack
-             (fun stack ->
+             (fun _ stack ->
                 let buffer = Cstruct.create 1024 in
                 (* Send '1' *)
                 Cstruct.set_uint8 buffer 0 1;
@@ -232,14 +232,14 @@ module Make(Host: Sig.HOST) = struct
       EchoServer.with_server
         (fun { EchoServer.local_port } ->
            with_stack
-             (fun stack ->
+             (fun slirp_server stack ->
                 let buffer = Cstruct.create 1024 in
                 (* Send '1' *)
                 Cstruct.set_uint8 buffer 0 1;
                 let udpv4 = Client.udpv4 stack in
                 let virtual_port = 1024 in
                 let server = UdpServer.make stack virtual_port in
-                let init_table_size = Slirp_stack.Udp_nat.get_nat_table_size () in
+                let init_table_size = Slirp_stack.Debug.get_nat_table_size slirp_server in
 
                 let rec loop remaining =
                   if remaining = 0 then failwith "Timed-out before UDP response arrived";
@@ -252,7 +252,7 @@ module Make(Host: Sig.HOST) = struct
                   | false -> loop (remaining - 1) in
                 loop 5
                 >>= fun () ->
-                Alcotest.(check int) "One NAT rule" 1 (Slirp_stack.Udp_nat.get_nat_table_size () - init_table_size);
+                Alcotest.(check int) "One NAT rule" 1 (Slirp_stack.Debug.get_nat_table_size slirp_server - init_table_size);
                 (* Send '2' *)
                 Cstruct.set_uint8 buffer 0 2;
                 (* Create another physical server and send traffic from the same
@@ -270,7 +270,7 @@ module Make(Host: Sig.HOST) = struct
                        | false -> loop (remaining - 1) in
                      loop 5
                      >>= fun () ->
-                     Alcotest.(check int) "Still one NAT rule" 1 (Slirp_stack.Udp_nat.get_nat_table_size () - init_table_size);
+                     Alcotest.(check int) "Still one NAT rule" 1 (Slirp_stack.Debug.get_nat_table_size slirp_server - init_table_size);
                      Lwt.return_unit
                   )
              )

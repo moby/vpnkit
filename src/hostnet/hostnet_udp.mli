@@ -19,6 +19,6 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME): sig
 
   val input: t:t -> ?userdesc:string -> oneshot:bool -> reply:reply -> src:address -> dst:address -> payload:Cstruct.t -> unit -> unit Lwt.t
 
-  val get_nat_table_size: unit -> int
+  val get_nat_table_size: t -> int
   (** Return the current number of allocated NAT table entries *)
 end

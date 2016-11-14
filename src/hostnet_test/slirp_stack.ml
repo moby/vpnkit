@@ -99,6 +99,21 @@ let config =
     pcap_settings = Active_config.Value(None, never);
   }
 
+(* This is a hacky way to get a hancle to the server side of the stack. *)
+let slirp_stack = ref None
+let slirp_stack_c = Lwt_condition.create ()
+let rec get_slirp_stack () =
+  match !slirp_stack with
+  | None ->
+    Lwt_condition.wait slirp_stack_c
+    >>= fun () ->
+    get_slirp_stack ()
+  | Some x ->
+    Lwt.return x
+let set_slirp_stack c =
+  slirp_stack := Some c;
+  Lwt_condition.signal slirp_stack_c ()
+
 let start_stack () =
   Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
   >>= fun server ->
@@ -107,6 +122,7 @@ let start_stack () =
     (fun flow ->
       Slirp_stack.connect config flow
       >>= fun stack ->
+      set_slirp_stack stack;
       Log.info (fun f -> f "stack connected");
       Slirp_stack.after_disconnect stack
       >>= fun () ->
@@ -115,10 +131,10 @@ let start_stack () =
     );
   Lwt.return port
 
-let stack_port = start_stack ()
+let connection = start_stack ()
 
 let with_stack f =
-  stack_port
+  connection
   >>= fun port ->
   Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 Ipaddr.V4.localhost, port)
   >>= function
@@ -138,8 +154,10 @@ let with_stack f =
     Lwt.finalize (fun () ->
       Log.info (fun f -> f "Initialising client TCP/IP stack");
       Client.connect client'
-      >>= fun stack ->
-      f stack
+      >>= fun client ->
+      get_slirp_stack ()
+      >>= fun slirp_stack ->
+      f slirp_stack client
     ) (fun () ->
       (* Server will close when it gets EOF *)
       VMNET.disconnect client'

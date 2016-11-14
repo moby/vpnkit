@@ -351,6 +351,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     switch: Switch.t;
     mutable endpoints: Endpoint.t IPMap.t;
     endpoints_m: Lwt_mutex.t;
+    udp_nat: Udp_nat.t;
   }
 
   let after_disconnect t = t.after_disconnect
@@ -578,6 +579,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     C.write_buffer c Tar.Header.zero_block;
     C.flush c
 
+  module Debug = struct
+    let get_nat_table_size t = Udp_nat.get_nat_table_size t.udp_nat
+  end
+
   (* If no traffic is received for 5 minutes, delete the endpoint and
      the switch port. *)
   let rec delete_unused_endpoints t () =
@@ -638,12 +643,14 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
+    let udp_nat = Udp_nat.create () in
     let t = {
       after_disconnect = Vmnet.after_disconnect x;
       interface;
       switch;
       endpoints;
       endpoints_m;
+      udp_nat;
     } in
     Lwt.async @@ delete_unused_endpoints t;
 
@@ -660,8 +667,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             Lwt.return (`Ok endpoint)
           end
         ) in
-
-    let udp_nat = Udp_nat.create () in
 
     (* Add a listener which looks for new flows *)
     Switch.listen switch
