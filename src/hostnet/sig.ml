@@ -52,21 +52,6 @@ module type FLOW_SERVER = sig
   (** Stop accepting connections on the given server *)
 end
 
-
-module type DATAGRAM = sig
-
-  type address
-
-  type reply = Cstruct.t -> unit Lwt.t
-
-  val input: ?userdesc:string -> oneshot:bool -> reply:reply -> src:address -> dst:address -> payload:Cstruct.t -> unit -> unit Lwt.t
-
-  val get_nat_table_size: unit -> int
-  (** Return the current number of allocated NAT table entries *)
-
-end
-
-
 module type SOCKETS = sig
   (* An OS-based BSD sockets implementation *)
 
@@ -83,9 +68,6 @@ module type SOCKETS = sig
   module Datagram: sig
 
     type address = Ipaddr.t * int
-
-    include DATAGRAM
-      with type address := address
 
     module Udp: sig
       type address = Ipaddr.t * int

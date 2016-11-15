@@ -20,7 +20,7 @@ open Slirp_stack
 let test_dhcp_query () =
   let t =
     with_stack
-      (fun stack ->
+      (fun _ stack ->
         let ips = List.map Ipaddr.V4.to_string (Client.IPV4.get_ip (Client.ipv4 stack)) in
         Log.info (fun f -> f "Got an IP: %s" (String.concat ", " ips));
         Lwt.return ()
@@ -30,7 +30,7 @@ let test_dhcp_query () =
 let test_dns_query server () =
   let t =
     with_stack
-      (fun stack ->
+      (fun _ stack ->
         let resolver = DNS.create stack in
         DNS.gethostbyname ~server resolver "www.google.com"
         >>= function
@@ -47,7 +47,7 @@ let test_etc_hosts_query server () =
   let test_name = "vpnkit.is.cool.yes.really" in
   let t =
     with_stack
-      (fun stack ->
+      (fun _ stack ->
         let resolver = DNS.create stack in
         DNS.gethostbyname ~server resolver test_name
         >>= function
@@ -75,7 +75,7 @@ let test_etc_hosts_query server () =
 let test_max_connections () =
   let t =
     with_stack
-      (fun stack ->
+      (fun _ stack ->
         Lwt.finalize
           (fun () ->
             let resolver = DNS.create stack in
@@ -105,7 +105,7 @@ let test_max_connections () =
 let test_http_fetch () =
   let t =
     with_stack
-      (fun stack ->
+      (fun _ stack ->
         let resolver = DNS.create stack in
         DNS.gethostbyname resolver "www.google.com"
         >>= function
@@ -212,7 +212,7 @@ let test_stream_data connections length () =
     DevNullServer.with_server
       (fun { DevNullServer.local_port } ->
         with_stack
-          (fun stack ->
+          (fun _ stack ->
             Lwt_list.iter_p
               (fun () ->
                 let rec connect () =

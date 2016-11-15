@@ -102,6 +102,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   end
 
   module Dns_forwarder = Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Time)(Recorder)
+  module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Host.Time)
 
   (* Global variable containing the global DNS configuration *)
   let dns =
@@ -350,6 +351,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     switch: Switch.t;
     mutable endpoints: Endpoint.t IPMap.t;
     endpoints_m: Lwt_mutex.t;
+    udp_nat: Udp_nat.t;
   }
 
   let after_disconnect t = t.after_disconnect
@@ -359,6 +361,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   module Local = struct
     type t = {
       endpoint: Endpoint.t;
+      udp_nat: Udp_nat.t;
       dns_ips: Ipaddr.V4.t list;
     }
     (** Represents the local machine including NTP and DNS servers *)
@@ -391,8 +394,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       | Ipv4 { src; payload = Udp { src = src_port; dst = 123; payload = Payload payload; _ }; _ } ->
         let localhost = Ipaddr.V4.localhost in
         Log.debug (fun f -> f "UDP/123 request from port %d -- sending it to %a:%d" src_port Ipaddr.V4.pp_hum localhost 123);
-        let reply buf = Stack_udp.write ~source_port:123 ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
-        Host.Sockets.Datagram.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 localhost, 123) ~payload ()
+        let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 localhost, 123; payload } in
+        Udp_nat.input ~t:t.udp_nat ~datagram ()
       (* UDP to any other port: localhost *)
       | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
         let description = Printf.sprintf "%s:%d -> %s:%d"
@@ -403,8 +406,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         end else if dnf && (Cstruct.len payload > mtu) then begin
           Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
         end else begin
-          let reply buf = Stack_udp.write ~source_port:dst_port ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
-          Host.Sockets.Datagram.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.(V4 V4.localhost), dst_port) ~payload ()
+          (* [1] For UDP to our local address, rewrite the destination to localhost.
+             This is the inverse of the rewrite below[2] *)
+          let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.(V4 V4.localhost), dst_port; payload } in
+          Udp_nat.input ~t:t.udp_nat ~datagram ()
         end
       (* TCP to local ports *)
       | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = dst_port; syn; raw; payload = Payload _; _ }; _ } ->
@@ -413,8 +418,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       | _ ->
         Lwt.return_unit
 
-    let create endpoint dns_ips =
-      let tcp_stack = { endpoint; dns_ips } in
+    let create endpoint udp_nat dns_ips =
+      let tcp_stack = { endpoint; udp_nat; dns_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -437,6 +442,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     type t = {
       endpoint:        Endpoint.t;
+      udp_nat:         Udp_nat.t;
     }
     (** Represents a remote system by proxying data to and from sockets *)
 
@@ -463,14 +469,14 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         end else if dnf && (Cstruct.len payload > mtu) then begin
           Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
         end else begin
-          let reply buf = Stack_udp.write ~source_port:dst_port ~dest_ip:src ~dest_port:src_port t.endpoint.Endpoint.udp4 buf in
-          Host.Sockets.Datagram.input ~oneshot:false ~reply ~src:(Ipaddr.V4 src, src_port) ~dst:(Ipaddr.V4 dst, dst_port) ~payload ()
+          let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 dst, dst_port; payload } in
+          Udp_nat.input ~t:t.udp_nat ~datagram ()
         end
       | _ ->
         Lwt.return_unit
 
-    let create endpoint =
-      let tcp_stack = { endpoint } in
+    let create endpoint udp_nat =
+      let tcp_stack = { endpoint; udp_nat } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -575,6 +581,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     C.write_buffer c Tar.Header.zero_block;
     C.flush c
 
+  module Debug = struct
+    let get_nat_table_size t = Udp_nat.get_nat_table_size t.udp_nat
+  end
+
   (* If no traffic is received for 5 minutes, delete the endpoint and
      the switch port. *)
   let rec delete_unused_endpoints t () =
@@ -635,12 +645,14 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
+    let udp_nat = Udp_nat.create () in
     let t = {
       after_disconnect = Vmnet.after_disconnect x;
       interface;
       switch;
       endpoints;
       endpoints_m;
+      udp_nat;
     } in
     Lwt.async @@ delete_unused_endpoints t;
 
@@ -657,6 +669,30 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             Lwt.return (`Ok endpoint)
           end
         ) in
+
+    (* Send a UDP datagram *)
+    let send_reply = function
+      | { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 dst, dst_port; payload } ->
+        (* [2] If the source address is localhost on the Mac, rewrite it to the
+           virtual IP. This is the inverse of the rewrite above[1] *)
+        let src =
+          if Ipaddr.V4.compare src Ipaddr.V4.localhost = 0
+          then local_ip
+          else src in
+        begin
+          find_endpoint src
+          >>= function
+          | `Error (`Msg m) ->
+            Log.err (fun f -> f "Failed to create an endpoint for %s: %s" (Ipaddr.V4.to_string dst) m);
+            Lwt.return_unit
+          | `Ok endpoint ->
+            Stack_udp.write ~source_port:src_port ~dest_ip:dst ~dest_port:dst_port endpoint.Endpoint.udp4 payload
+        end
+      | { Hostnet_udp.src = src, src_port; dst = dst, dst_port; _ } ->
+        Log.err (fun f -> f "Failed to send non-IPv4 UDP datagram %s:%d -> %s:%d" (Ipaddr.to_string src) src_port (Ipaddr.to_string dst) dst_port);
+        Lwt.return_unit in
+
+    Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
 
     (* Add a listener which looks for new flows *)
     Switch.listen switch
@@ -677,7 +713,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                find_endpoint dst
                >>= fun endpoint ->
                Log.debug (fun f -> f "creating local TCP/IP proxy for %s" (Ipaddr.V4.to_string dst));
-               Local.create endpoint local_ips
+               Local.create endpoint udp_nat local_ips
              end >>= function
              | `Error (`Msg m) ->
                Log.err (fun f -> f "Failed to create a TCP/IP stack: %s" m);
@@ -691,7 +727,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                find_endpoint dst
                >>= fun endpoint ->
                Log.debug (fun f -> f "create remote TCP/IP proxy for %s" (Ipaddr.V4.to_string dst));
-               Remote.create endpoint
+               Remote.create endpoint udp_nat
              end >>= function
              | `Error (`Msg m) ->
                Log.err (fun f -> f "Failed to create a TCP/IP stack: %s" m);

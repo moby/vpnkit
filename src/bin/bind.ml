@@ -97,10 +97,6 @@ module Make(Socket: Sig.SOCKETS) = struct
 
   module Datagram = struct
     type address = Socket.Datagram.address
-    type reply = Socket.Datagram.reply
-
-    let input = Socket.Datagram.input
-    let get_nat_table_size = Socket.Datagram.get_nat_table_size
 
     module Udp = struct
       include Socket.Datagram.Udp
