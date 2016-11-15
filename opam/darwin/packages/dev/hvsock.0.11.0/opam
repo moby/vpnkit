@@ -1,25 +1,24 @@
 opam-version: "1.2"
 maintainer: "dave@recoil.org"
-authors: [ "David Scott" "Rolf Neugebauer"]
+authors: [ "David Scott" "Rolf Neugebauer" "Anil Madhavapeddy"]
 license: "ISC"
 homepage: "https://github.com/djs55/ocaml-hvsock"
 dev-repo: "https://github.com/djs55/ocaml-hvsock.git"
 bug-reports: "https://github.com/djs55/ocaml-hvsock/issues"
 
 build: [
-  ["ocaml" "setup.ml" "-configure"]
+  ["ocaml" "setup.ml" "-configure" "--%{alcotest:enable}%-tests" ]
   [make]
 ]
 
 build-test:[
-  ["ocaml" "setup.ml" "-configure" "--enable-tests" ]
   [make "test"]
 ]
 install: [make "install"]
 remove: ["ocamlfind" "remove" "hvsock"]
 
 depends: [
-  "base-bytes" "base-threads"
+  "base-bytes"
   "lwt" {>= "2.4.7"}
   "logs"
   "fmt"
@@ -28,9 +27,10 @@ depends: [
   "mirage-types-lwt"
   "mirage-flow"
   "cstruct"
+  "duration"
   "ocamlfind" {build}
   "ocamlbuild" {build}
   "alcotest" {test & >= "0.4.0"}
 ]
 
-available: [ ocaml-version >= "4.01.0" ]
+available: [ ocaml-version >= "4.02.3" ]
