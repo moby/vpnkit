@@ -24,6 +24,17 @@ Build the application using:
 make
 ```
 
+Running with hyperkit
+---------------------
+
+First ask `com.docker.slirp` to listen for ethernet connections on a local Unix domain socket:
+```
+com.docker.slirp --ethernet /tmp/ethernet --debug
+```
+Next ask [com.docker.hyperkit](https://github.com/docker/hyperkit) to connect a NIC to this
+socket by adding a command-line option like `-s 2:0,virtio-vpnkit,path=/tmp/ethernet`. Note:
+you may need to change the slot `2:0` to a free slot in your VM configuration.
+
 Why is this needed?
 -------------------
 
