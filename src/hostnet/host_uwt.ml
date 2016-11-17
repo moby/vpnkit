@@ -528,7 +528,7 @@ module Sockets = struct
              if Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.localhost) = 0
              || Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.any) = 0
              then begin
-               Log.info (fun f -> f "attempting a best-effort bind of ::1:%d" local_port);
+               Log.debug (fun f -> f "attempting a best-effort bind of ::1:%d" local_port);
                bind_one (Ipaddr.(V6 V6.localhost), local_port)
                >>= fun (idx, _, fd) ->
                Lwt.return [ idx, fd ]
@@ -536,7 +536,7 @@ module Sockets = struct
                Lwt.return []
              end
           ) (fun e ->
-              Log.info (fun f -> f "ignoring failed bind to ::1:%d (%s)" local_port (Printexc.to_string e));
+              Log.debug (fun f -> f "ignoring failed bind to ::1:%d (%s)" local_port (Printexc.to_string e));
               Lwt.return []
             )
         >>= fun extra ->
