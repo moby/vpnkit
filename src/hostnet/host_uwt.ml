@@ -422,9 +422,12 @@ module Sockets = struct
                let results = Cstruct.sub t.read_buffer 0 n in
                t.read_buffer <- Cstruct.shift t.read_buffer n;
                Lwt.return (`Ok results)
-          ) (fun e ->
-              Log.err (fun f -> f "Socket.%s.read %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
-              Lwt.return `Eof
+          ) (function
+              | Uwt.Uwt_error(Uwt.ECANCELED, _, _) ->
+                Lwt.return `Eof
+              | e ->
+                Log.err (fun f -> f "Socket.%s.read %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
+                Lwt.return `Eof
             )
 
       let write t buf =
