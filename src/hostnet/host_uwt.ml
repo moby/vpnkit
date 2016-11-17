@@ -172,13 +172,17 @@ module Sockets = struct
                 Log.err (fun f -> f "Socket.%s.recvfrom: dropping partial response (buffer was %d bytes)" t.label (Cstruct.len buf));
                 read t
               end else Lwt.return (`Ok (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len))
-            ) (fun e ->
-              Log.err (fun f -> f "Socket.%s.recvfrom: %s caught %s returning Eof"
-                t.label
-                (string_of_flow t)
-                (Printexc.to_string e)
-              );
-              Lwt.return `Eof
+            ) (function
+              | Uwt.Uwt_error(Uwt.ECANCELED, _, _) ->
+                (* happens on normal timeout *)
+                Lwt.return `Eof
+              | e ->
+                Log.err (fun f -> f "Socket.%s.recvfrom: %s caught %s returning Eof"
+                  t.label
+                  (string_of_flow t)
+                  (Printexc.to_string e)
+                );
+                Lwt.return `Eof
             )
 
       let write t buf = match t.fd with
