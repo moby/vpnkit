@@ -105,10 +105,12 @@ let hvsock_connect_forever url sockaddr callback =
   aux ()
 
 let start_introspection introspection_url root =
-  Lwt.async (fun () ->
-    log_exception_continue "start_introspection_server"
+  if introspection_url = ""
+  then Log.info (fun f -> f "no introspection server requested. See the --introspection argument")
+  else Lwt.async (fun () ->
+    log_exception_continue ("starting introspection server on: " ^ introspection_url)
       (fun () ->
-        Log.info (fun f -> f "starting introspection intrspection_url:%s" introspection_url);
+        Log.info (fun f -> f "starting introspection server on: %s" introspection_url);
         let module Server = Fs9p.Make(Host.Sockets.Stream.Unix) in
         unix_listen introspection_url
         >>= fun s ->
@@ -127,10 +129,12 @@ let start_introspection introspection_url root =
   )
 
 let start_diagnostics diagnostics_url flow_cb =
-  Lwt.async (fun () ->
-    log_exception_continue "start_diagnostics_server"
+  if diagnostics_url = ""
+  then Log.info (fun f -> f "no diagnostics server requested. See the --diagnostics argument")
+  else Lwt.async (fun () ->
+    log_exception_continue ("starting diagnostics server on: " ^ diagnostics_url)
       (fun () ->
-        Log.info (fun f -> f "starting diagnostics diagnostics_url:%s" diagnostics_url);
+        Log.info (fun f -> f "starting diagnostics server on: %s" diagnostics_url);
         unix_listen diagnostics_url
         >>= fun s ->
         Host.Sockets.Stream.Unix.listen s flow_cb;
@@ -139,7 +143,7 @@ let start_diagnostics diagnostics_url flow_cb =
   )
 
 let start_port_forwarding port_control_url max_connections vsock_path =
-  Log.info (fun f -> f "starting port_forwarding port_control_url:%s vsock_path:%s"
+  Log.info (fun f -> f "starting port forwarding server on port_control_url:%s vsock_path:%s"
     port_control_url
     vsock_path);
   (* Start the 9P port forwarding server *)
