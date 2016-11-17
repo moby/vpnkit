@@ -845,7 +845,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         let ip_opts = List.map
             (fun x ->
                try
-                 Some (Ipaddr.of_string_exn x)
+                 if x = ""
+                 then None
+                 else Some (Ipaddr.of_string_exn x)
                with _ ->
                  Log.err (fun f -> f "Failed to parse IP address in allowed-bind-address: %s" x);
                  None
