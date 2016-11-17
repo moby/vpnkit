@@ -335,7 +335,7 @@ The directory will be deleted and replaced with a file of the same name.
       active := StringMap.add name entry !active;
       let resource = Entry entry in
       connection.fids :=  Types.Fid.Map.add fid resource !(connection.fids);
-      Log.info (fun f -> f "Creating resource %s" (string_of_resource resource));
+      Log.debug (fun f -> f "Creating resource %s" (string_of_resource resource));
       return { Response.Create.qid; iounit = 512l }
     | resource ->
       Log.err (fun f -> f "EPERM creating resource = %s"
@@ -343,7 +343,7 @@ The directory will be deleted and replaced with a file of the same name.
       Error.eperm
 
   let write connection ~cancel:_ { Request.Write.fid; offset; data } =
-    Log.info (fun f -> f "Write offset=%Ld data=[%s] to file" offset (Cstruct.to_string data));
+    Log.debug (fun f -> f "Write offset=%Ld data=[%s] to file" offset (Cstruct.to_string data));
     let ok = { Response.Write.count = Int32.of_int @@ Cstruct.len data } in
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
@@ -359,7 +359,7 @@ The directory will be deleted and replaced with a file of the same name.
             | Result.Ok f' -> (* local_port is resolved *)
               entry.instance <- Some f';
               entry.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
-              Log.info (fun f -> f "Created instance %s" (Instance.to_string f'));
+              Log.debug (fun f -> f "Created instance %s" (Instance.to_string f'));
               return ok
             | Result.Error (`Msg m) ->
               Log.err (fun f -> f "Failed to start instance: %s" m);
