@@ -362,7 +362,6 @@ The directory will be deleted and replaced with a file of the same name.
               Log.debug (fun f -> f "Created instance %s" (Instance.to_string f'));
               return ok
             | Result.Error (`Msg m) ->
-              Log.err (fun f -> f "Failed to start instance: %s" m);
               entry.result <- Some ("ERROR " ^ m ^ "\n");
               return ok
           end
