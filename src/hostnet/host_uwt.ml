@@ -236,7 +236,7 @@ module Sockets = struct
         let t = make ~idx ~label fd in
         if not(Uwt.Int_result.is_ok result) then begin
           let error = Uwt.Int_result.to_error result in
-          Log.err (fun f -> f "Socket.%s.bind(%s, %d): %s" t.label (Ipaddr.to_string ip) port (Uwt.strerror error));
+          Log.debug (fun f -> f "Socket.%s.bind(%s, %d): %s" t.label (Ipaddr.to_string ip) port (Uwt.strerror error));
           deregister_connection idx;
           Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
         end else Lwt.return t
@@ -516,7 +516,7 @@ module Sockets = struct
             end
           | Uwt.Error error ->
             let msg = Printf.sprintf "Socket.%s.bind(%s, %d): %s" label (Ipaddr.to_string ip) port (Uwt.strerror error) in
-            Log.err (fun f -> f "Socket.%s.bind: %s" label msg);
+            Log.debug (fun f -> f "Socket.%s.bind: %s" label msg);
             deregister_connection idx;
             Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", "")) )
         >>= fun local_port ->
