@@ -270,6 +270,7 @@ let start_udp_proxy description vsock_path_var remote_port server =
         Lwt.return true
       ) (function
         | Unix.Unix_error(Unix.EBADF, _, _) -> Lwt.return false
+        | Uwt.Uwt_error(Uwt.ECANCELED, _, _) -> Lwt.return false
         | e ->
           Log.err (fun f -> f "%s: shutting down recvfrom thread: %s" description (Printexc.to_string e));
           Lwt.return false
