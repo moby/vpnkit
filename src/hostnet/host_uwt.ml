@@ -423,7 +423,7 @@ module Sockets = struct
                t.read_buffer <- Cstruct.shift t.read_buffer n;
                Lwt.return (`Ok results)
           ) (function
-              | Uwt.Uwt_error(Uwt.ECANCELED, _, _) ->
+              | Uwt.Uwt_error((Uwt.ECANCELED | Uwt.ECONNRESET), _, _) ->
                 Lwt.return `Eof
               | e ->
                 Log.err (fun f -> f "Socket.%s.read %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
@@ -436,9 +436,12 @@ module Sockets = struct
              Uwt.Tcp.write_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len t.fd ~buf:buf.Cstruct.buffer
              >>= fun () ->
              Lwt.return (`Ok ())
-          ) (fun e ->
-              Log.err (fun f -> f "Socket.%s.write %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
-              Lwt.return `Eof
+          ) (function
+              | Uwt.Uwt_error((Uwt.ECANCELED | Uwt.ECONNRESET), _, _) ->
+                Lwt.return `Eof
+              | e ->
+                Log.err (fun f -> f "Socket.%s.write %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
+                Lwt.return `Eof
             )
 
       let writev t bufs =
@@ -451,9 +454,12 @@ module Sockets = struct
                  >>= fun () ->
                  loop bufs in
              loop bufs
-          ) (fun e ->
-              Log.err (fun f -> f "Socket.%s.writev %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
-              Lwt.return `Eof
+          ) (function
+              | Uwt.Uwt_error((Uwt.ECANCELED | Uwt.ECONNRESET), _, _) ->
+                Lwt.return `Eof
+              | e ->
+                Log.err (fun f -> f "Socket.%s.writev %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
+                Lwt.return `Eof
             )
 
       let close t =
