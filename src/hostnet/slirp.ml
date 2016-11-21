@@ -845,7 +845,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         let ip_opts = List.map
             (fun x ->
                try
-                 Some (Ipaddr.of_string_exn x)
+                 if x = ""
+                 then None
+                 else Some (Ipaddr.of_string_exn x)
                with _ ->
                  Log.err (fun f -> f "Failed to parse IP address in allowed-bind-address: %s" x);
                  None
@@ -869,7 +871,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         Lwt.return default
       | Some x -> Lwt.return x in
     let parse_ipv4_list default x =
-      let all = List.map (fun x -> Ipaddr.V4.of_string @@ String.trim x) @@ Astring.String.cuts ~sep:"," x in
+      let all = List.map Ipaddr.V4.of_string @@ List.filter (fun x -> x <> "") @@ List.map String.trim @@ Astring.String.cuts ~sep:"," x in
       let any_none, some = List.fold_left (fun (any_none, some) x -> match x with
           | None -> true, some
           | Some x -> any_none, x :: some

@@ -26,7 +26,7 @@
 
 let src =
   let src = Logs.Src.create "arp" ~doc:"fixed ARP table" in
-  Logs.Src.set_level src (Some Logs.Debug);
+  Logs.Src.set_level src (Some Logs.Info);
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -56,11 +56,11 @@ module Make(Ethif: V1_LWT.ETHIF) = struct
   let get_ips t = List.map fst (Table.bindings t.table)
   let add_ip t ip =
     let mac = Ethif.mac t.ethif in
-    Log.info (fun f -> f "ARP: adding %s -> %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac));
+    Log.debug (fun f -> f "ARP: adding %s -> %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac));
     Lwt.return_unit
   let set_ips t ips = Lwt_list.iter_s (add_ip t) ips
   let remove_ip t ip =
-    Log.info (fun f -> f "ARP: removing %s" (Ipaddr.V4.to_string ip));
+    Log.debug (fun f -> f "ARP: removing %s" (Ipaddr.V4.to_string ip));
     t.table <- Table.remove ip t.table;
     Lwt.return_unit
   let query t ip =

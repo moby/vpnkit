@@ -218,12 +218,12 @@ let server_negotiate t =
       let open Lwt_result.Infix in
       Lwt.return (Command.unmarshal buf)
       >>= fun (command, _) ->
-      Log.info (fun f -> f "PPP.negotiate: received %s" (Command.to_string command));
+      Log.debug (fun f -> f "PPP.negotiate: received %s" (Command.to_string command));
       let vif = Vif.create t.client_macaddr () in
       let buf = Cstruct.create Vif.sizeof in
       let (_: Cstruct.t) = Vif.marshal vif buf in
       let open Lwt.Infix in
-      Log.info (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
+      Log.debug (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
       Channel.write_buffer fd buf;
       Channel.flush fd
       >>= fun () ->
@@ -260,7 +260,7 @@ let client_negotiate t =
       let open Lwt_result.Infix in
       Lwt.return (Vif.unmarshal buf)
       >>= fun (vif, _) ->
-      Log.info (fun f -> f "Client.negotiate: vif %s" (Vif.to_string vif));
+      Log.debug (fun f -> f "Client.negotiate: vif %s" (Vif.to_string vif));
       Lwt_result.return ()
     )
 
@@ -351,7 +351,7 @@ let disconnect t = match t.fd with
   | None -> Lwt.return ()
   | Some fd ->
     t.fd <- None;
-    Log.info (fun f -> f "Vmnet.disconnect flushing channel");
+    Log.debug (fun f -> f "Vmnet.disconnect flushing channel");
     Channel.flush fd
     >>= fun () ->
     Lwt.wakeup_later t.after_disconnect_u ();
@@ -420,7 +420,7 @@ let writev t bufs =
 
 let listen t callback =
   if t.listening then begin
-    Log.info (fun f -> f "PPP.listen: called a second time: doing nothing");
+    Log.debug (fun f -> f "PPP.listen: called a second time: doing nothing");
     Lwt.return ();
   end else begin
     t.listening <- true;
@@ -463,7 +463,7 @@ let listen t callback =
            Lwt_result.return true
         ) (function
             | End_of_file ->
-              Log.info (fun f -> f "PPP.listen: closing connection");
+              Log.debug (fun f -> f "PPP.listen: closing connection");
               Lwt_result.return false
             | e ->
               Log.err (fun f -> f "PPP.listen: caught unexpected %s: disconnecting" (Printexc.to_string e));

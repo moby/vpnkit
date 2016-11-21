@@ -172,13 +172,17 @@ module Sockets = struct
                 Log.err (fun f -> f "Socket.%s.recvfrom: dropping partial response (buffer was %d bytes)" t.label (Cstruct.len buf));
                 read t
               end else Lwt.return (`Ok (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len))
-            ) (fun e ->
-              Log.err (fun f -> f "Socket.%s.recvfrom: %s caught %s returning Eof"
-                t.label
-                (string_of_flow t)
-                (Printexc.to_string e)
-              );
-              Lwt.return `Eof
+            ) (function
+              | Uwt.Uwt_error(Uwt.ECANCELED, _, _) ->
+                (* happens on normal timeout *)
+                Lwt.return `Eof
+              | e ->
+                Log.err (fun f -> f "Socket.%s.recvfrom: %s caught %s returning Eof"
+                  t.label
+                  (string_of_flow t)
+                  (Printexc.to_string e)
+                );
+                Lwt.return `Eof
             )
 
       let write t buf = match t.fd with
@@ -232,7 +236,7 @@ module Sockets = struct
         let t = make ~idx ~label fd in
         if not(Uwt.Int_result.is_ok result) then begin
           let error = Uwt.Int_result.to_error result in
-          Log.err (fun f -> f "Socket.%s.bind(%s, %d): %s" t.label (Ipaddr.to_string ip) port (Uwt.strerror error));
+          Log.debug (fun f -> f "Socket.%s.bind(%s, %d): %s" t.label (Ipaddr.to_string ip) port (Uwt.strerror error));
           deregister_connection idx;
           Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
         end else Lwt.return t
@@ -418,9 +422,12 @@ module Sockets = struct
                let results = Cstruct.sub t.read_buffer 0 n in
                t.read_buffer <- Cstruct.shift t.read_buffer n;
                Lwt.return (`Ok results)
-          ) (fun e ->
-              Log.err (fun f -> f "Socket.%s.read %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
-              Lwt.return `Eof
+          ) (function
+              | Uwt.Uwt_error((Uwt.ECANCELED | Uwt.ECONNRESET), _, _) ->
+                Lwt.return `Eof
+              | e ->
+                Log.err (fun f -> f "Socket.%s.read %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
+                Lwt.return `Eof
             )
 
       let write t buf =
@@ -429,9 +436,12 @@ module Sockets = struct
              Uwt.Tcp.write_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len t.fd ~buf:buf.Cstruct.buffer
              >>= fun () ->
              Lwt.return (`Ok ())
-          ) (fun e ->
-              Log.err (fun f -> f "Socket.%s.write %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
-              Lwt.return `Eof
+          ) (function
+              | Uwt.Uwt_error((Uwt.ECANCELED | Uwt.ECONNRESET), _, _) ->
+                Lwt.return `Eof
+              | e ->
+                Log.err (fun f -> f "Socket.%s.write %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
+                Lwt.return `Eof
             )
 
       let writev t bufs =
@@ -444,9 +454,12 @@ module Sockets = struct
                  >>= fun () ->
                  loop bufs in
              loop bufs
-          ) (fun e ->
-              Log.err (fun f -> f "Socket.%s.writev %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
-              Lwt.return `Eof
+          ) (function
+              | Uwt.Uwt_error((Uwt.ECANCELED | Uwt.ECONNRESET), _, _) ->
+                Lwt.return `Eof
+              | e ->
+                Log.err (fun f -> f "Socket.%s.writev %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
+                Lwt.return `Eof
             )
 
       let close t =
@@ -509,7 +522,7 @@ module Sockets = struct
             end
           | Uwt.Error error ->
             let msg = Printf.sprintf "Socket.%s.bind(%s, %d): %s" label (Ipaddr.to_string ip) port (Uwt.strerror error) in
-            Log.err (fun f -> f "Socket.%s.bind: %s" label msg);
+            Log.debug (fun f -> f "Socket.%s.bind: %s" label msg);
             deregister_connection idx;
             Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", "")) )
         >>= fun local_port ->
@@ -521,7 +534,7 @@ module Sockets = struct
              if Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.localhost) = 0
              || Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.any) = 0
              then begin
-               Log.info (fun f -> f "attempting a best-effort bind of ::1:%d" local_port);
+               Log.debug (fun f -> f "attempting a best-effort bind of ::1:%d" local_port);
                bind_one (Ipaddr.(V6 V6.localhost), local_port)
                >>= fun (idx, _, fd) ->
                Lwt.return [ idx, fd ]
@@ -529,7 +542,7 @@ module Sockets = struct
                Lwt.return []
              end
           ) (fun e ->
-              Log.info (fun f -> f "ignoring failed bind to ::1:%d (%s)" local_port (Printexc.to_string e));
+              Log.debug (fun f -> f "ignoring failed bind to ::1:%d (%s)" local_port (Printexc.to_string e));
               Lwt.return []
             )
         >>= fun extra ->
