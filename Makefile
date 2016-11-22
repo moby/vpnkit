@@ -47,10 +47,18 @@ test: setup.data
 	ocaml setup.ml -test
 
 install:
-	cp com.docker.slirp.exe '$(EXEDIR)'
+ifeq ($(OS),Windows_NT)
+	cp com.docker.slirp.exe '$(BINDIR)'
+else
+	cp _build/src/bin/main.native '$(BINDIR)/com.docker.slirp'
+endif
 
 uninstall:
-	@echo uninstall not implemented
+ifeq ($(OS),Windows_NT)
+	rm '$(BINDIR)\com.docker.slirp.exe'
+else
+	rm '$(BINDIR)/com.docker.slirp'
+endif
 
 OSS-LICENSES:
 	mkdir -p $(LICENSEDIRS)

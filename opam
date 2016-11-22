@@ -11,8 +11,8 @@ build-test: [
   ["./configure" "--enable-tests"]
   ["ocaml" "setup.ml" "-test"]
 ]
-install: [make "install"]
-remove: ["ocamlfind" "remove" "hostnet"]
+install: [make "install" "BINDIR=%{bin}%"]
+remove: [make "uninstall" "BINDIR=%{bin}%"]
 
 depends: [
   "ocamlfind" {build}
