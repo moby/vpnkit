@@ -1,5 +1,14 @@
 --- ./src/ocb_stubblr.ml
 +++ ./src/ocb_stubblr.ml
+@@ -154,7 +154,7 @@
+     let name = Pathname.(remove_extension clib |> basename) in
+     let name = String.(if is_prefix ~affix:"lib" name then drop ~max:3 name else name) in
+     S [A switch; A ("-l"^name)]
+-  and dep flag = Pathname.([remove_extension flag -.- "a"]) in
++  and dep flag = Pathname.([remove_extension flag -.- !Options.ext_lib]) in
+   pflag ["link"; "ocaml"; "library"; "byte"] tag (libarg "-dllib");
+   pflag ["link"; "ocaml"; "library"; "native"] tag  (libarg "-cclib");
+   pdep ["link"; "ocaml"] tag dep;
 @@ -170,9 +170,18 @@
    let c = env c and deps = env deps in
    let to_list str = List.filter ((<>) "\\") @@

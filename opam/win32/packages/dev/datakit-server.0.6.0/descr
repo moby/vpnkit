@@ -1,6 +1,0 @@
-A library to write Datakit servers
-
-The library exposes a VFS interface, that servers can use to write
-introspection libraries -- for instance to expose runtime parameters
-over 9p. The library does not depend on Irmin so is relatively
-lightweight to embed in any application.

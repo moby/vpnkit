@@ -34,7 +34,7 @@ depends: [
   "ocamlfind" {build}
   "cstruct" {>= "1.9.0" }
   "channel"
-  "mirage-types" {= "999"}
+  "mirage-types" {< "3.0.0"}
   "mirage-unix" {>= "1.1.0"}
   "mirage-console"
   "mirage-clock-unix" {>= "1.0.0"}

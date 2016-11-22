@@ -41,7 +41,7 @@ depends: [
   "fmt"
   "astring"
   "mirage-flow" { >= "1.1.0" }
-  "mirage-types-lwt" { = "999" }
+  "mirage-types-lwt" { >= "2.8.0" & <"3.0.0" }
   "ounit"
   "alcotest"
 ]

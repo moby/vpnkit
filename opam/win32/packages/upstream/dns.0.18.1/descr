@@ -1,5 +1,0 @@
-DNS client and server implementation
-
-This is a pure OCaml implementation of the DNS protocol. It is intended to be a
-reasonably high-performance implementation, but clarity is preferred rather
-than low-level performance hacks.
