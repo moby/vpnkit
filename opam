@@ -1,6 +1,21 @@
 opam-version: "1.2"
 maintainer: "David Scott <dave.scott@docker.com>"
-authors: [ "David Scott <dave.scott@docker.com>" ]
+authors: [
+	"Anil Madhavapeddy <anil@recoil.org>"
+	"David Scott <dave.scott@docker.com>"
+	"David Sheets <dsheets@docker.com>"
+	"Gaetan de Villele <gdevillele@gmail.com>"
+	"Ian Campbell <ian.campbell@docker.com>"
+	"Magnus Skjegstad <magnus@skjegstad.com>"
+	"Mindy Preston <mindy.preston@docker.com>"
+	"Sebastiaan van Stijn <github@gone.nl>"
+	"Thomas Gazagnaire <thomas@gazagnaire.com>"
+	"Thomas Leonard <thomas.leonard@docker.com>"
+]
+homepage:     "https://github.com/docker/vpnkit"
+bug-reports:  "https://github.com/docker/vpnkit/issues"
+dev-repo:     "https://github.com/docker/vpnkit.git"
+doc:          "https://docker.github.io/vpnkit/"
 
 build: [
   ["oasis" "setup"]
