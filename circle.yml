@@ -6,6 +6,8 @@ machine:
     OPAMJOBS: "2"
     MACOSX_DEPLOYMENT_TARGET: "10.10"
     CUSTOM_OPAM: "1"
+    OPAM_REPO=opam/darwin
+    OPAM_COMP="4.03.0"
 general:
   artifacts:
   - com.docker.slirp.tgz
@@ -17,10 +19,7 @@ checkout:
 dependencies:
   override:
   - brew install wget opam dylibbundler libffi pkg-config
-  - make depends
-  - make
-  - make OSS-LICENSES
-  - make COMMIT
+  - ./scripts/common.sh
 test:
   override:
   - make test

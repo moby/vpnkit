@@ -29,8 +29,7 @@ export PATH
 
 cd "${APPVEYOR_BUILD_FOLDER}"
 
-make depends
-make
-make OSS-LICENSES
-make COMMIT
-make test
+export REPO_ROOT=$(shell git rev-parse --show-toplevel)
+export OPAM_REPO=$(shell cygpath.exe -w "$(REPO_ROOT)/opam/win32")
+
+./common.sh

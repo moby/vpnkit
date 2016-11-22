@@ -11,14 +11,14 @@ BuildTools: ocamlbuild
 Description: proxy ethernet frames to and from sockets
 
 Executable slirp
-  Path: bin
+  Path: src/bin
   CompiledObject: best
   MainIs: main.ml
   BuildDepends: cmdliner, ofs, logs.fmt, hostnet, hvsock, hvsock.lwt-unix,
     datakit-server.fs9p, win-eventlog, asl, fd-send-recv
 
 Library hostnet
-  Path: hostnet
+  Path: src/hostnet
   Pack: true
   Findlibname: hostnet
   Modules: Error, Constants, Arp, Hostnet_dns, Filter, Frame, Cstructs, Capture, Mux, Slirp,
@@ -30,7 +30,7 @@ Library hostnet
     lwt.preemptive, threads, astring, datakit-server.vfs, dns-forward, tar
 
 Executable test_lwt
-  Path: hostnet_test
+  Path: src/hostnet_test
   CompiledObject: best
   MainIs: main_lwt.ml
   Build$: flag(tests)
@@ -38,7 +38,7 @@ Executable test_lwt
     dns.mirage, lwt.preemptive
 
 Executable test_uwt
-  Path: hostnet_test
+  Path: src/hostnet_test
   CompiledObject: best
   MainIs: main_uwt.ml
   Build$: flag(tests)
@@ -47,15 +47,15 @@ Executable test_uwt
 Test test_lwt
   Run$:               flag(tests)
   Command:            $test_lwt -q
-  WorkingDirectory:   hostnet_test
+  WorkingDirectory:   src/hostnet_test
 
 Test test_uwt
   Run$:               flag(tests)
   Command:            $test_uwt -q
-  WorkingDirectory:   hostnet_test
+  WorkingDirectory:   src/hostnet_test
 
 Library ofs
-  Path: ofs
+  Path: src/ofs
   Findlibname: ofs
   Modules: Active_list, Active_config
   BuildDepends: protocol-9p, protocol-9p.unix, cstruct, cstruct.lwt, lwt.unix, io-page.unix, logs,
@@ -66,5 +66,5 @@ Document ofs
   Type:                 ocamlbuild (0.4)
   BuildTools+:          ocamldoc
   Install:              true
-  XOCamlbuildPath:      ofs
+  XOCamlbuildPath:      src/ofs
   XOCamlbuildLibraries: ofs
