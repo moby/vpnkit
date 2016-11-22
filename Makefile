@@ -1,7 +1,7 @@
 REPO_ROOT=$(shell git rev-parse --show-toplevel)
 COMMIT_ID=$(shell git rev-parse HEAD)
-EXEDIR=C:\projects\vpnkit
-LICENSEDIRS=$(REPO_ROOT)/opam/licenses
+LICENSEDIRS=$(REPO_ROOT)/repo/licenses
+BINDIR?=$(shell pwd)
 
 .PHONY: com.docker.slirp.exe com.docker.slirp.tgz install uninstall OSS-LICENSES COMMIT
 
@@ -55,8 +55,8 @@ uninstall:
 OSS-LICENSES:
 	mkdir -p $(LICENSEDIRS)
 	cd $(LICENSEDIRS) && \
-	  $(OPAMFLAGS) $(REPO_ROOT)/opam/opam-licenses.sh slirp
-	$(REPO_ROOT)/opam/list-licenses.sh $(LICENSEDIRS) > OSS-LICENSES
+	  $(OPAMFLAGS) $(REPO_ROOT)/repo/opam-licenses.sh slirp
+	$(REPO_ROOT)/repo/list-licenses.sh $(LICENSEDIRS) > OSS-LICENSES
 
 COMMIT:
 	@echo $(COMMIT_ID) > COMMIT

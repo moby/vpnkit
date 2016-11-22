@@ -6,7 +6,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 OPAM_ROOT=${REPO_ROOT}/_build/opam
 
 # Collect the license metadata in a central place
-OUTPUT=${REPO_ROOT}/opam/licenses/
+OUTPUT=${REPO_ROOT}/repo/licenses/
 
 if [ $# = 0 ]; then
   echo "Usage:"

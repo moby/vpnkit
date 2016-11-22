@@ -6,8 +6,8 @@ machine:
     OPAMJOBS: "2"
     MACOSX_DEPLOYMENT_TARGET: "10.10"
     CUSTOM_OPAM: "1"
-    OPAM_REPO=opam/darwin
-    OPAM_COMP="4.03.0"
+    OPAM_REPO: repo/darwin
+    OPAM_COMP: "4.03.0"
 general:
   artifacts:
   - com.docker.slirp.tgz
