@@ -116,7 +116,7 @@ let start_introspection introspection_url root =
         >>= fun s ->
         Host.Sockets.Stream.Unix.listen s
           (fun flow ->
-            Server.accept ~root flow
+            Server.accept ~root ~msg:introspection_url flow
             >>= function
             | Result.Error (`Msg m) ->
               Log.err (fun f -> f "failed to establish 9P connection: %s" m);
