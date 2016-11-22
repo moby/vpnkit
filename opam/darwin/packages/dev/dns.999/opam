@@ -1,0 +1,67 @@
+opam-version: "1.2"
+maintainer: "anil@recoil.org"
+authors: [
+  "Anil Madhavapeddy"
+  "Tim Deegan"
+  "Richard Mortier"
+  "Haris Rotsos"
+  "David Sheets"
+  "Thomas Gazagnaire"
+  "Luke Dunstan"
+  "David Scott"
+]
+homepage: "https://github.com/mirage/ocaml-dns"
+bug-reports: "https://github.com/mirage/ocaml-dns/issues"
+license: "ISC"
+tags: ["org:mirage" "org:xapi-project"]
+dev-repo: "https://github.com/mirage/ocaml-dns.git"
+build: [
+  [
+    "ocaml"
+    "setup.ml"
+    "-configure"
+    "--prefix"
+    prefix
+    "--%{base-unix:enable}%-lwt"
+    "--%{mirage-types:enable}%-mirage"
+  ]
+  ["ocaml" "setup.ml" "-build"]
+]
+install: ["ocaml" "setup.ml" "-install"]
+build-test: [
+  [
+    "ocaml"
+    "setup.ml"
+    "-configure"
+    "--prefix"
+    prefix
+    "--%{base-unix:enable}%-lwt"
+    "--%{mirage-types:enable}%-mirage"
+    "--enable-tests"
+  ]
+  ["ocaml" "setup.ml" "-build"]
+  ["ocaml" "setup.ml" "-test" "-runner" "sequential"]
+]
+remove: ["ocamlfind" "remove" "dns"]
+depends: [
+  "ocamlfind" {build}
+  "base-bytes"
+  "lwt" {>= "2.4.7"}
+  "cstruct" {>= "1.0.1"}
+  "ppx_tools"
+  "re"
+  "cmdliner"
+  "ipaddr" {>= "2.6.0"}
+  "uri" {>= "1.7.0"}
+  "base64" {>= "2.0.0"}
+  "mirage-profile"
+  "hashcons"
+  "ounit" {test}
+  "pcap-format" {test}
+]
+depopts: ["async" "base-unix" "mirage-types"]
+conflicts: [
+  "mirage-types" {< "1.2.0"}
+  "async" {< "112.24.00"}
+]
+available: [ocaml-version >= "4.02.0"]
