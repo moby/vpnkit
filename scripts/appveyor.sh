@@ -29,7 +29,15 @@ export PATH
 
 cd "${APPVEYOR_BUILD_FOLDER}"
 
-export REPO_ROOT=$(shell git rev-parse --show-toplevel)
-export OPAM_REPO=$(shell cygpath.exe -w "$(REPO_ROOT)/opam.repo/win32")
+export REPO_ROOT=$(git rev-parse --show-toplevel)
+export OPAM_REPO=$(cygpath.exe -w "${REPO_ROOT}/repo/win32")
+export OPAMROOT=$(cygpath.exe -w "${REPO_ROOT}/_build/opam")
+# NOTE: this is where all the binaries will end up, e.g. `oasis`
+# This must be on the end of the path or else Windows will try to
+# execute the opam metadata file in vpnkit!
 export BINDIR='C:\projects\vpnkit'
-./common.sh
+export PATH="${PATH}:${BINDIR}"
+
+${APPVEYOR_BUILD_FOLDER}/scripts/common.sh
+
+make test
