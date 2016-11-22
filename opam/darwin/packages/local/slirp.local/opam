@@ -25,7 +25,7 @@ depends: [
   "uwt" {= "0.0.3"}
   "tcpip" { = "999" }
   "pcap-format"
-  "dns"
+  "dns" { = "999" }
   "dns-forward"
   "datakit-server"
   "hashcons" {= "1.0.1"}
