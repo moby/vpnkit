@@ -20,7 +20,7 @@ depends: [
   "ocamlfind" {build}
   "cstruct" {>= "1.3.0"}
   "lwt" {>= "2.4.3"}
-  "mirage-types" {>= "1.1.0"}
+  "mirage-types" {>= "2.3.0"}
   "io-page" {>= "1.0.0"}
   "uri"
   "logs"
