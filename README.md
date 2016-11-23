@@ -15,14 +15,11 @@ Building on Unix
 ----------------
 
 First install `wget`, `opam` using your package manager of choice.
-Install the OCaml library dependencies with:
+Build all the dependencies and the program itself with:
 ```
-make depends
+opam pin add vpnkit .
 ```
-Build the application using:
-```
-make
-```
+This will add the binary `com.docker.slirp` to your `$PATH`.
 
 Running with hyperkit
 ---------------------

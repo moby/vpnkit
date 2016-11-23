@@ -8,7 +8,7 @@ for commit in $(git rev-list origin/master..HEAD); do
             "AUTO: Update upstream packages" ];
         then
             echo "ERROR: ${commit} manually updates"
-            echo "opam/[darwin|win32]/packages/packages/upstream. Instead, please run:"
+            echo "repo/[darwin|win32]/packages/packages/upstream. Instead, please run:"
             echo ""
             echo "    make -C opam"
             echo ""
