@@ -39,5 +39,3 @@ export BINDIR='C:\projects\vpnkit'
 export PATH="${PATH}:${BINDIR}"
 
 ${APPVEYOR_BUILD_FOLDER}/scripts/common.sh
-
-make test

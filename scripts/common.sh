@@ -32,5 +32,6 @@ OPAMVERBOSE=1 opam install --deps-only slirp -y
 OPAMVERBOSE=1 opam reinstall tcpip -y -t
 
 OPAMVERBOSE=1 make
+OPAMVERBOSE=1 make test
 OPAMVERBOSE=1 make OSS-LICENSES
 OPAMVERBOSE=1 make COMMIT

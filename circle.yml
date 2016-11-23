@@ -19,4 +19,4 @@ dependencies:
   - scripts/common.sh
 test:
   override:
-  - make test
+  - echo Tests were run as part of the build
