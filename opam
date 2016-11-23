@@ -18,11 +18,10 @@ dev-repo:     "https://github.com/docker/vpnkit.git"
 doc:          "https://docker.github.io/vpnkit/"
 
 build: [
-  ["oasis" "setup"]
-  ["./configure" "--prefix" prefix]
-  ["ocaml" "setup.ml" "-build"]
+  [make]
 ]
 build-test: [
+  ["oasis" "setup"]
   ["./configure" "--enable-tests"]
   ["ocaml" "setup.ml" "-test"]
 ]
