@@ -1,15 +1,9 @@
 FROM ocaml/opam:alpine
-RUN sudo apk add --update ncurses
 ADD . /home/opam/src
-RUN sudo chown -R opam /home/opam/src/
-RUN opam repo add dev /home/opam/src
-RUN opam pin add -y -n proto-vmnet /home/opam/src/src/proto-vmnet
-RUN opam pin add -y -n ofs /home/opam/src/src/ofs
-RUN opam pin add -y -n hostnet /home/opam/src/src/hostnet
-RUN opam pin add -y -n osx-daemon /home/opam/src/src/osx-daemon
-RUN opam depext -u proto-vmnet
-RUN opam depext -u ofs
-RUN opam depext -u hostnet
-RUN opam install -j 2 -v -y proto-vmnet
-RUN opam install -j 2 -v -y ofs
-RUN opam install -j 2 -v -y hostnet
+# Latest packages plus some overrides are in this repo:
+RUN opam remote add vpnkit /home/opam/src/repo/darwin
+RUN opam pin add -y -n vpnkit /home/opam/src
+RUN opam depext vpnkit -y
+RUN opam install --deps-only vpnkit -y
+RUN opam pin remove vpnkit
+WORKDIR /home/opam/src
