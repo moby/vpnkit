@@ -29,9 +29,10 @@ install: [make "install" "BINDIR=%{bin}%"]
 remove: [make "uninstall" "BINDIR=%{bin}%"]
 
 depends: [
-  "ocamlfind" {build}
+  "ocamlfind"  {build}
   "ocamlbuild" {build}
-  "oasis" {build}
+  "oasis"      {build}
+  "alcotest"   {test}
   "result"
   "tar-format"
   "ipaddr"
@@ -56,6 +57,4 @@ depends: [
   "astring"
   "mirage-flow" { >= "1.1.0" }
   "mirage-types-lwt"
-  "ounit"
-  "alcotest"
 ]
