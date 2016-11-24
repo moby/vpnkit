@@ -21,9 +21,7 @@ build: [
   [make]
 ]
 build-test: [
-  ["oasis" "setup"]
-  ["./configure" "--enable-tests"]
-  ["ocaml" "setup.ml" "-test"]
+  [make "test"]
 ]
 install: [make "install" "BINDIR=%{bin}%"]
 remove: [make "uninstall" "BINDIR=%{bin}%"]
