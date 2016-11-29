@@ -1,6 +1,6 @@
 let src =
   let src = Logs.Src.create "ppp" ~doc:"point-to-point network link" in
-  Logs.Src.set_level src (Some Logs.Debug);
+  Logs.Src.set_level src (Some Logs.Info);
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
