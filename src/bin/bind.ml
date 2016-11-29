@@ -2,7 +2,7 @@ module Lwt_result = Hostnet.Hostnet_lwt_result (* remove when new Lwt is release
 
 let src =
   let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
-  Logs.Src.set_level src (Some Logs.Debug);
+  Logs.Src.set_level src (Some Logs.Info);
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
