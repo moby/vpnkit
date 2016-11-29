@@ -2,7 +2,7 @@ open Lwt.Infix
 
 let src =
   let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
-  Logs.Src.set_level src (Some Logs.Debug);
+  Logs.Src.set_level src (Some Logs.Info);
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -284,7 +284,6 @@ let start_udp_proxy description vsock_path_var remote_port server =
           read v
           >>= function
           | None ->
-            Log.debug (fun f -> f "%s: shutting down from vsock thread: UDP stream desychronised" description);
             Lwt.return false
           | Some (buf, address) ->
             Socket.Datagram.Udp.sendto fd address buf
