@@ -169,12 +169,12 @@ module Datagram = struct
       let description = "udp:" ^ (string_of_address address) in
       register_connection description
       >>= fun idx ->
-      let pf = match fst address with
-        | Ipaddr.V4 _ -> Lwt_unix.PF_INET
-        | Ipaddr.V6 _ -> Lwt_unix.PF_INET6 in
+      let pf, addr = match fst address with
+        | Ipaddr.V4 _ -> Lwt_unix.PF_INET, Unix.inet_addr_any
+        | Ipaddr.V6 _ -> Lwt_unix.PF_INET6, Unix.inet6_addr_any in
       let fd = Lwt_unix.socket pf Lwt_unix.SOCK_DGRAM 0 in
       (* Win32 requires all sockets to be bound however macOS and Linux don't *)
-      (try Lwt_unix.bind fd (Lwt_unix.ADDR_INET(Unix.inet_addr_any, 0)) with _ -> ());
+      (try Lwt_unix.bind fd (Lwt_unix.ADDR_INET(addr, 0)) with _ -> ());
       let sockaddr = sockaddr_of_address address in
       Lwt.return (Result.Ok (of_fd ~idx ~description ?read_buffer_size sockaddr address fd))
 

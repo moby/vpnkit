@@ -133,15 +133,15 @@ module Sockets = struct
         let description = "udp:" ^ (string_of_address address) in
         register_connection description
         >>= fun idx ->
-        let label, fd =
+        let label, fd, addr =
           try match fst @@ address with
-            | Ipaddr.V4 _ -> "UDPv4", Uwt.Udp.init_ipv4_exn ()
-            | Ipaddr.V6 _ -> "UDPv6", Uwt.Udp.init_ipv6_exn ()
+            | Ipaddr.V4 _ -> "UDPv4", Uwt.Udp.init_ipv4_exn (), Unix.inet_addr_any
+            | Ipaddr.V6 _ -> "UDPv6", Uwt.Udp.init_ipv6_exn (), Unix.inet6_addr_any
           with e -> deregister_connection idx; raise e in
         Lwt.catch
           (fun () ->
              let sockaddr = make_sockaddr address in
-             let result = Uwt.Udp.bind fd ~addr:(Unix.ADDR_INET(Unix.inet_addr_any, 0)) () in
+             let result = Uwt.Udp.bind fd ~addr:(Unix.ADDR_INET(addr, 0)) () in
              if not(Uwt.Int_result.is_ok result) then begin
                let error = Uwt.Int_result.to_error result in
                Log.err (fun f -> f "Socket.%s.connect(%s): %s" label (string_of_address address) (Uwt.strerror error));
