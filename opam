@@ -34,7 +34,7 @@ depends: [
   "result"
   "tar-format"
   "ipaddr"
-  "lwt"
+  "lwt" { < "3.0.0" }
   "uwt" { = "0.0.3" }
   "tcpip" { >= "2.8.0" & < "3.0.0" }
   "pcap-format"
