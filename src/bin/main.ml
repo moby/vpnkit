@@ -90,6 +90,9 @@ let hvsock_connect_forever url sockaddr callback =
         Log.info (fun f -> f "hvsock connected successfully");
         callback socket
       ) (function
+        | Unix.Unix_error(Unix.ETIMEDOUT, _, _) ->
+          HV.Hvsock.close socket
+          (* no need to add more delay *)
         | Unix.Unix_error(_, _, _) ->
           HV.Hvsock.close socket
           >>= fun () ->
