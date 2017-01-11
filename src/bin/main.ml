@@ -85,7 +85,7 @@ let hvsock_connect_forever url sockaddr callback =
     let socket = HV.Hvsock.create () in
     Lwt.catch
       (fun () ->
-        HV.Hvsock.connect socket sockaddr
+        HV.Hvsock.connect ~timeout_ms:300 socket sockaddr
         >>= fun () ->
         Log.info (fun f -> f "hvsock connected successfully");
         callback socket
