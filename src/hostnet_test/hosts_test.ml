@@ -17,10 +17,11 @@ let examples = [
     "# localhost is used to configure the loopback interface";
     "# when the system is booting.  Do not change this entry.";
     "##";
-    "127.0.0.1      	localhost";
+    "127.0.0.1      	localhost mylocalhostalias";
     "255.255.255.255	broadcasthost";
     "::1             localhost";
   ], [
+  "mylocalhostalias", Ipaddr.V4 Ipaddr.V4.localhost;
   "localhost", Ipaddr.V4 Ipaddr.V4.localhost;
   "broadcasthost", Ipaddr.of_string_exn "255.255.255.255";
   "localhost", Ipaddr.of_string_exn "::1";
