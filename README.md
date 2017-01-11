@@ -1,6 +1,8 @@
 VPN-friendly networking devices for [HyperKit](https://github.com/docker/hyperkit)
 ===============================
 
+[![Build Status (OSX)](https://circleci.com/gh/docker/vpnkit.png)](https://circleci.com/gh/docker/vpnkit)
+
 Binary artefacts are built by CI:
 
 - [MacOS](https://circleci.com/gh/docker/vpnkit)
