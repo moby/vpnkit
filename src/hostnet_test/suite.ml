@@ -307,7 +307,7 @@ let test_tcp = [
 module F = Forwarding.Make(Host)
 module N = Nat.Make(Host)
 
-let suite = [
+let suite = Hosts_test.suite @ [
   "Forwarding", F.test;
   "DHCP", test_dhcp;
   "DNS UDP", test_dns;
