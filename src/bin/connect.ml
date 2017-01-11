@@ -70,7 +70,7 @@ module Make_hvsock(Host: Sig.HOST) = struct
       Host.Sockets.register_connection description
       >>= fun idx ->
       let fd = F.Hvsock.create () in
-      F.Hvsock.connect ~timeout_ms:1000 fd sockaddr
+      F.Hvsock.connect fd sockaddr
       >>= fun () ->
       let flow = F.connect fd in
       Lwt.return { idx; flow }
