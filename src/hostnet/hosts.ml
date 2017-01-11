@@ -29,9 +29,9 @@ let of_string txt =
             | ' ' | '\n' | '\011' | '\012' | '\r' | '\t' -> true
             | _ -> false in
           match String.fields ~empty:false ~is_sep:whitespace line with
-          | [ addr; name ] ->
+          | addr :: names ->
             begin match Ipaddr.of_string addr with
-            | Some addr -> (name, addr) :: acc
+            | Some addr -> List.map (fun name -> (name, addr)) names @ acc
             | None ->
               Log.err (fun f -> f "Failed to parse address '%s' from hosts file" addr);
               acc
