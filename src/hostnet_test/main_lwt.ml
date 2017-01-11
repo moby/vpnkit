@@ -11,7 +11,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 module Tests = Suite.Make(Host_lwt_unix)
 
 let tests =
-  (List.map (fun (name, test) -> name ^ " with Lwt", test) Tests.suite) @
+  (List.map (fun (name, test) -> name ^ "_with_Lwt", test) Tests.suite) @
   Hosts_test.suite
 
 (* Run it *)
