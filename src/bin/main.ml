@@ -57,7 +57,7 @@ module Dns_policy = Hostnet_dns.Policy(Host.Files)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 module Forward_unix = Forward.Make(Connect_unix)(Bind)
 module Forward_hvsock = Forward.Make(Connect_hvsock)(Bind)
-module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Main)
+module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Fn)
 module Hosts = Hosts.Make(Host.Files)
 
 let file_descr_of_int (x: int) : Unix.file_descr =

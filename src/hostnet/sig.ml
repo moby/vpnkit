@@ -160,6 +160,20 @@ module type HOST = sig
     val run_in_main: (unit -> 'a Lwt.t) -> 'a
     (** Run the function in the main thread *)
   end
+
+  module Fn: sig
+    (** Call a blocking ('a -> 'b) function in a ('a -> 'b Lwt.t) context *)
+
+    type ('request, 'response) t
+    (** A function from 'request to 'response *)
+
+    val create: ('request -> 'response) -> ('request, 'response) t
+    val destroy: ('request, 'response) t -> unit
+
+    val fn: ('request, 'response) t -> 'request -> 'response Lwt.t
+    (** Apply the function *)
+
+  end
 end
 
 module type VMNET = sig

@@ -44,7 +44,7 @@ module Make_unix(Host: Sig.HOST) = struct
 end
 
 module Make_hvsock(Host: Sig.HOST) = struct
-  module F = Flow_lwt_hvsock_shutdown.Make(Host.Time)(Host.Main)
+  module F = Flow_lwt_hvsock_shutdown.Make(Host.Time)(Host.Fn)
 
   type flow = {
     idx: int;

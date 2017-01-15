@@ -771,3 +771,10 @@ module Main = struct
   let run = Lwt_main.run
   let run_in_main = Lwt_preemptive.run_in_main
 end
+
+module Fn = struct
+  type ('request, 'response) t = 'request -> 'response
+  let create f = f
+  let destroy _ = ()
+  let fn = Lwt_preemptive.detach
+end
