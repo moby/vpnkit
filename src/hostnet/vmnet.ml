@@ -178,7 +178,7 @@ type t = {
   stats: stats;
   client_macaddr: Macaddr.t;
   server_macaddr: Macaddr.t;
-  write_header: Cstruct.t;
+  mutable write_header: Cstruct.t;
   write_m: Lwt_mutex.t;
   mutable pcap: Unix.file_descr option;
   mutable pcap_size_limit: int64 option;
@@ -318,7 +318,7 @@ let stop_capture t =
 let make ~client_macaddr ~server_macaddr fd =
   let fd = Some fd in
   let stats = { rx_bytes = 0L; rx_pkts = 0l; tx_bytes = 0L; tx_pkts = 0l } in
-  let write_header = Cstruct.create Packet.sizeof in
+  let write_header = Cstruct.create (1024 * Packet.sizeof) in
   let write_m = Lwt_mutex.create () in
   let pcap = None in
   let pcap_size_limit = None in
@@ -404,9 +404,10 @@ let writev t bufs =
              );
              Lwt.return_unit
            end else begin
-             Packet.marshal len t.write_header;
+             let buf = Cstruct.create Packet.sizeof in
+             Packet.marshal len buf;
              let fd = get_fd t in
-             Channel.write_buffer fd t.write_header;
+             Channel.write_buffer fd buf;
              Log.debug (fun f ->
                  let b = Buffer.create 128 in
                  List.iter (Cstruct.hexdump_to_buffer b) bufs;
@@ -493,9 +494,13 @@ let write t buf =
              );
              Lwt.return_unit
            end else begin
+             if Cstruct.len t.write_header < Packet.sizeof then begin
+               t.write_header <- Cstruct.create (1024 * Packet.sizeof)
+             end;
              Packet.marshal len t.write_header;
              let fd = get_fd t in
-             Channel.write_buffer fd t.write_header;
+             Channel.write_buffer fd (Cstruct.sub t.write_header 0 Packet.sizeof);
+             t.write_header <- Cstruct.shift t.write_header Packet.sizeof;
              Log.debug (fun f ->
                  let b = Buffer.create 128 in
                  Cstruct.hexdump_to_buffer b buf;

@@ -33,7 +33,7 @@ depends: [
   "cmdliner"
   "charrua-core" { >= "0.3" }
   "named-pipe" { >= "0.4.0" }
-  "hvsock"
+  "hvsock" { >= "0.13.0" }
   "asl"
   "win-eventlog"
   "fd-send-recv"

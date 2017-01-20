@@ -897,3 +897,10 @@ module Main = struct
   let run = Uwt.Main.run
   let run_in_main = Uwt_preemptive.run_in_main
 end
+
+module Fn = struct
+  type ('request, 'response) t = 'request -> 'response
+  let create f = f
+  let destroy _ = ()
+  let fn = Uwt_preemptive.detach
+end
