@@ -44,7 +44,9 @@ module Make_unix(Host: Sig.HOST) = struct
 end
 
 module Make_hvsock(Host: Sig.HOST) = struct
-  module F = Flow_lwt_hvsock_shutdown.Make(Host.Time)(Host.Fn)
+  (* Avoid using `detach` because we don't want to exhaust the
+     thread pool since this will block the main TCP/IP stack. *)
+  module F = Flow_lwt_hvsock_shutdown.Make(Host.Time)(Lwt_hvsock_main_thread.Make(Host.Main))
 
   type flow = {
     idx: int;
