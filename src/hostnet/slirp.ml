@@ -215,10 +215,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let touch t =
       t.last_active_time <- Unix.gettimeofday ()
 
-    let create recorder switch arp_table ip =
+    let create recorder switch arp_table ip mtu =
       let netif = Switch.port switch ip in
       let open Infix in
-      or_error "Stack_ethif.connect" @@ Stack_ethif.connect netif
+      or_error "Stack_ethif.connect" @@ Stack_ethif.connect ~mtu netif
       >>= fun ethif ->
       or_error "Stack_arpv4.connect" @@ Stack_arpv4.connect ~table:arp_table ethif
       >>= fun arp ->
@@ -613,7 +613,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun () ->
     delete_unused_endpoints t ()
 
-  let connect x peer_ip local_ip extra_dns_ip get_domain_search get_domain_name =
+  let connect x peer_ip local_ip extra_dns_ip mtu get_domain_search get_domain_name =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
     let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
@@ -670,7 +670,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           then Lwt.return (`Ok (IPMap.find ip t.endpoints))
           else begin
             let open Infix in
-            Endpoint.create interface switch arp_table ip
+            Endpoint.create interface switch arp_table ip mtu
             >>= fun endpoint ->
             t.endpoints <- IPMap.add ip endpoint t.endpoints;
             Lwt.return (`Ok endpoint)
@@ -984,5 +984,5 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
              monitor_pcap_settings t.pcap_settings
           )
       );
-    connect x t.peer_ip t.local_ip t.extra_dns_ip t.get_domain_search t.get_domain_name
+    connect x t.peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name
 end
