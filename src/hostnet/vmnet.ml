@@ -18,8 +18,6 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
-let default_mtu = 1500
-
 let ethernet_header_length = 14 (* no VLAN *)
 
 module Init = struct
@@ -121,8 +119,7 @@ module Vif = struct
 
   let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
 
-  let create client_macaddr () =
-    let mtu = default_mtu in
+  let create client_macaddr mtu () =
     let max_packet_size = 1550 in
     { mtu; max_packet_size; client_macaddr }
 
@@ -178,6 +175,7 @@ type t = {
   stats: stats;
   client_macaddr: Macaddr.t;
   server_macaddr: Macaddr.t;
+  mtu: int;
   mutable write_header: Cstruct.t;
   write_m: Lwt_mutex.t;
   mutable pcap: Unix.file_descr option;
@@ -219,7 +217,7 @@ let server_negotiate t =
       Lwt.return (Command.unmarshal buf)
       >>= fun (command, _) ->
       Log.debug (fun f -> f "PPP.negotiate: received %s" (Command.to_string command));
-      let vif = Vif.create t.client_macaddr () in
+      let vif = Vif.create t.client_macaddr t.mtu () in
       let buf = Cstruct.create Vif.sizeof in
       let (_: Cstruct.t) = Vif.marshal vif buf in
       let open Lwt.Infix in
@@ -315,7 +313,7 @@ let stop_capture t =
       stop_capture_already_locked t
     )
 
-let make ~client_macaddr ~server_macaddr fd =
+let make ~client_macaddr ~server_macaddr ~mtu fd =
   let fd = Some fd in
   let stats = { rx_bytes = 0L; rx_pkts = 0l; tx_bytes = 0L; tx_pkts = 0l } in
   let write_header = Cstruct.create (1024 * Packet.sizeof) in
@@ -326,23 +324,23 @@ let make ~client_macaddr ~server_macaddr fd =
   let listeners = [] in
   let listening = false in
   let after_disconnect, after_disconnect_u = Lwt.task () in
-  { fd; stats; client_macaddr; server_macaddr; write_header; write_m; pcap;
+  { fd; stats; client_macaddr; server_macaddr; mtu; write_header; write_m; pcap;
     pcap_size_limit; pcap_m; listeners; listening; after_disconnect; after_disconnect_u }
 
 type fd = C.flow
 
-let of_fd ~client_macaddr ~server_macaddr flow =
+let of_fd ~client_macaddr ~server_macaddr ~mtu flow =
   let open Lwt_result.Infix in
   let channel = Channel.create flow in
-  let t = make ~client_macaddr ~server_macaddr channel in
+  let t = make ~client_macaddr ~server_macaddr ~mtu channel in
   server_negotiate t
   >>= fun () ->
   Lwt_result.return t
 
-let client_of_fd ~client_macaddr ~server_macaddr flow =
+let client_of_fd ~client_macaddr ~server_macaddr ~mtu flow =
   let open Lwt_result.Infix in
   let channel = Channel.create flow in
-  let t = make ~client_macaddr ~server_macaddr channel in
+  let t = make ~client_macaddr ~server_macaddr ~mtu channel in
   client_negotiate t
   >>= fun () ->
   Lwt_result.return t
@@ -398,9 +396,9 @@ let writev t bufs =
            capture t bufs
            >>= fun () ->
            let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
-           if len > (default_mtu + ethernet_header_length) then begin
+           if len > (t.mtu + ethernet_header_length) then begin
              Log.err (fun f ->
-               f "Dropping over-large ethernet frame, length = %d, mtu = %d" len default_mtu
+               f "Dropping over-large ethernet frame, length = %d, mtu = %d" len t.mtu
              );
              Lwt.return_unit
            end else begin
@@ -488,9 +486,9 @@ let write t buf =
            capture t [ buf ]
            >>= fun () ->
            let len = Cstruct.len buf in
-           if len > (default_mtu + ethernet_header_length) then begin
+           if len > (t.mtu + ethernet_header_length) then begin
              Log.err (fun f ->
-               f "Dropping over-large ethernet frame, length = %d, mtu = %d" len default_mtu
+               f "Dropping over-large ethernet frame, length = %d, mtu = %d" len t.mtu
              );
              Lwt.return_unit
            end else begin

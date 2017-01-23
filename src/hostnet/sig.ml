@@ -190,7 +190,7 @@ module type VMNET = sig
   type fd
 
   val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t
-    -> fd -> t Error.t
+    -> mtu:int -> fd -> t Error.t
 
   val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 

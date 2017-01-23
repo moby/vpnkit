@@ -13,13 +13,13 @@ val after_disconnect: t -> unit Lwt.t
 
 val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
 
-val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.flow -> t Error.t
-(** [of_fd ~client_macaddr ~server_macaddr fd] negotiates with the client over
+val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> mtu:int -> C.flow -> t Error.t
+(** [of_fd ~client_macaddr ~server_macaddr ~mtu fd] negotiates with the client over
     [fd]. The client uses [client_macaddr] as the source address of all its ethernet
     frames. The server uses [server_macaddr] as the source address of all its
-    ethernet frames. *)
+    ethernet frames and sets the MTU to [mtu]. *)
 
-val client_of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> C.flow -> t Error.t
+val client_of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> mtu:int -> C.flow -> t Error.t
 
 val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 (** [start_capture t ?size_limit filename] closes any existing pcap capture

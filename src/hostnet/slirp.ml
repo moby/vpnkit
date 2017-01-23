@@ -23,6 +23,8 @@ let default_dns_extra = []
    to respect the Do Not Fragment bit. *)
 let safe_outgoing_mtu = 1452 (* packets above this size with DNF set will get ICMP errors *)
 
+let default_mtu = 1500 (* used for the virtual ethernet link *)
+
 let log_exception_continue description f =
   Lwt.catch
     (fun () -> f ())
@@ -73,6 +75,7 @@ type config = {
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
   pcap_settings: pcap Active_config.values;
+  mtu: int;
 }
 
 module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST) = struct
@@ -936,8 +939,16 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       monitor_dns_settings settings in
     Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings dns_settings));
 
-    Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s domain_search:%s"
-                 (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip) (String.concat " " !domain_search)
+    let mtu_path = driver @ [ "slirp"; "mtu" ] in
+    Config.int config ~default:default_mtu mtu_path
+    >>= fun mtus ->
+    Lwt.async (fun () -> restart_on_change "slirp/mtu" string_of_int mtus);
+    let mtu = Active_config.hd mtus in
+
+    Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s domain_search:%s mtu:%d"
+                 (print_pcap @@ Active_config.hd pcap_settings)
+                 (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
+                 (String.concat " " !domain_search) mtu
              );
     let t = {
       peer_ip;
@@ -946,11 +957,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       get_domain_search;
       get_domain_name;
       pcap_settings;
+      mtu;
     } in
     Lwt.return t
 
   let connect t client =
-    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr client
+    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr ~mtu:t.mtu client
     >>= fun x ->
     Log.debug (fun f -> f "accepted vmnet connection");
 

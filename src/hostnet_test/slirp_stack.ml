@@ -97,6 +97,7 @@ let config =
     get_domain_search = (fun () -> []);
     get_domain_name = (fun () -> "local");
     pcap_settings = Active_config.Value(None, never);
+    mtu = 1500;
   }
 
 (* This is a hacky way to get a hancle to the server side of the stack. *)
@@ -143,7 +144,7 @@ let with_stack f =
   Log.info (fun f -> f "Made a loopback connection");
   let client_macaddr = Hostnet.Slirp.client_macaddr in
   let server_macaddr = Hostnet.Slirp.server_macaddr in
-  VMNET.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr flow
+  VMNET.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr ~mtu:1500 flow
   >>= function
   | Result.Error (`Msg x ) ->
     (* Server will close when it gets EOF *)
