@@ -23,7 +23,9 @@ let default_dns_extra = []
    to respect the Do Not Fragment bit. *)
 let safe_outgoing_mtu = 1452 (* packets above this size with DNF set will get ICMP errors *)
 
-let default_mtu = 1500 (* used for the virtual ethernet link *)
+(* The default MTU is limited by the maximum message size on a Hyper-V socket.
+   On currently available windows versions, we need to stay below 8192 bytes *)
+let default_mtu = 8000 (* used for the virtual ethernet link *)
 
 let log_exception_continue description f =
   Lwt.catch
