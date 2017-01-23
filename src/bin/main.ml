@@ -265,7 +265,8 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       extra_dns_ip = [];
       get_domain_search = (fun () -> []);
       get_domain_name = (fun () -> "local");
-      pcap_settings = Active_config.Value(pcap, never) } in
+      pcap_settings = Active_config.Value(pcap, never);
+      mtu = 1500; } in
 
   let config = match db_path with
     | Some db_path ->

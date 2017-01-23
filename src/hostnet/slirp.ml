@@ -17,7 +17,15 @@ let default_peer = "192.168.65.2"
 let default_host = "192.168.65.1"
 let default_dns_extra = []
 
-let mtu = 1452 (* packets above this size with DNF set will get ICMP errors *)
+(* When forwarding TCP, the connection is proxied so the MTU/MSS is link-local.
+   When forwarding UDP, the datagram on the internal link is the same size as
+   the corresponding datagram on the external link, so we have to be careful
+   to respect the Do Not Fragment bit. *)
+let safe_outgoing_mtu = 1452 (* packets above this size with DNF set will get ICMP errors *)
+
+(* The default MTU is limited by the maximum message size on a Hyper-V socket.
+   On currently available windows versions, we need to stay below 8192 bytes *)
+let default_mtu = 8000 (* used for the virtual ethernet link *)
 
 let log_exception_continue description f =
   Lwt.catch
@@ -69,6 +77,7 @@ type config = {
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
   pcap_settings: pcap Active_config.values;
+  mtu: int;
 }
 
 module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST) = struct
@@ -208,10 +217,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let touch t =
       t.last_active_time <- Unix.gettimeofday ()
 
-    let create recorder switch arp_table ip =
+    let create recorder switch arp_table ip mtu =
       let netif = Switch.port switch ip in
       let open Infix in
-      or_error "Stack_ethif.connect" @@ Stack_ethif.connect netif
+      or_error "Stack_ethif.connect" @@ Stack_ethif.connect ~mtu netif
       >>= fun ethif ->
       or_error "Stack_arpv4.connect" @@ Stack_arpv4.connect ~table:arp_table ethif
       >>= fun arp ->
@@ -312,7 +321,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         set_icmpv4_csum header 0x0000;
         (* this field is unused for icmp destination unreachable *)
         set_icmpv4_id header 0x00;
-        set_icmpv4_seq header mtu;
+        set_icmpv4_seq header safe_outgoing_mtu;
         let icmp_payload = match ip_payload with
           | Some ip_payload ->
             if (Cstruct.len ip_payload > 8) then begin
@@ -403,7 +412,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         if Cstruct.len payload < len then begin
           Log.err (fun f -> f "%s: dropping because reported len %d actual len %d" description len (Cstruct.len payload));
           Lwt.return_unit
-        end else if dnf && (Cstruct.len payload > mtu) then begin
+        end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
           Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
         end else begin
           (* [1] For UDP to our local address, rewrite the destination to localhost.
@@ -466,7 +475,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         if Cstruct.len payload < len then begin
           Log.err (fun f -> f "%s: dropping because reported len %d actual len %d" description len (Cstruct.len payload));
           Lwt.return_unit
-        end else if dnf && (Cstruct.len payload > mtu) then begin
+        end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
           Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
         end else begin
           let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 dst, dst_port; payload } in
@@ -606,7 +615,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun () ->
     delete_unused_endpoints t ()
 
-  let connect x peer_ip local_ip extra_dns_ip get_domain_search get_domain_name =
+  let connect x peer_ip local_ip extra_dns_ip mtu get_domain_search get_domain_name =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
     let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
@@ -663,7 +672,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           then Lwt.return (`Ok (IPMap.find ip t.endpoints))
           else begin
             let open Infix in
-            Endpoint.create interface switch arp_table ip
+            Endpoint.create interface switch arp_table ip mtu
             >>= fun endpoint ->
             t.endpoints <- IPMap.add ip endpoint t.endpoints;
             Lwt.return (`Ok endpoint)
@@ -932,8 +941,16 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       monitor_dns_settings settings in
     Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings dns_settings));
 
-    Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s domain_search:%s"
-                 (print_pcap @@ Active_config.hd pcap_settings) (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip) (String.concat " " !domain_search)
+    let mtu_path = driver @ [ "slirp"; "mtu" ] in
+    Config.int config ~default:default_mtu mtu_path
+    >>= fun mtus ->
+    Lwt.async (fun () -> restart_on_change "slirp/mtu" string_of_int mtus);
+    let mtu = Active_config.hd mtus in
+
+    Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s domain_search:%s mtu:%d"
+                 (print_pcap @@ Active_config.hd pcap_settings)
+                 (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
+                 (String.concat " " !domain_search) mtu
              );
     let t = {
       peer_ip;
@@ -942,11 +959,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       get_domain_search;
       get_domain_name;
       pcap_settings;
+      mtu;
     } in
     Lwt.return t
 
   let connect t client =
-    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr client
+    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr ~mtu:t.mtu client
     >>= fun x ->
     Log.debug (fun f -> f "accepted vmnet connection");
 
@@ -968,5 +986,5 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
              monitor_pcap_settings t.pcap_settings
           )
       );
-    connect x t.peer_ip t.local_ip t.extra_dns_ip t.get_domain_search t.get_domain_name
+    connect x t.peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name
 end
