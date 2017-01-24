@@ -120,7 +120,7 @@ module Vif = struct
   let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
 
   let create client_macaddr mtu () =
-    let max_packet_size = 1550 in
+    let max_packet_size = mtu + 50 in
     { mtu; max_packet_size; client_macaddr }
 
   let sizeof = sizeof_msg
