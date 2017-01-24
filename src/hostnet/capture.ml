@@ -18,21 +18,28 @@ module Make(Input: Sig.VMNET) = struct
 
   type packet = {
     len: int;
+    orig_len: int;
     time: float;
     bufs: Cstruct.t list;
   }
 
   type rule = {
     predicate: Frame.t -> bool;
+    snaplen: int;
     limit: int;
     packets: packet Queue.t;
     mutable nr_bytes: int;
   }
 
   let push rule bufs =
+    let orig_len = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
+    let bufs =
+      if Cstructs.len bufs > rule.snaplen
+      then Cstructs.sub bufs 0 rule.snaplen
+      else bufs in
     let len = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
     let time = Unix.gettimeofday () in
-    let packet = { len; time; bufs } in
+    let packet = { len; orig_len; time; bufs } in
     Queue.push packet rule.packets;
     rule.nr_bytes <- rule.nr_bytes + len;
     while rule.nr_bytes > rule.limit do
@@ -54,7 +61,7 @@ module Make(Input: Sig.VMNET) = struct
     set_pcap_header_version_minor file_header_buf Pcap.minor_version;
     set_pcap_header_thiszone file_header_buf 0l;
     set_pcap_header_sigfigs file_header_buf 4l;
-    set_pcap_header_snaplen file_header_buf 1500l;
+    set_pcap_header_snaplen file_header_buf (Int32.of_int rule.snaplen);
     set_pcap_header_network file_header_buf (Pcap.Network.to_int32 Pcap.Network.Ethernet);
 
     let frame_header_buf = Cstruct.create Pcap.sizeof_pcap_packet in
@@ -65,7 +72,7 @@ module Make(Input: Sig.VMNET) = struct
       set_pcap_packet_ts_sec frame_header_buf secs;
       set_pcap_packet_ts_usec frame_header_buf usecs;
       set_pcap_packet_incl_len frame_header_buf @@ Int32.of_int p.len;
-      set_pcap_packet_orig_len frame_header_buf @@ Int32.of_int p.len;
+      set_pcap_packet_orig_len frame_header_buf @@ Int32.of_int p.orig_len;
       frame_header_buf in
 
     let open_ () =
@@ -133,10 +140,10 @@ module Make(Input: Sig.VMNET) = struct
     stats: stats;
   }
 
-  let add_match ~t ~name ~limit ~predicate =
+  let add_match ~t ~name ~limit ~snaplen ~predicate =
     let packets = Queue.create () in
     let nr_bytes = 0 in
-    let rule = { predicate; limit; packets; nr_bytes } in
+    let rule = { predicate; limit; snaplen; packets; nr_bytes } in
     Hashtbl.replace t.rules name rule
 
   let bad_pcap = "bad.pcap"
@@ -149,7 +156,7 @@ module Make(Input: Sig.VMNET) = struct
     let t = { input; rules; stats } in
     (* Add a special capture rule for packets for which there is an error
        processing the packet captures. Ideally there should be no matches! *)
-    add_match ~t ~name:bad_pcap ~limit:1048576 ~predicate:(fun _ -> false);
+    add_match ~t ~name:bad_pcap ~limit:1048576 ~snaplen:1500 ~predicate:(fun _ -> false);
     Lwt.return (`Ok t)
 
   let filesystem t =

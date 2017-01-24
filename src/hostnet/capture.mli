@@ -7,7 +7,7 @@ module Make(Input: Sig.VMNET): sig
   (** Capture traffic from a network, match against a set of capture rules
       and keep a limited amount of the most recent traffic that matches. *)
 
-  val add_match: t:t -> name:string -> limit:int -> predicate:(Frame.t -> bool) -> unit
+  val add_match: t:t -> name:string -> limit:int -> snaplen:int -> predicate:(Frame.t -> bool) -> unit
   (** Start capturing traffic which matches a given rule *)
 
   val filesystem: t -> Vfs.Dir.t

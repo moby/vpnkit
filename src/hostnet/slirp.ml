@@ -628,9 +628,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let kib = 1024 in
     let mib = 1024 * kib in
     (* Capture 1 MiB of all traffic *)
-    Netif.add_match ~t:interface ~name:"all.pcap" ~limit:mib ~predicate:(fun _ -> true);
+    Netif.add_match ~t:interface ~name:"all.pcap" ~limit:mib ~snaplen:1500 ~predicate:(fun _ -> true);
     (* Capture 256 KiB of DNS traffic *)
-    Netif.add_match ~t:interface ~name:"dns.pcap" ~limit:(256 * kib) ~predicate:is_dns;
+    Netif.add_match ~t:interface ~name:"dns.pcap" ~limit:(256 * kib) ~snaplen:1500 ~predicate:is_dns;
 
     Switch.connect interface
     >>= fun switch ->
