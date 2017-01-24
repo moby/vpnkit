@@ -10,7 +10,6 @@ type config = {
   extra_dns_ip: Ipaddr.V4.t list;
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
-  pcap_settings: pcap Active_config.values;
   mtu: int;
 }
 (** A slirp TCP/IP stack ready to accept connections *)

@@ -76,7 +76,6 @@ type config = {
   extra_dns_ip: Ipaddr.V4.t list;
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
-  pcap_settings: pcap Active_config.values;
   mtu: int;
 }
 
@@ -756,30 +755,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   let create config =
     let driver = [ "com.docker.driver.amd64-linux" ] in
 
-    let pcap_path = driver @ [ "slirp"; "capture" ] in
-    Config.string_option config pcap_path
-    >>= fun string_pcap_settings ->
-    let parse_pcap = function
-      | None -> Lwt.return None
-      | Some x ->
-        begin match Stringext.split (String.trim x) ~on:':' with
-          | [ filename ] ->
-            (* Assume 10MiB limit for safety *)
-            Lwt.return (Some (filename, Some 16777216L))
-          | [ filename; limit ] ->
-            let limit =
-              try
-                Int64.of_string limit
-              with
-              | _ -> 16777216L in
-            let limit = if limit = 0L then None else Some limit in
-            Lwt.return (Some (filename, limit))
-          | _ ->
-            Lwt.return None
-        end in
-    Active_config.map parse_pcap string_pcap_settings
-    >>= fun pcap_settings ->
-
     let max_connections_path = driver @ [ "slirp"; "max-connections" ] in
     Config.string_option config max_connections_path
     >>= fun string_max_connections ->
@@ -947,8 +922,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     Lwt.async (fun () -> restart_on_change "slirp/mtu" string_of_int mtus);
     let mtu = Active_config.hd mtus in
 
-    Log.info (fun f -> f "Creating slirp server pcap_settings:%s peer_ip:%s local_ip:%s domain_search:%s mtu:%d"
-                 (print_pcap @@ Active_config.hd pcap_settings)
+    Log.info (fun f -> f "Creating slirp server peer_ip:%s local_ip:%s domain_search:%s mtu:%d"
                  (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
                  (String.concat " " !domain_search) mtu
              );
@@ -958,7 +932,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       extra_dns_ip;
       get_domain_search;
       get_domain_name;
-      pcap_settings;
       mtu;
     } in
     Lwt.return t
@@ -968,23 +941,5 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun x ->
     Log.debug (fun f -> f "accepted vmnet connection");
 
-    let rec monitor_pcap_settings pcap_settings =
-      ( match Active_config.hd pcap_settings with
-        | None ->
-          Log.debug (fun f -> f "Disabling any active packet capture");
-          Vmnet.stop_capture x
-        | Some (filename, size_limit) ->
-          Log.debug (fun f -> f "Capturing packets to %s %s" filename (match size_limit with None -> "with no limit" | Some x -> Printf.sprintf "limited to %Ld bytes" x));
-          Vmnet.start_capture x ?size_limit filename )
-      >>= fun () ->
-      Active_config.tl pcap_settings
-      >>= fun pcap_settings ->
-      monitor_pcap_settings pcap_settings in
-    Lwt.async (fun () ->
-        log_exception_continue "monitor_pcap_settings"
-          (fun () ->
-             monitor_pcap_settings t.pcap_settings
-          )
-      );
     connect x t.peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name
 end
