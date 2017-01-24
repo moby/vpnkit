@@ -96,7 +96,6 @@ let config =
     extra_dns_ip;
     get_domain_search = (fun () -> []);
     get_domain_name = (fun () -> "local");
-    pcap_settings = Active_config.Value(None, never);
     mtu = 1500;
   }
 
