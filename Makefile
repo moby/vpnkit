@@ -30,11 +30,11 @@ artefacts: $(ARTEFACTS)
 src/bin/depends.ml: src/bin/depends.ml.in
 	$(OPAMFLAGS) opam config subst src/bin/depends.ml || true
 	cp src/bin/depends.ml src/bin/depends.tmp
-	sed -e 's/%%VERSION%%/$(shell git rev-parse HEAD)/g' src/bin/depends.tmp > src/bin/depends.ml
+	sed -e 's/££VERSION££/$(shell git rev-parse HEAD)/g' src/bin/depends.tmp > src/bin/depends.ml
 	cp src/bin/depends.ml src/bin/depends.tmp
-	sed -e 's/%%HOSTNET_PINNED%%/$(shell opam info hostnet -f pinned)/g' src/bin/depends.tmp > src/bin/depends.ml
+	sed -e 's/££HOSTNET_PINNED££/$(shell opam info hostnet -f pinned)/g' src/bin/depends.tmp > src/bin/depends.ml
 	cp src/bin/depends.ml src/bin/depends.tmp
-	sed -e 's/%%HVSOCK_PINNED%%/$(shell opam info hvsock -f pinned)/g' src/bin/depends.tmp > src/bin/depends.ml
+	sed -e 's/££HVSOCK_PINNED££/$(shell opam info hvsock -f pinned)/g' src/bin/depends.tmp > src/bin/depends.ml
 
 com.docker.slirp.tgz: com.docker.slirp
 	mkdir -p _build/root/Contents/MacOS
