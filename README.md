@@ -17,11 +17,17 @@ Building on Unix
 ----------------
 
 First install `wget`, `opam` using your package manager of choice.
+
 Build all the dependencies and the program itself with:
+
 ```
-opam pin add vpnkit .
+cd [path to vpnkit source]
+opam remote add vpnkit ./repo/darwin
+opam install --deps-only slirp
+make
 ```
-This will add the binary `com.docker.slirp` to your `$PATH`.
+
+When the build succeeds the `com.docker.slirp` binary should be available in the current path.
 
 Running with hyperkit
 ---------------------
