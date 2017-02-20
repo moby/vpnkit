@@ -6,11 +6,11 @@ BINDIR?=$(shell pwd)
 BINARIES :=
 ARTEFACTS :=
 ifeq ($(OS),Windows_NT)
-	BINARIES += com.docker.slirp.exe
-	ARTEFACTS += com.docker.slirp.exe
+	BINARIES += vpnkit.exe
+	ARTEFACTS += vpnkit.exe
 else
-	BINARIES += com.docker.slirp
-	ARTEFACTS += com.docker.slirp.tgz
+	BINARIES += vpnkit
+	ARTEFACTS += vpnkit.tgz
 endif
 
 all: $(BINARIES)
@@ -36,24 +36,24 @@ src/bin/depends.ml: src/bin/depends.ml.in
 	cp src/bin/depends.ml src/bin/depends.tmp
 	sed -e 's/££HVSOCK_PINNED££/$(shell opam info hvsock -f pinned)/g' src/bin/depends.tmp > src/bin/depends.ml
 
-com.docker.slirp.tgz: com.docker.slirp
+vpnkit.tgz: vpnkit
 	mkdir -p _build/root/Contents/MacOS
-	cp com.docker.slirp _build/root/Contents/MacOS/com.docker.slirp
+	cp vpnkit _build/root/Contents/MacOS/vpnkit
 	dylibbundler -od -b \
-		-x _build/root/Contents/MacOS/com.docker.slirp \
+		-x _build/root/Contents/MacOS/vpnkit \
 		-d _build/root/Contents/Resources/lib \
 		-p @executable_path/../Resources/lib
-	tar -C _build/root -cvzf com.docker.slirp.tgz Contents
+	tar -C _build/root -cvzf vpnkit.tgz Contents
 
-.PHONY: com.docker.slirp.exe
-com.docker.slirp.exe: src/bin/depends.ml setup.data
+.PHONY: vpnkit.exe
+vpnkit.exe: src/bin/depends.ml setup.data
 	ocaml setup.ml -build
-	cp _build/src/bin/main.native com.docker.slirp.exe
+	cp _build/src/bin/main.native vpnkit.exe
 
-.PHONY: com.docker.slirp
-com.docker.slirp: src/bin/depends.ml setup.data
+.PHONY: vpnkit
+vpnkit: src/bin/depends.ml setup.data
 	ocaml setup.ml -build
-	cp _build/src/bin/main.native com.docker.slirp
+	cp _build/src/bin/main.native vpnkit
 
 setup.data: _oasis
 	oasis setup
@@ -80,7 +80,7 @@ COMMIT:
 .PHONY: clean
 clean:
 	rm -rf _build
-	rm -f com.docker.slirp
-	rm -f com.docker.slirp.tgz
+	rm -f vpnkit
+	rm -f vpnkit.tgz
 	rm -f src/bin/depends.ml
 	rm -f setup.data

@@ -27,14 +27,14 @@ opam install --deps-only slirp
 make
 ```
 
-When the build succeeds the `com.docker.slirp` binary should be available in the current path.
+When the build succeeds the `vpnkit` binary should be available in the current path.
 
 Running with hyperkit
 ---------------------
 
-First ask `com.docker.slirp` to listen for ethernet connections on a local Unix domain socket:
+First ask `vpnkit` to listen for ethernet connections on a local Unix domain socket:
 ```
-com.docker.slirp --ethernet /tmp/ethernet --debug
+vpnkit --ethernet /tmp/ethernet --debug
 ```
 Next ask [com.docker.hyperkit](https://github.com/docker/hyperkit) to connect a NIC to this
 socket by adding a command-line option like `-s 2:0,virtio-vpnkit,path=/tmp/ethernet`. Note:
