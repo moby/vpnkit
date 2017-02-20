@@ -10,7 +10,7 @@ install: [make "install"]
 remove: ["ocamlfind" "remove" "mirage-vnetif"]
 depends: [
   "lwt"
-  "mirage-types"
+  "mirage-types" {< "3.0.0"}
   "cstruct"
   "ipaddr"
   "io-page"

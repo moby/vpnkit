@@ -12,10 +12,10 @@ remove:  [make "unix-uninstall" "PREFIX=%{prefix}%"]
 depends: [
   "conf-which" {build}
   "cstruct" {>= "1.0.1"}
-  "ocamlfind"
+  "ocamlfind" {build}
   "lwt" {>= "2.4.3"}
   "io-page" {>= "1.5.0"}
-  "mirage-clock-unix" {>= "1.0.0"}
+  "mirage-clock-unix" {>= "1.0.0" & < "1.1"}
   "shared-memory-ring" {>= "1.0.0"}
   "mirage-profile" {>= "0.3"}
   "ocamlbuild" {build}

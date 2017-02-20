@@ -16,4 +16,5 @@ depexts: [
   [["centos"] ["m4"]]
   [["alpine"] ["m4"]]
   [["oraclelinux"] ["m4"]]
+  [["archlinux"] ["m4"]]
 ]

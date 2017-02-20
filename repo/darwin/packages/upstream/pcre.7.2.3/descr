@@ -1,0 +1,5 @@
+pcre-ocaml - bindings to the Perl Compatibility Regular Expressions library
+pcre-ocaml offers library functions for string pattern matching and
+substitution, similar to the functionality offered by the Perl
+language.
+

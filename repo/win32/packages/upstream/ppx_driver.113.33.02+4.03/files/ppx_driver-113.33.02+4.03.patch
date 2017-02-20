@@ -1,0 +1,14 @@
+--- ./src/ppx_driver.ml
++++ ./src/ppx_driver.ml
+@@ -225,7 +225,10 @@
+ 
+ let with_output fn ~binary ~f =
+   match fn with
+-  | None | Some "-" -> f stdout
++  | None | Some "-" ->
++    if binary && Sys.os_type = "Win32" then
++      set_binary_mode_out stdout true;
++    f stdout
+   | Some fn ->
+     let oc = if binary then open_out_bin fn else open_out fn in
+     match f oc with

@@ -1,0 +1,26 @@
+opam-version: "1.2"
+maintainer:   "Dave Scott <dave@recoil.org>"
+authors:      [ "Anil Madhavapeddy" "Dave Scott" "Richard Mortier" ]
+license:      "ISC"
+homepage:     "https://github.com/mirage/ocaml-pcap"
+dev-repo:     "https://github.com/mirage/ocaml-pcap.git"
+bug-reports:  "https://github.com/mirage/ocaml-pcap/issues"
+doc:          "https://mirage.github.io/ocaml-pcap/"
+tags:         [ "org:mirage" "org:xapi-project" ]
+
+build: [
+  [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "false" ]
+]
+build-test: [
+  [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "true" ]
+  [ "ocaml" "pkg/pkg.ml" "test" ]
+]
+
+depends: [
+  "ocamlfind"  {build}
+  "ocamlbuild" {build}
+  "topkg"      {build & >= "0.8.0"}
+  "ppx_tools"  {build}
+  "cstruct"            {>= "1.9.0"}
+  "ounit"      {test}
+]

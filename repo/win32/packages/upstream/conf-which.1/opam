@@ -9,4 +9,5 @@ depexts: [
   [["debian"] ["debianutils"]]
   [["ubuntu"] ["debianutils"]]
   [["nixpkgs"] ["which"]]
+  [["archlinux"] ["which"]]
 ]
