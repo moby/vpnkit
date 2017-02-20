@@ -29,7 +29,7 @@ let parse bufs =
       match dst_option, src_option with
       | None, _ -> Error (`Msg "failed to parse ethernet destination MAC")
       | _, None -> Error (`Msg "failed to parse ethernet source MAC")
-      | Some src, Some dst ->
+      | Some dst, Some src ->
         let inner = Cstructs.shift bufs 14 in
         ( match ethertype with
           | 0x0800 ->
