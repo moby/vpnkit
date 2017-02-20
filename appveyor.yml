@@ -17,6 +17,6 @@ build_script:
   - "%CYG_BASH% '${APPVEYOR_BUILD_FOLDER}/scripts/appveyor.sh'"
 
 artifacts:
-  - path: "com.docker.slirp.exe"
+  - path: "vpnkit.exe"
   - path: "OSS-LICENSES"
   - path: "COMMIT"

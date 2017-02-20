@@ -10,7 +10,7 @@ machine:
     OPAM_COMP: "4.03.0"
 general:
   artifacts:
-  - com.docker.slirp.tgz
+  - vpnkit.tgz
   - COMMIT
   - OSS-LICENSES
 dependencies:
