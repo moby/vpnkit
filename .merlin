@@ -4,6 +4,7 @@ PKG cmdliner alcotest lwt.unix logs.fmt dns.mirage lwt.preemptive
 PKG hvsock hvsock.lwt-unix datakit-server.fs9p win-eventlog asl
 PKG ipaddr mirage-flow ppx_sexp_conv pcap-format mirage-console.unix tcpip
 PKG charrua-core dns uwt lwt threads dns-forward tar
+PKG mirage-vnetif
 
 B _build/**
 B src/com.docker.slirp/_build/**

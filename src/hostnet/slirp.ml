@@ -9,12 +9,11 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module IPMap = Map.Make(Ipaddr.V4)
 
-let client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
-(* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
-let server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 
 let default_peer = "192.168.65.2"
 let default_host = "192.168.65.1"
+(* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
+let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 let default_dns_extra = []
 
 (* When forwarding TCP, the connection is proxied so the MTU/MSS is link-local.
@@ -71,6 +70,7 @@ let print_pcap = function
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
 type config = {
+  server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
   extra_dns_ip: Ipaddr.V4.t list;
@@ -79,7 +79,7 @@ type config = {
   mtu: int;
 }
 
-module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST) = struct
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST)(Vnet : Vnetif.BACKEND) = struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
 
   module Filteredif = Filter.Make(Vmnet)
@@ -354,6 +354,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   end
 
   type t = {
+    l2_switch: Vnet.t;
+    l2_client_id: Vnet.id;
     after_disconnect: unit Lwt.t;
     interface: Netif.t;
     switch: Switch.t;
@@ -614,7 +616,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun () ->
     delete_unused_endpoints t ()
 
-  let connect x peer_ip local_ip extra_dns_ip mtu get_domain_search get_domain_name =
+  let connect x l2_switch l2_client_id server_macaddr peer_ip local_ip extra_dns_ip mtu get_domain_search get_domain_name =
+
+    let client_macaddr = Vnet.mac l2_switch l2_client_id in
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
     let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
@@ -652,6 +656,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let endpoints_m = Lwt_mutex.create () in
     let udp_nat = Udp_nat.create () in
     let t = {
+      l2_switch;
+      l2_client_id;
       after_disconnect = Vmnet.after_disconnect x;
       interface;
       switch;
@@ -778,6 +784,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       >>= fun settings ->
       monitor_max_connections_settings settings in
     Lwt.async (fun () -> log_exception_continue "monitor max connections settings" (fun () -> monitor_max_connections_settings max_connections));
+
+    (* TODO Don't hardcode this *)
+    let server_macaddr = default_server_macaddr in
 
     (* Watch for DNS server overrides *)
     let domain_search = ref [] in
@@ -923,7 +932,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                  (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
                  (String.concat " " !domain_search) mtu
              );
+
     let t = {
+      server_macaddr;
       peer_ip;
       local_ip;
       extra_dns_ip;
@@ -933,10 +944,15 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     } in
     Lwt.return t
 
-  let connect t client =
-    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr ~mtu:t.mtu client
+  let connect t client l2_switch =
+    (match Vnet.register l2_switch with
+    | `Ok x -> Lwt.return x
+    | `Error _ -> Lwt.fail (Failure "unable to register device on l2 switch")) 
+    >>= fun l2_client_id ->
+    let client_macaddr = Vnet.mac l2_switch l2_client_id in
+    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
     >>= fun x ->
     Log.debug (fun f -> f "accepted vmnet connection");
 
-    connect x t.peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name
+    connect x l2_switch l2_client_id t.server_macaddr t.peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name
 end
