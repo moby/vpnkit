@@ -278,7 +278,53 @@
  	    ]
  	)
      )
-@@ -2352,7 +2448,9 @@
+@@ -1812,7 +1908,10 @@
+       output_string ch_out append;
+       close_out ch_out;
+       close_in ch_in;
+-      Unix.utimes outpath s.Unix.st_mtime s.Unix.st_mtime;
++      (try Unix.utimes outpath s.Unix.st_mtime s.Unix.st_mtime
++       with Unix.Unix_error(e,_,_) ->
++         prerr_endline("Warning: setting utimes for " ^ outpath
++                       ^ ": " ^ Unix.error_message e));
+ 
+       prerr_endline("Installed " ^ outpath);
+     with
+@@ -2218,6 +2317,15 @@
+ 
+ let reserved_names = [ Findlib_config.libexec_name; "postinstall"; "postremove" ];;
+ 
++(* We may need to remove files on which we do not have complete control.
++   On Windows, removing a read-only file fails so try to change the
++   mode of the file first. *)
++let remove_file fname =
++  try Sys.remove fname
++  with Sys_error _ ->
++    Unix.chmod fname 0o666;
++    Sys.remove fname
++
+ let remove_package () =
+   let destdir = ref (default_location()) in
+   let destdir_set = ref false in
+@@ -2294,7 +2402,7 @@
+     List.iter
+       (fun file ->
+ 	 let absfile = Filename.concat dlldir file in
+-	 Sys.remove absfile;
++	 remove_file absfile;
+ 	 prerr_endline ("Removed " ^ absfile)
+       )
+       dll_files
+@@ -2303,7 +2411,7 @@
+   (* Remove the files from the package directory: *)
+   if Sys.file_exists pkgdir then begin
+     let files = Sys.readdir pkgdir in
+-    Array.iter (fun f -> Sys.remove (Filename.concat pkgdir f)) files;
++    Array.iter (fun f -> remove_file (Filename.concat pkgdir f)) files;
+     Unix.rmdir pkgdir;
+     prerr_endline ("Removed " ^ pkgdir)
+   end
+@@ -2352,7 +2460,9 @@
  
  
  let print_configuration() =
@@ -288,7 +334,7 @@
      if Sys.file_exists s then
        s
      else
-@@ -2390,27 +2488,27 @@
+@@ -2390,27 +2500,27 @@
  	   if md = "" then "the corresponding package directories" else dir md
  	  );
  	Printf.printf "The standard library is assumed to reside in:\n    %s\n"
@@ -326,7 +372,7 @@
      | _ ->
  	assert false
  ;;
-@@ -2418,7 +2516,7 @@
+@@ -2418,7 +2528,7 @@
  
  let ocamlcall pkg cmd =
    let dir = package_directory pkg in
@@ -335,6 +381,17 @@
    begin
      try Unix.access path [ Unix.X_OK ]
      with
+@@ -2584,6 +2694,10 @@
+   | Sys_error f ->
+       prerr_endline ("ocamlfind: " ^ f);
+       exit 2
++  | Unix.Unix_error (e, fn, f) ->
++      prerr_endline ("ocamlfind: " ^ fn ^ " " ^ f
++                     ^ ": " ^ Unix.error_message e);
++      exit 2
+   | Findlib.No_such_package(pkg,info) ->
+       prerr_endline ("ocamlfind: Package `" ^ pkg ^ "' not found" ^
+ 		     (if info <> "" then " - " ^ info else ""));
 --- ./src/findlib/Makefile
 +++ ./src/findlib/Makefile
 @@ -88,6 +88,7 @@

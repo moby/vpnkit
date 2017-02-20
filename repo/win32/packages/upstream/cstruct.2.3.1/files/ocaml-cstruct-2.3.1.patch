@@ -1,0 +1,38 @@
+--- ./lib/cstruct_stubs.c
++++ ./lib/cstruct_stubs.c
+@@ -15,7 +15,9 @@
+  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  */
+ 
++#if !defined(_MSC_VER) || !defined(_WIN32)
+ #include <sys/param.h>
++#endif
+ #include <stdlib.h>
+ #include <errno.h>
+ #include <string.h>
+@@ -74,7 +76,11 @@
+ CAMLprim value
+ caml_check_alignment_bigstring(value val_buf, value val_ofs, value val_alignment)
+ {
++#if !defined(_MSC_VER) || !defined(_WIN32)
+   uint64_t address = (uint64_t) (Caml_ba_data_val(val_buf) + Long_val(val_ofs));
++#else
++  uint64_t address = (uint64_t) ((char*)Caml_ba_data_val(val_buf) + Long_val(val_ofs));
++#endif
+   int alignment = Int_val(val_alignment);
+   return Val_bool(address % alignment == 0);
+ }
+--- ./_oasis
++++ ./_oasis
+@@ -32,7 +32,10 @@
+   Modules:       Cstruct
+   BuildDepends:  bytes, bigarray, ocplib-endian, ocplib-endian.bigstring, sexplib
+   CSources:      cstruct_stubs.c
+-  CCOpt:         -O3 -Wall
++  if (system(win32) || system(win64))
++    CCOpt:         /Ox
++  else
++    CCOpt:         -O3 -Wall
+ 
+ Library async_cstruct
+   Build$:        flag(async)

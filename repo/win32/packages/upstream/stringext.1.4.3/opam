@@ -11,12 +11,6 @@ build: [
   ["ocaml" "setup.ml" "-build"]
 ]
 
-build-test: [
-  ["ocaml" "setup.ml" "-configure" "--enable-tests"]
-  ["ocaml" "setup.ml" "-build"]
-  ["ocaml" "setup.ml" "-test"]
-]
-
 build-doc: ["ocaml" "setup.ml" "-doc"]
 
 install: ["ocaml" "setup.ml" "-install"]
@@ -26,8 +20,6 @@ remove: ["ocamlfind" "remove" "stringext"]
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
-  "ounit" {test}
-  "qtest" {test & >="2.2"}
   "base-bytes"
 ]
 

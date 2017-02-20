@@ -1,0 +1,20 @@
+opam-version: "1.2"
+maintainer: "Sylvain Le Gall <sylvain+ocaml@le-gall.net>"
+authors: [ "Sylvain Le Gall" ]
+homepage: "http://ocaml-fileutils.forge.ocamlcore.org/"
+dev-repo: "https://github.com/gildor478/ocaml-fileutils.git"
+bug-reports: "https://forge.ocamlcore.org/tracker/?func=add&group_id=128&atid=589"
+build: [
+  ["ocaml" "setup.ml" "-configure" "--prefix" prefix]
+  ["ocaml" "setup.ml" "-build"]
+]
+install: ["ocaml" "setup.ml" "-install"]
+build-doc: [ "ocaml" "setup.ml" "-doc" ]
+remove: [
+  ["ocamlfind" "remove" "fileutils"]
+]
+depends: [
+  "ocamlfind"
+  "ounit" {>= "2.0.0"}
+  "ocamlbuild" {build}
+]

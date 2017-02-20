@@ -173,7 +173,7 @@ module Sockets = struct
                 read t
               end else Lwt.return (`Ok (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len))
             ) (function
-              | Uwt.Uwt_error(Uwt.ECANCELED, _, _) ->
+              | Unix.Unix_error(e, _, _) when Uwt.of_unix_error e = Uwt.ECANCELED ->
                 (* happens on normal timeout *)
                 Lwt.return `Eof
               | e ->
@@ -394,7 +394,7 @@ module Sockets = struct
         try
           if not closed then Uwt.Tcp.shutdown fd else Lwt.return ()
         with
-        | Uwt.Uwt_error(Uwt.ENOTCONN, _, _) -> Lwt.return ()
+        | Unix.Unix_error(Unix.ENOTCONN, _, _) -> Lwt.return ()
         | e ->
           Log.err (fun f -> f "Socket.%s.shutdown_write %s: caught %s returning Eof" label description (Printexc.to_string e));
           Lwt.return ()
@@ -423,7 +423,9 @@ module Sockets = struct
                t.read_buffer <- Cstruct.shift t.read_buffer n;
                Lwt.return (`Ok results)
           ) (function
-              | Uwt.Uwt_error((Uwt.ECANCELED | Uwt.ECONNRESET), _, _) ->
+              | Unix.Unix_error(Unix.ECONNRESET, _, _) ->
+                Lwt.return `Eof
+              | Unix.Unix_error(e, _, _) when Uwt.of_unix_error e = Uwt.ECANCELED ->
                 Lwt.return `Eof
               | e ->
                 Log.err (fun f -> f "Socket.%s.read %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
@@ -437,7 +439,9 @@ module Sockets = struct
              >>= fun () ->
              Lwt.return (`Ok ())
           ) (function
-              | Uwt.Uwt_error((Uwt.ECANCELED | Uwt.ECONNRESET), _, _) ->
+              | Unix.Unix_error(Unix.ECONNRESET, _, _) ->
+                Lwt.return `Eof
+              | Unix.Unix_error(e, _, _) when Uwt.of_unix_error e = Uwt.ECANCELED ->
                 Lwt.return `Eof
               | e ->
                 Log.err (fun f -> f "Socket.%s.write %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
@@ -455,7 +459,9 @@ module Sockets = struct
                  loop bufs in
              loop bufs
           ) (function
-              | Uwt.Uwt_error((Uwt.ECANCELED | Uwt.ECONNRESET), _, _) ->
+              | Unix.Unix_error(Unix.ECONNRESET, _, _) ->
+                Lwt.return `Eof
+              | Unix.Unix_error(e, _, _) when Uwt.of_unix_error e = Uwt.ECANCELED ->
                 Lwt.return `Eof
               | e ->
                 Log.err (fun f -> f "Socket.%s.writev %s: caught %s returning Eof" t.label t.description (Printexc.to_string e));
@@ -670,7 +676,7 @@ module Sockets = struct
         try
           if not closed then Uwt.Pipe.shutdown fd else Lwt.return ()
         with
-        | Uwt.Uwt_error(Uwt.ENOTCONN, _, _) -> Lwt.return ()
+        | Unix.Unix_error(Unix.ENOTCONN, _, _) -> Lwt.return ()
         | e ->
           Log.err (fun f -> f "Socket.Pipe.shutdown_write %s: caught %s returning Eof" description (Printexc.to_string e));
           Lwt.return ()
@@ -710,7 +716,7 @@ module Sockets = struct
              >>= fun () ->
              Lwt.return (`Ok ())
           ) (function
-             | Uwt.Uwt_error(Uwt.EPIPE, _, _) ->
+             | Unix.Unix_error(Unix.EPIPE, _, _) ->
                (* other end has closed, this is normal *)
                Lwt.return `Eof
              | e ->

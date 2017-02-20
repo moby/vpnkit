@@ -1,6 +1,0 @@
-Cooperative threads and I/O in monadic style
-
-Lwt provides typed, composable cooperative threads. These make it easy to run
-normally-blocking I/O operations concurrently in a single process. Also, in many
-cases, Lwt threads can interact without the need for locks or other
-synchronization primitives.

@@ -1,0 +1,40 @@
+diff --git a/Makefile b/Makefile
+index 1210145..b9225f6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -10,18 +10,18 @@ default: byte
+ 
+ .PHONY: byte
+ byte:
+-	$(OB) `./build/camlp4-byte-only.sh`
++	$(OB) `sh ./build/camlp4-byte-only.sh`
+ 
+ .PHONY: native
+ native:
+-	$(OB) `./build/camlp4-native-only.sh`
++	$(OB) `sh ./build/camlp4-native-only.sh`
+ 
+ .PHONY: all
+ all: byte native
+ 
+ .PHONY: install
+ install:
+-	env DESTDIR=$(DESTDIR) ./build/install.sh
++	env DESTDIR=$(DESTDIR) sh ./build/install.sh
+ 
+ .PHONY: install-META
+ install-META: camlp4/META
+@@ -33,11 +33,11 @@ camlp4/META: camlp4/META.in
+ 
+ .PHONY: bootstrap
+ bootstrap:
+-	./build/camlp4-bootstrap.sh
++	sh ./build/camlp4-bootstrap.sh
+ 
+ .PHONY: Camlp4Ast
+ Camlp4Ast:
+-	./build/camlp4-mkCamlp4Ast.sh
++	sh ./build/camlp4-mkCamlp4Ast.sh
+ 
+ .PHONY: clean
+ clean:

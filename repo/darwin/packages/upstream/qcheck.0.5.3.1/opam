@@ -1,0 +1,40 @@
+opam-version: "1.2"
+maintainer: "simon.cruanes@inria.fr"
+author: [ "Simon Cruanes <simon.cruanes@inria.fr>" ]
+homepage: "https://github.com/c-cube/qcheck/"
+doc: ["http://cedeela.fr/~simon/software/qcheck/QCheck.html"]
+tags: [
+  "test"
+  "property"
+  "quickcheck"
+]
+build: [
+  ["ocaml" "setup.ml" "-configure" "--prefix" prefix]
+  [make "build"]
+]
+build-doc: [
+  ["./configure" "--enable-docs" "--docdir" "%{doc}%"]
+  [make "doc"]
+]
+build-test: [
+  ["./configure" "--enable-tests"]
+  [make "test"]
+]
+install: [
+  [make "install"]
+]
+remove: [
+    ["ocamlfind" "remove" "qcheck"]
+]
+depends: [
+  "ocamlfind"
+  "base-bytes"
+  "base-unix"
+  "ounit"
+]
+available: [ ocaml-version >= "4.00.0" ]
+dev-repo: "https://github.com/c-cube/qcheck.git"
+bug-reports: "https://github.com/c-cube/qcheck/issues"
+conflicts: [
+  "ounit" { < "2.0" }
+]
