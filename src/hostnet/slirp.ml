@@ -620,6 +620,11 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let client_macaddr = Vnet.mac l2_switch l2_client_id in
 
+    (* Increment IP based on backend network ID *)
+    let peer_ip_int32 = Ipaddr.V4.to_int32 peer_ip in
+    let peer_ip = (Ipaddr.V4.of_int32 
+                    (Int32.add peer_ip_int32 (Int32.of_int l2_client_id))) in
+
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
     let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
 
@@ -637,14 +642,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun switch ->
 
     (* Serve a static ARP table *)
-    let arp_table = [
+    let local_arp_table = [
       peer_ip, client_macaddr;
       local_ip, server_macaddr;
     ] @ (List.map (fun ip -> ip, server_macaddr) extra_dns_ip) in
     or_failwith "arp_ethif" @@ Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
-    or_failwith "arp" @@ Global_arp.connect ~table:arp_table global_arp_ethif
-    >>= fun arp ->
 
     (* Listen on local IPs *)
     let local_ips = local_ip :: extra_dns_ip in
@@ -674,7 +677,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           then Lwt.return (`Ok (IPMap.find ip t.endpoints))
           else begin
             let open Infix in
-            Endpoint.create interface switch arp_table ip mtu
+            Endpoint.create interface switch local_arp_table ip mtu
             >>= fun endpoint ->
             t.endpoints <- IPMap.add ip endpoint t.endpoints;
             Lwt.return (`Ok endpoint)
@@ -706,15 +709,32 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
 
     (* Add a listener which looks for new flows *)
+    Log.info (fun f -> f "Client mac: %s server mac: %s" (Macaddr.to_string client_macaddr) (Macaddr.to_string server_macaddr));
+    Vnet.set_listen_fn t.l2_switch t.l2_client_id (fun buf -> 
+        match parse [ buf ] with
+        | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) -> 
+            Log.info (fun f -> f "received from bridge %s->%s, sent to switch.write" (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+            Switch.write switch buf 
+        | _ -> Lwt.return_unit ); (* write packets from virtual network directly to client *)
     Switch.listen switch
       (fun buf ->
          let open Frame in
          match parse [ buf ] with
-         | Ok (Ethernet { payload = Ipv4 { payload = Udp { dst = 67; _ }; _ }; _ })
-         | Ok (Ethernet { payload = Ipv4 { payload = Udp { dst = 68; _ }; _ }; _ }) ->
+         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
+            (not (Macaddr.compare eth_dst client_macaddr = 0 || 
+                  Macaddr.compare eth_dst server_macaddr = 0 || 
+                  Macaddr.compare eth_dst Macaddr.broadcast = 0)) -> (* not to server, client or broadcast.. *)
+           Log.info (fun f -> f "forwarded to bridge for %s->%s" (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+           Vnet.write t.l2_switch t.l2_client_id buf (* pass to virtual network *)
+         | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Ipv4 { payload = Udp { dst = 67; _ }; _ }; _ })
+         | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Ipv4 { payload = Udp { dst = 68; _ }; _ }; _ }) ->
+           Log.info (fun f -> f "dhcp %s->%s" (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
            Dhcp.callback dhcp buf
-         | Ok (Ethernet { payload = Arp { op = `Request }; _ }) ->
+         | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Arp { op = `Request }; _ }) ->
+           Log.info (fun f -> f "arp %s->%s" (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
            (* Arp.input expects only the ARP packet, with no ethernet header prefix *)
+           or_failwith "arp" @@ Global_arp.connect ~table:local_arp_table global_arp_ethif
+           >>= fun arp ->
            Global_arp.input arp (Cstruct.shift buf Wire_structs.sizeof_ethernet)
          | Ok (Ethernet { payload = Ipv4 ({ dst; _ } as ipv4 ); _ }) ->
            (* For any new IP destination, create a stack to proxy for the remote system *)
