@@ -20,7 +20,6 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let _ =
   Printexc.register_printer (function
     | Unix.Unix_error(e, _, _) -> Some (Unix.error_message e)
-    | Uwt.Uwt_error(e, _, _) -> Some (Uwt.strerror e)
     | e -> None
   )
 

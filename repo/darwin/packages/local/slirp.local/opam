@@ -19,10 +19,10 @@ depends: [
   "ocamlbuild" {build}
   "oasis" {build}
   "result"
-  "tar-format"
+  "tar-format" {= "0.6.1"}
   "ipaddr"
   "lwt"
-  "uwt" {= "0.0.3"}
+  "uwt" {>= "0.0.4"}
   "tcpip" { = "999" }
   "pcap-format"
   "dns" { = "999" }

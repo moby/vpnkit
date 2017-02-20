@@ -116,13 +116,12 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
                      >>= fun () ->
                      Lwt.return true
                   ) (function
-                      | Uwt.Uwt_error(Uwt.ECANCELED, _, _) ->
-                        (* fd has been closed by the GC *)
-                        Log.debug (fun f -> f "Hostnet_udp %s: shutting down listening thread" description);
-                        Lwt.return false
-                      | e ->
-                        Log.err (fun f -> f "Hostnet_udp %s: caught unexpected exception %s" description (Printexc.to_string e));
-                        Lwt.return false
+                    | Unix.Unix_error(e, _, _) when Uwt.of_unix_error e = Uwt.ECANCELED ->
+                      Log.debug (fun f -> f "Hostnet_udp %s: shutting down listening thread" description);
+                      Lwt.return false
+                    | e ->
+                      Log.err (fun f -> f "Hostnet_udp %s: caught unexpected exception %s" description (Printexc.to_string e));
+                      Lwt.return false
                     )
                 >>= function
                 | false ->
