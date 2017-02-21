@@ -35,7 +35,6 @@ let default d = function None -> d | Some x -> x
 
 let ethernet_serviceid = "30D48B34-7D27-4B0B-AAAF-BBBED334DD59"
 let ports_serviceid = "0B95756A-9985-48AD-9470-78E060895BE7"
-let default_client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
 
 let hvsock_addr_of_uri ~default_serviceid uri =
   (* hyperv://vmid/serviceid *)
@@ -261,13 +260,21 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
   let hardcoded_configuration =
     let never, _ = Lwt.task () in
     let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
+    let server_macaddr = Slirp.default_server_macaddr in
+    let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2" in
+    let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1" in
+    let global_arp_table : Slirp.arp_table = {
+        mutex = Lwt_mutex.create ();
+        table = [(local_ip, server_macaddr)];
+    } in
     { 
-      Slirp.server_macaddr = Slirp.default_server_macaddr;
-      peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
-      local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
+      Slirp.server_macaddr;
+      peer_ip;
+      local_ip;
       extra_dns_ip = [];
       get_domain_search = (fun () -> []);
       get_domain_name = (fun () -> "local");
+      global_arp_table;
       mtu = 1500; } in
 
   let config = match db_path with

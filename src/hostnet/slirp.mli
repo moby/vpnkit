@@ -5,6 +5,11 @@ type pcap = (string * int64 option) option
     file will grow without bound; otherwise the file will be closed when it is
     bigger than the given limit. *)
 
+type arp_table = {
+  mutex: Lwt_mutex.t;
+  mutable table: (Ipaddr.V4.t * Macaddr.t) list;
+}
+
 type config = {
   server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
@@ -12,6 +17,7 @@ type config = {
   extra_dns_ip: Ipaddr.V4.t list;
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
+  global_arp_table: arp_table;
   mtu: int;
 }
 
