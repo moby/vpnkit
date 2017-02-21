@@ -298,14 +298,14 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
   | Some "hyperv-connect" ->
     let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Dns_policy)(Host)(Vnet) in
     let sockaddr = hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid (Uri.of_string socket_url) in
+    ( match config with
+      | Some config -> Slirp_stack.create config
+      | None -> Lwt.return hardcoded_configuration )
+    >>= fun stack_config ->
     hvsock_connect_forever socket_url sockaddr
       (fun fd ->
         let conn = HV.connect fd in
-        ( match config with
-          | Some config -> Slirp_stack.create config
-          | None -> Lwt.return hardcoded_configuration )
-        >>= fun stack ->
-        Slirp_stack.connect stack conn l2_switch
+        Slirp_stack.connect stack_config conn l2_switch
         >>= fun stack ->
         Log.info (fun f -> f "stack connected");
         start_introspection introspection_url (Slirp_stack.filesystem stack);
@@ -319,13 +319,13 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
     let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)(Host)(Vnet) in
     unix_listen socket_url
     >>= fun server ->
+    ( match config with
+      | Some config -> Slirp_stack.create config
+      | None -> Lwt.return hardcoded_configuration )
+    >>= fun stack_config ->
     Host.Sockets.Stream.Unix.listen server
       (fun conn ->
-        ( match config with
-          | Some config -> Slirp_stack.create config
-          | None -> Lwt.return hardcoded_configuration )
-        >>= fun stack ->
-        Slirp_stack.connect stack conn l2_switch
+        Slirp_stack.connect stack_config conn l2_switch
         >>= fun stack ->
         Log.info (fun f -> f "stack connected");
         start_introspection introspection_url (Slirp_stack.filesystem stack);
