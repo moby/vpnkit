@@ -713,7 +713,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         Vnet.set_listen_fn t.l2_switch t.l2_client_id (fun buf -> 
             match parse [ buf ] with
             | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) -> 
-                Log.info (fun f -> f "%d: received from bridge %s->%s, sent to switch.write" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+                Log.debug (fun f -> f "%d: received from bridge %s->%s, sent to switch.write" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
                 Switch.write switch buf 
             | _ -> Lwt.return_unit ); (* write packets from virtual network directly to client *)
     end;
@@ -729,17 +729,17 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                   Macaddr.compare eth_dst server_macaddr = 0 || 
                   Macaddr.compare eth_dst Macaddr.broadcast = 0)) -> (* not to server, client or broadcast.. *)
            if use_bridge then begin
-               Log.info (fun f -> f "%d: forwarded to bridge for %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+               Log.debug (fun f -> f "%d: forwarded to bridge for %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
                Vnet.write t.l2_switch t.l2_client_id buf (* pass to virtual network *)
            end else begin
                Lwt.return_unit (* drop if bridge is not used *)
            end
          | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Ipv4 { payload = Udp { dst = 67; _ }; _ }; _ })
          | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Ipv4 { payload = Udp { dst = 68; _ }; _ }; _ }) ->
-           Log.info (fun f -> f "%d: dhcp %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+           Log.debug (fun f -> f "%d: dhcp %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
            Dhcp.callback dhcp buf
          | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Arp { op = `Request }; _ }) ->
-           Log.info (fun f -> f "%d: arp %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+           Log.debug (fun f -> f "%d: arp %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
            (* Arp.input expects only the ARP packet, with no ethernet header prefix *)
            begin
                if use_bridge then begin (* reply with global table if bridge is in use *)
