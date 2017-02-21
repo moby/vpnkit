@@ -18,6 +18,7 @@ type config = {
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
   global_arp_table: arp_table;
+  bridge_connections: bool;
   mtu: int;
 }
 
@@ -51,4 +52,4 @@ end
 val print_pcap: pcap -> string
 
 val default_server_macaddr: Macaddr.t
-
+val default_client_macaddr: Macaddr.t
