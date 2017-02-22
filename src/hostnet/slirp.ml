@@ -652,7 +652,15 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     (* Listen on local IPs *)
     let local_ips = local_ip :: extra_dns_ip in
 
-    let dhcp = Dhcp.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip
+    let highest_peer_ip = 
+        if use_bridge then begin (* number of IPs supported on virtual network, arbitrarily chosen *)
+            let ip_range = Int32.of_int 250 in
+            Some (Ipaddr.V4.of_int32 (Int32.add (Ipaddr.V4.to_int32 peer_ip) ip_range))
+        end else begin
+            None (* just set smallest available prefix *)
+        end 
+    in
+    let dhcp = Dhcp.make ~client_macaddr ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
       ~extra_dns_ip ~get_domain_search ~get_domain_name switch in
 
     let endpoints = IPMap.empty in

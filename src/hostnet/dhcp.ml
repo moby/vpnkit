@@ -30,7 +30,7 @@ module Make(Netif: V1_LWT.NETWORK) = struct
     | hd::tl -> List.fold_left (fun acc x -> if compare acc x > 0 then acc else x) hd tl
 
   (* given some MACs and IPs, construct a usable DHCP configuration *)
-  let make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip ~extra_dns_ip
+  let make ~client_macaddr ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip ~extra_dns_ip
     ~get_domain_search ~get_domain_name netif =
     let open Dhcp_server.Config in
     (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
@@ -43,7 +43,11 @@ module Make(Netif: V1_LWT.NETWORK) = struct
       let highest = maximum_ip all_static_ips in
       let i32 = to_int32 highest in
       of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
-    let prefix = smallest_prefix peer_ip [ local_ip; low_ip; high_ip ] 32 in
+    (* if highest_peer_ip is set, make the prefix mask include it *)
+    let ip_list = (match highest_peer_ip with
+    | None -> [ local_ip; low_ip; high_ip ]
+    | Some max_ip -> [ local_ip; low_ip; high_ip; max_ip ]) in
+    let prefix = smallest_prefix peer_ip ip_list 32 in
     let get_dhcp_configuration () : Dhcp_server.Config.t =
       (* The domain search is encoded using the scheme used for DNS names *)
       let domain_search =
