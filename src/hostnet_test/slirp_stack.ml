@@ -35,7 +35,8 @@ end
 module Make(Host: Sig.HOST) = struct
 module VMNET = Vmnet.Make(Host.Sockets.Stream.Tcp)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
-module Slirp_stack = Slirp.Make(Config)(VMNET)(Dns_policy)(Host)
+module Vnet = Basic_backend.Make
+module Slirp_stack = Slirp.Make(Config)(VMNET)(Dns_policy)(Host)(Vnet)
 
 module Client = struct
   module Netif = VMNET
@@ -88,14 +89,26 @@ let extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
 "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
 ]
 
+let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
+let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
+let server_macaddr = Slirp.default_server_macaddr
+
+let global_arp_table : Slirp.arp_table = 
+  { mutex = Lwt_mutex.create (); 
+    table = [(local_ip, Slirp.default_server_macaddr)] 
+  }
+
 let config =
   let never, _ = Lwt.task () in
   {
-    Slirp.peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2";
-    local_ip = Ipaddr.V4.of_string_exn "192.168.65.1";
+    Slirp.peer_ip;
+    local_ip;
     extra_dns_ip;
+    server_macaddr;
     get_domain_search = (fun () -> []);
     get_domain_name = (fun () -> "local");
+    bridge_connections = false;
+    global_arp_table;
     mtu = 1500;
   }
 
@@ -114,13 +127,13 @@ let set_slirp_stack c =
   slirp_stack := Some c;
   Lwt_condition.signal slirp_stack_c ()
 
-let start_stack () =
+let start_stack l2_switch () =
   Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
   >>= fun server ->
   let _, port = Host.Sockets.Stream.Tcp.getsockname server in
   Host.Sockets.Stream.Tcp.listen server
     (fun flow ->
-      Slirp_stack.connect config flow
+      Slirp_stack.connect config flow l2_switch
       >>= fun stack ->
       set_slirp_stack stack;
       Log.info (fun f -> f "stack connected");
@@ -131,7 +144,7 @@ let start_stack () =
     );
   Lwt.return port
 
-let connection = start_stack ()
+let connection = start_stack (Vnet.create ()) ()
 
 let with_stack f =
   connection
@@ -141,8 +154,8 @@ let with_stack f =
   | Result.Error (`Msg x) -> failwith x
   | Result.Ok flow ->
   Log.info (fun f -> f "Made a loopback connection");
-  let client_macaddr = Hostnet.Slirp.client_macaddr in
-  let server_macaddr = Hostnet.Slirp.server_macaddr in
+  let client_macaddr = Hostnet.Slirp.default_client_macaddr in
+  let server_macaddr = Hostnet.Slirp.default_server_macaddr in
   VMNET.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr ~mtu:1500 flow
   >>= function
   | Result.Error (`Msg x ) ->
