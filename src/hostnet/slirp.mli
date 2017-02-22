@@ -1,28 +1,38 @@
+
 type pcap = (string * int64 option) option
 (** Packet capture configuration. None means don't capture; Some (file, limit)
     means write pcap-formatted data to file. If the limit is None then the
     file will grow without bound; otherwise the file will be closed when it is
     bigger than the given limit. *)
 
+type arp_table = {
+  mutex: Lwt_mutex.t;
+  mutable table: (Ipaddr.V4.t * Macaddr.t) list;
+}
+
 type config = {
+  server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
   extra_dns_ip: Ipaddr.V4.t list;
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
+  global_arp_table: arp_table;
+  bridge_connections: bool;
   mtu: int;
 }
+
 (** A slirp TCP/IP stack ready to accept connections *)
 
-module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST): sig
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST)(Vnet : Vnetif.BACKEND) : sig
 
   val create: Config.t -> config Lwt.t
   (** Initialise a TCP/IP stack, taking configuration from the Config.t *)
 
   type t
 
-  val connect: config -> Vmnet.fd -> t Lwt.t
-  (** Read and write ethernet frames on the given fd *)
+  val connect: config -> Vmnet.fd -> Vnet.t -> t Lwt.t
+  (** Read and write ethernet frames on the given fd, connected to the specified Vnetif backend *)
 
   val after_disconnect: t -> unit Lwt.t
   (** Waits until the stack has been disconnected *)
@@ -41,6 +51,5 @@ end
 
 val print_pcap: pcap -> string
 
-val client_macaddr: Macaddr.t
-
-val server_macaddr: Macaddr.t
+val default_server_macaddr: Macaddr.t
+val default_client_macaddr: Macaddr.t

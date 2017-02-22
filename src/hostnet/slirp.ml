@@ -9,12 +9,11 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module IPMap = Map.Make(Ipaddr.V4)
 
-let client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
-(* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
-let server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
-
 let default_peer = "192.168.65.2"
 let default_host = "192.168.65.1"
+(* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
+let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
+let default_client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
 let default_dns_extra = []
 
 (* When forwarding TCP, the connection is proxied so the MTU/MSS is link-local.
@@ -70,16 +69,24 @@ let print_pcap = function
   | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
   | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
+type arp_table = {
+  mutex: Lwt_mutex.t;
+  mutable table: (Ipaddr.V4.t * Macaddr.t) list;
+}
+
 type config = {
+  server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
   extra_dns_ip: Ipaddr.V4.t list;
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
+  global_arp_table: arp_table;
+  bridge_connections: bool;
   mtu: int;
 }
 
-module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST) = struct
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST)(Vnet : Vnetif.BACKEND) = struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
 
   module Filteredif = Filter.Make(Vmnet)
@@ -354,6 +361,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   end
 
   type t = {
+    l2_switch: Vnet.t;
+    l2_client_id: Vnet.id;
     after_disconnect: unit Lwt.t;
     interface: Netif.t;
     switch: Switch.t;
@@ -614,7 +623,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun () ->
     delete_unused_endpoints t ()
 
-  let connect x peer_ip local_ip extra_dns_ip mtu get_domain_search get_domain_name =
+  let connect x l2_switch l2_client_id client_macaddr server_macaddr peer_ip local_ip extra_dns_ip mtu get_domain_search get_domain_name global_arp_table use_bridge =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
     let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
@@ -633,25 +642,33 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun switch ->
 
     (* Serve a static ARP table *)
-    let arp_table = [
+    let local_arp_table = [
       peer_ip, client_macaddr;
       local_ip, server_macaddr;
     ] @ (List.map (fun ip -> ip, server_macaddr) extra_dns_ip) in
     or_failwith "arp_ethif" @@ Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
-    or_failwith "arp" @@ Global_arp.connect ~table:arp_table global_arp_ethif
-    >>= fun arp ->
 
     (* Listen on local IPs *)
     let local_ips = local_ip :: extra_dns_ip in
 
-    let dhcp = Dhcp.make ~client_macaddr ~server_macaddr ~peer_ip ~local_ip
+    let highest_peer_ip = 
+        if use_bridge then begin (* number of IPs supported on virtual network, arbitrarily chosen *)
+            let ip_range = Int32.of_int 250 in
+            Some (Ipaddr.V4.of_int32 (Int32.add (Ipaddr.V4.to_int32 peer_ip) ip_range))
+        end else begin
+            None (* just set smallest available prefix *)
+        end 
+    in
+    let dhcp = Dhcp.make ~client_macaddr ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
       ~extra_dns_ip ~get_domain_search ~get_domain_name switch in
 
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
     let udp_nat = Udp_nat.create () in
     let t = {
+      l2_switch;
+      l2_client_id;
       after_disconnect = Vmnet.after_disconnect x;
       interface;
       switch;
@@ -668,7 +685,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           then Lwt.return (`Ok (IPMap.find ip t.endpoints))
           else begin
             let open Infix in
-            Endpoint.create interface switch arp_table ip mtu
+            Endpoint.create interface switch local_arp_table ip mtu
             >>= fun endpoint ->
             t.endpoints <- IPMap.add ip endpoint t.endpoints;
             Lwt.return (`Ok endpoint)
@@ -699,16 +716,48 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
 
+    (* If using bridge, add listener *)
+    if use_bridge then begin
+        Vnet.set_listen_fn t.l2_switch t.l2_client_id (fun buf -> 
+            match parse [ buf ] with
+            | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) -> 
+                Log.debug (fun f -> f "%d: received from bridge %s->%s, sent to switch.write" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+                Switch.write switch buf 
+            | _ -> Lwt.return_unit ); (* write packets from virtual network directly to client *)
+    end;
+
     (* Add a listener which looks for new flows *)
+    Log.info (fun f -> f "Client mac: %s server mac: %s" (Macaddr.to_string client_macaddr) (Macaddr.to_string server_macaddr));
     Switch.listen switch
       (fun buf ->
          let open Frame in
          match parse [ buf ] with
-         | Ok (Ethernet { payload = Ipv4 { payload = Udp { dst = 67; _ }; _ }; _ })
-         | Ok (Ethernet { payload = Ipv4 { payload = Udp { dst = 68; _ }; _ }; _ }) ->
+         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
+            (not (Macaddr.compare eth_dst client_macaddr = 0 || 
+                  Macaddr.compare eth_dst server_macaddr = 0 || 
+                  Macaddr.compare eth_dst Macaddr.broadcast = 0)) -> (* not to server, client or broadcast.. *)
+           if use_bridge then begin
+               Log.debug (fun f -> f "%d: forwarded to bridge for %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+               Vnet.write t.l2_switch t.l2_client_id buf (* pass to virtual network *)
+           end else begin
+               Lwt.return_unit (* drop if bridge is not used *)
+           end
+         | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Ipv4 { payload = Udp { dst = 67; _ }; _ }; _ })
+         | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Ipv4 { payload = Udp { dst = 68; _ }; _ }; _ }) ->
+           Log.debug (fun f -> f "%d: dhcp %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
            Dhcp.callback dhcp buf
-         | Ok (Ethernet { payload = Arp { op = `Request }; _ }) ->
+         | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Arp { op = `Request }; _ }) ->
+           Log.debug (fun f -> f "%d: arp %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
            (* Arp.input expects only the ARP packet, with no ethernet header prefix *)
+           begin
+               if use_bridge then begin (* reply with global table if bridge is in use *)
+                   Lwt_mutex.with_lock global_arp_table.mutex (fun _ ->
+                       or_failwith "arp" @@ Global_arp.connect ~table:global_arp_table.table global_arp_ethif)
+               end else begin (* if not, use local table *)
+                   or_failwith "arp" @@ Global_arp.connect ~table:local_arp_table global_arp_ethif
+               end
+           end
+           >>= fun arp ->
            Global_arp.input arp (Cstruct.shift buf Wire_structs.sizeof_ethernet)
          | Ok (Ethernet { payload = Ipv4 ({ dst; _ } as ipv4 ); _ }) ->
            (* For any new IP destination, create a stack to proxy for the remote system *)
@@ -778,6 +827,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       >>= fun settings ->
       monitor_max_connections_settings settings in
     Lwt.async (fun () -> log_exception_continue "monitor max connections settings" (fun () -> monitor_max_connections_settings max_connections));
+
+    (* TODO Don't hardcode this *)
+    let server_macaddr = default_server_macaddr in
 
     (* Watch for DNS server overrides *)
     let domain_search = ref [] in
@@ -919,24 +971,60 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     Lwt.async (fun () -> restart_on_change "slirp/mtu" string_of_int mtus);
     let mtu = Active_config.hd mtus in
 
-    Log.info (fun f -> f "Creating slirp server peer_ip:%s local_ip:%s domain_search:%s mtu:%d"
+    let bridge_connections_path = driver @ [ "slirp"; "bridge-connections" ] in
+    Config.int config ~default:0 bridge_connections_path
+    >>= fun bridge_conn ->
+    Lwt.async (fun () -> restart_on_change "slirp/bridge-connections" string_of_int bridge_conn);
+    let bridge_connections = ((Active_config.hd bridge_conn) != 0) in
+
+    Log.info (fun f -> f "Creating slirp server peer_ip:%s local_ip:%s domain_search:%s mtu:%d bridge:%B"
                  (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
-                 (String.concat " " !domain_search) mtu
+                 (String.concat " " !domain_search) mtu bridge_connections
              );
+
+    let global_arp_table = {
+        mutex = Lwt_mutex.create();
+        table = [(local_ip, server_macaddr)];
+    } in
     let t = {
+      server_macaddr;
       peer_ip;
       local_ip;
       extra_dns_ip;
       get_domain_search;
       get_domain_name;
+      global_arp_table;
+      bridge_connections;
       mtu;
     } in
     Lwt.return t
 
-  let connect t client =
-    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr ~mtu:t.mtu client
-    >>= fun x ->
+  let connect t client l2_switch =
     Log.debug (fun f -> f "accepted vmnet connection");
 
-    connect x t.peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name
+    begin
+        (* If bridge is in use, create unique IP and update global ARP *)
+        if t.bridge_connections then begin 
+            or_failwith "l2_switch" @@ Lwt.return @@ Vnet.register l2_switch
+            >>= fun l2_client_id ->
+            let client_macaddr = Vnet.mac l2_switch l2_client_id in
+
+            let peer_ip_int32 = Ipaddr.V4.to_int32 t.peer_ip in
+            let peer_ip_inc = (Ipaddr.V4.of_int32 (Int32.add peer_ip_int32 (Int32.of_int (l2_client_id-1)))) in
+
+            (* Add IP to global ARP table *)
+            Lwt_mutex.with_lock t.global_arp_table.mutex (fun () ->
+                t.global_arp_table.table <- (peer_ip_inc, client_macaddr) :: t.global_arp_table.table;
+                Lwt.return_unit)  >>= fun () ->
+            
+            Lwt.return (peer_ip_inc, client_macaddr, l2_client_id)
+        end else begin
+            Lwt.return (t.peer_ip, default_client_macaddr, -1)
+        end
+    end >>= fun (peer_ip, client_macaddr, l2_client_id) ->
+    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
+    >>= fun x ->
+
+    connect x l2_switch l2_client_id client_macaddr t.server_macaddr peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
+
 end
