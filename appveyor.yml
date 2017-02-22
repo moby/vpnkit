@@ -11,7 +11,7 @@ environment:
 install:
   - cmd: git config core.symlinks true
   - cmd: git reset --hard
-  - "%CYG_ROOT%\\setup-x86.exe -qnNdO -R %CYG_ROOT% -s http://cygwin.mirror.constant.com -l C:/cygwin/var/cache/setup -P rsync -P patch -P diffutils.3.5-1 -P make -P unzip -P git -P perl -P mingw64-x86_64-gcc-core"
+  - "%CYG_ROOT%\\setup-x86.exe -qnNdO -R %CYG_ROOT% -s http://cygwin.mirror.constant.com -l C:/cygwin/var/cache/setup -P rsync -P patch -P diffutils.3.5-1 -P make -P git -P perl -P mingw64-x86_64-gcc-core"
 
 build_script:
   - "%CYG_BASH% '${APPVEYOR_BUILD_FOLDER}/scripts/appveyor.sh'"
