@@ -132,6 +132,11 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     | Ethernet { payload = Ipv4 { payload = Tcp { dst = 53; _ }; _ }; _ } -> true
     | _ -> false
 
+  let is_ntp = let open Frame in function
+    | Ethernet { payload = Ipv4 { payload = Udp { src = 123; _ }; _ }; _ }
+    | Ethernet { payload = Ipv4 { payload = Udp { dst = 123; _ }; _ }; _ } -> true
+    | _ -> false
+
   let string_of_id id =
     Printf.sprintf "TCP %s:%d > %s:%d"
       (Ipaddr.V4.to_string id.Stack_tcp_wire.dest_ip) id.Stack_tcp_wire.dest_port
@@ -637,7 +642,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let kib = 1024 in
     (* Capture 256 KiB of DNS traffic *)
     Netif.add_match ~t:interface ~name:"dns.pcap" ~limit:(256 * kib) ~snaplen:1500 ~predicate:is_dns;
-
+    (* Capture 64KiB of NTP traffic *)
+    Netif.add_match ~t:interface ~name:"ntp.pcap" ~limit:(64 * kib) ~snaplen:1500 ~predicate:is_ntp;
     Switch.connect interface
     >>= fun switch ->
 
