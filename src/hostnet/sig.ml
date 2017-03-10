@@ -139,6 +139,13 @@ module type FILES = sig
   (** [unwatch watch] stops watching the path(s) associated with [watch] *)
 end
 
+module type DNS = sig
+
+  val getaddrinfo: string -> Unix.socket_domain -> Ipaddr.t list Lwt.t
+  (** [getaddrinfo host domain] returns a list of IP addresses corresponding
+      to [host] *)
+end
+
 module type HOST = sig
   (** The Host interface *)
 
@@ -153,6 +160,10 @@ module type HOST = sig
 
   module Time: V1_LWT.TIME
   module Clock: V1.CLOCK
+
+  module Dns: sig
+    include DNS
+  end
 
   module Main: sig
     val run: unit Lwt.t -> unit

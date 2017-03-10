@@ -103,7 +103,7 @@ let local_names_cb =
     end
   | _ -> Lwt.return_none
 
-module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) (Clock: V1.CLOCK) (Recorder: Sig.RECORDER) = struct
+module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.SOCKETS)(D: Sig.DNS) (Time: V1_LWT.TIME) (Clock: V1.CLOCK) (Recorder: Sig.RECORDER) = struct
 
   (* DNS uses slightly different protocols over TCP and UDP. We need both a UDP
      and TCP resolver configured to use the upstream servers. We will map UDP
@@ -172,6 +172,32 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
       Recorder.record recorder bufs
     | None ->
       () (* nowhere to log packet *)
+
+  (* HACK: override the local_names_cb as an experiment *)
+  let local_names_cb question =
+    let open Dns.Packet in
+    begin match question with
+      | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
+        D.getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET
+        >>= fun ips ->
+        Lwt.return (q_name, ips)
+      | { q_class = Q_IN; q_type = Q_AAAA; q_name; _ } ->
+        D.getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET6
+        >>= fun ips ->
+        Lwt.return (q_name, ips)
+      | _ ->
+        Lwt.return (Dns.Name.of_string "", [])
+    end
+    >>= function
+    | _, [] -> Lwt.return None
+    | q_name, ips ->
+      let answers = List.map (function
+        | Ipaddr.V4 v4 ->
+          { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = A v4 }
+        | Ipaddr.V6 v6 ->
+          { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA v6 }
+      ) ips in
+      Lwt.return (Some answers)
 
   let create ~local_address config =
     let open Dns_forward.Config.Address in

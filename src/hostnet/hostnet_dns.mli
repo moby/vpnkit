@@ -7,6 +7,7 @@ module Make
     (Udp: V1_LWT.UDPV4)
     (Tcp:V1_LWT.TCPV4)
     (Socket: Sig.SOCKETS)
+    (Dns: Sig.DNS)
     (Time: V1_LWT.TIME)
     (Clock: V1.CLOCK)
     (Recorder: Sig.RECORDER) : sig
