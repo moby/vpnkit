@@ -55,5 +55,5 @@ depends: [
   "astring"
   "mirage-flow" { >= "1.1.0" }
   "mirage-types-lwt"
-  "mirage-vnetif" 
+  "mirage-vnetif" { = "0.2.0" }
 ]
