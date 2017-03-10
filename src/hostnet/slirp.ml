@@ -116,7 +116,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let shutdown_write = close
   end
 
-  module Dns_forwarder = Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Time)(Recorder)
+  module Dns_forwarder = Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Time)(Host.Clock)(Recorder)
   module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Host.Time)
 
   (* Global variable containing the global DNS configuration *)

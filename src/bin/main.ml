@@ -235,7 +235,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
           zones = Domain.Set.empty; timeout_ms = Some 2000; order = 0;
         }
       ] in
-      Dns_policy.add ~priority:1 ~config:{ servers; search = [] } );
+      Dns_policy.add ~priority:1 ~config:{ servers; search = []; assume_offline_after_drops = None } );
 
   let etc_hosts_watch = match Hosts.watch ~path:hosts () with
     | Result.Ok watch -> Some watch

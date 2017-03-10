@@ -8,6 +8,7 @@ module Make
     (Tcp:V1_LWT.TCPV4)
     (Socket: Sig.SOCKETS)
     (Time: V1_LWT.TIME)
+    (Clock: V1.CLOCK)
     (Recorder: Sig.RECORDER) : sig
 
   type t
