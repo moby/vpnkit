@@ -74,7 +74,7 @@ module Policy(Files: Sig.FILES) = struct
 
 end
 
-let local_names_cb =
+let try_etc_hosts =
   let open Dns.Packet in
   function
   | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
@@ -173,8 +173,7 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     | None ->
       () (* nowhere to log packet *)
 
-  (* HACK: override the local_names_cb as an experiment *)
-  let local_names_cb question =
+  let try_getaddrinfo question =
     let open Dns.Packet in
     begin match question with
       | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
@@ -198,6 +197,13 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
           { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA v6 }
       ) ips in
       Lwt.return (Some answers)
+
+  (* HACK: override the local_names_cb as an experiment *)
+  let local_names_cb question =
+    try_etc_hosts question
+    >>= function
+    | Some x -> Lwt.return (Some x)
+    | None -> try_getaddrinfo question
 
   let create ~local_address config =
     let open Dns_forward.Config.Address in
