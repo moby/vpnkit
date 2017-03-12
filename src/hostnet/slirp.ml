@@ -116,7 +116,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let shutdown_write = close
   end
 
-  module Dns_forwarder = Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Time)(Host.Clock)(Recorder)
+  module Dns_forwarder = Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)(Host.Time)(Host.Clock)(Recorder)
   module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Host.Time)
 
   (* Global variable containing the global DNS configuration *)
@@ -658,13 +658,13 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     (* Listen on local IPs *)
     let local_ips = local_ip :: extra_dns_ip in
 
-    let highest_peer_ip = 
+    let highest_peer_ip =
         if use_bridge then begin (* number of IPs supported on virtual network, arbitrarily chosen *)
             let ip_range = Int32.of_int 250 in
             Some (Ipaddr.V4.of_int32 (Int32.add (Ipaddr.V4.to_int32 peer_ip) ip_range))
         end else begin
             None (* just set smallest available prefix *)
-        end 
+        end
     in
     let dhcp = Dhcp.make ~client_macaddr ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
       ~extra_dns_ip ~get_domain_search ~get_domain_name switch in
@@ -724,11 +724,11 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     (* If using bridge, add listener *)
     if use_bridge then begin
-        Vnet.set_listen_fn t.l2_switch t.l2_client_id (fun buf -> 
+        Vnet.set_listen_fn t.l2_switch t.l2_client_id (fun buf ->
             match parse [ buf ] with
-            | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) -> 
+            | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) ->
                 Log.debug (fun f -> f "%d: received from bridge %s->%s, sent to switch.write" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
-                Switch.write switch buf 
+                Switch.write switch buf
             | _ -> Lwt.return_unit ); (* write packets from virtual network directly to client *)
     end;
 
@@ -739,8 +739,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
          let open Frame in
          match parse [ buf ] with
          | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
-            (not (Macaddr.compare eth_dst client_macaddr = 0 || 
-                  Macaddr.compare eth_dst server_macaddr = 0 || 
+            (not (Macaddr.compare eth_dst client_macaddr = 0 ||
+                  Macaddr.compare eth_dst server_macaddr = 0 ||
                   Macaddr.compare eth_dst Macaddr.broadcast = 0)) -> (* not to server, client or broadcast.. *)
            if use_bridge then begin
                Log.debug (fun f -> f "%d: forwarded to bridge for %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
@@ -1010,7 +1010,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     begin
         (* If bridge is in use, create unique IP and update global ARP *)
-        if t.bridge_connections then begin 
+        if t.bridge_connections then begin
             or_failwith "l2_switch" @@ Lwt.return @@ Vnet.register l2_switch
             >>= fun l2_client_id ->
             let client_macaddr = Vnet.mac l2_switch l2_client_id in
@@ -1022,7 +1022,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             Lwt_mutex.with_lock t.global_arp_table.mutex (fun () ->
                 t.global_arp_table.table <- (peer_ip_inc, client_macaddr) :: t.global_arp_table.table;
                 Lwt.return_unit)  >>= fun () ->
-            
+
             Lwt.return (peer_ip_inc, client_macaddr, l2_client_id)
         end else begin
             Lwt.return (t.peer_ip, default_client_macaddr, -1)

@@ -785,6 +785,24 @@ module Clock = struct
   let gmtime _ = failwith "gmtime unimplemented"
 end
 
+module Dns = struct
+
+  (* FIXME: error handling completely missing *)
+  let getaddrinfo host domain =
+    let opts = [ Unix.AI_FAMILY domain ] in
+    let service = "" in
+    Lwt_unix.getaddrinfo host service opts
+    >>= fun x ->
+    Lwt.return @@ List.fold_left (fun acc addr_info -> match addr_info.Unix.ai_addr with
+      | Unix.ADDR_INET(ip, _) ->
+        begin match Ipaddr.of_string @@ Unix.string_of_inet_addr ip with
+        | Some ip -> ip :: acc
+        | None -> acc
+        end
+      | _ -> acc
+    ) [] x
+end
+
 module Main = struct
   let run = Lwt_main.run
   let run_in_main = Lwt_preemptive.run_in_main
