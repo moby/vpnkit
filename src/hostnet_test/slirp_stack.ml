@@ -18,7 +18,7 @@ module Dns_policy = struct
           timeout_ms = Some 2000; order = 0;
         }
       ) ips) in
-    { servers; search = [] }
+    { servers; search = []; assume_offline_after_drops = None }
 
   let config () =
     let ips = [

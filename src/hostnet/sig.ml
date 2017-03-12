@@ -152,6 +152,7 @@ module type HOST = sig
   end
 
   module Time: V1_LWT.TIME
+  module Clock: V1.CLOCK
 
   module Main: sig
     val run: unit Lwt.t -> unit

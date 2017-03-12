@@ -899,6 +899,24 @@ module Time = struct
   let sleep secs = Uwt.Timer.sleep (int_of_float (secs *. 1000.))
 end
 
+module Clock = struct
+  type tm =
+  { tm_sec: int;
+    tm_min: int;
+    tm_hour: int;
+    tm_mday: int;
+    tm_mon: int;
+    tm_year: int;
+    tm_wday: int;
+    tm_yday: int;
+    tm_isdst: bool;
+  }
+
+  let time = Unix.gettimeofday
+
+  let gmtime _ = failwith "gmtime unimplemented"
+end
+
 module Main = struct
   let run = Uwt.Main.run
   let run_in_main = Uwt_preemptive.run_in_main

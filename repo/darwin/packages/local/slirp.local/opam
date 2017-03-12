@@ -44,4 +44,5 @@ depends: [
   "mirage-types-lwt" { = "2.8.999" }
   "ounit"
   "alcotest"
+  "mirage-vnetif" { = "0.2.0" }
 ]

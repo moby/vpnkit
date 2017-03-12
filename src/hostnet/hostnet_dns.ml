@@ -17,7 +17,7 @@ module Policy(Files: Sig.FILES) = struct
         { Server.address = { Address.ip; port = 53 }; zones = Domain.Set.empty;
         timeout_ms = Some 2000; order = 0 }
       ) ips) in
-    { servers; search = [] }
+    { servers; search = []; assume_offline_after_drops = None }
 
   module IntMap = Map.Make(struct type t = int let compare (a: int) (b: int) = Pervasives.compare a b end)
 
@@ -103,16 +103,16 @@ let local_names_cb =
     end
   | _ -> Lwt.return_none
 
-module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) (Recorder: Sig.RECORDER) = struct
+module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.SOCKETS) (Time: V1_LWT.TIME) (Clock: V1.CLOCK) (Recorder: Sig.RECORDER) = struct
 
   (* DNS uses slightly different protocols over TCP and UDP. We need both a UDP
      and TCP resolver configured to use the upstream servers. We will map UDP
      onto UDP and TCP onto TCP, leaving the client to handle the truncated bit
      and retransmissions. *)
   module Dns_tcp_client = Dns_forward.Rpc.Client.Make(Socket.Stream.Tcp)(Dns_forward.Framing.Tcp(Socket.Stream.Tcp))(Time)
-  module Dns_tcp_resolver = Dns_forward.Resolver.Make(Dns_tcp_client)(Time)
+  module Dns_tcp_resolver = Dns_forward.Resolver.Make(Dns_tcp_client)(Time)(Clock)
   module Dns_udp_client = Dns_forward.Rpc.Client.Make(Socket.Datagram.Udp)(Dns_forward.Framing.Udp(Socket.Datagram.Udp))(Time)
-  module Dns_udp_resolver = Dns_forward.Resolver.Make(Dns_udp_client)(Time)
+  module Dns_udp_resolver = Dns_forward.Resolver.Make(Dns_udp_client)(Time)(Clock)
 
   (* We need to be able to parse the incoming framed TCP messages *)
   module Dns_tcp_framing = Dns_forward.Framing.Tcp(Tcp)
