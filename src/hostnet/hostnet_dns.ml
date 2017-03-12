@@ -198,15 +198,27 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
       ) ips in
       Lwt.return (Some answers)
 
-  (* HACK: override the local_names_cb as an experiment *)
-  let local_names_cb question =
-    try_etc_hosts question
-    >>= function
-    | Some x -> Lwt.return (Some x)
-    | None -> try_getaddrinfo question
-
   let create ~local_address config =
     let open Dns_forward.Config.Address in
+
+    (* If no servers are configured then use getaddrinfo *)
+    let nr_servers =
+      let open Dns_forward.Config in
+      Server.Set.cardinal config.servers in
+    let use_getaddrinfo = nr_servers = 0 in
+    if use_getaddrinfo
+    then Log.info (fun f -> f "No upstream DNS servers configured: will use getaddrinfo")
+    else Log.info (fun f -> f "%d upstream DNS servers are configured" nr_servers);
+
+    let local_names_cb question =
+      try_etc_hosts question
+      >>= function
+      | Some x -> Lwt.return (Some x)
+      | None ->
+        if use_getaddrinfo
+        then try_getaddrinfo question
+        else Lwt.return None in
+
     let message_cb ?(src = local_address) ?(dst = local_address) ~buf () =
       match src, dst with
       | { ip = Ipaddr.V4 source_ip; port = source_port }, { ip = Ipaddr.V4 dest_ip; port = dest_port } ->
