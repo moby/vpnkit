@@ -26,6 +26,7 @@ depends: [
   "tcpip" { = "999" }
   "pcap-format"
   "dns" { = "999" }
+  "dnssd"  {>= "0.2" }
   "dns-forward"
   "datakit-server"
   "hashcons" {= "1.0.1"}
