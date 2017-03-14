@@ -275,7 +275,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       get_domain_search = (fun () -> []);
       get_domain_name = (fun () -> "local");
       global_arp_table;
-      bridge_connections = false;
+      bridge_connections = true;
       mtu = 1500; } in
 
   let config = match db_path with
