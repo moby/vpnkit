@@ -936,7 +936,7 @@ module Dns = struct
         | _ -> acc
       ) [] x
 
-  let resolve question =
+  let resolve_getaddrinfo question =
     let open Dns.Packet in
     begin match question with
       | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
@@ -960,6 +960,34 @@ module Dns = struct
           { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA v6 }
       ) ips in
       Lwt.return answers
+
+  let resolve_dnssd question =
+    let open Dns.Packet in
+    begin match question with
+      | { q_class = Q_IN; q_type; q_name; _ } ->
+        begin
+          Uwt_preemptive.detach
+            (fun () ->
+              Dnssd.query (Dns.Name.to_string q_name) q_type
+            ) ()
+          >>= function
+          | Ok rrs -> Lwt.return rrs
+          | Error err ->
+            Log.warn (fun f -> f "DNS lookup %s %s: %s"
+              (Dns.Name.to_string q_name)
+              (Dns.Packet.q_type_to_string q_type)
+              (Dnssd.string_of_error err)
+            );
+            Lwt.return []
+        end
+      | _ ->
+        Lwt.return []
+    end
+
+  let resolve =
+    if Dnssd.is_supported_on_this_platform ()
+    then resolve_dnssd
+    else resolve_getaddrinfo
 end
 
 module Main = struct
