@@ -52,7 +52,7 @@ conflicts: [
   "ssl" {< "0.5.0"}
   "ppx_tools" {< "1.0.0" }
 ]
-available: [ocaml-version >= "4.02.0" & compiler != "4.02.1+BER"]
+available: [ocaml-version >= "4.02.0" & ocaml-version < "4.05.0" & compiler != "4.02.1+BER"]
 messages: [
   "For module Lwt_ssl, please install package lwt_ssl"
   {ssl:installed & !lwt_ssl:installed}

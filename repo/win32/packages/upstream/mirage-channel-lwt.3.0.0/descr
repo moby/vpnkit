@@ -1,0 +1,3 @@
+MirageOS channels
+
+An implementation of MirageOS' V1.CHANNEL using page aligned buffers.

@@ -1,10 +1,12 @@
 opam-version: "1.2"
+authors: ["Daniel de Rauglaudre" "Nicolas Pouillard"]
 maintainer: "jeremie@dimino.org"
 homepage: "https://github.com/ocaml/camlp4"
 license: "LGPLv2"
 build: [
   ["./configure" "--bindir=%{bin}%" "--libdir=%{lib}%/ocaml" "--pkgdir=%{lib}%"]
-  [make "all"]
+  [make "all"] {ocaml-native}
+  [make "byte"] {!ocaml-native}
 ]
 depends: [
   "ocamlbuild" {build}

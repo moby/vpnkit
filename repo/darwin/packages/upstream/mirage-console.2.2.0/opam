@@ -1,0 +1,21 @@
+opam-version: "1.2"
+maintainer:    "anil@recoil.org"
+homepage:      "https://github.com/mirage/mirage-console"
+bug-reports:   "https://github.com/mirage/mirage-console/issues"
+dev-repo:      "https://github.com/mirage/mirage-console.git"
+doc:           "https://mirage.github.io/mirage-console/"
+authors:       [ "Anil Madhavapeddy" "David Scott"]
+tags:          [ "org:mirage" "org:xapi-project"]
+license:       "ISC"
+
+build: ["ocaml" "pkg/pkg.ml" "build" "--pkg-name" name "--pinned" "%{pinned}%"]
+
+depends: [
+  "ocamlfind"  {build}
+  "ocamlbuild" {build}
+  "topkg" {build & >= "0.8.0"}
+  "mirage-device" {>= "1.0.0"}
+  "mirage-flow" {>= "1.2.0"}
+]
+
+available: [ocaml-version >= "4.03.0"]
