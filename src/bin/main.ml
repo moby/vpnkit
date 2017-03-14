@@ -193,7 +193,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
-let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug =
+let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug default_bridge =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -275,7 +275,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       get_domain_search = (fun () -> []);
       get_domain_name = (fun () -> "local");
       global_arp_table;
-      bridge_connections = false;
+      bridge_connections = default_bridge;
       mtu = 1500; } in
 
   let config = match db_path with
@@ -343,16 +343,16 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       | None -> () );
     Lwt.return_unit
 
-let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug =
+let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug default_bridge =
   Host.Main.run
-    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug)
+    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug default_bridge )
 end
 
-let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap select debug =
+let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap select debug default_bridge =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug
+    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug default_bridge
 
 open Cmdliner
 
@@ -461,6 +461,10 @@ let debug =
   let doc = "Verbose debug logging to stdout" in
   Arg.(value & flag & info [ "debug" ] ~doc)
 
+let default_bridge =
+  let doc = "Start in bridge mode by default if no database is available." in
+  Arg.(value & flag & info [ "default-bridge"] ~doc)
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -468,7 +472,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ dns $ hosts $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ dns $ hosts $ pcap $ select $ debug $ default_bridge ),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =
