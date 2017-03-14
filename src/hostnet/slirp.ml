@@ -978,7 +978,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let mtu = Active_config.hd mtus in
 
     let bridge_connections_path = driver @ [ "slirp"; "bridge-connections" ] in
-    Config.int config ~default:0 bridge_connections_path
+    Config.int config ~default:1 bridge_connections_path
     >>= fun bridge_conn ->
     Lwt.async (fun () -> restart_on_change "slirp/bridge-connections" string_of_int bridge_conn);
     let bridge_connections = ((Active_config.hd bridge_conn) != 0) in
