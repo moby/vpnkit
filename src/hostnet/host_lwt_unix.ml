@@ -801,6 +801,31 @@ module Dns = struct
         end
       | _ -> acc
     ) [] x
+
+  let resolve question =
+    let open Dns.Packet in
+    begin match question with
+      | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
+        getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET
+        >>= fun ips ->
+        Lwt.return (q_name, ips)
+      | { q_class = Q_IN; q_type = Q_AAAA; q_name; _ } ->
+        getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET6
+        >>= fun ips ->
+        Lwt.return (q_name, ips)
+      | _ ->
+        Lwt.return (Dns.Name.of_string "", [])
+    end
+    >>= function
+    | _, [] -> Lwt.return []
+    | q_name, ips ->
+      let answers = List.map (function
+        | Ipaddr.V4 v4 ->
+          { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = A v4 }
+        | Ipaddr.V6 v6 ->
+          { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA v6 }
+      ) ips in
+      Lwt.return answers
 end
 
 module Main = struct

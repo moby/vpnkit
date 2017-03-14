@@ -140,10 +140,8 @@ module type FILES = sig
 end
 
 module type DNS = sig
-
-  val getaddrinfo: string -> Unix.socket_domain -> Ipaddr.t list Lwt.t
-  (** [getaddrinfo host domain] returns a list of IP addresses corresponding
-      to [host] *)
+  val resolve: Dns.Packet.question -> Dns.Packet.rr list Lwt.t
+  (** Given a question, find associated resource records *)
 end
 
 module type HOST = sig

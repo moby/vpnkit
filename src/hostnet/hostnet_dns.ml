@@ -173,30 +173,11 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     | None ->
       () (* nowhere to log packet *)
 
-  let try_getaddrinfo question =
-    let open Dns.Packet in
-    begin match question with
-      | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
-        D.getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET
-        >>= fun ips ->
-        Lwt.return (q_name, ips)
-      | { q_class = Q_IN; q_type = Q_AAAA; q_name; _ } ->
-        D.getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET6
-        >>= fun ips ->
-        Lwt.return (q_name, ips)
-      | _ ->
-        Lwt.return (Dns.Name.of_string "", [])
-    end
+  let try_host_resolver question =
+    D.resolve question
     >>= function
-    | _, [] -> Lwt.return None
-    | q_name, ips ->
-      let answers = List.map (function
-        | Ipaddr.V4 v4 ->
-          { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = A v4 }
-        | Ipaddr.V6 v6 ->
-          { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA v6 }
-      ) ips in
-      Lwt.return (Some answers)
+    | [] -> Lwt.return None
+    | x -> Lwt.return (Some x)
 
   let create ~local_address config =
     let open Dns_forward.Config.Address in
@@ -205,9 +186,9 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     let nr_servers =
       let open Dns_forward.Config in
       Server.Set.cardinal config.servers in
-    let use_getaddrinfo = nr_servers = 0 in
-    if use_getaddrinfo
-    then Log.info (fun f -> f "No upstream DNS servers configured: will use getaddrinfo")
+    let use_host_resolver = nr_servers = 0 in
+    if use_host_resolver
+    then Log.info (fun f -> f "No upstream DNS servers configured: will use host's resolver")
     else Log.info (fun f -> f "%d upstream DNS servers are configured" nr_servers);
 
     let local_names_cb question =
@@ -215,8 +196,8 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
       >>= function
       | Some x -> Lwt.return (Some x)
       | None ->
-        if use_getaddrinfo
-        then try_getaddrinfo question
+        if use_host_resolver
+        then try_host_resolver question
         else Lwt.return None in
 
     let message_cb ?(src = local_address) ?(dst = local_address) ~buf () =
