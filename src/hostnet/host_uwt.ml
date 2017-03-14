@@ -963,15 +963,42 @@ module Dns = struct
 
   let resolve_dnssd question =
     let open Dns.Packet in
+    let rec query name ty =
+      Uwt_preemptive.detach
+        (fun () ->
+          Dnssd.query (Dns.Name.to_string name) ty
+        ) ()
+      >>= function
+      | Error e -> Lwt.return (Error e)
+      | Ok rrs ->
+        (* If there are any CNAMEs, resolve these too *)
+        let cnames = List.rev @@ List.fold_left (fun acc rr ->
+          match rr.rdata with
+          | CNAME name -> name :: acc
+          | _ -> acc
+        ) [] rrs in
+        Lwt_list.fold_left_s
+          (fun acc name -> match acc with
+            | Error e -> Lwt.return (Error e)
+            | Ok xs ->
+              query name ty
+              >>= function
+              | Error e -> Lwt.return (Error e)
+              | Ok more -> Lwt.return (Ok (xs @ more))
+          ) (Ok rrs) cnames in
+
     begin match question with
       | { q_class = Q_IN; q_type; q_name; _ } ->
         begin
-          Uwt_preemptive.detach
-            (fun () ->
-              Dnssd.query (Dns.Name.to_string q_name) q_type
-            ) ()
+          query q_name q_type
           >>= function
-          | Ok rrs -> Lwt.return rrs
+          | Ok rrs ->
+            Log.info (fun f -> f "DNS lookup %s %s: %s"
+              (Dns.Name.to_string q_name)
+              (Dns.Packet.q_type_to_string q_type)
+              (String.concat ", " @@ List.map Dns.Packet.rr_to_string rrs)
+            );
+            Lwt.return rrs
           | Error err ->
             Log.warn (fun f -> f "DNS lookup %s %s: %s"
               (Dns.Name.to_string q_name)
