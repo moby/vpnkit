@@ -1,4 +1,0 @@
-Various implementations of the MirageOS FLOW interface
-
-- `Fflow` uses input/output functions to build a flow
-- `Lwt_io_flow` uses `Lwt_io.channel`

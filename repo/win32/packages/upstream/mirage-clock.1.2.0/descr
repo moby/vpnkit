@@ -1,6 +1,0 @@
-Libraries and module types for two kinds of clocks:
-
-* clocks which give a full date and time (PCLOCK)
-* clocks which give a count of time elapsed since the clock started, guaranteed to always increase (MCLOCK)
-
-These are primarily useful in the context of Mirage projects.

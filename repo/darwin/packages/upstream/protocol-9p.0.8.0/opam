@@ -6,9 +6,8 @@ homepage:     "https://github.com/mirage/ocaml-9p"
 dev-repo:     "https://github.com/mirage/ocaml-9p.git"
 bug-reports:  "https://github.com/mirage/ocaml-9p/issues"
 doc:          "https://mirage.github.io/ocaml-9p/"
-tags:         ["org:mirage"]
 
-build: ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "false"
+build: ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%"
           "--with-lambda-term" "%{lambda-term:installed}%"]
 
 build-test: [
@@ -22,10 +21,8 @@ depends: [
   "cstruct" {>= "1.9.0"}
   "sexplib" {> "113.00.00" }
   "result"
-  "rresult"
-  "mirage-flow-lwt" {>= "1.2.0"}
-  "mirage-kv-lwt" {>= "1.0.0"}
-  "mirage-channel-lwt" {>= "3.0.0"}
+  "mirage-types-lwt"
+  "channel" {>= "1.1.0" }
   "lwt" {>= "2.4.7"}
   "base-unix"
   "cmdliner"
