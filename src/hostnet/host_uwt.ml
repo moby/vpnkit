@@ -935,6 +935,86 @@ module Dns = struct
           end
         | _ -> acc
       ) [] x
+
+  let resolve_getaddrinfo question =
+    let open Dns.Packet in
+    begin match question with
+      | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
+        getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET
+        >>= fun ips ->
+        Lwt.return (q_name, ips)
+      | { q_class = Q_IN; q_type = Q_AAAA; q_name; _ } ->
+        getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET6
+        >>= fun ips ->
+        Lwt.return (q_name, ips)
+      | _ ->
+        Lwt.return (Dns.Name.of_string "", [])
+    end
+    >>= function
+    | _, [] -> Lwt.return []
+    | q_name, ips ->
+      let answers = List.map (function
+        | Ipaddr.V4 v4 ->
+          { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = A v4 }
+        | Ipaddr.V6 v6 ->
+          { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA v6 }
+      ) ips in
+      Lwt.return answers
+
+  let resolve_dnssd question =
+    let open Dns.Packet in
+    let rec query name ty =
+      Uwt_preemptive.detach
+        (fun () ->
+          Dnssd.query (Dns.Name.to_string name) ty
+        ) ()
+      >>= function
+      | Error e -> Lwt.return (Error e)
+      | Ok rrs ->
+        (* If there are any CNAMEs, resolve these too *)
+        let cnames = List.rev @@ List.fold_left (fun acc rr ->
+          match rr.rdata with
+          | CNAME name -> name :: acc
+          | _ -> acc
+        ) [] rrs in
+        Lwt_list.fold_left_s
+          (fun acc name -> match acc with
+            | Error e -> Lwt.return (Error e)
+            | Ok xs ->
+              query name ty
+              >>= function
+              | Error e -> Lwt.return (Error e)
+              | Ok more -> Lwt.return (Ok (xs @ more))
+          ) (Ok rrs) cnames in
+
+    begin match question with
+      | { q_class = Q_IN; q_type; q_name; _ } ->
+        begin
+          query q_name q_type
+          >>= function
+          | Ok rrs ->
+            Log.info (fun f -> f "DNS lookup %s %s: %s"
+              (Dns.Name.to_string q_name)
+              (Dns.Packet.q_type_to_string q_type)
+              (String.concat ", " @@ List.map Dns.Packet.rr_to_string rrs)
+            );
+            Lwt.return rrs
+          | Error err ->
+            Log.warn (fun f -> f "DNS lookup %s %s: %s"
+              (Dns.Name.to_string q_name)
+              (Dns.Packet.q_type_to_string q_type)
+              (Dnssd.string_of_error err)
+            );
+            Lwt.return []
+        end
+      | _ ->
+        Lwt.return []
+    end
+
+  let resolve =
+    if Dnssd.is_supported_on_this_platform ()
+    then resolve_dnssd
+    else resolve_getaddrinfo
 end
 
 module Main = struct

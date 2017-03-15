@@ -28,3 +28,4 @@ depends: [
   "ounit"      {test}
 ]
 available: [ ocaml-version >= "4.02.1" & opam-version >= "1.2" ]
+patches: [ "fix_ppx_deriving_make_mllib.patch" ]

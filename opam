@@ -39,6 +39,7 @@ depends: [
   "tcpip" { >= "2.8.0" & < "3.0.0" }
   "pcap-format"
   "dns"
+  "dnssd" { >= "0.2" }
   "dns-forward"
   "datakit-server"
   "hashcons" {= "1.0.1"}

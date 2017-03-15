@@ -26,6 +26,7 @@ depends: [
   "tcpip" { = "999" }
   "pcap-format"
   "dns" { = "999" }
+  "dnssd"  {>= "0.2" }
   "dns-forward"
   "datakit-server"
   "hashcons" {= "1.0.1"}
@@ -40,8 +41,9 @@ depends: [
   "logs"
   "fmt"
   "astring"
-  "mirage-flow" { >= "1.1.0" }
+  "mirage-flow" { = "1.1.0" }
   "mirage-types-lwt" { = "2.8.999" }
+  "protocol-9p" { = "0.8.0" }
   "ounit"
   "alcotest"
   "mirage-vnetif" { = "0.2.0" }

@@ -28,4 +28,7 @@ depends: [
   "ounit"      {test}
 ]
 available: [ ocaml-version >= "4.02.1" & opam-version >= "1.2" ]
-patches: "patch-topkg-ppx_deriving.4.1" {os = "win32"}
+patches: [
+  "patch-topkg-ppx_deriving.4.1" {os = "win32"}
+  "fix_ppx_deriving_make_mllib.patch"
+]
