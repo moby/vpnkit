@@ -41,7 +41,7 @@ depends: [
   "logs"
   "fmt"
   "astring"
-  "mirage-flow" { >= "1.1.0" }
+  "mirage-flow" { = "1.1.0" }
   "mirage-types-lwt" { = "2.8.999" }
   "protocol-9p" { = "0.8.0" }
   "ounit"
