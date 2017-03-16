@@ -285,7 +285,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
         Host.Sockets.Stream.Unix.connect db_path
         >>= fun x ->
         Lwt_result.return x in
-      Some (Config.create ~reconnect ())
+      Some (Config.create ~reconnect ~branch:"master" ())
     | None ->
       Log.warn (fun f -> f "no database: using hardcoded network configuration values");
       None in
