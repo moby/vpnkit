@@ -193,7 +193,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
-let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug =
+let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -267,7 +267,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
         mutex = Lwt_mutex.create ();
         table = [(local_ip, server_macaddr)];
     } in
-    { 
+    {
       Slirp.server_macaddr;
       peer_ip;
       local_ip;
@@ -285,7 +285,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
         Host.Sockets.Stream.Unix.connect db_path
         >>= fun x ->
         Lwt_result.return x in
-      Some (Config.create ~reconnect ~branch:"state" ())
+      Some (Config.create ~reconnect ~branch:db_branch ())
     | None ->
       Log.warn (fun f -> f "no database: using hardcoded network configuration values");
       None in
@@ -343,16 +343,16 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       | None -> () );
     Lwt.return_unit
 
-let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug =
+let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap debug =
   Host.Main.run
-    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug)
+    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap debug)
 end
 
-let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap select debug =
+let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path dns hosts pcap debug
+    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap debug
 
 open Cmdliner
 
@@ -432,6 +432,15 @@ let db_path =
   in
   Arg.(value & opt (some string) None doc)
 
+let db_branch =
+  let doc =
+    Arg.info ~doc:
+      "The database branch which contains the configuration information. \
+       The default is `master`."
+    ["branch"]
+  in
+  Arg.(value & opt string "master" doc)
+
 let dns =
   let doc =
     Arg.info ~doc:
@@ -468,7 +477,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ dns $ hosts $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts $ pcap $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =
