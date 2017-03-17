@@ -143,17 +143,17 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
           ) in
     loop 1 (* if we fail straightaway, log the error *)
 
-  let create_transport reconnect ?username () =
+  let create_transport reconnect branch ?username () =
     connect reconnect ?username ()
     >>= fun conn ->
     Lwt.catch
       (fun () ->
-        (* If we start first we need to create the master branch *)
-        Client.mkdir conn ["branch"] "master" rwxr_xr_x
+        (* If we start first we need to create the branch *)
+        Client.mkdir conn ["branch"] branch rwxr_xr_x
         >>|= fun () ->
         Client.LowLevel.allocate_fid conn
         >>|= fun fid ->
-        Client.walk_from_root conn fid ["branch"; "master"; "watch"; "tree.live"]
+        Client.walk_from_root conn fid ["branch"; branch; "watch"; "tree.live"]
         >>|= fun _walk ->
         Client.LowLevel.openfid conn fid Protocol_9p.Types.OpenMode.read_only
         >>|= fun _openfid ->
@@ -169,24 +169,25 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
   type t = {
     reconnect: unit -> (FLOW.flow, [ `Msg of string ]) Result.result Lwt.t;
     username: string option;
+    branch: string;
     mutable transport: transport option;
     transport_m: Lwt_mutex.t;
   }
 
-  let create ?username ~reconnect () =
+  let create ?username ~branch ~reconnect () =
     let transport = None in
     let transport_m = Lwt_mutex.create () in
-    { reconnect; username; transport; transport_m }
+    { reconnect; username; branch; transport; transport_m }
 
   (* Will retry forever to create a connected transport *)
-  let transport ({ username; reconnect; _ } as t) =
+  let transport ({ username; reconnect; branch; _ } as t) =
     Lwt_mutex.with_lock t.transport_m
       (fun () ->
         match t.transport with
           | Some transport -> Lwt.return transport
           | None ->
             Log.info (fun f -> f "attempting to reconnect to database");
-            retry_forever (fun () -> create_transport reconnect ?username ())
+            retry_forever (fun () -> create_transport reconnect branch ?username ())
             >>= fun transport ->
             Log.info (fun f -> f "reconnected transport layer");
             t.transport <- Some transport;
