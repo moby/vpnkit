@@ -30,6 +30,7 @@ depends: [
   "topkg" {build}
   "base-bytes"
   "sexplib"
+  "ppx_deriving" {build}
   "ppx_sexp_conv"
   "ounit" {test}
 ]

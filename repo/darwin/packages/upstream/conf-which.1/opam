@@ -6,6 +6,9 @@ dev-repo: "https://github.com/ocaml/opam-repository.git"
 license: "GPL-2+"
 build: [["which" "which"]]
 depexts: [
+  [["centos"] ["which"]]
+  [["fedora"] ["which"]]
+  [["opensuse"] ["which"]]
   [["debian"] ["debianutils"]]
   [["ubuntu"] ["debianutils"]]
   [["nixpkgs"] ["which"]]

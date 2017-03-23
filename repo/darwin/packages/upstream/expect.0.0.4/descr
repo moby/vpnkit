@@ -1,5 +1,0 @@
-Simple implementation of "expect" to help building unitary testing of interactive program
-You can match the question using a regular expression or a timeout.
-
-See the Expect manual for more information:
-http://expect.nist.gov/

@@ -35,6 +35,7 @@ depends: [
   "ocamlfind" {build}
   "re"
   "sexplib" {>= "109.53.00"}
+  "ppx_deriving" {build}
   "ppx_sexp_conv" {>= "113.33.01"}
   "base-bytes"
   "stringext" {>= "1.4.0"}
