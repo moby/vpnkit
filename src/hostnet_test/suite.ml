@@ -304,7 +304,7 @@ let test_tcp = [
 ]
 
 module F = Forwarding.Make(Host)
-module N = Nat.Make(Host)
+module N = Test_nat.Make(Host)
 
 let suite = Hosts_test.suite @ [
   "Forwarding", F.test;
