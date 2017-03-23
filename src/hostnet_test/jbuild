@@ -1,0 +1,8 @@
+(executables
+  ((names (main_lwt main_uwt))
+   (libraries   (
+     hostnet cmdliner alcotest lwt.unix logs.fmt
+     dns.mirage lwt.preemptive uwt.preemptive
+   ))
+   (preprocess  no_preprocessing)
+))

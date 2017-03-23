@@ -1,0 +1,9 @@
+(executables
+  ((names (main))
+   (libraries   (
+     cmdliner ofs logs.fmt hostnet hvsock hvsock.lwt-unix
+     datakit-server.fs9p win-eventlog asl fd-send-recv
+   ))
+   (preprocess  no_preprocessing)
+))
+

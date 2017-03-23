@@ -1,0 +1,10 @@
+(library
+  ((name        ofs)
+   (public_name ofs)
+   (libraries (
+    protocol-9p protocol-9p.unix cstruct cstruct.lwt lwt.unix io-page.unix logs
+    mirage-types.lwt astring named-pipe.lwt
+   ))
+   (wrapped false)
+))
+

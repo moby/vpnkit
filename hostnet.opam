@@ -17,18 +17,10 @@ bug-reports:  "https://github.com/docker/vpnkit/issues"
 dev-repo:     "https://github.com/docker/vpnkit.git"
 doc:          "https://docker.github.io/vpnkit/"
 
-build: [
-  [make]
-]
-build-test: [
-  [make "test"]
-]
-install: [make "install" "BINDIR=%{bin}%"]
-remove: [make "uninstall" "BINDIR=%{bin}%"]
-
 depends: [
   "ocamlfind"  {build}
-  "jbuilder"   {build}
+  "ocamlbuild" {build}
+  "oasis"      {build}
   "alcotest"   {test}
   "result"
   "tar-format" {= "0.6.1"}
