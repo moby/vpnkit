@@ -1,4 +1,4 @@
-module Lwt_result = Hostnet.Hostnet_lwt_result (* remove when new Lwt is released *)
+module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
 
 let src =
   let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
@@ -8,7 +8,6 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 open Lwt.Infix
-open Hostnet
 open Vmnet
 
 let error_of_failure f = Lwt.catch f (fun e -> Lwt_result.fail (`Msg (Printexc.to_string e)))

@@ -19,7 +19,6 @@ Executable slirp
 
 Library hostnet
   Path: src/hostnet
-  Pack: true
   Findlibname: hostnet
   Modules: Error, Constants, Arp, Hostnet_dns, Filter, Frame, Cstructs, Capture, Mux, Slirp,
     Hostnet_udp, Hostnet_lwt_result, Forward, Host_lwt_unix, Host_uwt, Hosts, Vmnet, Dhcp, Sig

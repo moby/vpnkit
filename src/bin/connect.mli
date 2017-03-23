@@ -1,5 +1,3 @@
-open Hostnet
-
 module Make_unix(Host: Sig.HOST): sig
   include Sig.Connector
 

@@ -1,4 +1,3 @@
-open Hostnet
 open Lwt.Infix
 
 let src =
@@ -154,8 +153,8 @@ let with_stack f =
   | Result.Error (`Msg x) -> failwith x
   | Result.Ok flow ->
   Log.info (fun f -> f "Made a loopback connection");
-  let client_macaddr = Hostnet.Slirp.default_client_macaddr in
-  let server_macaddr = Hostnet.Slirp.default_server_macaddr in
+  let client_macaddr = Slirp.default_client_macaddr in
+  let server_macaddr = Slirp.default_server_macaddr in
   VMNET.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr ~mtu:1500 flow
   >>= function
   | Result.Error (`Msg x ) ->
