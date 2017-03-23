@@ -22,23 +22,16 @@ let ethernet_header_length = 14 (* no VLAN *)
 
 module Init = struct
 
-  [%%cstruct
-  type msg = {
-    magic : uint8_t [@len 5];   (* VMN3T *)
-    version : uint32_t ;   (* 1 *)
-    commit : uint8_t [@len 40];
-  } [@@little_endian]
-  ]
-
   type t = {
     magic: string;
     version: int32;
     commit: string;
-  } [@@deriving sexp]
+  }
 
-  let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
+  let to_string t =
+    Printf.sprintf "{ magic = %s; version = %ld; commit = %s }" t.magic t.version t.commit
 
-  let sizeof = sizeof_msg
+  let sizeof = 5 + 4 + 40
 
   let default = {
     magic = "VMN3T";
@@ -47,45 +40,40 @@ module Init = struct
   }
 
   let marshal t rest =
-    set_msg_magic t.magic 0 rest;
-    set_msg_version rest t.version;
-    set_msg_commit t.commit 0 rest;
-    Cstruct.shift rest sizeof_msg
+    Cstruct.blit_from_string t.magic 0 rest 0 5;
+    Cstruct.LE.set_uint32 rest 5 t.version;
+    Cstruct.blit_from_string t.commit 0 rest 9 40;
+    Cstruct.shift rest sizeof
 
   let unmarshal rest =
-    let magic = Cstruct.to_string @@ get_msg_magic rest in
-    let version = get_msg_version rest in
-    let commit = Cstruct.to_string @@ get_msg_commit rest in
-    let rest = Cstruct.shift rest sizeof_msg in
+    let magic = Cstruct.(to_string @@ sub rest 0 5) in
+    let version = Cstruct.LE.get_uint32 rest 5 in
+    let commit = Cstruct.(to_string @@ sub rest 9 40) in
+    let rest = Cstruct.shift rest sizeof in
     Result.Ok ({ magic; version; commit }, rest)
 end
 
 module Command = struct
 
-  [%%cstruct
-  type msg = {
-    command : uint8_t;
-  } [@@little_endian]
-  ]
-
   type t =
     | Ethernet of string (* 36 bytes *)
     | Bind_ipv4 of Ipaddr.V4.t * int * bool
-  [@@deriving sexp]
 
-  let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
+  let to_string = function
+    | Ethernet x -> "Ethernet " ^ x
+    | Bind_ipv4 (ip, port, tcp) -> "Bind_ipv4 " ^ (Ipaddr.V4.to_string ip) ^ " " ^ (string_of_int port) ^ " " ^ (string_of_bool tcp)
 
-  let sizeof = sizeof_msg + 36
+  let sizeof = 1 + 36
 
   let marshal t rest = match t with
     | Ethernet uuid ->
-      set_msg_command rest 1;
-      let rest = Cstruct.shift rest sizeof_msg in
+      Cstruct.set_uint8 rest 0 1;
+      let rest = Cstruct.shift rest 1 in
       Cstruct.blit_from_string uuid 0 rest 0 (String.length uuid);
       Cstruct.shift rest (String.length uuid)
     | Bind_ipv4 (ip, port, stream) ->
-      set_msg_command rest 6;
-      let rest = Cstruct.shift rest sizeof_msg in
+      Cstruct.set_uint8 rest 0 6;
+      let rest = Cstruct.shift rest 1 in
       Cstruct.LE.set_uint32 rest 0 (Ipaddr.V4.to_int32 ip);
       let rest = Cstruct.shift rest 4 in
       Cstruct.LE.set_uint16 rest 0 port;
@@ -94,7 +82,7 @@ module Command = struct
       Cstruct.shift rest 1
 
   let unmarshal rest =
-    match get_msg_command rest with
+    match Cstruct.get_uint8 rest 0 with
     | 1 ->
       let uuid = Cstruct.(to_string (sub rest 1 36)) in
       let rest = Cstruct.shift rest 37 in
@@ -103,59 +91,47 @@ module Command = struct
 end
 
 module Vif = struct
-  [%%cstruct
-  type msg = {
-    mtu : uint16_t;
-    max_packet_size : uint16_t;
-    macaddr : uint8_t [@len 6];
-  } [@@little_endian]
-  ]
 
   type t = {
     mtu: int;
     max_packet_size: int;
     client_macaddr: Macaddr.t;
-  } [@@deriving sexp]
+  }
 
-  let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
+  let to_string t = Printf.sprintf "{ mtu = %d; max_packet_size = %d; client_macaddr = %s }" t.mtu t.max_packet_size (Macaddr.to_string t.client_macaddr)
 
   let create client_macaddr mtu () =
     let max_packet_size = mtu + 50 in
     { mtu; max_packet_size; client_macaddr }
 
-  let sizeof = sizeof_msg
+  let sizeof = 2 + 2 + 6
 
   let marshal t rest =
-    set_msg_mtu rest t.mtu;
-    set_msg_max_packet_size rest t.max_packet_size;
-    set_msg_macaddr (Macaddr.to_bytes t.client_macaddr) 0 rest;
-    Cstruct.shift rest sizeof_msg
+    Cstruct.LE.set_uint16 rest 0 t.mtu;
+    Cstruct.LE.set_uint16 rest 2 t.max_packet_size;
+    Cstruct.blit_from_bytes (Macaddr.to_bytes t.client_macaddr) 0 rest 4 6; 
+    Cstruct.shift rest sizeof
 
   let unmarshal rest =
-    let mtu = get_msg_mtu rest in
-    let max_packet_size = get_msg_max_packet_size rest in
+    let mtu = Cstruct.LE.get_uint16 rest 0 in
+    let max_packet_size = Cstruct.LE.get_uint16 rest 2 in
+    let mac = Cstruct.(to_string @@ sub rest 4 6) in
     try
-      let client_macaddr = Macaddr.of_bytes_exn @@ Cstruct.to_string @@ get_msg_macaddr rest in
-      Result.Ok ({ mtu; max_packet_size; client_macaddr }, Cstruct.shift rest sizeof_msg)
+      let client_macaddr = Macaddr.of_bytes_exn mac in
+      Result.Ok ({ mtu; max_packet_size; client_macaddr }, Cstruct.shift rest sizeof)
     with _ ->
-      Result.Error (`Msg (Printf.sprintf "Failed to parse MAC: [%s]" (Cstruct.to_string @@ get_msg_macaddr rest)))
+      Result.Error (`Msg (Printf.sprintf "Failed to parse MAC: [%s]" mac))
 
 end
 
 module Packet = struct
-  [%%cstruct
-  type msg = {
-    len : uint16_t;
-  } [@@little_endian]
-  ]
-
-  let sizeof = sizeof_msg
+  let sizeof = 2
 
   let marshal t rest =
-    set_msg_len rest t
+    Cstruct.LE.set_uint16 rest 0 t
 
   let unmarshal rest =
-    let t = get_msg_len rest in
+    let t = Cstruct.LE.get_uint16 rest 0 in
     Result.Ok (t, Cstruct.shift rest sizeof)
 end
 
