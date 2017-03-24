@@ -28,8 +28,7 @@ remove: [make "uninstall" "BINDIR=%{bin}%"]
 
 depends: [
   "ocamlfind"  {build}
-  "ocamlbuild" {build}
-  "oasis"      {build}
+  "jbuilder"   {build}
   "alcotest"   {test}
   "result"
   "tar-format" {= "0.6.1"}

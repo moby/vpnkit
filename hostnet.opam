@@ -1,0 +1,51 @@
+opam-version: "1.2"
+maintainer: "David Scott <dave.scott@docker.com>"
+authors: [
+	"Anil Madhavapeddy <anil@recoil.org>"
+	"David Scott <dave.scott@docker.com>"
+	"David Sheets <dsheets@docker.com>"
+	"Gaetan de Villele <gdevillele@gmail.com>"
+	"Ian Campbell <ian.campbell@docker.com>"
+	"Magnus Skjegstad <magnus@skjegstad.com>"
+	"Mindy Preston <mindy.preston@docker.com>"
+	"Sebastiaan van Stijn <github@gone.nl>"
+	"Thomas Gazagnaire <thomas@gazagnaire.com>"
+	"Thomas Leonard <thomas.leonard@docker.com>"
+]
+homepage:     "https://github.com/docker/vpnkit"
+bug-reports:  "https://github.com/docker/vpnkit/issues"
+dev-repo:     "https://github.com/docker/vpnkit.git"
+doc:          "https://docker.github.io/vpnkit/"
+
+depends: [
+  "ocamlfind"  {build}
+  "ocamlbuild" {build}
+  "oasis"      {build}
+  "alcotest"   {test}
+  "result"
+  "tar-format" {= "0.6.1"}
+  "ipaddr"
+  "lwt" { < "3.0.0" }
+  "uwt" { >= "0.0.4" }
+  "tcpip" { >= "2.8.0" & < "3.0.0" }
+  "pcap-format"
+  "dns"
+  "dnssd" { >= "0.2" }
+  "dns-forward"
+  "datakit-server"
+  "hashcons" {= "1.0.1"}
+  "pcap-format" { >= "0.4.0" }
+  "cmdliner"
+  "charrua-core" { >= "0.3" }
+  "named-pipe" { >= "0.4.0" }
+  "hvsock" { >= "0.13.0" }
+  "asl"
+  "win-eventlog"
+  "fd-send-recv"
+  "logs"
+  "fmt"
+  "astring"
+  "mirage-flow" { >= "1.1.0" }
+  "mirage-types-lwt"
+  "mirage-vnetif" { = "0.2.0" }
+]

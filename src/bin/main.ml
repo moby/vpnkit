@@ -1,7 +1,6 @@
-module Lwt_result = Hostnet.Hostnet_lwt_result (* remove when new Lwt is released *)
+module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
 
 open Lwt
-open Hostnet
 
 let src =
   let src = Logs.Src.create "9P" ~doc:"/port filesystem" in
@@ -453,7 +452,7 @@ let hosts =
     Arg.info ~doc:
       "Path to /etc/hosts file" ["hosts"]
   in
-  Arg.(value & opt string Hostnet.Hosts.default_etc_hosts_path doc)
+  Arg.(value & opt string Hosts.default_etc_hosts_path doc)
 
 let pcap=
   let doc =

@@ -2,22 +2,9 @@ opam-version: "1.2"
 maintainer: "David Scott <dave.scott@docker.com>"
 authors: [ "David Scott <dave.scott@docker.com>" ]
 
-build: [
-  ["oasis" "setup"]
-  ["./configure" "--prefix" prefix]
-  ["oasis" "-build"]
-]
-build-test: [
-  ["./configure" "--enable-tests"]
-  ["oasis" "-test"]
-]
-install: [make "install"]
-remove: ["ocamlfind" "remove" "hostnet"]
-
 depends: [
   "ocamlfind" {build}
-  "ocamlbuild" {build}
-  "oasis" {build}
+  "jbuilder"  {build}
   "result"
   "tar-format" {= "0.6.1"}
   "ipaddr"

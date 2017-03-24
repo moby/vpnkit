@@ -3,13 +3,11 @@ COMMIT_ID=$(shell git rev-parse HEAD)
 LICENSEDIRS=$(REPO_ROOT)/repo/licenses
 BINDIR?=$(shell pwd)
 
-BINARIES :=
+BINARIES := vpnkit.exe
 ARTEFACTS :=
 ifeq ($(OS),Windows_NT)
-	BINARIES += vpnkit.exe
 	ARTEFACTS += vpnkit.exe
 else
-	BINARIES += vpnkit
 	ARTEFACTS += vpnkit.tgz
 endif
 
@@ -36,9 +34,9 @@ src/bin/depends.ml: src/bin/depends.ml.in
 	cp src/bin/depends.ml src/bin/depends.tmp
 	sed -e 's/££HVSOCK_PINNED££/$(shell opam info hvsock -f pinned)/g' src/bin/depends.tmp > src/bin/depends.ml
 
-vpnkit.tgz: vpnkit
+vpnkit.tgz: vpnkit.exe
 	mkdir -p _build/root/Contents/MacOS
-	cp vpnkit _build/root/Contents/MacOS/vpnkit
+	cp vpnkit.exe _build/root/Contents/MacOS/vpnkit
 	dylibbundler -od -b \
 		-x _build/root/Contents/MacOS/vpnkit \
 		-d _build/root/Contents/Resources/lib \
@@ -46,25 +44,16 @@ vpnkit.tgz: vpnkit
 	tar -C _build/root -cvzf vpnkit.tgz Contents
 
 .PHONY: vpnkit.exe
-vpnkit.exe: src/bin/depends.ml setup.data
-	ocaml setup.ml -build
-	cp _build/src/bin/main.native vpnkit.exe
-
-.PHONY: vpnkit
-vpnkit: src/bin/depends.ml setup.data
-	ocaml setup.ml -build
-	cp _build/src/bin/main.native vpnkit
-
-setup.data: _oasis
-	oasis setup
-	ocaml setup.ml -configure --disable-tests
+vpnkit.exe: src/bin/depends.ml
+	jbuilder build src/bin/main.exe
+	cp _build/default/src/bin/main.exe vpnkit.exe
 
 .PHONY: test
-test: _oasis
-	oasis setup
-	ocaml setup.ml -configure --enable-tests
-	ocaml setup.ml -build
-	ocaml setup.ml -test
+test:
+	jbuilder build src/hostnet_test/main_lwt.exe
+	jbuilder build src/hostnet_test/main_uwt.exe
+	./_build/default/src/hostnet_test/main_lwt.exe
+	./_build/default/src/hostnet_test/main_uwt.exe
 
 .PHONY: OSS-LICENSES
 OSS-LICENSES:
@@ -80,7 +69,6 @@ COMMIT:
 .PHONY: clean
 clean:
 	rm -rf _build
-	rm -f vpnkit
+	rm -f vpnkit.exe
 	rm -f vpnkit.tgz
 	rm -f src/bin/depends.ml
-	rm -f setup.data

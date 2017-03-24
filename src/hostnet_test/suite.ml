@@ -1,4 +1,3 @@
-open Hostnet
 open Lwt.Infix
 
 let src =
@@ -55,18 +54,18 @@ let test_etc_hosts_query server () =
           Log.err (fun f -> f "This test relies on the name %s not existing but it really has IPs: %s" test_name (String.concat ", " (List.map Ipaddr.to_string ips)));
           failwith (Printf.sprintf "Test name %s really does exist" test_name)
         | _ -> begin
-          Hostnet.Hosts.etc_hosts := [
+          Hosts.etc_hosts := [
             test_name, Ipaddr.V4 (Ipaddr.V4.localhost);
           ];
           DNS.gethostbyname ~server resolver test_name
           >>= function
           | (_ :: _) as ips ->
             Log.info (fun f -> f "Name %s has IPs: %s" test_name (String.concat ", " (List.map Ipaddr.to_string ips)));
-            Hostnet.Hosts.etc_hosts := [];
+            Hosts.etc_hosts := [];
             Lwt.return ()
           | _ ->
             Log.err (fun f -> f "Failed to lookup name from /etc/hosts");
-            Hostnet.Hosts.etc_hosts := [];
+            Hosts.etc_hosts := [];
             failwith "failed to lookup name from /etc/hosts"
           end
       ) in
@@ -305,7 +304,7 @@ let test_tcp = [
 ]
 
 module F = Forwarding.Make(Host)
-module N = Nat.Make(Host)
+module N = Test_nat.Make(Host)
 
 let suite = Hosts_test.suite @ [
   "Forwarding", F.test;

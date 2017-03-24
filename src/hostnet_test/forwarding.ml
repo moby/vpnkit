@@ -1,4 +1,3 @@
-open Hostnet
 open Lwt.Infix
 
 let src =
@@ -68,7 +67,7 @@ module ForwardServer = struct
 end
 
 module Forward = Forward.Make(struct
-  type port = Hostnet.Forward.Port.t
+  type port = Forward.Port.t
 
   include Host.Sockets.Stream.Tcp
 

@@ -29,7 +29,7 @@ let examples = [
 ]
 
 let test_one txt expected () =
-  let x = Hostnet.Hosts.of_string txt in
+  let x = Hosts.of_string txt in
   let expected' = List.length expected in
   let x' = List.length x in
   if expected' <> x'

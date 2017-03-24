@@ -1,4 +1,3 @@
-open Hostnet
 open Lwt.Infix
 
 let src =

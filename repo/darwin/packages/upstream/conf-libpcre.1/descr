@@ -1,2 +1,0 @@
-Virtual package relying on a libpcre system installation.
-This package can only install if the libpcre is installed on the system.

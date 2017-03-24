@@ -5,7 +5,6 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-open Hostnet
 open Lwt.Infix
 
 let (/) = Filename.concat

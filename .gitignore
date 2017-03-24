@@ -5,13 +5,7 @@ _build/
 *~
 COMMIT
 OSS-LICENSES
-vpnkit
+vpnkit.exe
 vpnkit.tgz
 opam/licenses/dependency.slirp
-_tags
-configure
-myocamlbuild.ml
-setup.data
-setup.log
-setup.ml
 src/hostnet_test/_tests/
