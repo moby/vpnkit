@@ -1,0 +1,33 @@
+opam-version: "1.2"
+maintainer:   "dave@recoil.org"
+authors:      ["David Scott"]
+license:      "ISC"
+homepage:     "https://github.com/djs55/ocaml-dns-forward"
+bug-reports:  "https://github.com/djs55/ocaml-dns-forward"
+dev-repo:     "https://github.com/djs55/ocaml-dns-forward"
+doc:          "https://github.com/djs55/ocaml-dns-forward"
+
+build: [
+  make
+]
+build-test: [
+  make "test"
+]
+
+depends: [
+  "ocamlfind"  {build}
+  "jbuilder"   {build}
+  "mirage-flow" {<= "1.1.0"}
+  "channel"
+  "dns"
+  "rresult" "astring" "fmt"
+  "cstruct"     {>= "2.2"}
+  "result"
+  "lwt"         {>= "2.6.0"}
+  "logs"        {>= "0.5.0"}
+  "mtime"
+  "sexplib"
+  "ipaddr"
+  "alcotest"   {test}
+]
+available: [ocaml-version >= "4.03.0"]
