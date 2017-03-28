@@ -7,19 +7,17 @@ bug-reports:  "https://github.com/djs55/ocaml-dns-forward"
 dev-repo:     "https://github.com/djs55/ocaml-dns-forward"
 doc:          "https://github.com/djs55/ocaml-dns-forward"
 
-build: ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%"]
+build: [
+  make
+]
 build-test: [
-  ["ocaml" "pkg/pkg.ml" "build" "--tests" "true"]
-  ["ocaml" "pkg/pkg.ml" "test"]
+  make "test"
 ]
 
 depends: [
   "ocamlfind"  {build}
-  "ocamlbuild" {build}
-  "topkg"      {build}
-  "ppx_tools"  {build}
-  "cmdliner"
-  "mirage-flow"
+  "jbuilder"   {build}
+  "mirage-flow" {<= "1.1.0"}
   "channel"
   "dns"
   "rresult" "astring" "fmt"
@@ -32,4 +30,4 @@ depends: [
   "ipaddr"
   "alcotest"   {test}
 ]
-available: [ocaml-version >= "4.02.0"]
+available: [ocaml-version >= "4.03.0"]
