@@ -116,6 +116,7 @@ let start_introspection introspection_url root =
         let module Server = Fs9p.Make(Host.Sockets.Stream.Unix) in
         unix_listen introspection_url
         >>= fun s ->
+        Host.Sockets.Stream.Unix.disable_connection_tracking s;
         Host.Sockets.Stream.Unix.listen s
           (fun flow ->
             Server.accept ~root ~msg:introspection_url flow
@@ -139,6 +140,7 @@ let start_diagnostics diagnostics_url flow_cb =
         Log.info (fun f -> f "starting diagnostics server on: %s" diagnostics_url);
         unix_listen diagnostics_url
         >>= fun s ->
+        Host.Sockets.Stream.Unix.disable_connection_tracking s;
         Host.Sockets.Stream.Unix.listen s flow_cb;
         Lwt.return_unit
       )
