@@ -219,9 +219,12 @@ module Sockets = struct
         label: string;
         fd: Uwt.Udp.t;
         mutable closed: bool;
+        mutable disable_connection_tracking: bool;
       }
 
-      let make ~idx ~label fd = { idx; label; fd; closed = false }
+      let make ~idx ~label fd = { idx; label; fd; closed = false; disable_connection_tracking = false }
+
+      let disable_connection_tracking server = server.disable_connection_tracking <- true
 
       let bind (ip, port) =
         let description = "udp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
@@ -481,6 +484,7 @@ module Sockets = struct
         label: string;
         mutable listening_fds: (int * Uwt.Tcp.t) list;
         read_buffer_size: int;
+        mutable disable_connection_tracking: bool;
       }
 
       let getsockname' = function
@@ -495,7 +499,9 @@ module Sockets = struct
         let label = match getsockname' listening_fds with
           | Ipaddr.V4 _, _ -> "TCPv4"
           | Ipaddr.V6 _, _ -> "TCPv6" in
-        { label; listening_fds; read_buffer_size }
+        { label; listening_fds; read_buffer_size; disable_connection_tracking = false }
+
+      let disable_connection_tracking server = server.disable_connection_tracking <- true
 
       let getsockname server = getsockname' server.listening_fds
 
@@ -573,7 +579,7 @@ module Sockets = struct
         let idx = register_connection_no_limit description in
         make ~read_buffer_size [ (idx, fd) ]
 
-      let listen server cb =
+      let listen server' cb =
         List.iter
           (fun (_, fd) ->
              Uwt.Tcp.listen_exn fd ~max:32 ~cb:(fun server x ->
@@ -602,7 +608,9 @@ module Sockets = struct
                        (fun () ->
                          Lwt.catch
                            (fun () ->
-                             register_connection description
+                             ( if server'.disable_connection_tracking
+                               then Lwt.return @@ register_connection_no_limit description
+                               else register_connection description )
                              >>= fun idx ->
                              Lwt.return (Some (of_fd ~idx ~label ~description client))
                            ) (fun _e ->
@@ -625,7 +633,7 @@ module Sockets = struct
                       )
                    end
                );
-          ) server.listening_fds
+          ) server'.listening_fds
 
     end
 
@@ -753,6 +761,7 @@ module Sockets = struct
         idx: int;
         fd: Uwt.Pipe.t;
         mutable closed: bool;
+        mutable disable_connection_tracking: bool;
       }
 
       let bind path =
@@ -768,7 +777,7 @@ module Sockets = struct
         Lwt.catch
           (fun () ->
             Uwt.Pipe.bind_exn fd ~path;
-            Lwt.return { idx; fd; closed = false }
+            Lwt.return { idx; fd; closed = false; disable_connection_tracking = false }
           ) (fun e ->
             deregister_connection idx;
             Lwt.fail e
@@ -778,6 +787,9 @@ module Sockets = struct
         | Uwt.Ok path ->
           path
         | _ -> invalid_arg "Unix.sockname passed a non-Unix socket"
+
+      let disable_connection_tracking server =
+        server.disable_connection_tracking <- true
 
       let listen ({ fd; _ } as server') cb =
         Uwt.Pipe.listen_exn fd ~max:5 ~cb:(fun server x ->
@@ -794,7 +806,9 @@ module Sockets = struct
                     Lwt.catch
                       (fun () ->
                         let description = "unix:" ^ (getsockname server') in
-                        register_connection description
+                        ( if server'.disable_connection_tracking
+                          then Lwt.return @@ register_connection_no_limit description
+                          else register_connection description )
                         >>= fun idx ->
                         Lwt.return (Some (of_fd ~idx ~description client))
                       ) (fun _e ->
@@ -822,7 +836,7 @@ module Sockets = struct
             | Uwt.Ok path -> "unix:" ^ path
             | Uwt.Error error -> "getsockname failed: " ^ (Uwt.strerror error) in
           let idx = register_connection_no_limit description in
-          { idx; fd; closed = false }
+          { idx; fd; closed = false; disable_connection_tracking = false }
         | Uwt.Error error ->
           let msg = Printf.sprintf "Socket.Pipe.of_bound_fd (read_buffer_size=%d) failed with %s" read_buffer_size (Uwt.strerror error) in
           Log.err (fun f -> f "%s" msg);
