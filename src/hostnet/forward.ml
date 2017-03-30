@@ -315,11 +315,12 @@ let start_udp_proxy description vsock_path_var remote_port server =
 let start vsock_path_var t =
   match t.local with
   | `Tcp (local_ip, local_port)  ->
+    let description = Printf.sprintf "forwarding from tcp:%s:%d" (Ipaddr.to_string local_ip) local_port in
     Lwt.catch
       (fun () ->
         check_bind_allowed local_ip
         >>= fun () ->
-        Socket.Stream.Tcp.bind (local_ip, local_port)
+        Socket.Stream.Tcp.bind ~description (local_ip, local_port)
         >>= fun server ->
         t.server <- Some (`Tcp server);
         (* Resolve the local port yet (the fds are already bound) *)
@@ -343,11 +344,12 @@ let start vsock_path_var t =
           Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d: unexpected error %s" (Ipaddr.to_string local_ip) local_port (Printexc.to_string e))))
       )
     | `Udp (local_ip, local_port) ->
+      let description = Printf.sprintf "forwarding from udp:%s:%d" (Ipaddr.to_string local_ip) local_port in
       Lwt.catch
         (fun () ->
           check_bind_allowed local_ip
           >>= fun () ->
-          Socket.Datagram.Udp.bind (local_ip, local_port)
+          Socket.Datagram.Udp.bind ~description (local_ip, local_port)
           >>= fun server ->
           t.server <- Some (`Udp server);
           start_udp_proxy (to_string t) vsock_path_var t.remote_port server
