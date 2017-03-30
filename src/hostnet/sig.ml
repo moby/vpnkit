@@ -229,13 +229,13 @@ module type DNS_POLICY = sig
 
   type priority = int (** higher is more important *)
 
-  val add: priority:priority -> config:Dns_forward.Config.t -> unit
+  val add: priority:priority -> config:[ `Upstream of Dns_forward.Config.t | `Host ] -> unit
   (** Add some configuration at the given priority level *)
 
   val remove: priority:priority -> unit
   (** Remove the configuration at the given priority level *)
 
-  val config: unit -> Dns_forward.Config.t
+  val config: unit -> [ `Upstream of Dns_forward.Config.t | `Host ]
   (** Return the currently active DNS configuration *)
 end
 

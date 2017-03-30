@@ -2,6 +2,14 @@
 module Policy(Files: Sig.FILES): Sig.DNS_POLICY
 (** Global DNS configuration *)
 
+module Config: sig
+  type t = [
+    | `Upstream of Dns_forward.Config.t (** use upstream servers *)
+    | `Host (** use the host's resolver *)
+  ]
+  val to_string: t -> string
+end
+
 module Make
     (Ip: V1_LWT.IPV4 with type prefix = Ipaddr.V4.t)
     (Udp: V1_LWT.UDPV4)
@@ -15,8 +23,10 @@ module Make
   type t
   (** A DNS proxy instance with a fixed configuration *)
 
-  val create: local_address:Dns_forward.Config.Address.t -> Dns_forward.Config.t -> t Lwt.t
-  (** Create a DNS forwarding instance based on the given configuration.
+  val create: local_address:Dns_forward.Config.Address.t -> Config.t -> t Lwt.t
+  (** Create a DNS forwarding instance based on the given configuration, either
+      [`Upstream config]: send DNS requests to the given upstream servers
+      [`Host]: use the Host's resolver.
       The parameter [~local_address] will be used in any .pcap trace as the
       source address of DNS requests sent from this host. *)
 
