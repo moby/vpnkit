@@ -288,8 +288,6 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
       Log.warn (fun f -> f "%s lookup failed: %s" (describe buf) m);
       Lwt.return_unit
     | Result.Ok buffer ->
-      (* Synthesize a packet from the remote to the host i.e. dst *)
-      record_udp ~source_ip:dst ~source_port:53 ~dest_ip:src ~dest_port:src_port [ buffer ];
       Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer
 
   let handle_tcp ~t =
