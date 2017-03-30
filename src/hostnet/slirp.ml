@@ -859,6 +859,15 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           Lwt.return None
       ) string_dns_settings
     >>= fun dns_settings ->
+    let resolver_path = driver @ [ "slirp"; "resolver" ] in
+    Config.string_option config resolver_path
+    >>= fun string_resolver_settings ->
+    Active_config.map
+      (function
+        | Some "host" -> Lwt.return `Host
+        | _ -> Lwt.return `Upstream
+      ) string_resolver_settings
+    >>= fun resolver_settings ->
 
     let domain_name = ref "local" in
     let get_domain_name () = !domain_name in
@@ -944,32 +953,43 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let local_ip = Active_config.hd host_ips in
     let extra_dns_ip = Active_config.hd extra_dns_ips in
 
-    let rec monitor_dns_settings settings =
+    let upstream_servers = ref Dns_forward.Config.({servers = Server.Set.empty; search = []; assume_offline_after_drops = None }) in
+    let resolver = ref `Upstream in
+    let update_dns () =
+      let config = match !resolver, !upstream_servers with
+        | `Upstream, servers -> `Upstream servers
+        | `Host, _ -> `Host in
+      Log.info (fun f -> f "updating resolvers to %s" (Hostnet_dns.Config.to_string config));
+      !dns >>= fun t ->
+      Dns_forwarder.destroy t
+      >>= fun () ->
+      Dns_policy.remove ~priority:3;
+      Dns_policy.add ~priority:3 ~config;
       let local_address = { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 } in
+      dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
+      Lwt.return_unit in
+
+    let rec monitor_dns_settings settings =
       begin match Active_config.hd settings with
         | None ->
-          Log.info (fun f -> f "remove resolver override");
-          Dns_policy.remove ~priority:3;
-          !dns >>= fun t ->
-          Dns_forwarder.destroy t
-          >>= fun () ->
-          dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
-          Lwt.return_unit
+          upstream_servers := Dns_forward.Config.({ servers = Server.Set.empty; search = []; assume_offline_after_drops = None });
         | Some (servers: Dns_forward.Config.t) ->
-          let open Dns_forward in
-          Log.info (fun f -> f "updating resolvers to %s" (Config.to_string servers));
-          Dns_policy.add ~priority:3 ~config:(`Upstream servers);
-          !dns >>= fun t ->
-          Dns_forwarder.destroy t
-          >>= fun () ->
-          dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
-          Lwt.return_unit
-      end
+          upstream_servers := servers;
+      end;
+      update_dns ()
       >>= fun () ->
       Active_config.tl settings
       >>= fun settings ->
       monitor_dns_settings settings in
-    Lwt.async (fun () -> log_exception_continue "monitor DNS settings" (fun () -> monitor_dns_settings dns_settings));
+    Lwt.async (fun () -> log_exception_continue "monitor upstream server DNS settings" (fun () -> monitor_dns_settings dns_settings));
+    let rec monitor_resolver_settings settings =
+      resolver := Active_config.hd settings;
+      update_dns ()
+      >>= fun () ->
+      Active_config.tl settings
+      >>= fun settings ->
+      monitor_resolver_settings settings in
+    Lwt.async (fun () -> log_exception_continue "monitor upstream DNS resolver settings" (fun () -> monitor_resolver_settings resolver_settings));
 
     let mtu_path = driver @ [ "slirp"; "mtu" ] in
     Config.int config ~default:default_mtu mtu_path
