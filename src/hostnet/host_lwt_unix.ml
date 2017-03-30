@@ -240,9 +240,12 @@ module Datagram = struct
       idx: int;
       fd: Lwt_unix.file_descr;
       mutable closed: bool;
+      mutable disable_connection_tracking: bool;
     }
 
-    let make ~idx fd = { idx; fd; closed = false }
+    let make ~idx fd = { idx; fd; closed = false; disable_connection_tracking = false }
+
+    let disable_connection_tracking server = server.disable_connection_tracking <- true
 
     let bind (ip, port) =
       let pf = match ip with
@@ -483,10 +486,13 @@ module Stream = struct
       read_buffer_size: int;
       path: string; (* only for Win32 *)
       mutable closed: bool;
+      mutable disable_connection_tracking: bool;
     }
 
     let make ?(read_buffer_size = default_read_buffer_size) ?(path="") listening_fds =
-      { listening_fds; read_buffer_size; path; closed = false }
+      { listening_fds; read_buffer_size; path; closed = false; disable_connection_tracking = false }
+
+    let disable_connection_tracking server = server.disable_connection_tracking <- true
 
     let shutdown server =
       let fds = server.listening_fds in
@@ -520,7 +526,9 @@ module Stream = struct
          (fun () ->
            Lwt.catch
              (fun () ->
-               register_connection description
+               ( if server.disable_connection_tracking
+                 then Lwt.return @@ register_connection_no_limit description
+                 else register_connection description )
                >>= fun idx ->
                Lwt.return (Some (of_fd ~idx ~read_buffer_size ~description client))
              ) (fun _e ->
@@ -655,7 +663,9 @@ module Stream = struct
                   let fd = Named_pipe_lwt.Server.to_fd p in
                   Lwt.catch
                     (fun () ->
-                      register_connection description
+                      ( if server.disable_connection_tracking
+                        then Lwt.return @@ register_connection_no_limit description
+                        else register_connection description )
                       >>= fun idx ->
                       Lwt.return (Some (of_fd ~idx ~read_buffer_size ~description fd))
                     ) (fun _e ->

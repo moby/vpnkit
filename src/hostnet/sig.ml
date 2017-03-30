@@ -42,6 +42,11 @@ module type FLOW_SERVER = sig
   val getsockname: server -> address
   (** Query the address the server is bound to *)
 
+  val disable_connection_tracking: server -> unit
+  (** For a particular server, exempt connections from the tracking mechanism.
+      This is intended for internal purposes only (e.g. extracting diagnostics
+      information) *)
+
   type flow
 
   val listen: server -> (flow -> unit Lwt.t) -> unit
