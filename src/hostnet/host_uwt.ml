@@ -223,8 +223,8 @@ module Sockets = struct
 
       let make ~idx ~label fd = { idx; label; fd; closed = false }
 
-      let bind (ip, port) =
-        let description = "udp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
+      let bind ?(description="") (ip, port) =
+        let description = "udp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) ^ " " ^ description in
         let sockaddr = make_sockaddr(ip, port) in
         register_connection description
         >>= fun idx ->
@@ -499,8 +499,8 @@ module Sockets = struct
 
       let getsockname server = getsockname' server.listening_fds
 
-      let bind_one (ip, port) =
-        let description = "tcp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
+      let bind_one ?(description="") (ip, port) =
+        let description = "tcp:" ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) ^ " " ^ description in
         register_connection description
         >>= fun idx ->
         let fd = try Uwt.Tcp.init () with e -> deregister_connection idx; raise e in
@@ -517,8 +517,8 @@ module Sockets = struct
           Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
         end else Lwt.return (idx, label, fd)
 
-      let bind (ip, port) =
-        bind_one (ip, port)
+      let bind ?description (ip, port) =
+        bind_one ?description (ip, port)
         >>= fun (idx, label, fd) ->
         ( match Uwt.Tcp.getsockname fd with
           | Uwt.Ok sockaddr ->
@@ -755,13 +755,13 @@ module Sockets = struct
         mutable closed: bool;
       }
 
-      let bind path =
+      let bind ?(description="") path =
         Lwt.catch
           (fun () ->
              Uwt.Fs.unlink path
           ) (fun _ -> Lwt.return ())
         >>= fun () ->
-        let description = "unix:" ^ path in
+        let description = "unix:" ^ path ^ " " ^ description in
         register_connection description
         >>= fun idx ->
         let fd = Uwt.Pipe.init () in

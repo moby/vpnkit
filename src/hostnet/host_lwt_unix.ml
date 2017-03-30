@@ -80,12 +80,12 @@ let string_of_address (dst, dst_port) =
 let sockaddr_of_address (dst, dst_port) =
   Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string dst, dst_port)
 
-let unix_bind_one pf ty ip port =
+let unix_bind_one ?(description="") pf ty ip port =
   let protocol = match pf, ty with
     | (Unix.PF_INET | Unix.PF_INET6), Unix.SOCK_STREAM -> "tcp:"
     | (Unix.PF_INET | Unix.PF_INET6), Unix.SOCK_DGRAM  -> "udp:"
     | _, _ -> "unknown:" in
-  let description = protocol ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) in
+  let description = protocol ^ (Ipaddr.to_string ip) ^ ":" ^ (string_of_int port) ^ " " ^ description in
   register_connection description
   >>= fun idx ->
   let addr = Lwt_unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port) in
@@ -102,11 +102,11 @@ let unix_bind_one pf ty ip port =
       Lwt.fail e
     )
 
-let unix_bind ty (local_ip, local_port) =
+let unix_bind ?description ty (local_ip, local_port) =
   let pf = match local_ip with
     | Ipaddr.V4 _ -> Lwt_unix.PF_INET
     | Ipaddr.V6 _ -> Lwt_unix.PF_INET6 in
-  unix_bind_one pf ty local_ip local_port
+  unix_bind_one ?description pf ty local_ip local_port
   >>= fun (idx, fd) ->
   let local_port = match local_port, Lwt_unix.getsockname fd with
     | 0, Unix.ADDR_INET(_, local_port) -> local_port
@@ -121,7 +121,7 @@ let unix_bind ty (local_ip, local_port) =
       || Ipaddr.compare local_ip (Ipaddr.V4 Ipaddr.V4.any) = 0
       then begin
         Log.info (fun f -> f "attempting a best-effort bind of ::1:%d" local_port);
-        unix_bind_one Lwt_unix.PF_INET6 ty Ipaddr.(V6 V6.localhost) local_port
+        unix_bind_one ?description Lwt_unix.PF_INET6 ty Ipaddr.(V6 V6.localhost) local_port
         >>= fun (idx, fd) ->
         Lwt.return [ idx, fd ]
       end else begin
@@ -244,11 +244,11 @@ module Datagram = struct
 
     let make ~idx fd = { idx; fd; closed = false }
 
-    let bind (ip, port) =
+    let bind ?description (ip, port) =
       let pf = match ip with
         | Ipaddr.V4 _ -> Lwt_unix.PF_INET
         | Ipaddr.V6 _ -> Lwt_unix.PF_INET6 in
-      unix_bind_one pf Lwt_unix.SOCK_DGRAM ip port
+      unix_bind_one ?description pf Lwt_unix.SOCK_DGRAM ip port
       >>= fun (idx, fd) ->
       Lwt.return (make ~idx fd)
 
@@ -575,8 +575,8 @@ module Stream = struct
         | Ipaddr.V6 _ -> Lwt_unix.PF_INET6 in
       connect description ?read_buffer_size pf Lwt_unix.SOCK_STREAM sockaddr
 
-    let bind (ip, port) =
-      unix_bind Lwt_unix.SOCK_STREAM (ip, port)
+    let bind ?description (ip, port) =
+      unix_bind ?description Lwt_unix.SOCK_STREAM (ip, port)
       >>= fun fds ->
       Lwt.return (make fds)
 
@@ -610,8 +610,8 @@ module Stream = struct
         connect description ?read_buffer_size Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM sockaddr
       end
 
-    let bind path =
-      let description = "unix:" ^ path in
+    let bind ?(description="") path =
+      let description = "unix:" ^ path ^ " " ^ description in
       if is_win32
       then Lwt.return (make ~path [])
       else
