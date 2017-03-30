@@ -24,7 +24,7 @@ module Dns_policy = struct
       Ipaddr.of_string_exn "8.8.8.8", 53;
       Ipaddr.of_string_exn "8.8.4.4", 53;
     ] in
-    config_of_ips ips
+    `Upstream (config_of_ips ips)
 
   let add ~priority:_ ~config:_ = ()
   let remove ~priority:_ = ()

@@ -9,6 +9,24 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+module Config = struct
+  type t = [
+    | `Upstream of Dns_forward.Config.t
+    | `Host
+  ]
+
+  let to_string = function
+    | `Upstream x -> "use upstream DNS servers " ^ (Dns_forward.Config.to_string x)
+    | `Host -> "use host resolver"
+
+  let compare a b = match a, b with
+    | `Upstream x, `Upstream y -> Dns_forward.Config.compare x y
+    | `Host, `Upstream _ -> -1
+    | `Upstream _, `Host -> 1
+    | `Host, `Host -> 0
+end
+
+
 module Policy(Files: Sig.FILES) = struct
   let config_of_ips ips =
     let open Dns_forward.Config in
@@ -26,7 +44,7 @@ module Policy(Files: Sig.FILES) = struct
       Ipaddr.of_string_exn "8.8.8.8", 53;
       Ipaddr.of_string_exn "8.8.4.4", 53;
     ] in
-    config_of_ips ips
+    `Upstream (config_of_ips ips)
 
   type priority = int
 
@@ -39,14 +57,14 @@ module Policy(Files: Sig.FILES) = struct
     let before = config () in
     t := IntMap.add priority c (!t);
     let after = config () in
-    if Dns_forward.Config.compare before after <> 0
-    then Log.info (fun f -> f "Add(%d): DNS configuration changed to: %s" priority (Dns_forward.Config.to_string after))
+    if Config.compare before after <> 0
+    then Log.info (fun f -> f "Add(%d): DNS configuration changed to: %s" priority (Config.to_string after))
   let remove ~priority =
     let before = config () in
     t := IntMap.remove priority !t;
     let after = config () in
-    if Dns_forward.Config.compare before after <> 0
-    then Log.info (fun f -> f "Remove(%d): DNS configuration changed to: %s" priority (Dns_forward.Config.to_string after))
+    if Config.compare before after <> 0
+    then Log.info (fun f -> f "Remove(%d): DNS configuration changed to: %s" priority (Config.to_string after))
 
   (* Watch for the /etc/resolv.file *)
   let resolv_conf = "/etc/resolv.conf"
@@ -62,8 +80,8 @@ module Policy(Files: Sig.FILES) = struct
             | Result.Error (`Msg m) ->
               Log.err (fun f -> f "Failed to parse %s: %s" resolv_conf m);
               Lwt_result.return ()
-            | Result.Ok config ->
-              add ~priority:2 ~config;
+            | Result.Ok servers ->
+              add ~priority:2 ~config:(`Upstream servers);
               Lwt_result.return ()
           )
       ) with
@@ -117,18 +135,25 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
   (* We need to be able to parse the incoming framed TCP messages *)
   module Dns_tcp_framing = Dns_forward.Framing.Tcp(Tcp)
 
-  type t = {
+  type dns = {
     dns_tcp_resolver: Dns_tcp_resolver.t;
     dns_udp_resolver: Dns_udp_resolver.t;
   }
 
+  type t =
+    | Upstream of dns (* use upstream DNS servers *)
+    | Host (* use the host resolver *)
+
   let recorder = ref None
   let set_recorder r = recorder := Some r
 
-  let destroy t =
-    Dns_tcp_resolver.destroy t.dns_tcp_resolver
-    >>= fun () ->
-    Dns_udp_resolver.destroy t.dns_udp_resolver
+  let destroy = function
+    | Upstream { dns_tcp_resolver; dns_udp_resolver } ->
+      Dns_tcp_resolver.destroy dns_tcp_resolver
+      >>= fun () ->
+      Dns_udp_resolver.destroy dns_udp_resolver
+    | Host ->
+      Lwt.return_unit
 
   let record_udp ~source_ip ~source_port ~dest_ip ~dest_port bufs =
     match !recorder with
@@ -179,40 +204,75 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     | [] -> Lwt.return None
     | x -> Lwt.return (Some x)
 
-  let create ~local_address config =
-    let open Dns_forward.Config.Address in
+  let create ~local_address = function
+    | `Upstream config ->
+      let open Dns_forward.Config.Address in
+      let nr_servers =
+        let open Dns_forward.Config in
+        Server.Set.cardinal config.servers in
+      Log.info (fun f -> f "%d upstream DNS servers are configured" nr_servers);
 
-    (* If no servers are configured then use getaddrinfo *)
-    let nr_servers =
-      let open Dns_forward.Config in
-      Server.Set.cardinal config.servers in
-    let use_host_resolver = nr_servers = 0 in
-    if use_host_resolver
-    then Log.info (fun f -> f "No upstream DNS servers configured: will use host's resolver")
-    else Log.info (fun f -> f "%d upstream DNS servers are configured" nr_servers);
+      let message_cb ?(src = local_address) ?(dst = local_address) ~buf () =
+        match src, dst with
+        | { ip = Ipaddr.V4 source_ip; port = source_port }, { ip = Ipaddr.V4 dest_ip; port = dest_port } ->
+          record_udp ~source_ip ~source_port ~dest_ip ~dest_port [ buf ];
+          Lwt.return_unit
+        | _ ->
+          (* We don't know how to marshal IPv6 yet *)
+          Lwt.return_unit in
+      Dns_udp_resolver.create ~message_cb config
+      >>= fun dns_udp_resolver ->
+      Dns_tcp_resolver.create ~message_cb config
+      >>= fun dns_tcp_resolver ->
+      Lwt.return (Upstream { dns_tcp_resolver; dns_udp_resolver })
+    | `Host ->
+      Log.info (fun f -> f "Will use the host's DNS resolver");
+      Lwt.return Host
 
-    let local_names_cb question =
-      try_etc_hosts question
+  let answer t is_tcp buffer =
+    let len = Cstruct.len buffer in
+    let buf = Dns.Buf.of_cstruct buffer in
+    match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
+    | None ->
+      Lwt.return (Result.Error (`Msg "failed to parse DNS packet"))
+    | Some ({ questions = [ question ]; _ } as request) ->
+      let marshal pkt =
+        let buf = Dns.Buf.create 1024 in
+        let buf = Dns.Packet.marshal buf pkt in
+        Cstruct.of_bigarray buf in
+      let reply answers =
+        let id = request.id in
+        let detail = { request.detail with Dns.Packet.qr = Dns.Packet.Response; ra = true } in
+        let questions = request.questions in
+        let authorities = [] and additionals = [] in
+        { Dns.Packet.id; detail; questions; answers; authorities; additionals } in
+      begin try_etc_hosts question
       >>= function
-      | Some x -> Lwt.return (Some x)
+      | Some answers ->
+        Lwt.return (Result.Ok (marshal @@ reply answers))
       | None ->
-        if use_host_resolver
-        then try_host_resolver question
-        else Lwt.return None in
-
-    let message_cb ?(src = local_address) ?(dst = local_address) ~buf () =
-      match src, dst with
-      | { ip = Ipaddr.V4 source_ip; port = source_port }, { ip = Ipaddr.V4 dest_ip; port = dest_port } ->
-        record_udp ~source_ip ~source_port ~dest_ip ~dest_port [ buf ];
-        Lwt.return_unit
-      | _ ->
-        (* We don't know how to marshal IPv6 yet *)
-        Lwt.return_unit in
-    Dns_udp_resolver.create ~local_names_cb ~message_cb config
-    >>= fun dns_udp_resolver ->
-    Dns_tcp_resolver.create ~local_names_cb ~message_cb config
-    >>= fun dns_tcp_resolver ->
-    Lwt.return { dns_tcp_resolver; dns_udp_resolver }
+        begin match is_tcp, t with
+        | true, Upstream { dns_tcp_resolver; _ } ->
+          Dns_tcp_resolver.answer buffer dns_tcp_resolver
+        | false, Upstream { dns_udp_resolver; _ } ->
+          Dns_udp_resolver.answer buffer dns_udp_resolver
+        | _, Host ->
+          D.resolve question
+          >>= function
+          | [] ->
+            let nxdomain =
+              let id = request.id in
+              let detail = { request.detail with Dns.Packet.qr = Dns.Packet.Response; ra = true; rcode = Dns.Packet.NXDomain } in
+              let questions = request.questions in
+              let authorities = [] and additionals = [] and answers = [] in
+              { Dns.Packet.id; detail; questions; answers; authorities; additionals } in
+            Lwt.return (Result.Ok (marshal nxdomain))
+          | answers ->
+            Lwt.return (Result.Ok (marshal @@ reply answers))
+        end
+      end
+    | _ ->
+      Lwt.return (Result.Error (`Msg "DNS packet had multiple questions"))
 
   let describe buf =
     let len = Cstruct.len buf in
@@ -222,8 +282,7 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     | Some request -> Dns.Packet.to_string request
 
   let handle_udp ~t ~udp ~src ~dst ~src_port buf =
-    (* FIXME: need to record the upstream request *)
-    Dns_udp_resolver.answer buf t.dns_udp_resolver
+    answer t false buf
     >>= function
     | Result.Error (`Msg m) ->
       Log.warn (fun f -> f "%s lookup failed: %s" (describe buf) m);
@@ -248,7 +307,7 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
             (* Perform queries in background threads *)
             Lwt.async
               (fun () ->
-                Dns_tcp_resolver.answer request t.dns_tcp_resolver
+                answer t true request
                 >>= function
                 | Result.Error (`Msg m) ->
                   Log.warn (fun f -> f "%s lookup failed: %s" (describe request) m);

@@ -955,10 +955,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           >>= fun () ->
           dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
           Lwt.return_unit
-        | Some (config: Dns_forward.Config.t) ->
+        | Some (servers: Dns_forward.Config.t) ->
           let open Dns_forward in
-          Log.info (fun f -> f "updating resolvers to %s" (Config.to_string config));
-          Dns_policy.add ~priority:3 ~config;
+          Log.info (fun f -> f "updating resolvers to %s" (Config.to_string servers));
+          Dns_policy.add ~priority:3 ~config:(`Upstream servers);
           !dns >>= fun t ->
           Dns_forwarder.destroy t
           >>= fun () ->
