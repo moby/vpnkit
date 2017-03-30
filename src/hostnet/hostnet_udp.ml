@@ -90,7 +90,7 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
 
          Lwt.catch
            (fun () ->
-              Udp.bind (Ipaddr.(V4 V4.any), 0)
+              Udp.bind ~description (Ipaddr.(V4 V4.any), 0)
               >>= fun server ->
               let last_use = Unix.gettimeofday () in
               let flow = { description; server; last_use } in

@@ -36,7 +36,7 @@ module type FLOW_SERVER = sig
   (** Create a server from a file descriptor bound to a Unix domain socket
       by some other process and passed to us. *)
 
-  val bind: address -> server Lwt.t
+  val bind: ?description:string -> address -> server Lwt.t
   (** Bind a server to an address *)
 
   val getsockname: server -> address
