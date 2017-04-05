@@ -34,4 +34,5 @@ depends: [
   "ounit"
   "alcotest"
   "mirage-vnetif" { = "0.2.0" }
+  "uuidm"
 ]
