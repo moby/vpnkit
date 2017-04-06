@@ -11,6 +11,7 @@ module IPMap = Map.Make(Ipaddr.V4)
 
 let default_peer = "192.168.65.2"
 let default_host = "192.168.65.1"
+let default_highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 let default_client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
@@ -666,9 +667,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let local_ips = local_ip :: extra_dns_ip in
 
     let highest_peer_ip =
-        if use_bridge then begin (* number of IPs supported on virtual network, arbitrarily chosen *)
-            let ip_range = Int32.of_int 250 in
-            Some (Ipaddr.V4.of_int32 (Int32.add (Ipaddr.V4.to_int32 peer_ip) ip_range))
+        if use_bridge then begin 
+            Some default_highest_ip
         end else begin
             None (* just set smallest available prefix *)
         end
@@ -1050,7 +1050,6 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             >>= fun l2_client_id ->
             let client_macaddr = (Vnet.mac l2_switch l2_client_id) in
 
-            (* generate new unique IP *)
             let used_ips = 
                 Hashtbl.fold (fun k v l ->
                     let ip, _ = v in
@@ -1066,6 +1065,13 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                     let uuid_suffix = Bytes.sub uuid_bytes 12 4 in
                     let preferred_ip = Ipaddr.V4.of_bytes_exn uuid_suffix in
                     Log.info (fun f -> f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
+                    let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
+                    let highest_ip_int32 = Ipaddr.V4.to_int32 default_highest_ip in
+                    let lowest_ip_int32 = Ipaddr.V4.to_int32 first_ip in
+                    if (preferred_ip_int32 > highest_ip_int32) || (preferred_ip_int32 <  lowest_ip_int32) then
+                    begin
+                        failwith "Preferred IP address out of range."
+                    end;
                     if not (List.mem preferred_ip used_ips) then begin
                         Some preferred_ip
                     end else begin
@@ -1075,7 +1081,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                     None
                 end in
 
-            let rec next_unique_ip next_ip = (* TODO No check for max ip *)
+            (* look for a new unique IP *)
+            let rec next_unique_ip next_ip =
+                if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 default_highest_ip) then
+                begin
+                    failwith "No IP addresses available."
+                end;
                 if not (List.mem next_ip used_ips) then begin
                     next_ip
                 end else begin
