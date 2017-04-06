@@ -15,6 +15,7 @@ let default_host = "192.168.65.1"
 let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 let default_client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
 let default_dns_extra = []
+let default_uuid_preferred_ip_prefix = Bytes.make 12 '\000'
 
 (* When forwarding TCP, the connection is proxied so the MTU/MSS is link-local.
    When forwarding UDP, the datagram on the internal link is the same size as
@@ -654,7 +655,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun switch ->
 
     (* Serve a static ARP table *)
-    let local_arp_table = [
+   let local_arp_table = [
       peer_ip, client_macaddr;
       local_ip, server_macaddr;
     ] @ (List.map (fun ip -> ip, server_macaddr) extra_dns_ip) in
@@ -1039,10 +1040,11 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   let client_macaddr_of_uuid t first_ip l2_switch (uuid:Uuidm.t) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
         if (Hashtbl.mem t.client_uuids.table uuid) then begin (* uuid already used, get config *)
-            let (_, l2_client_id) = (Hashtbl.find t.client_uuids.table uuid) in
-            Lwt.return (Vnet.mac l2_switch l2_client_id) (* may raise Not_found if id is unknown to the bridge *)
+            let (ip, l2_client_id) = (Hashtbl.find t.client_uuids.table uuid) in
+            let mac = (Vnet.mac l2_switch l2_client_id) in
+            Log.info (fun f-> f "Reconnecting MAC %s with IP %s" (Macaddr.to_string mac) (Ipaddr.V4.to_string ip));
+            Lwt.return mac (* may raise Not_found if id is unknown to the bridge *)
         end else begin (* new uuid, register in bridge *)
-
             (* register new client on bridge *)
             or_failwith "l2_switch" @@ Lwt.return @@ Vnet.register l2_switch
             >>= fun l2_client_id ->
@@ -1054,6 +1056,25 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                     let ip, _ = v in
                     l @ [ip]) t.client_uuids.table []
             in 
+
+            (* check if a specific IP is requested *)
+            let preferred_ip = 
+                let uuid_bytes = Uuidm.to_bytes uuid in
+                let uuid_prefix = Bytes.sub uuid_bytes 0 (Bytes.length default_uuid_preferred_ip_prefix) in
+                if (Bytes.compare uuid_prefix default_uuid_preferred_ip_prefix) = 0 then
+                begin
+                    let uuid_suffix = Bytes.sub uuid_bytes 12 4 in
+                    let preferred_ip = Ipaddr.V4.of_bytes_exn uuid_suffix in
+                    Log.info (fun f -> f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
+                    if not (List.mem preferred_ip used_ips) then begin
+                        Some preferred_ip
+                    end else begin
+                        failwith "Preferred IP address %s not available" (Ipaddr.V4.to_string preferred_ip)
+                    end
+                end else begin
+                    None
+                end in
+
             let rec next_unique_ip next_ip = (* TODO No check for max ip *)
                 if not (List.mem next_ip used_ips) then begin
                     next_ip
@@ -1062,7 +1083,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                     next_unique_ip next_ip
                 end
             in
-            let client_ip = next_unique_ip first_ip in
+
+            let client_ip = (match preferred_ip with
+                | None -> next_unique_ip first_ip
+                | Some ip -> ip) in
 
             (* Add IP to global ARP table *)
             Lwt_mutex.with_lock t.global_arp_table.mutex (fun () ->
