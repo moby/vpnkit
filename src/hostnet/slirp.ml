@@ -74,6 +74,11 @@ type arp_table = {
   mutable table: (Ipaddr.V4.t * Macaddr.t) list;
 }
 
+type uuid_table = {
+  mutex: Lwt_mutex.t;
+  table: (Uuidm.t, Ipaddr.V4.t * int) Hashtbl.t;
+}
+
 type config = {
   server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
@@ -82,11 +87,12 @@ type config = {
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
   global_arp_table: arp_table;
+  client_uuids: uuid_table;
   bridge_connections: bool;
   mtu: int;
 }
 
-module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST)(Vnet : Vnetif.BACKEND) = struct
+module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST)(Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) = struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
 
   module Filteredif = Filter.Make(Vmnet)
@@ -628,7 +634,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun () ->
     delete_unused_endpoints t ()
 
-  let connect x l2_switch l2_client_id client_macaddr server_macaddr peer_ip local_ip extra_dns_ip mtu get_domain_search get_domain_name global_arp_table use_bridge =
+  let connect x l2_switch l2_client_id client_macaddr server_macaddr peer_ip local_ip extra_dns_ip mtu get_domain_search get_domain_name (global_arp_table:arp_table) use_bridge =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
     let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
@@ -738,7 +744,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (fun buf ->
          let open Frame in
          match parse [ buf ] with
-         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
+         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; payload }) when
             (not (Macaddr.compare eth_dst client_macaddr = 0 ||
                   Macaddr.compare eth_dst server_macaddr = 0 ||
                   Macaddr.compare eth_dst Macaddr.broadcast = 0)) -> (* not to server, client or broadcast.. *)
@@ -1008,9 +1014,13 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                  (String.concat " " !domain_search) mtu bridge_connections
              );
 
-    let global_arp_table = {
+    let global_arp_table : arp_table = {
         mutex = Lwt_mutex.create();
         table = [(local_ip, server_macaddr)];
+    } in
+    let client_uuids : uuid_table = {
+        mutex = Lwt_mutex.create();
+        table = Hashtbl.create 50;
     } in
     let t = {
       server_macaddr;
@@ -1020,37 +1030,77 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       get_domain_search;
       get_domain_name;
       global_arp_table;
+      client_uuids;
       bridge_connections;
       mtu;
     } in
     Lwt.return t
 
-  let connect t client l2_switch =
-    Log.debug (fun f -> f "accepted vmnet connection");
+  let client_macaddr_of_uuid t first_ip l2_switch (uuid:Uuidm.t) =
+    Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
+        if (Hashtbl.mem t.client_uuids.table uuid) then begin (* uuid already used, get config *)
+            let (_, l2_client_id) = (Hashtbl.find t.client_uuids.table uuid) in
+            Lwt.return (Vnet.mac l2_switch l2_client_id) (* may raise Not_found if id is unknown to the bridge *)
+        end else begin (* new uuid, register in bridge *)
 
-    begin
-        (* If bridge is in use, create unique IP and update global ARP *)
-        if t.bridge_connections then begin
+            (* register new client on bridge *)
             or_failwith "l2_switch" @@ Lwt.return @@ Vnet.register l2_switch
             >>= fun l2_client_id ->
-            let client_macaddr = Vnet.mac l2_switch l2_client_id in
+            let client_macaddr = (Vnet.mac l2_switch l2_client_id) in
 
-            let peer_ip_int32 = Ipaddr.V4.to_int32 t.peer_ip in
-            let peer_ip_inc = (Ipaddr.V4.of_int32 (Int32.add peer_ip_int32 (Int32.of_int (l2_client_id-1)))) in
+            (* generate new unique IP *)
+            let used_ips = 
+                Hashtbl.fold (fun k v l ->
+                    let ip, _ = v in
+                    l @ [ip]) t.client_uuids.table []
+            in 
+            let rec next_unique_ip next_ip = (* TODO No check for max ip *)
+                if not (List.mem next_ip used_ips) then begin
+                    next_ip
+                end else begin
+                    let next_ip = Ipaddr.V4.of_int32 (Int32.succ (Ipaddr.V4.to_int32 next_ip)) in
+                    next_unique_ip next_ip
+                end
+            in
+            let client_ip = next_unique_ip first_ip in
 
             (* Add IP to global ARP table *)
             Lwt_mutex.with_lock t.global_arp_table.mutex (fun () ->
-                t.global_arp_table.table <- (peer_ip_inc, client_macaddr) :: t.global_arp_table.table;
+                t.global_arp_table.table <- (client_ip, client_macaddr) :: t.global_arp_table.table;
                 Lwt.return_unit)  >>= fun () ->
 
-            Lwt.return (peer_ip_inc, client_macaddr, l2_client_id)
-        end else begin
-            Lwt.return (t.peer_ip, default_client_macaddr, -1)
+            (* add to client table and return mac *)
+            Hashtbl.replace t.client_uuids.table uuid (client_ip, l2_client_id);
+            Lwt.return client_macaddr
         end
-    end >>= fun (peer_ip, client_macaddr, l2_client_id) ->
-    or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
-    >>= fun x ->
+    )
 
-    connect x l2_switch l2_client_id client_macaddr t.server_macaddr peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
+  let get_client_ip_id t uuid =
+    Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
+        Lwt.return (Hashtbl.find t.client_uuids.table uuid)
+    )
+
+  let connect t client l2_switch =
+    Log.debug (fun f -> f "accepted vmnet connection");
+    begin
+        (* If bridge is in use, create unique IP and update global ARP *)
+        if t.bridge_connections then begin
+            or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(client_macaddr_of_uuid t t.peer_ip l2_switch)
+                ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
+             >>= fun x -> 
+            let client_macaddr = Vmnet.get_client_macaddr x in
+            let client_uuid = Vmnet.get_client_uuid x in
+            get_client_ip_id t client_uuid 
+            >>= fun (client_ip, l2_client_id) -> 
+            connect x l2_switch l2_client_id client_macaddr t.server_macaddr client_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
+        end else begin
+            (* When bridge is disabled, just use fixed uuid and peer_ip from t *)
+            or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(fun _ -> Lwt.return default_client_macaddr) 
+                ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
+            >>= fun x ->
+            let client_macaddr = Vmnet.get_client_macaddr x in
+            connect x l2_switch (-1) client_macaddr t.server_macaddr t.peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
+        end
+    end
 
 end

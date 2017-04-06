@@ -10,6 +10,11 @@ type arp_table = {
   mutable table: (Ipaddr.V4.t * Macaddr.t) list;
 }
 
+type uuid_table = {
+  mutex: Lwt_mutex.t;
+  table: (Uuidm.t, Ipaddr.V4.t * int) Hashtbl.t;
+}
+
 type config = {
   server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
@@ -18,6 +23,7 @@ type config = {
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
   global_arp_table: arp_table;
+  client_uuids: uuid_table;
   bridge_connections: bool;
   mtu: int;
 }

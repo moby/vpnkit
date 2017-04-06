@@ -223,7 +223,7 @@ module Make(Input: Sig.VMNET) = struct
     t.stats.rx_pkts <- 0l;
     t.stats.tx_pkts <- 0l
 
-  let of_fd ~client_macaddr:_ ~server_macaddr:_ ~mtu:_ =
+  let of_fd ~client_macaddr_of_uuid:_ ~server_macaddr:_ ~mtu:_ =
     failwith "Capture.of_fd unimplemented"
 
   let start_capture _ ?size_limit:_ _ =
@@ -231,4 +231,10 @@ module Make(Input: Sig.VMNET) = struct
 
   let stop_capture _ =
     failwith "Capture.stop_capture unimplemented"
+
+  let get_client_uuid t =
+    failwith "Capture.get_client_uuid unimplemented"
+
+  let get_client_macaddr t =
+    failwith "Capture.get_client_macaddr unimplemented"
 end
