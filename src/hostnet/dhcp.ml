@@ -57,15 +57,21 @@ module Make(Netif: V1_LWT.NETWORK) = struct
           Name.marshal map n buffer (Name.of_string name)
         ) (Name.Map.empty, 0, buffer) (get_domain_search ()) in
         Cstruct.(to_string (sub buffer 0 n)) in
+      let domain_name = get_domain_name () in
       let options = [
-        Dhcp_wire.Domain_name (get_domain_name ());
         Dhcp_wire.Routers [ local_ip ];
         Dhcp_wire.Dns_servers (local_ip :: extra_dns_ip);
         Dhcp_wire.Ntp_servers [ local_ip ];
         Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
         Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix);
-        Dhcp_wire.Domain_search domain_search;
-      ] in {
+      ] in
+      (* domain_search and get_domain_name may produce an empty string, which is
+       * invalid, so only add the option if there is content *)
+      let options = if domain_search = "" then options
+      else Dhcp_wire.Domain_search domain_search :: options in
+      let options = if domain_name = "" then options 
+      else Dhcp_wire.Domain_name domain_name :: options in
+      {
         options = options;
         hostname = "vpnkit"; (* it's us! *)
         hosts = [ ];
