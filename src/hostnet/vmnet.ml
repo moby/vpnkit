@@ -56,11 +56,11 @@ end
 module Command = struct
 
   type t =
-    | Ethernet of string (* 36 bytes *)
+    | Ethernet of Uuidm.t (* 36 bytes *)
     | Bind_ipv4 of Ipaddr.V4.t * int * bool
 
   let to_string = function
-    | Ethernet x -> "Ethernet " ^ x
+    | Ethernet x -> "Ethernet " ^ (Uuidm.to_string x)
     | Bind_ipv4 (ip, port, tcp) -> "Bind_ipv4 " ^ (Ipaddr.V4.to_string ip) ^ " " ^ (string_of_int port) ^ " " ^ (string_of_bool tcp)
 
   let sizeof = 1 + 36
@@ -69,8 +69,9 @@ module Command = struct
     | Ethernet uuid ->
       Cstruct.set_uint8 rest 0 1;
       let rest = Cstruct.shift rest 1 in
-      Cstruct.blit_from_string uuid 0 rest 0 (String.length uuid);
-      Cstruct.shift rest (String.length uuid)
+      let uuid_str = Uuidm.to_string uuid in
+      Cstruct.blit_from_string uuid_str 0 rest 0 (String.length uuid_str);
+      Cstruct.shift rest (String.length uuid_str)
     | Bind_ipv4 (ip, port, stream) ->
       Cstruct.set_uint8 rest 0 6;
       let rest = Cstruct.shift rest 1 in
@@ -84,10 +85,17 @@ module Command = struct
   let unmarshal rest =
     match Cstruct.get_uint8 rest 0 with
     | 1 ->
-      let uuid = Cstruct.(to_string (sub rest 1 36)) in
+      let uuid_str = Cstruct.(to_string (sub rest 1 36)) in
       let rest = Cstruct.shift rest 37 in
-      Result.Ok (Ethernet uuid, rest)
+      let result = match (Uuidm.of_string uuid_str) with
+          | Some uuid -> begin
+            Result.Ok (Ethernet uuid, rest)
+          end
+          | None -> Result.Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str))
+      in 
+      result
     | n -> Result.Error (`Msg (Printf.sprintf "Unknown command: %d" n))
+
 end
 
 module Vif = struct
@@ -149,6 +157,7 @@ type stats = {
 type t = {
   mutable fd: Channel.t option;
   stats: stats;
+  client_uuid: Uuidm.t;
   client_macaddr: Macaddr.t;
   server_macaddr: Macaddr.t;
   mtu: int;
@@ -170,10 +179,15 @@ let get_fd t = match t.fd with
   | Some fd -> fd
   | None -> failwith "Vmnet connection is disconnected"
 
-let server_negotiate t =
+let get_client_uuid t =
+  t.client_uuid
+
+let get_client_macaddr t =
+  t.client_macaddr
+
+let server_negotiate ~fd ~client_macaddr_of_uuid ~mtu =
   error_of_failure
     (fun () ->
-      let fd = get_fd t in
       Channel.read_exactly ~len:Init.sizeof fd
       >>= fun bufs ->
       let buf = Cstruct.concat bufs in
@@ -192,23 +206,29 @@ let server_negotiate t =
       let open Lwt_result.Infix in
       Lwt.return (Command.unmarshal buf)
       >>= fun (command, _) ->
-      Log.debug (fun f -> f "PPP.negotiate: received %s" (Command.to_string command));
-      let vif = Vif.create t.client_macaddr t.mtu () in
-      let buf = Cstruct.create Vif.sizeof in
-      let (_: Cstruct.t) = Vif.marshal vif buf in
-      let open Lwt.Infix in
-      Log.debug (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
-      Channel.write_buffer fd buf;
-      Channel.flush fd
-      >>= fun () ->
-      Lwt_result.return ()
+      Log.info (fun f -> f "PPP.negotiate: received %s" (Command.to_string command));
+      match command with
+      | Ethernet uuid -> begin
+          let open Lwt.Infix in
+          client_macaddr_of_uuid uuid
+          >>= fun client_macaddr -> 
+          let vif = Vif.create client_macaddr mtu () in
+          let buf = Cstruct.create Vif.sizeof in
+          let (_: Cstruct.t) = Vif.marshal vif buf in
+          let open Lwt.Infix in
+          Log.info (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
+          Channel.write_buffer fd buf;
+          Channel.flush fd
+          >>= fun () ->
+          Lwt_result.return (uuid, client_macaddr)
+        end
+      | Bind_ipv4 _ -> (raise (Failure "PPP.negotiate: unsupported command Bind_ipv4"))
     )
 
-let client_negotiate t =
+let client_negotiate ~uuid ~fd =
   error_of_failure
     (fun () ->
       let open Lwt.Infix in
-      let fd = get_fd t in
       let buf = Cstruct.create Init.sizeof in
       let (_: Cstruct.t) = Init.marshal Init.default buf in
       Channel.write_buffer fd buf;
@@ -222,7 +242,6 @@ let client_negotiate t =
       >>= fun (init, _) ->
       Log.info (fun f -> f "Client.negotiate: received %s" (Init.to_string init));
       let buf = Cstruct.create Command.sizeof in
-      let uuid = String.make 36 'X' in
       let (_: Cstruct.t) = Command.marshal (Command.Ethernet uuid) buf in
       let open Lwt.Infix in
       Channel.write_buffer fd buf;
@@ -235,7 +254,7 @@ let client_negotiate t =
       Lwt.return (Vif.unmarshal buf)
       >>= fun (vif, _) ->
       Log.debug (fun f -> f "Client.negotiate: vif %s" (Vif.to_string vif));
-      Lwt_result.return ()
+      Lwt_result.return (vif)
     )
 
 (* Use blocking I/O here so we can avoid Using Lwt_unix or Uwt. Ideally we
@@ -289,7 +308,7 @@ let stop_capture t =
       stop_capture_already_locked t
     )
 
-let make ~client_macaddr ~server_macaddr ~mtu fd =
+let make ~client_macaddr ~server_macaddr ~mtu ~client_uuid fd =
   let fd = Some fd in
   let stats = { rx_bytes = 0L; rx_pkts = 0l; tx_bytes = 0L; tx_pkts = 0l } in
   let write_header = Cstruct.create (1024 * Packet.sizeof) in
@@ -300,25 +319,24 @@ let make ~client_macaddr ~server_macaddr ~mtu fd =
   let listeners = [] in
   let listening = false in
   let after_disconnect, after_disconnect_u = Lwt.task () in
-  { fd; stats; client_macaddr; server_macaddr; mtu; write_header; write_m; pcap;
+  { fd; stats; client_macaddr; client_uuid; server_macaddr; mtu; write_header; write_m; pcap;
     pcap_size_limit; pcap_m; listeners; listening; after_disconnect; after_disconnect_u }
 
 type fd = C.flow
 
-let of_fd ~client_macaddr ~server_macaddr ~mtu flow =
+let of_fd ~client_macaddr_of_uuid ~server_macaddr ~mtu flow =
   let open Lwt_result.Infix in
   let channel = Channel.create flow in
-  let t = make ~client_macaddr ~server_macaddr ~mtu channel in
-  server_negotiate t
-  >>= fun () ->
+  server_negotiate ~fd:channel ~client_macaddr_of_uuid ~mtu >>= fun (client_uuid, client_macaddr) ->
+  let t = make ~client_macaddr ~server_macaddr ~mtu ~client_uuid channel in
   Lwt_result.return t
 
-let client_of_fd ~client_macaddr ~server_macaddr ~mtu flow =
+let client_of_fd ~uuid ~server_macaddr flow =
   let open Lwt_result.Infix in
   let channel = Channel.create flow in
-  let t = make ~client_macaddr ~server_macaddr ~mtu channel in
-  client_negotiate t
-  >>= fun () ->
+  client_negotiate ~uuid ~fd:channel 
+  >>= fun vif ->
+  let t = make vif.client_macaddr server_macaddr vif.mtu uuid channel in
   Lwt_result.return t
 
 let disconnect t = match t.fd with

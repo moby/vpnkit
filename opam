@@ -56,4 +56,5 @@ depends: [
   "mirage-flow" { >= "1.1.0" }
   "mirage-types-lwt"
   "mirage-vnetif" { = "0.2.0" }
+  "uuidm"
 ]

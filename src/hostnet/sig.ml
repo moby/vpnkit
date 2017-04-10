@@ -204,12 +204,16 @@ module type VMNET = sig
 
   type fd
 
-  val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t
+  val of_fd: client_macaddr_of_uuid:(Uuidm.t -> Macaddr.t Lwt.t) -> server_macaddr:Macaddr.t 
     -> mtu:int -> fd -> t Error.t
 
   val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 
   val stop_capture: t -> unit Lwt.t
+
+  val get_client_uuid: t -> Uuidm.t
+
+  val get_client_macaddr: t -> Macaddr.t
 end
 
 module type DNS_POLICY = sig

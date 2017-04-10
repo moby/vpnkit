@@ -97,7 +97,12 @@ let global_arp_table : Slirp.arp_table =
     table = [(local_ip, Slirp.default_server_macaddr)] 
   }
 
-let config =
+let client_uuids : Slirp.uuid_table = 
+  { mutex = Lwt_mutex.create ();
+    table = Hashtbl.create 50;
+  }
+
+let config_without_bridge =
   let never, _ = Lwt.task () in
   {
     Slirp.peer_ip;
@@ -106,6 +111,7 @@ let config =
     server_macaddr;
     get_domain_search = (fun () -> []);
     get_domain_name = (fun () -> "local");
+    client_uuids;
     bridge_connections = false;
     global_arp_table;
     mtu = 1500;
@@ -126,7 +132,7 @@ let set_slirp_stack c =
   slirp_stack := Some c;
   Lwt_condition.signal slirp_stack_c ()
 
-let start_stack l2_switch () =
+let start_stack l2_switch config () =
   Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
   >>= fun server ->
   let _, port = Host.Sockets.Stream.Tcp.getsockname server in
@@ -143,7 +149,7 @@ let start_stack l2_switch () =
     );
   Lwt.return port
 
-let connection = start_stack (Vnet.create ()) ()
+let connection = start_stack (Vnet.create ()) config_without_bridge ()
 
 let with_stack f =
   connection
@@ -155,7 +161,10 @@ let with_stack f =
   Log.info (fun f -> f "Made a loopback connection");
   let client_macaddr = Slirp.default_client_macaddr in
   let server_macaddr = Slirp.default_server_macaddr in
-  VMNET.client_of_fd ~client_macaddr:server_macaddr ~server_macaddr:client_macaddr ~mtu:1500 flow
+  let uuid = (match Uuidm.of_string "d1d9cd61-d0dc-4715-9bb3-4c11da7ad7a5" with
+  | Some x -> x
+  | None -> failwith "unable to parse test uuid") in
+  VMNET.client_of_fd ~uuid ~server_macaddr:client_macaddr flow
   >>= function
   | Result.Error (`Msg x ) ->
     (* Server will close when it gets EOF *)

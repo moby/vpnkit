@@ -13,13 +13,13 @@ val after_disconnect: t -> unit Lwt.t
 
 val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
 
-val of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> mtu:int -> C.flow -> t Error.t
-(** [of_fd ~client_macaddr ~server_macaddr ~mtu fd] negotiates with the client over
-    [fd]. The client uses [client_macaddr] as the source address of all its ethernet
-    frames. The server uses [server_macaddr] as the source address of all its
-    ethernet frames and sets the MTU to [mtu]. *)
+val of_fd: client_macaddr_of_uuid:(Uuidm.t -> Macaddr.t Lwt.t) -> server_macaddr:Macaddr.t -> mtu:int -> C.flow -> t Error.t
+(** [of_fd ~client_macaddr_of_uuid ~server_macaddr ~mtu fd] negotiates with the client over
+    [fd]. The server uses [client_macaddr_of_uuid] to create a source address for the client's ethernet
+    frames based on a uuid supplied by the client. The server uses [server_macaddr] as the source 
+    address of all its ethernet frames and sets the MTU to [mtu]. *)
 
-val client_of_fd: client_macaddr:Macaddr.t -> server_macaddr:Macaddr.t -> mtu:int -> C.flow -> t Error.t
+val client_of_fd: uuid:Uuidm.t -> server_macaddr:Macaddr.t -> C.flow -> t Error.t
 
 val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 (** [start_capture t ?size_limit filename] closes any existing pcap capture
@@ -30,6 +30,11 @@ val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 
 val stop_capture: t -> unit Lwt.t
 (** [stop_capture t] stops any in-progress capture and closes the file. *)
+
+val get_client_uuid: t -> Uuidm.t
+
+val get_client_macaddr: t -> Macaddr.t
+
 end
 
 module Init : sig
@@ -46,7 +51,7 @@ end
 module Command : sig
 
   type t =
-    | Ethernet of string (* 36 bytes *)
+    | Ethernet of Uuidm.t (* 36 bytes *)
     | Bind_ipv4 of Ipaddr.V4.t * int * bool
 
     val to_string: t -> string
