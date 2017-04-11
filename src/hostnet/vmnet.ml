@@ -87,13 +87,20 @@ module Command = struct
     | 1 ->
       let uuid_str = Cstruct.(to_string (sub rest 1 36)) in
       let rest = Cstruct.shift rest 37 in
-      let result = match (Uuidm.of_string uuid_str) with
-          | Some uuid -> begin
-            Result.Ok (Ethernet uuid, rest)
-          end
-          | None -> Result.Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str))
-      in 
-      result
+      if (Bytes.compare (Bytes.make 36 '\000') uuid_str) = 0 then
+      begin
+          let random_uuid = (Uuidm.v `V4) in
+          Log.info (fun f -> f "Generated UUID on behalf of client: %s" (Uuidm.to_string random_uuid));
+          Result.Ok (Ethernet random_uuid, rest) (* generate random uuid on behalf of client if client sent array of \0 *)
+      end else  begin
+          let result = match (Uuidm.of_string uuid_str) with (* parse uuid from client *)
+              | Some uuid -> begin
+                Result.Ok (Ethernet uuid, rest)
+              end
+              | None -> Result.Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str))
+          in 
+          result
+      end
     | n -> Result.Error (`Msg (Printf.sprintf "Unknown command: %d" n))
 
 end
