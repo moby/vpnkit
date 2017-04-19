@@ -950,9 +950,14 @@ module Dns = struct
         | _ -> acc
       ) [] x
 
+  let localhost_local = Dns.Name.of_string "localhost.local"
+
   let resolve_getaddrinfo question =
     let open Dns.Packet in
     begin match question with
+      | { q_class = Q_IN; q_name; _ } when q_name = localhost_local ->
+        Log.debug (fun f -> f "DNS lookup of localhost.local: return NXDomain");
+        Lwt.return (q_name, [])
       | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
         getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET
         >>= fun ips ->
@@ -1002,6 +1007,9 @@ module Dns = struct
           ) (Ok rrs) cnames in
 
     begin match question with
+      | { q_class = Q_IN; q_name; _ } when q_name = localhost_local ->
+        Log.debug (fun f -> f "DNS lookup of localhost.local: return NXDomain");
+        Lwt.return []
       | { q_class = Q_IN; q_type; q_name; _ } ->
         begin
           query q_name q_type
