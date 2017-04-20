@@ -613,6 +613,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
   module Debug = struct
     let get_nat_table_size t = Udp_nat.get_nat_table_size t.udp_nat
+
+    let update_dns () =
+      let local_address = { Dns_forward.Config.Address.ip = Ipaddr.V4 Ipaddr.V4.localhost; port = 0 } in
+      dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
   end
 
   (* If no traffic is received for 5 minutes, delete the endpoint and

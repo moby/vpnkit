@@ -8,6 +8,7 @@ module Config: sig
     | `Host (** use the host's resolver *)
   ]
   val to_string: t -> string
+  val compare: t -> t -> int
 end
 
 module Make
