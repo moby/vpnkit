@@ -19,16 +19,37 @@ module Dns_policy = struct
       ) ips) in
     { servers; search = []; assume_offline_after_drops = None }
 
-  let config () =
+  module Config = Hostnet_dns.Config
+
+  let google_dns =
     let ips = [
       Ipaddr.of_string_exn "8.8.8.8", 53;
       Ipaddr.of_string_exn "8.8.4.4", 53;
     ] in
     `Upstream (config_of_ips ips)
 
-  let add ~priority:_ ~config:_ = ()
-  let remove ~priority:_ = ()
   type priority = int
+
+  module IntMap = Map.Make(struct type t = int let compare (a: int) (b: int) = Pervasives.compare a b end)
+
+  let t = ref (IntMap.add 0 google_dns IntMap.empty)
+
+  let config () =
+    snd @@ IntMap.max_binding !t
+
+  let add ~priority ~config:c =
+    let before = config () in
+    t := IntMap.add priority c (!t);
+    let after = config () in
+    if Config.compare before after <> 0
+    then Log.info (fun f -> f "Add(%d): DNS configuration changed to: %s" priority (Config.to_string after))
+  let remove ~priority =
+    let before = config () in
+    t := IntMap.remove priority !t;
+    let after = config () in
+    if Config.compare before after <> 0
+    then Log.info (fun f -> f "Remove(%d): DNS configuration changed to: %s" priority (Config.to_string after))
+
 end
 
 module Make(Host: Sig.HOST) = struct

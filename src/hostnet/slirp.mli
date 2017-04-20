@@ -52,6 +52,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   module Debug: sig
     val get_nat_table_size: t -> int
     (** Return the number of active NAT table entries *)
+
+    val update_dns: unit -> unit
+    (** Update the DNS forwarder following a configuration change *)
   end
 end
 

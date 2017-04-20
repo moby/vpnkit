@@ -13,6 +13,7 @@ let run ?(timeout=60.) t =
   let timeout = Host.Time.sleep timeout >>= fun () -> Lwt.fail (Failure "timeout") in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
 
+module Dns_policy = Slirp_stack.Dns_policy
 module Slirp_stack = Slirp_stack.Make(Host)
 open Slirp_stack
 
@@ -26,7 +27,13 @@ let test_dhcp_query () =
       ) in
   run t
 
-let test_dns_query server () =
+let set_dns_policy use_host =
+  Dns_policy.remove ~priority:3;
+  Dns_policy.add ~priority:3 ~config:(if use_host then `Host else Dns_policy.google_dns);
+  Slirp_stack.Debug.update_dns ()
+
+let test_dns_query server use_host () =
+  set_dns_policy use_host;
   let t =
     with_stack
       (fun _ stack ->
@@ -42,7 +49,34 @@ let test_dns_query server () =
       ) in
   run t
 
-let test_etc_hosts_query server () =
+(* `docker push` will attempt to resolve `localhost.local` if the host has
+   domain set to `local` which is common on Macs. We don't want this query to
+   take 5s to fail. *)
+let test_localhost_local_query server use_host () =
+  set_dns_policy use_host;
+  let t =
+    with_stack
+      (fun _ stack ->
+        let resolver = DNS.create stack in
+        let request =
+          DNS.gethostbyname ~server resolver "localhost.local"
+          >>= function
+          | (_ :: _) as ips ->
+            Log.err (fun f -> f "successfully resolved localhost.local: this shouldn't happen");
+            failwith "Successfully resolved localhost.local"
+          | _ ->
+            Log.info (fun f -> f "Failed to lookup localhost.local: this is good");
+            Lwt.return_unit in
+        let timeout =
+          Host.Time.sleep 1.
+          >>= fun () ->
+          Lwt.fail_with "DNS resolution of localhost.local took more than 1s" in
+        Lwt.pick [ request; timeout ]
+      ) in
+  run t
+
+let test_etc_hosts_query server use_host () =
+  set_dns_policy use_host;
   let test_name = "vpnkit.is.cool.yes.really" in
   let t =
     with_stack
@@ -281,11 +315,13 @@ let test_dhcp = [
   "Simple query", `Quick, test_dhcp_query;
 ]
 
-let test_dns = [
-  "Use 8.8.8.8 to lookup www.google.com", `Quick, test_dns_query primary_dns_ip;
-  "Service a query from /etc/hosts cache", `Quick, test_etc_hosts_query primary_dns_ip;
+let test_dns use_host =
+  let descr = if use_host then "local Host resolver" else "Google via 8.8.8.8" in [
+  "Use " ^ descr ^ " to lookup www.google.com", `Quick, test_dns_query primary_dns_ip use_host;
+  "Service a query from /etc/hosts cache", `Quick, test_etc_hosts_query primary_dns_ip use_host;
+  "Check that localhost.local fails fast via " ^ descr, `Quick, test_localhost_local_query primary_dns_ip use_host;
 ] @ (List.map (fun ip ->
-  "Use 8.8.8.8 to lookup www.google.com via " ^ (Ipaddr.V4.to_string ip), `Quick, test_dns_query ip;
+  "Use " ^ descr ^ " to lookup www.google.com via " ^ (Ipaddr.V4.to_string ip), `Quick, test_dns_query ip use_host;
   ) extra_dns_ip
 )
 
@@ -309,7 +345,8 @@ module N = Test_nat.Make(Host)
 let suite = Hosts_test.suite @ [
   "Forwarding", F.test;
   "DHCP", test_dhcp;
-  "DNS UDP", test_dns;
+  "DNS UDP via Host", test_dns true;
+  "DNS UDP via Google", test_dns false;
   "TCP", test_tcp;
   "UDP", N.suite;
 ]
