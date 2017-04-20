@@ -1,16 +1,16 @@
-VPN-friendly networking devices for [HyperKit](https://github.com/docker/hyperkit)
+VPN-friendly networking devices for [HyperKit](https://github.com/moby/hyperkit)
 ===============================
 
-[![Build Status (OSX)](https://circleci.com/gh/docker/vpnkit.png)](https://circleci.com/gh/docker/vpnkit)
+[![Build Status (OSX)](https://circleci.com/gh/moby/vpnkit.png)](https://circleci.com/gh/moby/vpnkit)
 
 Binary artefacts are built by CI:
 
-- [MacOS](https://circleci.com/gh/docker/vpnkit)
-- [Windows](https://ci.appveyor.com/project/docker/vpnkit/history)
+- [MacOS](https://circleci.com/gh/moby/vpnkit)
+- [Windows](https://ci.appveyor.com/project/moby/vpnkit/history)
 
-![VPNKit diagram](http://docker.github.io/vpnkit/vpnkit.png)
+![VPNKit diagram](http://moby.github.io/vpnkit/vpnkit.png)
 
-VPNKit is a set of tools and services for helping [HyperKit](https://github.com/docker/hyperkit)
+VPNKit is a set of tools and services for helping [HyperKit](https://github.com/moby/hyperkit)
 VMs interoperate with host VPN configurations.
 
 Building on Unix
@@ -36,7 +36,7 @@ First ask `vpnkit` to listen for ethernet connections on a local Unix domain soc
 ```
 vpnkit --ethernet /tmp/ethernet --debug
 ```
-Next ask [com.docker.hyperkit](https://github.com/docker/hyperkit) to connect a NIC to this
+Next ask [com.docker.hyperkit](https://github.com/moby/hyperkit) to connect a NIC to this
 socket by adding a command-line option like `-s 2:0,virtio-vpnkit,path=/tmp/ethernet`. Note:
 you may need to change the slot `2:0` to a free slot in your VM configuration.
 
@@ -49,7 +49,7 @@ Activating a VPN involves modifying the same routing tables, DNS and firewall/NA
 and therefore there can be a clash -- this often results in the network connection to the VM
 being disconnected.
 
-VPNKit, part of [HyperKit](https://github.com/docker/hyperkit)
+VPNKit, part of [HyperKit](https://github.com/moby/hyperkit)
 attempts to work nicely with VPN software by intercepting the VM traffic at the Ethernet level,
 parsing and understanding protocols like NTP, DNS, UDP, TCP and doing the "right thing" with
 respect to the host's VPN configuration.
