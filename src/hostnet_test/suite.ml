@@ -58,20 +58,23 @@ let test_localhost_local_query server use_host () =
     with_stack
       (fun _ stack ->
         let resolver = DNS.create stack in
-        let request =
-          DNS.gethostbyname ~server resolver "localhost.local"
-          >>= function
-          | (_ :: _) as ips ->
-            Log.err (fun f -> f "successfully resolved localhost.local: this shouldn't happen");
-            failwith "Successfully resolved localhost.local"
-          | _ ->
-            Log.info (fun f -> f "Failed to lookup localhost.local: this is good");
-            Lwt.return_unit in
-        let timeout =
-          Host.Time.sleep 1.
-          >>= fun () ->
-          Lwt.fail_with "DNS resolution of localhost.local took more than 1s" in
-        Lwt.pick [ request; timeout ]
+        Lwt_list.iter_s
+          (fun name ->
+            let request =
+              DNS.gethostbyname ~server resolver "localhost.local"
+              >>= function
+              | (_ :: _) as ips ->
+                Log.err (fun f -> f "successfully resolved localhost.local: this shouldn't happen");
+                failwith "Successfully resolved localhost.local"
+              | _ ->
+                Log.info (fun f -> f "Failed to lookup localhost.local: this is good");
+                Lwt.return_unit in
+            let timeout =
+              Host.Time.sleep 1.
+              >>= fun () ->
+              Lwt.fail_with "DNS resolution of localhost.local took more than 1s" in
+            Lwt.pick [ request; timeout ]
+        ) [ "localhost.local"; "moby.local"; "vpnkit.local" ]
       ) in
   run t
 
