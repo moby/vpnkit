@@ -557,6 +557,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         Lwt.return_unit in
 
     let rec tar pwd dir =
+      let mod_time = Int64.of_float @@ Host.Clock.time () in
       Vfs.Dir.ls dir
       >>?= fun inodes ->
       Lwt_list.iter_s
@@ -588,7 +589,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             copy ()
             >>= fun fragments ->
             let length = List.fold_left (+) 0 (List.map Cstruct.len fragments) in
-            let header = Tar.Header.make (Filename.concat pwd @@ Vfs.Inode.basename inode) (Int64.of_int length) in
+            let header = Tar.Header.make ~file_mode:0o0644 ~mod_time (Filename.concat pwd @@ Vfs.Inode.basename inode) (Int64.of_int length) in
             Writer.write header c
             >>= fun () ->
             List.iter (C.write_buffer c) fragments;
