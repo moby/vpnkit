@@ -534,7 +534,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
            Vfs.Inode.dir "capture" @@ Netif.filesystem t.interface;
            Vfs.Inode.file "flows" (Tcp.Flow.filesystem ());
            Vfs.Inode.file "endpoints" endpoints;
-           Vfs.Inode.dir "ports" @@ Switch.filesystem t.switch;
+           Vfs.Inode.file "ports" @@ Switch.filesystem t.switch;
          ]
       )
 

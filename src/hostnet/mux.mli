@@ -31,6 +31,6 @@ module Make(Netif: V1_LWT.NETWORK) : sig
   val remove: t -> rule -> unit
   (** Given a rule, remove the associated port if one exists *)
 
-  val filesystem: t -> Vfs.Dir.t
+  val filesystem: t -> Vfs.File.t
   (** A virtual filesystem for debugging *)
 end
