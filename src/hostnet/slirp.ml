@@ -520,16 +520,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
   let filesystem t =
     let endpoints =
-      Vfs.Dir.of_list
-        (fun () ->
-           Vfs.ok (
-             IPMap.fold
-               (fun ip t acc ->
-                  let txt = Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.Endpoint.last_active_time in
-                  Vfs.Inode.dir txt Vfs.Dir.empty :: acc)
-               t.endpoints []
-           )
-        ) in
+      let xs =
+        IPMap.fold
+          (fun ip t acc ->
+             Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.Endpoint.last_active_time :: acc
+          ) t.endpoints [] in
+      Vfs.File.ro_of_string @@ String.concat "\n" xs in
     Vfs.Dir.of_list
       (fun () ->
          Vfs.ok [
@@ -537,7 +533,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
            Vfs.Inode.file "connections" (Host.Sockets.connections ());
            Vfs.Inode.dir "capture" @@ Netif.filesystem t.interface;
            Vfs.Inode.file "flows" (Tcp.Flow.filesystem ());
-           Vfs.Inode.dir "endpoints" endpoints;
+           Vfs.Inode.file "endpoints" endpoints;
            Vfs.Inode.dir "ports" @@ Switch.filesystem t.switch;
          ]
       )
