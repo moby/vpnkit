@@ -587,6 +587,7 @@ module Sockets = struct
         List.iter
           (fun (_, fd) ->
              let listen_result = Uwt.Tcp.listen fd ~max:Utils.somaxconn ~cb:(fun server x ->
+               try
                  if Uwt.Int_result.is_error x then
                    Log.err (fun f -> f "Uwt.Tcp.listen callback failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error x))
                  else
@@ -638,6 +639,8 @@ module Sockets = struct
                              )
                       )
                    end
+                 with e ->
+                   Log.err (fun f -> f "Uwt.Tcp.listen callback raised: %s" (Printexc.to_string e))
                ) in
             if Uwt.Int_result.is_error listen_result
             then Log.err (fun f -> f "Uwt.Tcp.listen failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error listen_result))
@@ -802,9 +805,10 @@ module Sockets = struct
 
       let listen ({ fd; _ } as server') cb =
         let listen_result = Uwt.Pipe.listen fd ~max:Utils.somaxconn ~cb:(fun server x ->
-          if Uwt.Int_result.is_error x then
-            Log.err (fun f -> f "Uwt.Pipe.listen callback failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error x))
-          else
+          try
+            if Uwt.Int_result.is_error x then
+              Log.err (fun f -> f "Uwt.Pipe.listen callback failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error x))
+            else
               let client = Uwt.Pipe.init () in
               let t = Uwt.Pipe.accept_raw ~server ~client in
               if Uwt.Int_result.is_error t then begin
@@ -838,6 +842,8 @@ module Sockets = struct
                         ) (fun () -> close flow )
                   )
               end
+          with e ->
+            Log.err (fun f -> f "Uwt.Pipe.listen callback raised: %s" (Printexc.to_string e))
           ) in
           if Uwt.Int_result.is_error listen_result
           then Log.err (fun f -> f "Uwt.Pipe.listen failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error listen_result))
