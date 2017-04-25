@@ -193,15 +193,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (* Global table of active flows *)
       let all : t Id.Map.t ref = ref Id.Map.empty
 
-      let filesystem =
-        Vfs.Dir.of_list
-          (fun () ->
-             Vfs.ok (
-               Id.Map.fold
-                 (fun _ t acc -> Vfs.Inode.dir (to_string t) Vfs.Dir.empty :: acc)
-                 !all []
-             )
-          )
+      let filesystem () =
+        let flows = Id.Map.fold (fun _ t acc -> to_string t :: acc) !all [] in
+        Vfs.File.ro_of_string @@ String.concat "\n" flows
 
       let create id socket =
         let socket = Some socket in
@@ -542,7 +536,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
            (* could replace "connections" with "flows" *)
            Vfs.Inode.file "connections" (Host.Sockets.connections ());
            Vfs.Inode.dir "capture" @@ Netif.filesystem t.interface;
-           Vfs.Inode.dir "flows" Tcp.Flow.filesystem;
+           Vfs.Inode.file "flows" (Tcp.Flow.filesystem ());
            Vfs.Inode.dir "endpoints" endpoints;
            Vfs.Inode.dir "ports" @@ Switch.filesystem t.switch;
          ]
