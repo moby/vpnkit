@@ -540,7 +540,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (fun () ->
          Vfs.ok [
            (* could replace "connections" with "flows" *)
-           Vfs.Inode.dir "connections" Host.Sockets.connections;
+           Vfs.Inode.file "connections" (Host.Sockets.connections ());
            Vfs.Inode.dir "capture" @@ Netif.filesystem t.interface;
            Vfs.Inode.dir "flows" Tcp.Flow.filesystem;
            Vfs.Inode.dir "endpoints" endpoints;
