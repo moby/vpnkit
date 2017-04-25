@@ -149,9 +149,9 @@ module Sockets = struct
              end else Lwt_result.return (of_fd ~idx ?read_buffer_size ~description sockaddr address fd)
           )
           (fun e ->
-             (* FIXME(djs55): error handling *)
              deregister_connection idx;
-             let _ = Uwt.Udp.close fd in
+             Uwt.Udp.close_wait fd
+             >>= fun () ->
              errorf "Socket.%s.connect %s: caught %s" label description (Printexc.to_string e)
           )
 
@@ -206,8 +206,8 @@ module Sockets = struct
         | Some fd ->
           t.fd <- None;
           Log.debug (fun f -> f "Socket.%s.close: %s" t.label (string_of_flow t));
-          (* FIXME(djs55): errors *)
-          let _ = Uwt.Udp.close fd in
+          Uwt.Udp.close_wait fd
+          >>= fun () ->
           (match t.idx with Some idx -> deregister_connection idx | None -> ());
           Lwt.return_unit
 
@@ -275,13 +275,11 @@ module Sockets = struct
       let shutdown server =
         if not server.closed then begin
           server.closed <- true;
-          let result = Uwt.Udp.close server.fd in
-          if not(Uwt.Int_result.is_ok result) then begin
-            Log.err (fun f -> f "Socket.%s: close returned %s" server.label (Uwt.strerror (Uwt.Int_result.to_error result)));
-          end;
+          Uwt.Udp.close_wait server.fd
+          >>= fun () ->
           deregister_connection server.idx;
-        end;
-        Lwt.return_unit
+          Lwt.return_unit
+        end else Lwt.return_unit
 
     let rec recvfrom server buf =
       Uwt.Udp.recv_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer server.fd
@@ -384,9 +382,9 @@ module Sockets = struct
              Lwt_result.return (of_fd ~idx ~label ~read_buffer_size ~description fd)
           )
           (fun e ->
-             (* FIXME(djs55): error handling *)
              deregister_connection idx;
-             let _ = Uwt.Tcp.close fd in
+             Uwt.Tcp.close_wait fd
+             >>= fun () ->
              errorf "Socket.%s.connect %s: caught %s" label description (Printexc.to_string e)
           )
 
@@ -474,8 +472,8 @@ module Sockets = struct
       let close t =
         if not t.closed then begin
           t.closed <- true;
-          (* FIXME(djs55): errors *)
-          let _ = Uwt.Tcp.close t.fd in
+          Uwt.Tcp.close_wait t.fd
+          >>= fun () ->
           deregister_connection t.idx;
           Lwt.return ()
         end else Lwt.return ()
@@ -563,12 +561,12 @@ module Sockets = struct
       let shutdown server =
         let fds = server.listening_fds in
         server.listening_fds <- [];
-        (* FIXME(djs55): errors *)
-        List.iter (fun (idx, fd) ->
-          ignore (Uwt.Tcp.close fd);
-          deregister_connection idx
-        ) fds;
-        Lwt.return ()
+        Lwt_list.iter_s (fun (idx, fd) ->
+          Uwt.Tcp.close_wait fd
+          >>= fun () ->
+          deregister_connection idx;
+          Lwt.return_unit
+        ) fds
 
       let of_bound_fd ?(read_buffer_size = default_read_buffer_size) fd =
         let description = match Unix.getsockname fd with
@@ -614,7 +612,8 @@ module Sockets = struct
                              >>= fun idx ->
                              Lwt.return (Some (of_fd ~idx ~label ~description client))
                            ) (fun _e ->
-                             ignore (Uwt.Tcp.close client);
+                             Uwt.Tcp.close_wait client
+                             >>= fun () ->
                              Lwt.return_none
                            )
                          >>= function
@@ -751,8 +750,8 @@ module Sockets = struct
       let close t =
         if not t.closed then begin
           t.closed <- true;
-          (* FIXME(djs55): errors *)
-          let _ = Uwt.Pipe.close t.fd in
+          Uwt.Pipe.close_wait t.fd
+          >>= fun () ->
           deregister_connection t.idx;
           Lwt.return ()
         end else Lwt.return ()
@@ -812,7 +811,8 @@ module Sockets = struct
                         >>= fun idx ->
                         Lwt.return (Some (of_fd ~idx ~description client))
                       ) (fun _e ->
-                        ignore (Uwt.Pipe.close client);
+                        Uwt.Pipe.close_wait client
+                        >>= fun () ->
                         Lwt.return_none
                       )
                     >>= function
@@ -845,15 +845,11 @@ module Sockets = struct
       let shutdown server =
         if not server.closed then begin
           server.closed <- true;
-          (* FIXME(djs55): errors *)
-          ignore(Uwt.Pipe.close server.fd);
+          Uwt.Pipe.close_wait server.fd
+          >>= fun () ->
           deregister_connection server.idx;
-        end;
-        Lwt.return ()
-
-
-
-
+          Lwt.return_unit
+        end else Lwt.return_unit
     end
   end
 end
