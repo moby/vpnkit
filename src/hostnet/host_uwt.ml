@@ -580,14 +580,14 @@ module Sockets = struct
       let listen server' cb =
         List.iter
           (fun (_, fd) ->
-             Uwt.Tcp.listen_exn fd ~max:32 ~cb:(fun server x ->
+             let listen_result = Uwt.Tcp.listen fd ~max:32 ~cb:(fun server x ->
                  if Uwt.Int_result.is_error x then
-                   ignore(Uwt_io.printl "listen error")
+                   Log.err (fun f -> f "Uwt.Tcp.listen callback failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error x))
                  else
                    let client = Uwt.Tcp.init () in
                    let t = Uwt.Tcp.accept_raw ~server ~client in
                    if Uwt.Int_result.is_error t then begin
-                     ignore(Uwt_io.printl "accept error");
+                     Log.err (fun f -> f "Uwt.Tcp.accept_raw failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error t))
                    end else begin
                      let label, description = match Uwt.Tcp.getpeername client with
                        | Uwt.Ok sockaddr ->
@@ -631,7 +631,9 @@ module Sockets = struct
                              )
                       )
                    end
-               );
+               ) in
+            if Uwt.Int_result.is_error listen_result
+            then Log.err (fun f -> f "Uwt.Tcp.listen failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error listen_result))
           ) server'.listening_fds
 
     end
@@ -791,14 +793,14 @@ module Sockets = struct
         server.disable_connection_tracking <- true
 
       let listen ({ fd; _ } as server') cb =
-        Uwt.Pipe.listen_exn fd ~max:5 ~cb:(fun server x ->
-            if Uwt.Int_result.is_error x then
-              ignore(Uwt_io.printl "listen error")
-            else
+        let listen_result = Uwt.Pipe.listen fd ~max:5 ~cb:(fun server x ->
+          if Uwt.Int_result.is_error x then
+            Log.err (fun f -> f "Uwt.Pipe.listen callback failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error x))
+          else
               let client = Uwt.Pipe.init () in
               let t = Uwt.Pipe.accept_raw ~server ~client in
               if Uwt.Int_result.is_error t then begin
-                ignore(Uwt_io.printl "accept error");
+                Log.err (fun f -> f "Uwt.Pipe.accept_raw failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error t))
               end else begin
                 Lwt.async
                   (fun () ->
@@ -827,7 +829,9 @@ module Sockets = struct
                         ) (fun () -> close flow )
                   )
               end
-          )
+          ) in
+          if Uwt.Int_result.is_error listen_result
+          then Log.err (fun f -> f "Uwt.Pipe.listen failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error listen_result))
 
       let of_bound_fd ?(read_buffer_size = default_read_buffer_size) fd =
         match Uwt.Pipe.openpipe fd with
