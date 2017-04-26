@@ -996,28 +996,10 @@ module Dns = struct
   let resolve_dnssd question =
     let open Dns.Packet in
     let query name ty =
-      let rec loop acc name ty =
-        Uwt_preemptive.detach
-          (fun () ->
-            Dnssd.query (Dns.Name.to_string name) ty
-          ) ()
-        >>= function
-        | Error e -> Lwt.return (Error e)
-        | Ok rrs ->
-          let not_seen_before = List.filter (fun x -> not (List.mem x acc)) rrs in
-          (* If there are any CNAMEs, resolve these too *)
-          let cnames = List.rev @@ List.fold_left (fun acc rr ->
-            match rr.rdata with
-            | CNAME name -> name :: acc
-            | _ -> acc
-          ) [] not_seen_before in
-          Lwt_list.fold_left_s
-            (fun acc name -> match acc with
-              | Error e -> Lwt.return (Error e)
-              | Ok acc ->
-                loop acc name ty
-            ) (Ok (acc @ not_seen_before)) cnames in
-      loop [] name ty in
+      Uwt_preemptive.detach
+        (fun () ->
+          Dnssd.query (Dns.Name.to_string name) ty
+        ) () in
 
     begin match question with
       | { q_class = Q_IN; q_name; _ } when is_mdns q_name ->
