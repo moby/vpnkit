@@ -662,7 +662,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let local_ips = local_ip :: extra_dns_ip in
 
     let highest_peer_ip =
-        if use_bridge then begin 
+        if use_bridge then begin
             Some default_highest_ip
         end else begin
             None (* just set smallest available prefix *)
@@ -1045,14 +1045,14 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             >>= fun l2_client_id ->
             let client_macaddr = (Vnet.mac l2_switch l2_client_id) in
 
-            let used_ips = 
+            let used_ips =
                 Hashtbl.fold (fun k v l ->
                     let ip, _ = v in
                     l @ [ip]) t.client_uuids.table []
-            in 
+            in
 
             (* check if a specific IP is requested *)
-            let preferred_ip = 
+            let preferred_ip =
                 let uuid_bytes = Uuidm.to_bytes uuid in
                 let uuid_prefix = Bytes.sub uuid_bytes 0 (Bytes.length default_uuid_preferred_ip_prefix) in
                 if (Bytes.compare uuid_prefix default_uuid_preferred_ip_prefix) = 0 then
@@ -1117,15 +1117,15 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         if t.bridge_connections then begin
             or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(client_macaddr_of_uuid t t.peer_ip l2_switch)
                 ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
-             >>= fun x -> 
+             >>= fun x ->
             let client_macaddr = Vmnet.get_client_macaddr x in
             let client_uuid = Vmnet.get_client_uuid x in
-            get_client_ip_id t client_uuid 
-            >>= fun (client_ip, l2_client_id) -> 
+            get_client_ip_id t client_uuid
+            >>= fun (client_ip, l2_client_id) ->
             connect x l2_switch l2_client_id client_macaddr t.server_macaddr client_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
         end else begin
             (* When bridge is disabled, just use fixed uuid and peer_ip from t *)
-            or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(fun _ -> Lwt.return default_client_macaddr) 
+            or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(fun _ -> Lwt.return default_client_macaddr)
                 ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
             >>= fun x ->
             let client_macaddr = Vmnet.get_client_macaddr x in
