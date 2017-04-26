@@ -69,15 +69,9 @@ module Sockets = struct
   exception Too_many_connections
 
   let connection_table = Hashtbl.create 511
-  let connections =
-    Vfs.Dir.of_list
-      (fun () ->
-        Vfs.ok (
-          Hashtbl.fold
-            (fun _ c acc -> Vfs.Inode.dir c Vfs.Dir.empty :: acc)
-            connection_table []
-        )
-      )
+  let connections () =
+    let xs = Hashtbl.fold (fun _ c acc -> c :: acc) connection_table [] in
+    Vfs.File.ro_of_string @@ String.concat "\n" xs
   let register_connection_no_limit description =
     let idx = next_connection_idx () in
     Hashtbl.replace connection_table idx description;
@@ -149,9 +143,10 @@ module Sockets = struct
              end else Lwt_result.return (of_fd ~idx ?read_buffer_size ~description sockaddr address fd)
           )
           (fun e ->
-             (* FIXME(djs55): error handling *)
              deregister_connection idx;
-             let _ = Uwt.Udp.close fd in
+             log_exception_continue "Udp.connect Uwt.Udp.close_wait"
+               (fun () -> Uwt.Udp.close_wait fd)
+             >>= fun () ->
              errorf "Socket.%s.connect %s: caught %s" label description (Printexc.to_string e)
           )
 
@@ -206,8 +201,9 @@ module Sockets = struct
         | Some fd ->
           t.fd <- None;
           Log.debug (fun f -> f "Socket.%s.close: %s" t.label (string_of_flow t));
-          (* FIXME(djs55): errors *)
-          let _ = Uwt.Udp.close fd in
+          log_exception_continue "Udp.close Uwt.Udp.close_wait"
+            (fun () -> Uwt.Udp.close_wait fd)
+          >>= fun () ->
           (match t.idx with Some idx -> deregister_connection idx | None -> ());
           Lwt.return_unit
 
@@ -275,13 +271,12 @@ module Sockets = struct
       let shutdown server =
         if not server.closed then begin
           server.closed <- true;
-          let result = Uwt.Udp.close server.fd in
-          if not(Uwt.Int_result.is_ok result) then begin
-            Log.err (fun f -> f "Socket.%s: close returned %s" server.label (Uwt.strerror (Uwt.Int_result.to_error result)));
-          end;
+          log_exception_continue "Udp.shutdown Uwt.Udp.close_wait"
+            (fun () -> Uwt.Udp.close_wait server.fd)
+          >>= fun () ->
           deregister_connection server.idx;
-        end;
-        Lwt.return_unit
+          Lwt.return_unit
+        end else Lwt.return_unit
 
     let rec recvfrom server buf =
       Uwt.Udp.recv_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len ~buf:buf.Cstruct.buffer server.fd
@@ -384,9 +379,10 @@ module Sockets = struct
              Lwt_result.return (of_fd ~idx ~label ~read_buffer_size ~description fd)
           )
           (fun e ->
-             (* FIXME(djs55): error handling *)
              deregister_connection idx;
-             let _ = Uwt.Tcp.close fd in
+             log_exception_continue "Tcp.connect Uwt.Tcp.close_wait"
+               (fun () -> Uwt.Tcp.close_wait fd)
+             >>= fun () ->
              errorf "Socket.%s.connect %s: caught %s" label description (Printexc.to_string e)
           )
 
@@ -474,8 +470,9 @@ module Sockets = struct
       let close t =
         if not t.closed then begin
           t.closed <- true;
-          (* FIXME(djs55): errors *)
-          let _ = Uwt.Tcp.close t.fd in
+          log_exception_continue "Tcp.close Uwt.Tcp.close_wait"
+            (fun () -> Uwt.Tcp.close_wait t.fd)
+          >>= fun () ->
           deregister_connection t.idx;
           Lwt.return ()
         end else Lwt.return ()
@@ -563,12 +560,13 @@ module Sockets = struct
       let shutdown server =
         let fds = server.listening_fds in
         server.listening_fds <- [];
-        (* FIXME(djs55): errors *)
-        List.iter (fun (idx, fd) ->
-          ignore (Uwt.Tcp.close fd);
-          deregister_connection idx
-        ) fds;
-        Lwt.return ()
+        Lwt_list.iter_s (fun (idx, fd) ->
+          log_exception_continue "Tcp.shutdown: Uwt.Tcp.close_wait"
+            (fun () -> Uwt.Tcp.close_wait fd)
+          >>= fun () ->
+          deregister_connection idx;
+          Lwt.return_unit
+        ) fds
 
       let of_bound_fd ?(read_buffer_size = default_read_buffer_size) fd =
         let description = match Unix.getsockname fd with
@@ -582,14 +580,15 @@ module Sockets = struct
       let listen server' cb =
         List.iter
           (fun (_, fd) ->
-             Uwt.Tcp.listen_exn fd ~max:32 ~cb:(fun server x ->
+             let listen_result = Uwt.Tcp.listen fd ~max:Utils.somaxconn ~cb:(fun server x ->
+               try
                  if Uwt.Int_result.is_error x then
-                   ignore(Uwt_io.printl "listen error")
+                   Log.err (fun f -> f "Uwt.Tcp.listen callback failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error x))
                  else
                    let client = Uwt.Tcp.init () in
                    let t = Uwt.Tcp.accept_raw ~server ~client in
                    if Uwt.Int_result.is_error t then begin
-                     ignore(Uwt_io.printl "accept error");
+                     Log.err (fun f -> f "Uwt.Tcp.accept_raw failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error t))
                    end else begin
                      let label, description = match Uwt.Tcp.getpeername client with
                        | Uwt.Ok sockaddr ->
@@ -614,7 +613,9 @@ module Sockets = struct
                              >>= fun idx ->
                              Lwt.return (Some (of_fd ~idx ~label ~description client))
                            ) (fun _e ->
-                             ignore (Uwt.Tcp.close client);
+                             log_exception_continue "Tcp.listen Uwt.Tcp.close_wait"
+                               (fun () -> Uwt.Tcp.close_wait client)
+                             >>= fun () ->
                              Lwt.return_none
                            )
                          >>= function
@@ -632,7 +633,11 @@ module Sockets = struct
                              )
                       )
                    end
-               );
+                 with e ->
+                   Log.err (fun f -> f "Uwt.Tcp.listen callback raised: %s" (Printexc.to_string e))
+               ) in
+            if Uwt.Int_result.is_error listen_result
+            then Log.err (fun f -> f "Uwt.Tcp.listen failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error listen_result))
           ) server'.listening_fds
 
     end
@@ -751,8 +756,9 @@ module Sockets = struct
       let close t =
         if not t.closed then begin
           t.closed <- true;
-          (* FIXME(djs55): errors *)
-          let _ = Uwt.Pipe.close t.fd in
+          log_exception_continue "Unix.close Uwt.Pipe.close_wait"
+            (fun () -> Uwt.Pipe.close_wait t.fd)
+          >>= fun () ->
           deregister_connection t.idx;
           Lwt.return ()
         end else Lwt.return ()
@@ -792,14 +798,15 @@ module Sockets = struct
         server.disable_connection_tracking <- true
 
       let listen ({ fd; _ } as server') cb =
-        Uwt.Pipe.listen_exn fd ~max:5 ~cb:(fun server x ->
+        let listen_result = Uwt.Pipe.listen fd ~max:Utils.somaxconn ~cb:(fun server x ->
+          try
             if Uwt.Int_result.is_error x then
-              ignore(Uwt_io.printl "listen error")
+              Log.err (fun f -> f "Uwt.Pipe.listen callback failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error x))
             else
               let client = Uwt.Pipe.init () in
               let t = Uwt.Pipe.accept_raw ~server ~client in
               if Uwt.Int_result.is_error t then begin
-                ignore(Uwt_io.printl "accept error");
+                Log.err (fun f -> f "Uwt.Pipe.accept_raw failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error t))
               end else begin
                 Lwt.async
                   (fun () ->
@@ -812,7 +819,9 @@ module Sockets = struct
                         >>= fun idx ->
                         Lwt.return (Some (of_fd ~idx ~description client))
                       ) (fun _e ->
-                        ignore (Uwt.Pipe.close client);
+                        log_exception_continue "Unix.listen Uwt.Pipe.close_wait"
+                          (fun () -> Uwt.Pipe.close_wait client)
+                        >>= fun () ->
                         Lwt.return_none
                       )
                     >>= function
@@ -827,7 +836,11 @@ module Sockets = struct
                         ) (fun () -> close flow )
                   )
               end
-          )
+          with e ->
+            Log.err (fun f -> f "Uwt.Pipe.listen callback raised: %s" (Printexc.to_string e))
+          ) in
+          if Uwt.Int_result.is_error listen_result
+          then Log.err (fun f -> f "Uwt.Pipe.listen failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error listen_result))
 
       let of_bound_fd ?(read_buffer_size = default_read_buffer_size) fd =
         match Uwt.Pipe.openpipe fd with
@@ -845,15 +858,12 @@ module Sockets = struct
       let shutdown server =
         if not server.closed then begin
           server.closed <- true;
-          (* FIXME(djs55): errors *)
-          ignore(Uwt.Pipe.close server.fd);
+          log_exception_continue "Unix.shutdown Uwt.Pipe.close_wait"
+            (fun () -> Uwt.Pipe.close_wait server.fd)
+          >>= fun () ->
           deregister_connection server.idx;
-        end;
-        Lwt.return ()
-
-
-
-
+          Lwt.return_unit
+        end else Lwt.return_unit
     end
   end
 end

@@ -62,16 +62,12 @@ module Make(Netif: V1_LWT.NETWORK) = struct
   }
 
   let filesystem t =
-    Vfs.Dir.of_list
-      (fun () ->
-        Vfs.ok (
-          RuleMap.fold
-            (fun ip t acc ->
-              let txt = Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.last_active_time in
-               Vfs.Inode.dir txt Vfs.Dir.empty :: acc)
-            t.rules []
-        )
-      )
+    let xs =
+      RuleMap.fold
+        (fun ip t acc ->
+          Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.last_active_time :: acc
+        ) t.rules [] in
+    Vfs.File.ro_of_string @@ String.concat "\n" xs
 
   let remove t rule =
     Log.debug (fun f -> f "removing switch port for %s" (Ipaddr.V4.to_string rule));

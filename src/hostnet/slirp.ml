@@ -193,15 +193,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (* Global table of active flows *)
       let all : t Id.Map.t ref = ref Id.Map.empty
 
-      let filesystem =
-        Vfs.Dir.of_list
-          (fun () ->
-             Vfs.ok (
-               Id.Map.fold
-                 (fun _ t acc -> Vfs.Inode.dir (to_string t) Vfs.Dir.empty :: acc)
-                 !all []
-             )
-          )
+      let filesystem () =
+        let flows = Id.Map.fold (fun _ t acc -> to_string t :: acc) !all [] in
+        Vfs.File.ro_of_string @@ String.concat "\n" flows
 
       let create id socket =
         let socket = Some socket in
@@ -526,25 +520,21 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
   let filesystem t =
     let endpoints =
-      Vfs.Dir.of_list
-        (fun () ->
-           Vfs.ok (
-             IPMap.fold
-               (fun ip t acc ->
-                  let txt = Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.Endpoint.last_active_time in
-                  Vfs.Inode.dir txt Vfs.Dir.empty :: acc)
-               t.endpoints []
-           )
-        ) in
+      let xs =
+        IPMap.fold
+          (fun ip t acc ->
+             Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.Endpoint.last_active_time :: acc
+          ) t.endpoints [] in
+      Vfs.File.ro_of_string @@ String.concat "\n" xs in
     Vfs.Dir.of_list
       (fun () ->
          Vfs.ok [
            (* could replace "connections" with "flows" *)
-           Vfs.Inode.dir "connections" Host.Sockets.connections;
+           Vfs.Inode.file "connections" (Host.Sockets.connections ());
            Vfs.Inode.dir "capture" @@ Netif.filesystem t.interface;
-           Vfs.Inode.dir "flows" Tcp.Flow.filesystem;
-           Vfs.Inode.dir "endpoints" endpoints;
-           Vfs.Inode.dir "ports" @@ Switch.filesystem t.switch;
+           Vfs.Inode.file "flows" (Tcp.Flow.filesystem ());
+           Vfs.Inode.file "endpoints" endpoints;
+           Vfs.Inode.file "ports" @@ Switch.filesystem t.switch;
          ]
       )
 
@@ -567,6 +557,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         Lwt.return_unit in
 
     let rec tar pwd dir =
+      let mod_time = Int64.of_float @@ Host.Clock.time () in
       Vfs.Dir.ls dir
       >>?= fun inodes ->
       Lwt_list.iter_s
@@ -598,7 +589,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             copy ()
             >>= fun fragments ->
             let length = List.fold_left (+) 0 (List.map Cstruct.len fragments) in
-            let header = Tar.Header.make (Filename.concat pwd @@ Vfs.Inode.basename inode) (Int64.of_int length) in
+            let header = Tar.Header.make ~file_mode:0o0644 ~mod_time (Filename.concat pwd @@ Vfs.Inode.basename inode) (Int64.of_int length) in
             Writer.write header c
             >>= fun () ->
             List.iter (C.write_buffer c) fragments;

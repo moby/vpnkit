@@ -224,6 +224,8 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
   Log.info (fun f -> f "vpnkit version %s with hostnet version %s %s uwt version %s hvsock version %s %s"
     Depends.version Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
   );
+  Log.info (fun f -> f "System SOMAXCONN is %d" Utils.somaxconn);
+
   Printexc.record_backtrace true;
 
   ( match dns with

@@ -9,6 +9,6 @@
     lwt.preemptive threads astring datakit-server.vfs dns-forward tar mirage-vnetif
     dnssd uuidm
    ))
+   (c_names (stubs_utils))
    (wrapped false)
 ))
-

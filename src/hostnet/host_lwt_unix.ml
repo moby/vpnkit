@@ -35,15 +35,9 @@ let next_connection_idx =
 exception Too_many_connections
 
 let connection_table = Hashtbl.create 511
-let connections =
-  Vfs.Dir.of_list
-    (fun () ->
-      Vfs.ok (
-        Hashtbl.fold
-          (fun _ c acc -> Vfs.Inode.dir c Vfs.Dir.empty :: acc)
-          connection_table []
-      )
-    )
+let connections () =
+  let xs = Hashtbl.fold (fun _ c acc -> c :: acc) connection_table [] in
+  Vfs.File.ro_of_string @@ String.concat "\n" xs
 let register_connection_no_limit description =
   let idx = next_connection_idx () in
   Hashtbl.replace connection_table idx description;
@@ -556,7 +550,7 @@ module Stream = struct
                 (fun () ->
                   Lwt.finalize
                     (fun () ->
-                      Lwt_unix.listen fd 32;
+                      Lwt_unix.listen fd Utils.somaxconn;
                       loop fd
                     ) (fun () ->
                       shutdown server
