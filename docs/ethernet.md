@@ -1,11 +1,12 @@
-# Ethernet traffic flow
+# Using vpnkit as a default gateway
 
-This page describes how `vpnkit` works by using Docker for Mac and Docker
-for Windows as concrete examples.
+This page describes how `vpnkit` is used to provide a default gateway inside Docker
+for Mac and Docker for Windows. We start by describing the
+plumbing needed to extract ethernet frames from a Linux VM running on the Mac
+and on Windows, and then describe the processing `vpnkit` performs on these
+frames in order to provide the illusion of true Internet connectivity.
 
-First, how do ethernet frames leave the VM and arrive in `vpnkit`?
-
-## Inside Docker for Mac
+## Plumbing inside Docker for Mac
 
 The Docker for Mac VM is running on top of the [hyperkit](https://github.com/moby/hyperkit)
 hypervisor. The VM has a `virtio-vpnkit` PCI device which appears as a `virtio-net`
@@ -16,7 +17,7 @@ simple custom protocol.
 
 ![Mac plumbing diagram](http://moby.github.io/vpnkit/mac.png)
 
-## Inside Docker for Windows
+## Plumbing inside Docker for Windows
 
 The Docker for Windows VM is running on top of Hyper-V. `vpnkit` on the host
 uses Hyper-V sockets to connect to a process (`tap-vsockd`) inside the VM which accepts the
@@ -76,13 +77,13 @@ tries to make a TCP connection:
 
 - the application calls `connect`
 - the Linux kernel emits a `TCP` packet with the `SYN` flag set
-- the Linux kernel applies the `iptables` rules (created by `docker`) and consults
+- the Linux kernel applies the `iptables` rules and consults
   the routing table to select the outgoing interface and then transmits the frame
 - the frame is relayed to the host
   - on windows: the interface was a `tap` device created by the `tap-vsockd`
     process. This process reads the frame from the associated file descriptor,
     encapsulates it and writes it to the Hyper-V socket connected to `vpnkit`.
-  - on Mac: the interface was a `virtio` NIC. The network driver in the VM pushes
+  - on Mac: the interface was a `virtio-net` NIC. The network driver in the VM pushes
     the packet to a queue in memory shared with the hypervisor, the `virtio-vpnkit`
     virtual hardware pops the packet from the queue and then writes it down a
     Unix domain socket connected to `vpnkit`.
