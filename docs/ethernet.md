@@ -10,8 +10,9 @@ and Docker for Windows as concrete examples.
 ## Inside Docker for Mac
 
 The Docker for Mac VM is running on top of the [hyperkit](https://github.com/moby/hyperkit)
-hypervisor. The VM has a `virtio-vpnkit` PCI device which appears as a network
-interface inside the VM. The virtual hardware implementation connects to
+hypervisor. The VM has a `virtio-vpnkit` PCI device which appears as a `virtio-net`
+network interface inside the VM. The
+[virtual hardware implementation](https://github.com/moby/hyperkit/blob/master/src/lib/pci_virtio_net_vpnkit.c) connects to
 `vpnkit` on the host over a Unix domain socket and encapsulates frames using a
 simple custom protocol.
 
@@ -20,7 +21,7 @@ simple custom protocol.
 ## Inside Docker for Windows
 
 The Docker for Windows VM is running on top of Hyper-V. `vpnkit` on the host
-uses Hyper-V sockets to connect to a process inside the VM which accepts the
+uses Hyper-V sockets to connect to a process (`tap-vsockd`) inside the VM which accepts the
 connection and configures a `tap` device. Frames are encapsulated using the
 same custom protocol as on the Mac.
 
@@ -30,7 +31,7 @@ Note: the connection is currently made from the Host to the VM to work around
 a bug in older versions of Windows 10. At some point this should change to be
 a connection from the VM to the host.
 
-Note: the userspace process in the VM which configures a `tap` device could be
+Note: the userspace `tap-vsockd` process in the VM which configures a `tap` device could be
 replaced with a custom Linux kernel driver which knows how to encapsulate the
 frames and communicate over Hyper-V sockets.
 
