@@ -49,7 +49,7 @@ Frames arriving on the default port are examined and
   same destination address is processed by the new endpoint.
 
 Each virtual TCP/IP endpoint terminates TCP and UDP flows using the
-[Mirage](https://openmirage.io/) [TCP/IP stack](https://github.com/mirage/mirage-tcpip).
+[Mirage](https://mirage.io/) [TCP/IP stack](https://github.com/mirage/mirage-tcpip).
 The data from the flows is proxied to and from regular BSD-style sockets on
 both Windows and Mac.
 
