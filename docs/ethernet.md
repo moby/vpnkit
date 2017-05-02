@@ -2,7 +2,7 @@
 
 The following diagram shows the flow of ethernet traffic from the VM:
 
-![ethernet diagram](http://docker.github.io/vpnkit/ethernet.png)
+![ethernet diagram](http://moby.github.io/vpnkit/ethernet.png)
 
 Frames arriving from the VM interface are processed by a simple ethernet switch.
 The switch demultiplexes traffic onto output ports by matching against rules.
