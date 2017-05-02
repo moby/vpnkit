@@ -1,11 +1,9 @@
 # Ethernet traffic flow
 
-The following diagram shows the flow of ethernet traffic from the VM:
+This page describes how `vpnkit` works by using Docker for Mac and Docker
+for Windows as concrete examples.
 
-![ethernet diagram](http://moby.github.io/vpnkit/ethernet.png)
-
-The following sections describe the flow in more detail, using Docker for Mac
-and Docker for Windows as concrete examples.
+First, how do ethernet frames leave the VM and arrive in `vpnkit`?
 
 ## Inside Docker for Mac
 
@@ -58,6 +56,10 @@ If the VM is communicating with 10 remote IP addresses, then there will be 10
 instances of a Mirage TCP/IP stack, one per IP address. The TCP/IP stack
 instances act as proxies for the remote hosts.
 
+The following diagram shows the flow of ethernet traffic within `vpnkit`:
+
+![ethernet diagram](http://moby.github.io/vpnkit/ethernet.png)
+
 Each switch port has an associated `last_active_time` and if there is no traffic
 flow for a configured time interval, the port is deactivated and the TCP/IP
 endpoint is shutdown.
@@ -65,6 +67,7 @@ endpoint is shutdown.
 The active ports may be queried by connecting to a Unix domain socket on the Mac
 or a named pipe on Windows and receiving diagnostic data in a Unix tar formatted
 stream.
+
 
 ## Example: connection setup
 
