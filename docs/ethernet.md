@@ -15,12 +15,24 @@ interface inside the VM. The virtual hardware implementation connects to
 `vpnkit` on the host over a Unix domain socket and encapsulates frames using a
 simple custom protocol.
 
+![Mac plumbing diagram](http://moby.github.io/vpnkit/mac.png)
+
 ## Inside Docker for Windows
 
 The Docker for Windows VM is running on top of Hyper-V. `vpnkit` on the host
 uses Hyper-V sockets to connect to a process inside the VM which accepts the
 connection and configures a `tap` device. Frames are encapsulated using the
 same custom protocol as on the Mac.
+
+![Windows plumbing diagram](http://moby.github.io/vpnkit/win.png)
+
+Note: the connection is currently made from the Host to the VM to work around
+a bug in older versions of Windows 10. At some point this should change to be
+a connection from the VM to the host.
+
+Note: the userspace process in the VM which configures a `tap` device could be
+replaced with a custom Linux kernel driver which knows how to encapsulate the
+frames and communicate over Hyper-V sockets.
 
 ## When a frame arrives in vpnkit
 
