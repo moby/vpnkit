@@ -90,7 +90,7 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.98994949"
-     inkscape:cx="352.56655"
+     inkscape:cx="831.37886"
      inkscape:cy="-12.263431"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
@@ -120,7 +120,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -236,11 +236,6 @@
          x="116.41666"
          y="143.54167"
          style="stroke-width:0.26458332px">vpnkit</tspan></text>
-    <path
-       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 248.70833,95.916667 h -5.29167"
-       id="path5738"
-       inkscape:connector-curvature="0" />
     <path
        style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
        d="m 211.66667,162.0625 -15.87501,1e-5"
