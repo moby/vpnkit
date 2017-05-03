@@ -44,14 +44,17 @@ Frames arriving on the default port are examined and
 
 - if they contain ARP requests, we send a response using a static global ARP
   table
-- if they contain IPv4 datagrams then we create a fresh virtual TCP/IP endpoint, a fresh
-  switch port and connect them together so that all future IPv4 traffic to the
+- if they contain IPv4 datagrams then we create a fresh virtual TCP/IP endpoint
+  using the [Mirage](https://mirage.io/) [TCP/IP stack](https://github.com/mirage/mirage-tcpip)
+  (no kernel TCP/IP interfaces are involved), a fresh
+  switch port on our internal switch and connect them together so that all future IPv4 traffic to the
   same destination address is processed by the new endpoint.
 
 Each virtual TCP/IP endpoint terminates TCP and UDP flows using the
 [Mirage](https://mirage.io/) [TCP/IP stack](https://github.com/mirage/mirage-tcpip).
 The data from the flows is proxied to and from regular BSD-style sockets on
-both Windows and Mac.
+both Windows and Mac. The host kernel therefore only sees outgoing
+`SOCK_STREAM` and `SOCK_DGRAM` connections from the `vpnkit` process.
 
 If the VM is communicating with 10 remote IP addresses, then there will be 10
 instances of a Mirage TCP/IP stack, one per IP address. The TCP/IP stack
@@ -89,6 +92,7 @@ tries to make a TCP connection:
     Unix domain socket connected to `vpnkit`.
 - the frame is received by `vpnkit` and input into the ethernet switch.
   - if the destination IP is not recognised: `vpnkit` creates a TCP/IP endpoint
+    using [Mirage](https://mirage.io/) [TCP/IP stack](https://github.com/mirage/mirage-tcpip)
     with the destination IP address and configures the switch to send future
     packets with this destination IP to this endpoint
   - if the destination IP is recognised: the internal switch inputs the frame
@@ -109,3 +113,6 @@ to the VM and no set of associated firewall rules or routing tables. All outgoin
 connections originate from the `vpnkit` process. If the user installs some
 advanced networking or VPN software which reconfigures the routing table or
 firewall rules, it will not break the connection between `vpnkit` and the VM.
+
+This technique for forwarding network connections is commonly known as
+[Slirp](https://en.wikipedia.org/wiki/Slirp).
