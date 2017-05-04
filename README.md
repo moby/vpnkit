@@ -61,5 +61,5 @@ traffic without requiring low-level Ethernet bridging support.
 Design
 ------
 
-- [ethernet](docs/ethernet.md): describes the flow of ethernet traffic to/from the VM
-- [DNS](docs/DNS.md): describes the DNS forwarder implementation
+- [Using vpnkit as a default gateway](docs/ethernet.md): describes the flow of ethernet traffic to/from the VM
+- [Port forwarding](docs/ports.md): describes how ports are forwarded from the host into the VM
