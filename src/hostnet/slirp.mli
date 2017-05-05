@@ -26,13 +26,14 @@ type config = {
   client_uuids: uuid_table;
   bridge_connections: bool;
   mtu: int;
+  host_names: Dns.Name.t list;
 }
 
 (** A slirp TCP/IP stack ready to accept connections *)
 
 module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST)(Vnet : Vnetif.BACKEND) : sig
 
-  val create: Config.t -> config Lwt.t
+  val create: ?host_names:Dns.Name.t list -> Config.t -> config Lwt.t
   (** Initialise a TCP/IP stack, taking configuration from the Config.t *)
 
   type t

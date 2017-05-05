@@ -121,6 +121,14 @@ let try_etc_hosts =
     end
   | _ -> Lwt.return_none
 
+let try_builtins local_ip host_names question =
+  let open Dns.Packet in
+  match local_ip, question with
+  | Ipaddr.V4 local_ip, { q_class = Q_IN; q_type = (Q_A|Q_AAAA); q_name; _ } when List.mem q_name host_names ->
+    Log.info (fun f -> f "DNS: %s is a builtin: %s" (Dns.Name.to_string q_name) (Ipaddr.V4.to_string local_ip));
+    Lwt.return (Some [ { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = A local_ip } ])
+  | _ -> Lwt.return_none
+
 module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.SOCKETS)(D: Sig.DNS) (Time: V1_LWT.TIME) (Clock: V1.CLOCK) (Recorder: Sig.RECORDER) = struct
 
   (* DNS uses slightly different protocols over TCP and UDP. We need both a UDP
@@ -140,19 +148,25 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     dns_udp_resolver: Dns_udp_resolver.t;
   }
 
-  type t =
+  type resolver =
     | Upstream of dns (* use upstream DNS servers *)
     | Host (* use the host resolver *)
+
+  type t = {
+    local_ip: Ipaddr.t;
+    host_names: Dns.Name.t list;
+    resolver: resolver;
+  }
 
   let recorder = ref None
   let set_recorder r = recorder := Some r
 
   let destroy = function
-    | Upstream { dns_tcp_resolver; dns_udp_resolver } ->
+    | { resolver = Upstream { dns_tcp_resolver; dns_udp_resolver } } ->
       Dns_tcp_resolver.destroy dns_tcp_resolver
       >>= fun () ->
       Dns_udp_resolver.destroy dns_udp_resolver
-    | Host ->
+    | { resolver = Host } ->
       Lwt.return_unit
 
   let record_udp ~source_ip ~source_port ~dest_ip ~dest_port bufs =
@@ -204,7 +218,10 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     | [] -> Lwt.return None
     | x -> Lwt.return (Some x)
 
-  let create ~local_address = function
+  let create ~local_address ~host_names =
+    let local_ip = local_address.Dns_forward.Config.Address.ip in
+    Log.info (fun f -> f "DNS names %s will map to local IP %s" (String.concat ", " @@ List.map Dns.Name.to_string host_names) (Ipaddr.to_string local_ip));
+    function
     | `Upstream config ->
       let open Dns_forward.Config.Address in
       let nr_servers =
@@ -224,10 +241,10 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
       >>= fun dns_udp_resolver ->
       Dns_tcp_resolver.create ~message_cb config
       >>= fun dns_tcp_resolver ->
-      Lwt.return (Upstream { dns_tcp_resolver; dns_udp_resolver })
+      Lwt.return { local_ip; host_names; resolver = Upstream { dns_tcp_resolver; dns_udp_resolver } }
     | `Host ->
       Log.info (fun f -> f "Will use the host's DNS resolver");
-      Lwt.return Host
+      Lwt.return { local_ip; host_names; resolver = Host }
 
   let answer t is_tcp buffer =
     let len = Cstruct.len buffer in
@@ -251,25 +268,30 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
       | Some answers ->
         Lwt.return (Result.Ok (marshal @@ reply answers))
       | None ->
-        begin match is_tcp, t with
-        | true, Upstream { dns_tcp_resolver; _ } ->
-          Dns_tcp_resolver.answer buffer dns_tcp_resolver
-        | false, Upstream { dns_udp_resolver; _ } ->
-          Dns_udp_resolver.answer buffer dns_udp_resolver
-        | _, Host ->
-          D.resolve question
-          >>= function
-          | [] ->
-            let nxdomain =
-              let id = request.id in
-              let detail = { request.detail with Dns.Packet.qr = Dns.Packet.Response; ra = true; rcode = Dns.Packet.NXDomain } in
-              let questions = request.questions in
-              let authorities = [] and additionals = [] and answers = [] in
-              { Dns.Packet.id; detail; questions; answers; authorities; additionals } in
-            Lwt.return (Result.Ok (marshal nxdomain))
-          | answers ->
-            Lwt.return (Result.Ok (marshal @@ reply answers))
-        end
+        try_builtins t.local_ip t.host_names question
+        >>= function
+        | Some answers ->
+          Lwt.return (Result.Ok (marshal @@ reply answers))
+        | None ->
+          begin match is_tcp, t.resolver with
+          | true, Upstream { dns_tcp_resolver; _ } ->
+            Dns_tcp_resolver.answer buffer dns_tcp_resolver
+          | false, Upstream { dns_udp_resolver; _ } ->
+            Dns_udp_resolver.answer buffer dns_udp_resolver
+          | _, Host ->
+            D.resolve question
+            >>= function
+            | [] ->
+              let nxdomain =
+                let id = request.id in
+                let detail = { request.detail with Dns.Packet.qr = Dns.Packet.Response; ra = true; rcode = Dns.Packet.NXDomain } in
+                let questions = request.questions in
+                let authorities = [] and additionals = [] and answers = [] in
+                { Dns.Packet.id; detail; questions; answers; authorities; additionals } in
+              Lwt.return (Result.Ok (marshal nxdomain))
+            | answers ->
+              Lwt.return (Result.Ok (marshal @@ reply answers))
+          end
       end
     | _ ->
       Lwt.return (Result.Error (`Msg "DNS packet had multiple questions"))

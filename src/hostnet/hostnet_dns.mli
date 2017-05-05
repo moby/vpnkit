@@ -16,7 +16,7 @@ module Make
     (Udp: V1_LWT.UDPV4)
     (Tcp:V1_LWT.TCPV4)
     (Socket: Sig.SOCKETS)
-    (Dns: Sig.DNS)
+    (Dns_resolver: Sig.DNS)
     (Time: V1_LWT.TIME)
     (Clock: V1.CLOCK)
     (Recorder: Sig.RECORDER) : sig
@@ -24,7 +24,7 @@ module Make
   type t
   (** A DNS proxy instance with a fixed configuration *)
 
-  val create: local_address:Dns_forward.Config.Address.t -> Config.t -> t Lwt.t
+  val create: local_address:Dns_forward.Config.Address.t -> host_names:Dns.Name.t list -> Config.t -> t Lwt.t
   (** Create a DNS forwarding instance based on the given configuration, either
       [`Upstream config]: send DNS requests to the given upstream servers
       [`Host]: use the Host's resolver.

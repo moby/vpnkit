@@ -194,7 +194,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
-let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap debug =
+let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -259,6 +259,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
         start_port_forwarding port_control_url max_connections vsock_path
       )
     );
+  let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
 
   let hardcoded_configuration =
     let never, _ = Lwt.task () in
@@ -284,7 +285,8 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       global_arp_table;
       client_uuids;
       bridge_connections = true;
-      mtu = 1500; } in
+      mtu = 1500;
+      host_names } in
 
   let config = match db_path with
     | Some db_path ->
@@ -307,7 +309,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
     let module Slirp_stack = Slirp.Make(Config)(Vmnet.Make(HV))(Dns_policy)(Host)(Vnet) in
     let sockaddr = hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid (Uri.of_string socket_url) in
     ( match config with
-      | Some config -> Slirp_stack.create config
+      | Some config -> Slirp_stack.create ~host_names config
       | None -> Lwt.return hardcoded_configuration )
     >>= fun stack_config ->
     hvsock_connect_forever socket_url sockaddr
@@ -328,7 +330,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
     unix_listen socket_url
     >>= fun server ->
     ( match config with
-      | Some config -> Slirp_stack.create config
+      | Some config -> Slirp_stack.create ~host_names config
       | None -> Lwt.return hardcoded_configuration )
     >>= fun stack_config ->
     Host.Sockets.Stream.Unix.listen server
@@ -351,16 +353,16 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       | None -> () );
     Lwt.return_unit
 
-let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap debug =
+let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names debug =
   Host.Main.run
-    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap debug)
+    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names debug)
 end
 
-let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap select debug =
+let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap debug
+    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names debug
 
 open Cmdliner
 
@@ -470,6 +472,14 @@ let pcap=
   in
   Arg.(value & opt (some string) None doc)
 
+let host_names =
+  let doc =
+    Arg.info ~doc:
+      "Comma-separated list of DNS names to map to the Host's virtual IP"
+      ["host-names"]
+  in
+  Arg.(value & opt string "vpnkit.host" doc)
+
 let select =
   let doc = "Use a select event loop rather than the default libuv-based one" in
   Arg.(value & flag & info [ "select" ] ~doc)
@@ -485,7 +495,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts $ pcap $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts $ pcap $ host_names $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =
