@@ -54,7 +54,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     val get_nat_table_size: t -> int
     (** Return the number of active NAT table entries *)
 
-    val update_dns: unit -> unit
+    val update_dns: ?local_ip:Ipaddr.t -> ?host_names:Dns.Name.t list -> unit -> unit
     (** Update the DNS forwarder following a configuration change *)
   end
 end

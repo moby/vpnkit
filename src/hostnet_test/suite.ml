@@ -27,10 +27,10 @@ let test_dhcp_query () =
       ) in
   run t
 
-let set_dns_policy use_host =
+let set_dns_policy ?host_names use_host =
   Dns_policy.remove ~priority:3;
   Dns_policy.add ~priority:3 ~config:(if use_host then `Host else Dns_policy.google_dns);
-  Slirp_stack.Debug.update_dns ()
+  Slirp_stack.Debug.update_dns ?host_names ()
 
 let test_dns_query server use_host () =
   set_dns_policy use_host;
@@ -46,6 +46,24 @@ let test_dns_query server use_host () =
         | _ ->
           Log.err (fun f -> f "Failed to lookup www.google.com");
           failwith "Failed to lookup www.google.com"
+      ) in
+  run t
+
+let test_builtin_dns_query server use_host () =
+  let name = "experimental.host.name.localhost" in
+  set_dns_policy ~host_names:[ Dns.Name.of_string name ] use_host;
+  let t =
+    with_stack
+      (fun _ stack ->
+        let resolver = DNS.create stack in
+        DNS.gethostbyname ~server resolver name
+        >>= function
+        | (_ :: _) as ips ->
+          Log.info (fun f -> f "%s has IPs: %s" name (String.concat ", " (List.map Ipaddr.to_string ips)));
+          Lwt.return ()
+        | _ ->
+          Log.err (fun f -> f "Failed to lookup %s" name);
+          failwith ("Failed to lookup " ^ name)
       ) in
   run t
 
@@ -321,6 +339,7 @@ let test_dhcp = [
 let test_dns use_host =
   let descr = if use_host then "local Host resolver" else "Google via 8.8.8.8" in [
   "Use " ^ descr ^ " to lookup www.google.com", `Quick, test_dns_query primary_dns_ip use_host;
+  "Check that builtin DNS queries work", `Quick, test_builtin_dns_query primary_dns_ip use_host;
   "Service a query from /etc/hosts cache", `Quick, test_etc_hosts_query primary_dns_ip use_host;
   "Check that localhost.local fails fast via " ^ descr, `Quick, test_localhost_local_query primary_dns_ip use_host;
 ] @ (List.map (fun ip ->
