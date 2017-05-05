@@ -204,7 +204,7 @@ module type VMNET = sig
 
   type fd
 
-  val of_fd: client_macaddr_of_uuid:(Uuidm.t -> Macaddr.t Lwt.t) -> server_macaddr:Macaddr.t 
+  val of_fd: client_macaddr_of_uuid:(Uuidm.t -> Macaddr.t Lwt.t) -> server_macaddr:Macaddr.t
     -> mtu:int -> fd -> t Error.t
 
   val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
