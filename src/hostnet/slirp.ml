@@ -92,6 +92,7 @@ type config = {
   client_uuids: uuid_table;
   bridge_connections: bool;
   mtu: int;
+  host_names: Dns.Name.t list;
 }
 
 module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST)(Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) = struct
@@ -131,7 +132,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   let dns =
     let ip = Ipaddr.V4 (Ipaddr.V4.of_string_exn default_host) in
     let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
-    ref (Dns_forwarder.create ~local_address @@ Dns_policy.config ())
+    ref (Dns_forwarder.create ~local_address ~host_names:[] @@ Dns_policy.config ())
 
   let is_dns = let open Frame in function
     | Ethernet { payload = Ipv4 { payload = Udp { src = 53; _ }; _ }; _ }
@@ -605,9 +606,9 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   module Debug = struct
     let get_nat_table_size t = Udp_nat.get_nat_table_size t.udp_nat
 
-    let update_dns () =
-      let local_address = { Dns_forward.Config.Address.ip = Ipaddr.V4 Ipaddr.V4.localhost; port = 0 } in
-      dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
+    let update_dns ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(host_names = []) () =
+      let local_address = { Dns_forward.Config.Address.ip = local_ip; port = 0 } in
+      dns := Dns_forwarder.create ~local_address ~host_names (Dns_policy.config ());
   end
 
   (* If no traffic is received for 5 minutes, delete the endpoint and
@@ -806,7 +807,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     Log.info (fun f -> f "TCP/IP ready");
     Lwt.return t
 
-  let create config =
+  let create ?(host_names = [ Dns.Name.of_string "vpnkit.host" ]) config =
     let driver = [ "com.docker.driver.amd64-linux" ] in
 
     let max_connections_path = driver @ [ "slirp"; "max-connections" ] in
@@ -968,7 +969,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       Dns_policy.remove ~priority:3;
       Dns_policy.add ~priority:3 ~config;
       let local_address = { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 } in
-      dns := Dns_forwarder.create ~local_address (Dns_policy.config ());
+      dns := Dns_forwarder.create ~local_address ~host_names (Dns_policy.config ());
       Lwt.return_unit in
 
     let rec monitor_dns_settings settings =
@@ -1029,6 +1030,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       client_uuids;
       bridge_connections;
       mtu;
+      host_names;
     } in
     Lwt.return t
 
