@@ -552,7 +552,7 @@ module Stream = struct
                 (fun () ->
                   Lwt.finalize
                     (fun () ->
-                      Lwt_unix.listen fd Utils.somaxconn;
+                      Lwt_unix.listen fd (!Utils.somaxconn);
                       loop fd
                     ) (fun () ->
                       shutdown server
