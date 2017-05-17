@@ -1,6 +1,29 @@
 --- ./depext.ml
 +++ ./depext.ml
-@@ -45,12 +45,21 @@
+@@ -18,6 +18,22 @@
+   ignore (Unix.close_process_in ic);
+   lines
+ 
++let open_process_out argv =
++  let (in_read, in_write) = Unix.pipe () in
++  Unix.set_close_on_exec in_read;
++  let ch = Unix.in_channel_of_descr in_read in
++  set_binary_mode_in ch false;
++  let pid = Unix.create_process argv.(0) argv Unix.stdin in_write Unix.stderr in
++  Unix.close in_write;
++  (pid, ch)
++
++let lines_of_argv argv =
++  let pid,ch = open_process_out argv in
++  let lines = lines_of_channel ch in
++  close_in ch;
++  ignore (Unix.waitpid [] pid);
++  lines
++
+ let lines_of_file f =
+   let ic = open_in f in
+   let lines = lines_of_channel ic in
+@@ -45,12 +61,21 @@
    in
    aux 0
  
@@ -24,7 +47,7 @@
    let c = String.concat " " c in
    if !debug then Printf.eprintf "+ %s\n%!" c;
    Unix.system c
-@@ -65,6 +74,24 @@
+@@ -65,6 +90,24 @@
        with End_of_file -> false)
      fmt
  
@@ -49,7 +72,7 @@
  (* system detection *)
  
  let arch () =
-@@ -127,6 +154,11 @@
+@@ -127,6 +170,11 @@
       with Not_found | Failure _ -> None)
    | `OpenBSD -> Some `OpenBSD
    | `FreeBSD -> Some `FreeBSD
@@ -61,7 +84,7 @@
    | _ -> None
  
  (* generate OPAM depexts flags *)
-@@ -166,6 +198,7 @@
+@@ -166,6 +214,7 @@
    | Some `Gentoo -> ["gentoo"]
    | Some `OpenBSD -> ["openbsd"]
    | Some `FreeBSD -> ["freebsd"]
@@ -69,16 +92,73 @@
    | Some (`Other s) -> [String.lowercase s]
    | None -> []
  
-@@ -222,6 +255,8 @@
+@@ -181,20 +230,28 @@
+ )
+ 
+ let depexts flags opam_packages =
+-  let c =
+-    if String.sub (Lazy.force opam_version) 0 4 = "1.1." then
+-      (* backwards-compatible command *)
+-      Printf.sprintf "opam install --external=%s %s"
+-        (String.concat "," flags)
+-        (String.concat "," opam_packages)
++  let s =
++    if Sys.win32 then
++      let a = "--external=" ^ (String.concat "," flags) in
++      let b = "--required-by=" ^ (String.concat "," opam_packages) in
++      let argv = [| "opam"; "list" ; "--safe" ; "--recursive" ; a ; b |] in
++      lines_of_argv argv
+     else
+-    (* this is lighter, more general and doesn't require a lock. But only on
+-       newer opams *)
+-    Printf.sprintf "opam list --safe --recursive --external=%s --required-by=%s"
+-      (String.concat "," flags)
+-      (String.concat "," opam_packages)
++      let c =
++        if String.sub (Lazy.force opam_version) 0 4 = "1.1." then
++          (* backwards-compatible command *)
++          Printf.sprintf "opam install --external=%s %s"
++            (String.concat "," flags)
++            (String.concat "," opam_packages)
++        else
++          (* this is lighter, more general and doesn't require a lock. But only on
++             newer opams *)
++          Printf.sprintf "opam list --safe --recursive --external=%s --required-by=%s"
++            (String.concat "," flags)
++            (String.concat "," opam_packages)
++      in
++      lines_of_command c
+   in
+-  let s = lines_of_command c in
+   let lines = List.filter (fun s -> String.length s > 0 && s.[0] <> '#') s in
+   List.flatten (List.map (string_split ' ') lines)
+ 
+@@ -222,6 +279,24 @@
      ["emerge"::packages]
    | Some `Alpine ->
      ["apk"::"add"::packages]
 +  | Some `Cygwinports ->
-+    ["cygwin-install.exe"::"install"::packages]
++    let rec iter accu_whole accu_cur len = function
++    | [] ->
++      if accu_cur = [] then
++        List.rev accu_whole
++      else
++        List.rev (add_a accu_whole accu_cur)
++    | hd::tl ->
++      let hd_len = String.length (Filename.quote hd) + 2 in
++      if len + hd_len > 7_000 then
++        iter (add_a accu_whole accu_cur) [hd] hd_len tl
++      else
++        iter accu_whole (hd::accu_cur) (len + hd_len) tl
++    and add_a accu_whole accu_cur =
++      let hda = "cygwin-install.exe"::"install"::(List.rev accu_cur) in
++      hda::accu_whole
++    in
++    iter [] [] 0 packages
    | Some `OpenSUSE ->
      ["zypper"::"install"::yes ["-y"] packages]
    | Some (`Other d) ->
-@@ -314,12 +349,13 @@
+@@ -314,12 +389,13 @@
           | [pkg;_;_;"installed"] -> (try StringMap.find pkg virtual_map @ acc with Not_found -> acc)
           | _ -> acc)
        installed lines
@@ -93,7 +173,7 @@
        | _ -> assert(false)
      in
      List.filter
-@@ -466,7 +502,7 @@
+@@ -466,7 +542,7 @@
    if install_arg && opam_packages <> [] then begin
      (if not short then Printf.printf "# Now letting OPAM install the packages\n%!");
      (if !debug then Printf.eprintf "+ %s\n%!" (String.concat " " opam_cmdline));

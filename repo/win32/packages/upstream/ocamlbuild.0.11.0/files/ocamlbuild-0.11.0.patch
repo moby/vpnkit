@@ -39,7 +39,7 @@
 +   * space seems to work, too - and the ouput is nicer *)
    if Sys.os_type = "Win32" then
 -    Buffer.add_string b "''";
-+    Buffer.add_string b " ";
++    Buffer.add_char b ' ';
    let first = ref true in
    let put_space () =
      if !first then
@@ -322,39 +322,40 @@
  
 --- ./src/ocamlbuild_unix_plugin.ml
 +++ ./src/ocamlbuild_unix_plugin.ml
-@@ -48,6 +48,13 @@
+@@ -48,12 +48,22 @@
    end
  
  let run_and_open s kont =
++  let s_orig = s in
 +  let s =
 +    (* Be consistent! My_unix.run_and_open uses My_std.sys_command and
 +       sys_command uses bash. *)
 +    if Sys.win32 = false then s else
-+    (Lazy.force My_std.windows_shell |> Array.to_list |> String.concat " ")
-+    ^ " -ec " ^ Filename.quote s
++    let l = match Lazy.force My_std.windows_shell |> Array.to_list with
++    | hd::tl -> (Filename.quote hd)::tl
++    | _ -> assert false in
++    "\"" ^ (String.concat " " l) ^ " -ec " ^ Filename.quote (" " ^ s) ^ "\""
 +  in
    let ic = Unix.open_process_in s in
    let close () =
      match Unix.close_process_in ic with
+     | Unix.WEXITED 0 -> ()
+     | Unix.WEXITED _ | Unix.WSIGNALED _ | Unix.WSTOPPED _ ->
+-        failwith (Printf.sprintf "Error while running: %s" s) in
++        failwith (Printf.sprintf "Error while running: %s" s_orig) in
+   let res = try
+       kont ic
+     with e -> (close (); raise e)
 --- ./src/options.ml
 +++ ./src/options.ml
-@@ -173,11 +173,33 @@
+@@ -173,11 +173,24 @@
      build_dir := Filename.concat (Sys.getcwd ()) s
    else
      build_dir := s
 +
-+let slashify p =
-+  match Sys.os_type with
-+  | "Win32" ->
-+    let len = String.length p in
-+    let b = Bytes.create len in
-+    for i = 0 to len - 1 do
-+      Bytes.set b i (match p.[i] with
-+        | '\\' ->  '/'
-+        | x -> x )
-+    done;
-+    Bytes.to_string b
-+  | _ -> p
++let slashify =
++  if Sys.win32 then fun p -> String.map (function '\\' -> '/' | x -> x) p
++  else fun p ->p
 +
 +let sb () =
 +  match Sys.os_type with
@@ -373,7 +374,7 @@
    Arg.align
    [
     "-version", Unit print_version , " Display the version";
-@@ -256,8 +278,8 @@
+@@ -256,8 +269,8 @@
     "-build-dir", String set_build_dir, "<path> Set build directory (implies no-links)";
     "-install-lib-dir", Set_string Ocamlbuild_where.libdir, "<path> Set the install library directory";
     "-install-bin-dir", Set_string Ocamlbuild_where.bindir, "<path> Set the install binary directory";
@@ -386,7 +387,7 @@
       used when building myocamlbuild.ml (only)";
 --- ./src/pathname.ml
 +++ ./src/pathname.ml
-@@ -84,6 +84,27 @@
+@@ -84,6 +84,26 @@
    | x :: xs -> x :: normalize_list xs
  
  let normalize x =
@@ -396,7 +397,6 @@
 +    else
 +      let len = String.length x in
 +      let b = Bytes.create len in
-+      let use_bs = ref false in
 +      for i = 0 to pred len do
 +        match x.[i] with
 +        | '\\' -> Bytes.set b i '/'

@@ -18,6 +18,7 @@ depends: [
   "ocamlfind" {build}
   "mirage-types-lwt" {< "3.0.0"}
   "cmdliner"
+  "cstruct-lwt"
   "mirage-unix" {>= "1.1.0"}
   "ocamlbuild" {build}
 ]

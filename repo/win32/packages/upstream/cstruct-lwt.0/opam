@@ -1,0 +1,16 @@
+opam-version: "1.2"
+maintainer:   "anil@recoil.org"
+authors:      ["Anil Madhavapeddy" "Richard Mortier" "Thomas Gazagnaire"
+               "Pierre Chambart" "David Kaloper" "Jeremy Yallop" "David Scott"
+               "Mindy Preston" ]
+homepage:     "https://github.com/mirage/ocaml-cstruct"
+license:      "ISC"
+dev-repo:     "https://github.com/mirage/ocaml-cstruct.git"
+bug-reports:  "https://github.com/mirage/ocaml-cstruct/issues"
+tags: [ "org:mirage" "org:ocamllabs" ]
+build: []
+depends: [
+  "cstruct" {<"3.0.0"}
+  "lwt"
+]
+available: [ocaml-version >= "4.02.3"]
