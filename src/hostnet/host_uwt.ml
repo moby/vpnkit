@@ -580,7 +580,7 @@ module Sockets = struct
       let listen server' cb =
         List.iter
           (fun (_, fd) ->
-             let listen_result = Uwt.Tcp.listen fd ~max:Utils.somaxconn ~cb:(fun server x ->
+             let listen_result = Uwt.Tcp.listen fd ~max:(!Utils.somaxconn) ~cb:(fun server x ->
                try
                  if Uwt.Int_result.is_error x then
                    Log.err (fun f -> f "Uwt.Tcp.listen callback failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error x))
@@ -798,7 +798,7 @@ module Sockets = struct
         server.disable_connection_tracking <- true
 
       let listen ({ fd; _ } as server') cb =
-        let listen_result = Uwt.Pipe.listen fd ~max:Utils.somaxconn ~cb:(fun server x ->
+        let listen_result = Uwt.Pipe.listen fd ~max:(!Utils.somaxconn) ~cb:(fun server x ->
           try
             if Uwt.Int_result.is_error x then
               Log.err (fun f -> f "Uwt.Pipe.listen callback failed with: %s" (Uwt.strerror @@ Uwt.Int_result.to_error x))

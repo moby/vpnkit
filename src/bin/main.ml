@@ -192,7 +192,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
-let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names debug =
+let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names listen_backlog debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -222,7 +222,9 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
   Log.info (fun f -> f "vpnkit version %s with hostnet version %s %s uwt version %s hvsock version %s %s"
     Depends.version Depends.hostnet_version Depends.hostnet_pinned Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
   );
-  Log.info (fun f -> f "System SOMAXCONN is %d" Utils.somaxconn);
+  Log.info (fun f -> f "System SOMAXCONN is %d" !Utils.somaxconn);
+  Utils.somaxconn := (match listen_backlog with None -> !Utils.somaxconn | Some x -> x);
+  Log.info (fun f -> f "Will use a listen backlog of %d" !Utils.somaxconn);
 
   Printexc.record_backtrace true;
 
@@ -349,16 +351,16 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       | None -> () );
     Lwt.return_unit
 
-let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names debug =
+let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names listen_backlog debug =
   Host.Main.run
-    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names debug)
+    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names listen_backlog debug)
 end
 
-let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names select debug =
+let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names select listen_backlog debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names debug
+    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names listen_backlog debug
 
 open Cmdliner
 
@@ -473,6 +475,11 @@ let select =
   let doc = "Use a select event loop rather than the default libuv-based one" in
   Arg.(value & flag & info [ "select" ] ~doc)
 
+let listen_backlog =
+  let doc = "Specify a maximum listen(2) backlog. If no override is specified \
+             then we will use SOMAXCONN." in
+  Arg.(value & opt (some int) None & info [ "listen-backlog" ] ~doc)
+
 let debug =
   let doc = "Verbose debug logging to stdout" in
   Arg.(value & flag & info [ "debug" ] ~doc)
@@ -484,7 +491,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts  $ host_names $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts  $ host_names $ select $ listen_backlog $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =
