@@ -1,0 +1,111 @@
+--- ./myocamlbuild.ml
++++ ./myocamlbuild.ml
+@@ -20,6 +20,11 @@
+   in
+   rule "js_of_ocaml: .byte -> .js" ~dep ~prod f
+ 
++let lib s =
++  match !Ocamlbuild_plugin.Options.ext_lib with
++  | "" -> s ^ ".a"
++  | x -> s ^ "." ^ x
++
+ let () =
+   dispatch begin function
+   | After_rules ->
+@@ -31,10 +36,10 @@
+ 
+       (* mtime-clock-os *)
+ 
+-      dep ["record_mtime_clock_os_stubs"] ["src-os/libmtime_clock_stubs.a"];
++      dep ["record_mtime_clock_os_stubs"] [lib "src-os/libmtime_clock_stubs"];
+       flag_and_dep
+         ["link"; "ocaml"; "link_mtime_clock_os_stubs"]
+-        (P "src-os/libmtime_clock_stubs.a");
++        (P (lib "src-os/libmtime_clock_stubs"));
+       flag ["library"; "ocaml"; "byte"; "record_mtime_clock_os_stubs"]
+         (S ([A "-dllib"; A "-lmtime_clock_stubs"] @ system_support_lib));
+       flag ["library"; "ocaml"; (* byte and native *)
+--- ./src-os/mtime_clock_stubs.c
++++ ./src-os/mtime_clock_stubs.c
+@@ -26,6 +26,8 @@
+  #if defined(_POSIX_VERSION)
+    #define OCAML_MTIME_POSIX
+  #endif
++#elif defined(_WIN32)
++#define OCAML_MTIME_WINDOWS
+ #endif
+ 
+ /* Darwin */
+@@ -123,6 +125,72 @@
+   CAMLreturn (some);
+ }
+ 
++#elif defined(OCAML_MTIME_WINDOWS)
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++
++static double performance_frequency;
++static void set_performance_frequency(void)
++{
++  LARGE_INTEGER t_freq;
++  if (!QueryPerformanceFrequency(&t_freq)) {
++    OCAML_MTIME_RAISE_SYS_ERROR ("clock_gettime () failed");
++  }
++  performance_frequency = (1000000000.0 / t_freq.QuadPart);
++}
++
++CAMLprim value ocaml_mtime_clock_elapsed_ns (value unit)
++{
++  (void) unit;
++  static LARGE_INTEGER start;
++  if (performance_frequency == 0.0) {
++    set_performance_frequency();
++  }
++  if ( start.QuadPart == 0 )
++  {
++    if (!QueryPerformanceCounter(&start)) {
++      OCAML_MTIME_RAISE_SYS_ERROR ("clock_gettime () failed");
++    }
++  }
++  static LARGE_INTEGER now;
++  if ( !QueryPerformanceCounter(&now)) {
++    OCAML_MTIME_RAISE_SYS_ERROR ("clock_gettime () failed");
++  }
++  uint64_t ret = (now.QuadPart - start.QuadPart) * performance_frequency;
++  return caml_copy_int64(ret);
++}
++
++CAMLprim value ocaml_mtime_clock_now_ns (value unit)
++{
++  (void) unit;
++  if (performance_frequency == 0.0) {
++    set_performance_frequency();
++  }
++  static LARGE_INTEGER now;
++  if ( !QueryPerformanceCounter(&now)) {
++    OCAML_MTIME_RAISE_SYS_ERROR ("clock_gettime () failed");
++  }
++  uint64_t ret = now.QuadPart * performance_frequency;
++  return caml_copy_int64(ret);
++}
++
++CAMLprim value ocaml_mtime_clock_period_ns (value unit)
++{
++  (void) unit;
++  if (performance_frequency == 0.0) {
++    set_performance_frequency();
++  }
++  if ( performance_frequency <= 0.0 ) {
++    return Val_none;
++  }
++  value ret;
++  value p = caml_copy_int64(performance_frequency);
++  Begin_roots1(p);
++  ret = caml_alloc_small(1,0);
++  Field(ret,0) = p;
++  End_roots();
++  return ret;
++}
+ /* Unsupported */
+ 
+ #else
