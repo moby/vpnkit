@@ -151,6 +151,8 @@ The directory will be deleted and replaced with a file of the same name.
     connection.fids := Types.Fid.Map.add fid Root !(connection.fids);
     return { Response.Attach.qid = root_qid }
 
+  exception Enoent
+
   let walk connection ~cancel:_ { Request.Walk.fid; newfid; wnames } =
     try
       let from = Types.Fid.Map.find fid !(connection.fids) in
@@ -168,19 +170,18 @@ The directory will be deleted and replaced with a file of the same name.
                 | Some _ -> []
               ) in
               (Entry entry, qid), qid :: qids
-            end else failwith "ENOENT"
+            end else raise Enoent
           | "ctl", Entry entry ->
             let qid = next_qid [] in
             (ControlFile entry, qid), qid :: qids
-          | _, _ -> failwith "ENOENT"
+          | _, _ -> raise Enoent
         ) ((from, next_qid []), []) wnames in
       connection.fids := Types.Fid.Map.add newfid (fst from) !(connection.fids);
       let wqids = List.rev wqids in
       return { Response.Walk.wqids }
     with
     | Not_found -> Error.badfid
-    | Failure "ENOENT" -> Error.enoent
-    | Failure "BADWALK" -> Error.badwalk
+    | Enoent -> Error.enoent
 
   let free_resource = function
     | ControlFile entry ->

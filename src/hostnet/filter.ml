@@ -107,10 +107,10 @@ module Make(Input: Sig.VMNET) = struct
   let of_fd ~client_macaddr_of_uuid:_ ~server_macaddr:_ ~mtu:_ =
     failwith "Filter.of_fd unimplemented"
 
-  let get_client_uuid t =
+  let get_client_uuid _ =
     failwith "Filter.get_client_uuid unimplemented"
 
-  let get_client_macaddr t =
+  let get_client_macaddr _ =
     failwith "Filter.get_client_macaddr unimplemented"
 
   let start_capture _ ?size_limit:_ _ =

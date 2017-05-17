@@ -11,7 +11,7 @@ module Dns_policy = struct
   let config_of_ips ips =
     let open Dns_forward.Config in
     let servers = Server.Set.of_list (
-      List.map (fun (ip, port) ->
+      List.map (fun (ip, _) ->
         {
           Server.address = { Address.ip; port = 53 }; zones = Domain.Set.empty;
           timeout_ms = Some 2000; order = 0;
@@ -113,18 +113,17 @@ let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
 let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
 let server_macaddr = Slirp.default_server_macaddr
 
-let global_arp_table : Slirp.arp_table = 
-  { mutex = Lwt_mutex.create (); 
-    table = [(local_ip, Slirp.default_server_macaddr)] 
+let global_arp_table : Slirp.arp_table =
+  { Slirp.mutex = Lwt_mutex.create ();
+    table = [(local_ip, Slirp.default_server_macaddr)]
   }
 
-let client_uuids : Slirp.uuid_table = 
-  { mutex = Lwt_mutex.create ();
+let client_uuids : Slirp.uuid_table =
+  { Slirp.mutex = Lwt_mutex.create ();
     table = Hashtbl.create 50;
   }
 
 let config_without_bridge =
-  let never, _ = Lwt.task () in
   {
     Slirp.peer_ip;
     local_ip;
@@ -182,7 +181,6 @@ let with_stack f =
   | Result.Ok flow ->
   Log.info (fun f -> f "Made a loopback connection");
   let client_macaddr = Slirp.default_client_macaddr in
-  let server_macaddr = Slirp.default_server_macaddr in
   let uuid = (match Uuidm.of_string "d1d9cd61-d0dc-4715-9bb3-4c11da7ad7a5" with
   | Some x -> x
   | None -> failwith "unable to parse test uuid") in

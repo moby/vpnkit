@@ -24,7 +24,7 @@ let of_string txt =
         if line = "" then acc else begin
           let line = match String.cut ~sep:"#" line with
             | None -> line
-            | Some (important, comment) -> important in
+            | Some (important, _) -> important in
           let whitespace = function
             | ' ' | '\n' | '\011' | '\012' | '\r' | '\t' -> true
             | _ -> false in

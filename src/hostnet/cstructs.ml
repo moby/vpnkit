@@ -33,7 +33,7 @@ let sub t off len =
   (* trim the length *)
   let rec trim acc ts remaining = match remaining, ts with
     | 0, _ -> List.rev acc
-    | n, [] -> err "invalid bounds in Cstructs.sub %a off=%d len=%d" pp_t t off len
+    | _, [] -> err "invalid bounds in Cstructs.sub %a off=%d len=%d" pp_t t off len
     | n, t :: ts ->
       let to_take = min (Cstruct.len t) n in
       (* either t is consumed and we only need ts, or t has data remaining in which

@@ -77,11 +77,11 @@ let test_localhost_local_query server use_host () =
       (fun _ stack ->
         let resolver = DNS.create stack in
         Lwt_list.iter_s
-          (fun name ->
+          (fun _ ->
             let request =
               DNS.gethostbyname ~server resolver "localhost.local"
               >>= function
-              | (_ :: _) as ips ->
+              | _ :: _ ->
                 Log.err (fun f -> f "successfully resolved localhost.local: this shouldn't happen");
                 failwith "Successfully resolved localhost.local"
               | _ ->
@@ -139,7 +139,7 @@ let test_max_connections () =
               Host.Sockets.set_max_connections (Some 0);
               begin Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
               >>= function
-              | `Ok flow ->
+              | `Ok _ ->
                 Log.err (fun f -> f "Connected to www.google.com, max_connections exceeded");
                 failwith "too many connections"
               | `Error _ ->
@@ -264,7 +264,7 @@ let rec count = function 0 -> [] | n -> () :: (count (n - 1))
 let test_stream_data connections length () =
   let t =
     DevNullServer.with_server
-      (fun { DevNullServer.local_port } ->
+      (fun { DevNullServer.local_port; _ } ->
         with_stack
           (fun _ stack ->
             Lwt_list.iter_p

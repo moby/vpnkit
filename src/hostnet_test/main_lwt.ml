@@ -1,5 +1,3 @@
-open Lwt.Infix
-
 let src =
   let src = Logs.Src.create "test" ~doc:"Test the slirp stack" in
   Logs.Src.set_level src (Some Logs.Debug);

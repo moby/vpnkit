@@ -31,26 +31,14 @@ module Result = struct
 end
 
 module Int16 = struct
-  module M = struct
-    type t = int
-    let compare (a: t) (b: t) = Pervasives.compare a b
-  end
-  include M
-  module Map = Map.Make(M)
-  module Set = Set.Make(M)
+  type t = int
 end
 
 module Port = struct
-  module M = struct
-    type t = [
-      | `Tcp of Ipaddr.t * Int16.t
-      | `Udp of Ipaddr.t * Int16.t
-    ]
-    let compare = compare
-  end
-  include M
-  module Map = Map.Make(M)
-  module Set = Set.Make(M)
+  type t = [
+    | `Tcp of Ipaddr.t * Int16.t
+    | `Udp of Ipaddr.t * Int16.t
+  ]
 
   let to_string = function
     | `Tcp (addr, port) -> Printf.sprintf "tcp:%s:%d" (Ipaddr.to_string addr) port
@@ -84,8 +72,6 @@ type t = {
 type key = Port.t
 
 let get_key t = t.local
-
-module Map = Port.Map
 
 type context = string
 

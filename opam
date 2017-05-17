@@ -33,7 +33,7 @@ depends: [
   "result"
   "tar-format" {= "0.6.1"}
   "ipaddr"
-  "lwt" { < "3.0.0" }
+  "lwt" { >= "2.7.0" }
   "uwt" { >= "0.0.4" }
   "tcpip" { >= "2.8.0" & < "3.0.0" }
   "pcap-format"

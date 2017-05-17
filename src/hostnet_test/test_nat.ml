@@ -80,7 +80,7 @@ module Make(Host: Sig.HOST) = struct
       let seen_source_ports = PortSet.empty in
       let t = { port; highest; seen_source_ports; c } in
       Client.listen_udpv4 stack ~port
-        (fun ~src ~dst ~src_port buffer ->
+        (fun ~src:_ ~dst:_ ~src_port buffer ->
            t.highest <- max t.highest (Cstruct.get_uint8 buffer 0);
            t.seen_source_ports <- PortSet.add src_port t.seen_source_ports;
            Log.debug (fun f -> f "Received UDP %d -> %d highest %d" src_port port t.highest);
@@ -88,13 +88,13 @@ module Make(Host: Sig.HOST) = struct
            Lwt.return_unit
         );
       t
-    let rec wait_for_data ~timeout ~highest t =
+    let wait_for_data ~highest t =
       if t.highest < highest then begin
         Lwt.pick [ Lwt_condition.wait t.c; Host.Time.sleep 1. ]
         >>= fun () ->
         Lwt.return (t.highest >= highest)
       end else Lwt.return true
-    let rec wait_for_ports ~timeout ~num t =
+    let wait_for_ports ~num t =
       if PortSet.cardinal t.seen_source_ports < num then begin
         Lwt.pick [ Lwt_condition.wait t.c; Host.Time.sleep 1. ]
         >>= fun () ->
@@ -106,7 +106,7 @@ module Make(Host: Sig.HOST) = struct
   let test_udp () =
     let t =
       EchoServer.with_server
-        (fun { EchoServer.local_port } ->
+        (fun { EchoServer.local_port; _ } ->
            with_stack
              (fun _ stack ->
                 let buffer = Cstruct.create 1024 in
@@ -121,7 +121,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for_data ~timeout:1. ~highest:1 server
+                  UdpServer.wait_for_data ~highest:1 server
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -136,7 +136,7 @@ module Make(Host: Sig.HOST) = struct
   let test_udp_2 () =
     let t =
       EchoServer.with_server
-        (fun { EchoServer.local_port } ->
+        (fun { EchoServer.local_port; _ } ->
            with_stack
              (fun _ stack ->
                 let buffer = Cstruct.create 1024 in
@@ -153,7 +153,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port1 local_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port1 ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for_data ~timeout:1. ~highest:1 server1
+                  UdpServer.wait_for_data ~highest:1 server1
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -169,10 +169,10 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port2 local_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port2 ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for_data ~timeout:1. ~highest:2 server2
+                  UdpServer.wait_for_data ~highest:2 server2
                   >>= fun ok2 ->
                   (* The server should "multicast" the packet to the original "connection" *)
-                  UdpServer.wait_for_data ~timeout:1. ~highest:2 server1
+                  UdpServer.wait_for_data ~highest:2 server1
                   >>= fun ok1 ->
                   if ok1 && ok2 then Lwt.return_unit else loop (remaining - 1) in
                 loop 5
@@ -204,7 +204,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port1 dest_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port1 ~dest_ip:Ipaddr.V4.localhost ~dest_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for_data ~timeout:1. ~highest:1 server1
+                  UdpServer.wait_for_data ~highest:1 server1
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -225,7 +225,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" source_port dest_port (Cstruct.get_uint8 buffer 0));
                   Host.Sockets.Datagram.Udp.sendto client address buffer
                   >>= fun () ->
-                  UdpServer.wait_for_data ~timeout:1. ~highest:2 server1
+                  UdpServer.wait_for_data ~highest:2 server1
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -240,7 +240,7 @@ module Make(Host: Sig.HOST) = struct
   let test_shared_nat_rule () =
     let t =
       EchoServer.with_server
-        (fun { EchoServer.local_port } ->
+        (fun { EchoServer.local_port; _ } ->
            with_stack
              (fun slirp_server stack ->
                 let buffer = Cstruct.create 1024 in
@@ -256,7 +256,7 @@ module Make(Host: Sig.HOST) = struct
                   Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port (Cstruct.get_uint8 buffer 0));
                   Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                   >>= fun () ->
-                  UdpServer.wait_for_data ~timeout:1. ~highest:1 server
+                  UdpServer.wait_for_data ~highest:1 server
                   >>= function
                   | true -> Lwt.return_unit
                   | false -> loop (remaining - 1) in
@@ -268,13 +268,13 @@ module Make(Host: Sig.HOST) = struct
                 (* Create another physical server and send traffic from the same
                    virtual address *)
                 EchoServer.with_server
-                  (fun { EchoServer.local_port } ->
+                  (fun { EchoServer.local_port; _ } ->
                      let rec loop remaining =
                        if remaining = 0 then failwith "Timed-out before UDP response arrived";
                        Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port (Cstruct.get_uint8 buffer 0));
                        Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port udpv4 buffer
                        >>= fun () ->
-                       UdpServer.wait_for_data ~timeout:1. ~highest:2 server
+                       UdpServer.wait_for_data ~highest:2 server
                        >>= function
                        | true -> Lwt.return_unit
                        | false -> loop (remaining - 1) in
@@ -292,9 +292,9 @@ module Make(Host: Sig.HOST) = struct
   let test_source_ports () =
     let t =
       EchoServer.with_server
-        (fun { EchoServer.local_port = local_port1 } ->
+        (fun { EchoServer.local_port = local_port1; _ } ->
           EchoServer.with_server
-            (fun { EchoServer.local_port = local_port2 } ->
+            (fun { EchoServer.local_port = local_port2; _ } ->
                with_stack
                  (fun _ stack ->
                     let buffer = Cstruct.create 1024 in
@@ -311,7 +311,7 @@ module Make(Host: Sig.HOST) = struct
                       Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port2 (Cstruct.get_uint8 buffer 0));
                       Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port2 udpv4 buffer
                       >>= fun () ->
-                      UdpServer.wait_for_ports ~timeout:1. ~num:2 server
+                      UdpServer.wait_for_ports ~num:2 server
                       >>= function
                       | true -> Lwt.return_unit
                       | false -> loop (remaining - 1) in
