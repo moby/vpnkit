@@ -67,8 +67,6 @@ module ForwardServer = struct
 end
 
 module Forward = Forward.Make(struct
-  type port = Forward.Port.t
-
   include Host.Sockets.Stream.Tcp
 
   open Lwt.Infix
@@ -226,7 +224,7 @@ module ForwardControl = struct
         Lwt.return { t; fid; ip; port }
       | _ -> failwith ("failed to parse response: " ^ line)
     end else failwith response
-  let destroy { t; fid } =
+  let destroy { t; fid; _ } =
     Client.LowLevel.clunk t.ninep fid
     >>*= fun _clunk ->
     Lwt.return ()

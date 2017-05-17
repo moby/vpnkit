@@ -67,7 +67,7 @@ module Make(Netif: V1_LWT.NETWORK) = struct
         (fun ip t acc ->
           Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.last_active_time :: acc
         ) t.rules [] in
-    Vfs.File.ro_of_string @@ String.concat "\n" xs
+    Vfs.File.ro_of_string (String.concat "\n" xs)
 
   let remove t rule =
     Log.debug (fun f -> f "removing switch port for %s" (Ipaddr.V4.to_string rule));
@@ -77,7 +77,7 @@ module Make(Netif: V1_LWT.NETWORK) = struct
     (* Does the packet match any of our rules? *)
     let open Frame in
     match parse [ buf ] with
-    | Ok (Ethernet { payload = Ipv4 { dst } }) ->
+    | Ok (Ethernet { payload = Ipv4 { dst; _ }; _ }) ->
       if RuleMap.mem dst t.rules then begin
         let port = RuleMap.find dst t.rules in
         port.last_active_time <- Unix.gettimeofday ();

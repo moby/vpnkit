@@ -37,7 +37,7 @@ exception Too_many_connections
 let connection_table = Hashtbl.create 511
 let connections () =
   let xs = Hashtbl.fold (fun _ c acc -> c :: acc) connection_table [] in
-  Vfs.File.ro_of_string @@ String.concat "\n" xs
+  Vfs.File.ro_of_string (String.concat "\n" xs)
 let register_connection_no_limit description =
   let idx = next_connection_idx () in
   Hashtbl.replace connection_table idx description;

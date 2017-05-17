@@ -175,7 +175,7 @@ module Make(Input: Sig.VMNET) = struct
   let record t bufs =
     try
       Hashtbl.iter
-        (fun name rule ->
+        (fun _ rule ->
           match Frame.parse bufs with
           | Result.Ok f -> if rule.predicate f then push rule bufs
           | Result.Error (`Msg m) -> failwith m
@@ -232,9 +232,9 @@ module Make(Input: Sig.VMNET) = struct
   let stop_capture _ =
     failwith "Capture.stop_capture unimplemented"
 
-  let get_client_uuid t =
+  let get_client_uuid _ =
     failwith "Capture.get_client_uuid unimplemented"
 
-  let get_client_macaddr t =
+  let get_client_macaddr _ =
     failwith "Capture.get_client_macaddr unimplemented"
 end

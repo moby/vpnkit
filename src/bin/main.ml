@@ -19,7 +19,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let _ =
   Printexc.register_printer (function
     | Unix.Unix_error(e, _, _) -> Some (Unix.error_message e)
-    | e -> None
+    | _ -> None
   )
 
 let log_exception_continue description f =
@@ -29,8 +29,6 @@ let log_exception_continue description f =
        Log.err (fun f -> f "%s: failed with %s" description (Printexc.to_string e));
        Lwt.return ()
     )
-
-let default d = function None -> d | Some x -> x
 
 let ethernet_serviceid = "30D48B34-7D27-4B0B-AAAF-BBBED334DD59"
 let ports_serviceid = "0B95756A-9985-48AD-9470-78E060895BE7"
@@ -194,7 +192,7 @@ let start_port_forwarding port_control_url max_connections vsock_path =
     );
     Lwt.return_unit
 
-let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names debug =
+let main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names debug =
   (* Write to stdout if expicitly requested [debug = true] or if the environment
      variable DEBUG is set *)
   let env_debug = try ignore @@ Unix.getenv "DEBUG"; true with Not_found -> false in
@@ -262,17 +260,15 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
   let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
 
   let hardcoded_configuration =
-    let never, _ = Lwt.task () in
-    let pcap = match pcap with None -> None | Some filename -> Some (filename, None) in
     let server_macaddr = Slirp.default_server_macaddr in
     let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2" in
     let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1" in
     let client_uuids : Slirp.uuid_table = {
-        mutex = Lwt_mutex.create ();
+        Slirp.mutex = Lwt_mutex.create ();
         table = Hashtbl.create 50;
     } in
     let global_arp_table : Slirp.arp_table = {
-        mutex = Lwt_mutex.create ();
+        Slirp.mutex = Lwt_mutex.create ();
         table = [(local_ip, server_macaddr)];
     } in
     {
@@ -353,16 +349,16 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       | None -> () );
     Lwt.return_unit
 
-let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names debug =
+let main socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names debug =
   Host.Main.run
-    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names debug)
+    (main_t socket_url port_control_url introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names debug)
 end
 
-let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names select debug =
+let main socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names select debug =
   let module Use_lwt_unix = Main(Host_lwt_unix) in
   let module Use_uwt = Main(Host_uwt) in
   (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts pcap host_names debug
+    socket port_control introspection_url diagnostics_url max_connections vsock_path db_path db_branch dns hosts host_names debug
 
 open Cmdliner
 
@@ -465,13 +461,6 @@ let hosts =
   in
   Arg.(value & opt string Hosts.default_etc_hosts_path doc)
 
-let pcap=
-  let doc =
-    Arg.info ~doc:
-      "Filename to write packet capture data to" ["pcap"]
-  in
-  Arg.(value & opt (some string) None doc)
-
 let host_names =
   let doc =
     Arg.info ~doc:
@@ -495,7 +484,7 @@ let command =
      `P "Terminates TCP/IP and UDP/IP connections from a client and proxy the\
          flows via userspace sockets"]
   in
-  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts $ pcap $ host_names $ select $ debug),
+  Term.(pure main $ socket $ port_control_path $ introspection_path $ diagnostics_path $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts  $ host_names $ select $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =

@@ -1,7 +1,6 @@
 module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
 
 open Lwt
-open Sexplib.Std
 
 let src =
   let src = Logs.Src.create "vmnet" ~doc:"vmnet" in
@@ -9,14 +8,6 @@ let src =
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
-
-let log_exception_continue description f =
-  Lwt.catch
-    (fun () -> f ())
-    (fun e ->
-       Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
-       Lwt.return ()
-    )
 
 let ethernet_header_length = 14 (* no VLAN *)
 
@@ -215,10 +206,10 @@ let server_negotiate ~fd ~client_macaddr_of_uuid ~mtu =
       >>= fun (command, _) ->
       Log.info (fun f -> f "PPP.negotiate: received %s" (Command.to_string command));
       match command with
-      | Ethernet uuid -> begin
+      | Command.Ethernet uuid -> begin
           let open Lwt.Infix in
           client_macaddr_of_uuid uuid
-          >>= fun client_macaddr -> 
+          >>= fun client_macaddr ->
           let vif = Vif.create client_macaddr mtu () in
           let buf = Cstruct.create Vif.sizeof in
           let (_: Cstruct.t) = Vif.marshal vif buf in
@@ -229,7 +220,7 @@ let server_negotiate ~fd ~client_macaddr_of_uuid ~mtu =
           >>= fun () ->
           Lwt_result.return (uuid, client_macaddr)
         end
-      | Bind_ipv4 _ -> (raise (Failure "PPP.negotiate: unsupported command Bind_ipv4"))
+      | Command.Bind_ipv4 _ -> (raise (Failure "PPP.negotiate: unsupported command Bind_ipv4"))
     )
 
 let client_negotiate ~uuid ~fd =
@@ -341,9 +332,9 @@ let of_fd ~client_macaddr_of_uuid ~server_macaddr ~mtu flow =
 let client_of_fd ~uuid ~server_macaddr flow =
   let open Lwt_result.Infix in
   let channel = Channel.create flow in
-  client_negotiate ~uuid ~fd:channel 
+  client_negotiate ~uuid ~fd:channel
   >>= fun vif ->
-  let t = make vif.client_macaddr server_macaddr vif.mtu uuid channel in
+  let t = make ~client_macaddr:vif.Vif.client_macaddr ~server_macaddr:server_macaddr ~mtu:vif.Vif.mtu ~client_uuid:uuid channel in
   Lwt_result.return t
 
 let disconnect t = match t.fd with
@@ -540,5 +531,4 @@ let reset_stats_counters t =
   t.stats.rx_pkts <- 0l;
   t.stats.tx_pkts <- 0l
 
-let get_id _ = ()
 end

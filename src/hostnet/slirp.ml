@@ -196,7 +196,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
       let filesystem () =
         let flows = Id.Map.fold (fun _ t acc -> to_string t :: acc) !all [] in
-        Vfs.File.ro_of_string @@ String.concat "\n" flows
+        Vfs.File.ro_of_string (String.concat "\n" flows)
 
       let create id socket =
         let socket = Some socket in
@@ -526,7 +526,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           (fun ip t acc ->
              Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.Endpoint.last_active_time :: acc
           ) t.endpoints [] in
-      Vfs.File.ro_of_string @@ String.concat "\n" xs in
+      Vfs.File.ro_of_string (String.concat "\n" xs) in
     Vfs.Dir.of_list
       (fun () ->
          Vfs.ok [
@@ -669,7 +669,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             None (* just set smallest available prefix *)
         end
     in
-    let dhcp = Dhcp.make ~client_macaddr ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
+    let dhcp = Dhcp.make ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
       ~extra_dns_ip ~get_domain_search ~get_domain_name switch in
 
     let endpoints = IPMap.empty in
@@ -741,7 +741,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       (fun buf ->
          let open Frame in
          match parse [ buf ] with
-         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; payload }) when
+         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
             (not (Macaddr.compare eth_dst client_macaddr = 0 ||
                   Macaddr.compare eth_dst server_macaddr = 0 ||
                   Macaddr.compare eth_dst Macaddr.broadcast = 0)) -> (* not to server, client or broadcast.. *)
@@ -1048,7 +1048,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             let client_macaddr = (Vnet.mac l2_switch l2_client_id) in
 
             let used_ips =
-                Hashtbl.fold (fun k v l ->
+                Hashtbl.fold (fun _ v l ->
                     let ip, _ = v in
                     l @ [ip]) t.client_uuids.table []
             in
@@ -1072,7 +1072,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                     if not (List.mem preferred_ip used_ips) then begin
                         Some preferred_ip
                     end else begin
-                        failwith "Preferred IP address %s not available" (Ipaddr.V4.to_string preferred_ip)
+                        failwith (Printf.sprintf "Preferred IP address %s not available" (Ipaddr.V4.to_string preferred_ip))
                     end
                 end else begin
                     None

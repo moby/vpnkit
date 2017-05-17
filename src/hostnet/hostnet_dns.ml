@@ -31,7 +31,7 @@ module Policy(Files: Sig.FILES) = struct
   let config_of_ips ips =
     let open Dns_forward.Config in
     let servers = Server.Set.of_list (
-      List.map (fun (ip, port) ->
+      List.map (fun (ip, _) ->
         { Server.address = { Address.ip; port = 53 }; zones = Domain.Set.empty;
         timeout_ms = Some 2000; order = 0 }
       ) ips) in
@@ -162,11 +162,11 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
   let set_recorder r = recorder := Some r
 
   let destroy = function
-    | { resolver = Upstream { dns_tcp_resolver; dns_udp_resolver } } ->
+    | { resolver = Upstream { dns_tcp_resolver; dns_udp_resolver; _ }; _ } ->
       Dns_tcp_resolver.destroy dns_tcp_resolver
       >>= fun () ->
       Dns_udp_resolver.destroy dns_udp_resolver
-    | { resolver = Host } ->
+    | { resolver = Host; _ } ->
       Lwt.return_unit
 
   let record_udp ~source_ip ~source_port ~dest_ip ~dest_port bufs =
@@ -212,12 +212,6 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     | None ->
       () (* nowhere to log packet *)
 
-  let try_host_resolver question =
-    D.resolve question
-    >>= function
-    | [] -> Lwt.return None
-    | x -> Lwt.return (Some x)
-
   let create ~local_address ~host_names =
     let local_ip = local_address.Dns_forward.Config.Address.ip in
     Log.info (fun f -> f "DNS names %s will map to local IP %s" (String.concat ", " @@ List.map Dns.Name.to_string host_names) (Ipaddr.to_string local_ip));
@@ -247,6 +241,7 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
       Lwt.return { local_ip; host_names; resolver = Host }
 
   let answer t is_tcp buffer =
+    let open Dns.Packet in
     let len = Cstruct.len buffer in
     let buf = Dns.Buf.of_cstruct buffer in
     match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
@@ -303,7 +298,7 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     | None -> Printf.sprintf "Unparsable DNS packet length %d" len
     | Some request -> Dns.Packet.to_string request
 
-  let handle_udp ~t ~udp ~src ~dst ~src_port buf =
+  let handle_udp ~t ~udp ~src ~dst:_ ~src_port buf =
     answer t false buf
     >>= function
     | Result.Error (`Msg m) ->
@@ -314,7 +309,7 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
 
   let handle_tcp ~t =
     (* FIXME: need to record the upstream request *)
-    let listeners port =
+    let listeners _ =
       Log.debug (fun f -> f "DNS TCP handshake complete");
       Some (fun flow ->
         let packets = Dns_tcp_framing.connect flow in
