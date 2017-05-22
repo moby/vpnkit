@@ -29,10 +29,14 @@ depends: [
   "fmt"
   "astring"
   "mirage-flow" { = "1.1.0" }
+  "mirage-http"
+  "cohttp"
+  "channel"
   "mirage-types-lwt" { = "2.8.999" }
   "protocol-9p" { = "0.8.0" }
   "ounit"
   "alcotest"
   "mirage-vnetif" { = "0.2.0" }
   "uuidm"
+  "ezjsonm"
 ]

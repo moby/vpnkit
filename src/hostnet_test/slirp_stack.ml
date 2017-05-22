@@ -136,6 +136,7 @@ let config_without_bridge =
     global_arp_table;
     mtu = 1500;
     host_names = [];
+    http_intercept = ref false;
   }
 
 (* This is a hacky way to get a hancle to the server side of the stack. *)

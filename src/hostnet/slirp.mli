@@ -27,6 +27,7 @@ type config = {
   bridge_connections: bool;
   mtu: int;
   host_names: Dns.Name.t list;
+  http_intercept: bool ref;
 }
 
 (** A slirp TCP/IP stack ready to accept connections *)
