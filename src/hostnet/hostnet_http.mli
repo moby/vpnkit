@@ -1,7 +1,7 @@
 module Make
     (Ip: V1_LWT.IPV4 with type prefix = Ipaddr.V4.t)
     (Udp: V1_LWT.UDPV4)
-    (Tcp:V1_LWT.TCPV4)
+    (Tcp: Mirage_flow_s.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
     : sig

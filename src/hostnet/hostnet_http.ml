@@ -8,7 +8,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 module Make
     (Ip: V1_LWT.IPV4 with type prefix = Ipaddr.V4.t)
     (Udp: V1_LWT.UDPV4)
-    (Tcp:V1_LWT.TCPV4)
+    (Tcp:Mirage_flow_s.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
     = struct
@@ -229,8 +229,113 @@ module Make
       ) in
     Lwt.return listeners
 
+  let https ~dst ~t =
+    let open Lwt.Infix in
+    let listeners _port =
+      Log.debug (fun f -> f "HTTPS TCP handshake complete");
+      Some (fun flow ->
+        Lwt.finalize
+          (fun () ->
+            match t.https with
+            | None ->
+              Log.warn (fun f -> f "Failed to proxy https: no proxy defined");
+              Lwt.return_unit
+            | Some ((ip, port) as address) ->
+              let host = Ipaddr.V4.to_string dst in
+              Log.info (fun f -> f "%s:443 --> %s:%d\n%!" host (Ipaddr.to_string ip) port);
+              let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
+              let connect = { connect with Cohttp.Request.resource = Printf.sprintf "%s:%d" (Ipaddr.V4.to_string dst) 443 } in
+              Socket.Stream.Tcp.connect address
+              >>= function
+              | Error _ ->
+                Log.err (fun f -> f "Failed to connect to %s" (string_of_address address));
+                Lwt.return_unit
+              | Ok remote ->
+                let outgoing = Outgoing.C.create remote in
+                Lwt.finalize
+                  (fun () ->
+                    Outgoing.Request.write ~flush:true (fun _ -> Lwt.return_unit) connect outgoing
+                    >>= fun () ->
+                    Outgoing.Response.read outgoing
+                    >>= function
+                    | `Eof ->
+                      Log.warn (fun f -> f "EOF from %s" (string_of_address address));
+                      Lwt.return_unit
+                    | `Invalid x ->
+                      Log.warn (fun f -> f "Failed to parse HTTP response on port %s: %s" (string_of_address address) x);
+                      Lwt.return_unit
+                    | `Ok res ->
+                      begin
+                        Log.info (fun f -> f "<-- %s %s %s\n%!"
+                          (Cohttp.Code.string_of_status res.Cohttp.Response.status)
+                          (Cohttp.Code.string_of_version res.Cohttp.Response.version)
+                          (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t res)));
+                        (* Since we've already layered a channel on top, we can't
+                           use the Mirage_flow.proxy since it would miss the contents
+                           already buffered. Therefore we write out own channel-level
+                           proxy here: *)
+                        let incoming = Incoming.C.create flow in
+                        let a_t =
+                          let rec loop () =
+                            Lwt.catch
+                              (fun () ->
+                                Outgoing.C.read_some outgoing
+                                >>= fun buf ->
+                                Incoming.C.write_buffer incoming buf;
+                                Incoming.C.flush incoming
+                                >>= fun () ->
+                                Lwt.return true
+                              ) (function
+                                | End_of_file -> Lwt.return false
+                                | e ->
+                                  Log.warn (fun f -> f "Possibly unexpected exeption %s in proxy" (Printexc.to_string e));
+                                  Lwt.return false)
+                            >>= fun continue ->
+                            if continue then loop () else begin
+                              Tcp.shutdown_write flow
+                              >>= fun () ->
+                              Lwt.return_unit
+                            end in
+                          loop () in
+                        let b_t =
+                          let rec loop () =
+                            Lwt.catch
+                              (fun () ->
+                                Incoming.C.read_some incoming
+                                >>= fun buf ->
+                                Outgoing.C.write_buffer outgoing buf;
+                                Outgoing.C.flush outgoing
+                                >>= fun () ->
+                                Lwt.return true
+                              ) (function
+                                | End_of_file -> Lwt.return false
+                                | e ->
+                                  Log.warn (fun f -> f "Possibly unexpected exeption %s in proxy" (Printexc.to_string e));
+                                  Lwt.return false)
+                            >>= fun continue ->
+                            if continue then loop () else begin
+                              Socket.Stream.Tcp.shutdown_write remote
+                              >>= fun () ->
+                              Lwt.return_unit
+                            end in
+                          loop () in
+                        Lwt.join [ a_t; b_t ]
+                        >>= fun () ->
+                        Lwt.return_unit
+                      end
+                ) (fun () ->
+                  Socket.Stream.Tcp.close remote
+                )
+          ) (fun () ->
+            Tcp.close flow
+          )
+        ) in
+    Lwt.return listeners
+
   let handle ~dst:(ip, port) ~t =
     if port = 80 && t.http <> None
     then Some (http ~dst:ip ~t)
+    else if port = 443 && t.https <> None
+    then Some (https ~dst:ip ~t)
     else None
 end
