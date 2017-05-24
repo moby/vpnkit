@@ -144,11 +144,65 @@ module Make(Host: Sig.HOST) = struct
       Lwt.return ()
     end
 
+  let test_http_connect () =
+    let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
+    Host.Main.run begin
+      Slirp_stack.with_stack
+        (fun _ stack ->
+          with_server
+            (fun flow ->
+              let ic = Incoming.C.create flow in
+              Incoming.Request.read ic
+              >>= function
+              | `Eof ->
+                Log.err (fun f -> f "Failed to request");
+                failwith "Failed to read request"
+              | `Invalid x ->
+                Log.err (fun f -> f "Failed to parse request: %s" x);
+                failwith ("Failed to parse request: " ^ x)
+              | `Ok req ->
+                Log.info (fun f -> f "received: %s" (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t req)));
+                Alcotest.check Alcotest.string "method" (Cohttp.Code.string_of_method `CONNECT) (Cohttp.Code.string_of_method req.Cohttp.Request.meth);
+                let uri = Cohttp.Request.uri req in
+                Alcotest.check Alcotest.(option string) "host" (Some (Ipaddr.V4.to_string test_dst_ip)) (Uri.host uri);
+                Alcotest.check Alcotest.(option int) "port" (Some 443) (Uri.port uri);
+                (* Unfortunately cohttp always adds transfer-encoding: chunked
+                   so we write the header ourselves *)
+                Incoming.C.write_line ic "HTTP/1.0 200 OK\r";
+                Incoming.C.write_line ic "\r";
+                Incoming.C.flush ic
+                >>= fun () ->
+                Incoming.C.write_line ic "hello";
+                Incoming.C.flush ic
+            ) (fun server ->
+              Slirp_stack.Slirp_stack.Debug.update_http ~https:("127.0.0.1:" ^ (string_of_int server.Server.port)) ()
+              >>= function
+              | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
+              | Ok () ->
+                let open Slirp_stack in
+                begin Client.TCPV4.create_connection (Client.tcpv4 stack) (test_dst_ip, 443)
+                >>= function
+                | `Error _ ->
+                  Log.err (fun f -> f "TCPV4.create_connection %s:443 failed" (Ipaddr.V4.to_string test_dst_ip));
+                  failwith "TCPV4.create_connection"
+                | `Ok flow ->
+                  let ic = Outgoing.C.create flow in
+                  Outgoing.C.read_some ~len:5 ic
+                  >>= fun buf ->
+                  let txt = Cstruct.to_string buf in
+                  Alcotest.check Alcotest.string "message" "hello" txt;
+                  Lwt.return_unit
+                end
+            )
+        )
+    end
+
   let suite = [
     "interception", `Quick, test_interception;
     "URI", `Quick, test_uri_absolute;
     "custom_header", `Quick, test_x_header_preserved;
     "user_agent", `Quick, test_user_agent_preserved;
+    "CONNECT", `Quick, test_http_connect;
   ]
 
 end
