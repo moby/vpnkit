@@ -623,7 +623,23 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let update_dns ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(host_names = []) () =
       let local_address = { Dns_forward.Config.Address.ip = local_ip; port = 0 } in
-      dns := Dns_forwarder.create ~local_address ~host_names (Dns_policy.config ());
+      dns := Dns_forwarder.create ~local_address ~host_names (Dns_policy.config ())
+
+    let update_http ?http:http_config ?https ?exclude () =
+      Http_forwarder.create ?http:http_config ?https ?exclude ()
+      >>= function
+      | Error e -> Lwt.return (Error e)
+      | Ok h ->
+        http := Some h;
+        Lwt.return (Ok ())
+
+    let update_http_json j () =
+      Http_forwarder.of_json j
+      >>= function
+      | Error e -> Lwt.return (Error e)
+      | Ok h ->
+        http := Some h;
+        Lwt.return (Ok ())
   end
 
   (* If no traffic is received for 5 minutes, delete the endpoint and

@@ -27,7 +27,6 @@ type config = {
   bridge_connections: bool;
   mtu: int;
   host_names: Dns.Name.t list;
-  http_intercept: bool ref;
 }
 
 (** A slirp TCP/IP stack ready to accept connections *)
@@ -57,6 +56,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     val update_dns: ?local_ip:Ipaddr.t -> ?host_names:Dns.Name.t list -> unit -> unit
     (** Update the DNS forwarder following a configuration change *)
+
+    val update_http: ?http:string -> ?https:string -> ?exclude:string -> unit -> unit Error.t
+    (** Update the HTTP forwarder following a configuration change *)
+
+    val update_http_json: Ezjsonm.value -> unit -> unit Error.t
+    (** Update the HTTP forwarder using the json interface *)
   end
 end
 
