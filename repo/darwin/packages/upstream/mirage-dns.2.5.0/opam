@@ -1,0 +1,25 @@
+opam-version: "1.2"
+maintainer: "anil@recoil.org"
+homepage: "https://github.com/mirage/ocaml-dns"
+dev-repo: "https://github.com/mirage/ocaml-dns.git"
+bug-reports: "https://github.com/mirage/ocaml-dns/issues"
+license: "ISC"
+authors: [
+  "Anil Madhavapeddy"
+  "Tim Deegan"
+  "Richard Mortier"
+  "Haris Rotsos"
+  "David Sheets"
+  "Thomas Gazagnaire"
+  "Luke Dunstan"
+]
+build: ["ocamlfind" "query" "dns.mirage"]
+depends: [
+  "ocamlfind"
+  "dns" {>= "0.15.1"}
+  "mirage-types-lwt" {>= "2.3.0" & < "3.0.0"}
+  "lwt" {>= "2.4.3"}
+  "cstruct" {>= "1.0.0"}
+  "tcpip"
+]
+available: [ocaml-version >= "4.01.0"]

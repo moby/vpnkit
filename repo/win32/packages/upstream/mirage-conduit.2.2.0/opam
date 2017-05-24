@@ -1,0 +1,19 @@
+opam-version: "1.2"
+maintainer: "anil@recoil.org"
+authors: ["Anil Madhavapeddy" "Thomas Leonard" "Thomas Gazagnaire"]
+homepage: "https://github.com/mirage/ocaml-conduit"
+dev-repo: "https://github.com/mirage/ocaml-conduit.git"
+bug-reports: "https://github.com/mirage/ocaml-conduit/issues"
+tags: "org:mirage"
+license: "ISC"
+build: ["ocamlfind" "query" "conduit.mirage"]
+depends: [
+  "mirage-types-lwt" {>= "2.3.0" & < "3.0.0"}
+  "mirage-dns" {>= "2.0.0"}
+  "conduit" {>= "0.8.4"}
+]
+depopts: ["vchan" "tls"]
+conflicts: [
+  "tls" {< "0.5.0"}
+]
+available: [ocaml-version >= "4.01.0"]
