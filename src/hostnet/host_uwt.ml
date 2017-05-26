@@ -1017,7 +1017,10 @@ module Dns = struct
             );
             Lwt.return rrs
           | Error err ->
-            Log.warn (fun f -> f "DNS lookup %s %s: %s"
+            (* In IPv4 environments its normal to fail to look up AAAA records:
+               suppress the log spam *)
+            if err <> Dnssd.NoSuchRecord || q_type <> Q_AAAA
+            then Log.info (fun f -> f "DNS lookup %s %s: %s"
               (Dns.Name.to_string q_name)
               (Dns.Packet.q_type_to_string q_type)
               (Dnssd.string_of_error err)
