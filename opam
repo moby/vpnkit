@@ -54,7 +54,11 @@ depends: [
   "fmt"
   "astring"
   "mirage-flow" { >= "1.1.0" }
+  "mirage-http"
+  "cohttp"
+  "channel"
   "mirage-types-lwt"
   "mirage-vnetif" { = "0.2.0" }
   "uuidm"
+  "ezjsonm"
 ]

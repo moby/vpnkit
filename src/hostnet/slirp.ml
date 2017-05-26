@@ -126,6 +126,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   end
 
   module Dns_forwarder = Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)(Host.Time)(Host.Clock)(Recorder)
+  module Http_forwarder = Hostnet_http.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)
+
   module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Host.Time)
 
   (* Global variable containing the global DNS configuration *)
@@ -133,6 +135,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let ip = Ipaddr.V4 (Ipaddr.V4.of_string_exn default_host) in
     let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
     ref (Dns_forwarder.create ~local_address ~host_names:[] @@ Dns_policy.config ())
+
+  (* Global variable containing the global HTTP proxy configuration *)
+  let http =
+    ref None
 
   let is_dns = let open Frame in function
     | Ethernet { payload = Ipv4 { payload = Udp { src = 53; _ }; _ }; _ }
@@ -482,9 +488,18 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
           | _ ->
             Lwt.return_unit in
         Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
+      (* Transparent HTTP intercept? *)
       | Ipv4 { src = dest_ip; dst = local_ip; payload = Tcp { src = dest_port; dst = local_port; syn; raw; _ }; _ } ->
         let id = { Stack_tcp_wire.local_port; dest_ip; local_ip; dest_port } in
-        Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 local_ip, local_port) raw
+        let callback = match !http with
+          | None -> None
+          | Some http -> Http_forwarder.handle ~dst:(local_ip, local_port) ~t:http in
+        begin match callback with
+        | None ->
+          Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 local_ip, local_port) raw (* common case *)
+        | Some cb ->
+          Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
+        end
       | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
         let description = Printf.sprintf "%s:%d -> %s:%d"
             (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in
@@ -608,7 +623,23 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let update_dns ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(host_names = []) () =
       let local_address = { Dns_forward.Config.Address.ip = local_ip; port = 0 } in
-      dns := Dns_forwarder.create ~local_address ~host_names (Dns_policy.config ());
+      dns := Dns_forwarder.create ~local_address ~host_names (Dns_policy.config ())
+
+    let update_http ?http:http_config ?https ?exclude () =
+      Http_forwarder.create ?http:http_config ?https ?exclude ()
+      >>= function
+      | Error e -> Lwt.return (Error e)
+      | Ok h ->
+        http := Some h;
+        Lwt.return (Ok ())
+
+    let update_http_json j () =
+      Http_forwarder.of_json j
+      >>= function
+      | Error e -> Lwt.return (Error e)
+      | Ok h ->
+        http := Some h;
+        Lwt.return (Ok ())
   end
 
   (* If no traffic is received for 5 minutes, delete the endpoint and
@@ -1005,6 +1036,37 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun bridge_conn ->
     Lwt.async (fun () -> restart_on_change "slirp/bridge-connections" string_of_int bridge_conn);
     let bridge_connections = ((Active_config.hd bridge_conn) != 0) in
+
+    let http_intercept_path = driver @ [ "slirp"; "http-intercept" ] in
+    Config.string_option config http_intercept_path
+    >>= fun string_http_intercept_settings ->
+    let parse_http_intercept = function
+      | None -> Lwt.return None
+      | Some txt ->
+        begin match Ezjsonm.from_string txt with
+        | exception _ ->
+          Log.err (fun f -> f "Failed to parse http-intercept json: %s" txt);
+          Lwt.return None
+        | j ->
+          Http_forwarder.of_json j
+          >>= function
+          | Error (`Msg m) ->
+            Log.err (fun f -> f "Failed to decode http-intercept json: %s" m);
+            Lwt.return None
+          | Ok t ->
+            Lwt.return (Some t)
+        end in
+    Active_config.map parse_http_intercept string_http_intercept_settings
+    >>= fun http_intercept_settings ->
+    let rec monitor_http_intercept_settings settings =
+      http := Active_config.hd settings;
+      ( match !http with
+        | None -> Log.info (fun f -> f "Disabling transparent HTTP redirection")
+        | Some x -> Log.info (fun f -> f "Enabling transparent HTTP redirection to %s" (Http_forwarder.to_string x)) );
+      Active_config.tl settings
+      >>= fun settings ->
+      monitor_http_intercept_settings settings in
+    Lwt.async (fun () -> log_exception_continue "monitor http interception settings" (fun () -> monitor_http_intercept_settings http_intercept_settings));
 
     Log.info (fun f -> f "Creating slirp server peer_ip:%s local_ip:%s domain_search:%s mtu:%d bridge:%B"
                  (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)

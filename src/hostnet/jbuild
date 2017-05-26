@@ -7,7 +7,7 @@
     tcpip.arpv4 tcpip.ipv4 tcpip.icmpv4 tcpip.udp tcpip.tcp tcpip.stack-direct
     charrua-core.server dns dns.lwt ofs uwt uwt.ext uwt.preemptive
     lwt.preemptive threads astring datakit-server.vfs dns-forward tar mirage-vnetif
-    dnssd uuidm
+    dnssd uuidm mirage-http cohttp channel ezjsonm
    ))
    (c_names (stubs_utils))
    (wrapped false)

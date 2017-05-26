@@ -1,0 +1,64 @@
+--- ./Makefile
++++ ./Makefile
+@@ -9,18 +9,18 @@
+ ASYNC ?= $(shell if ocamlfind query async >/dev/null 2>&1; then echo --enable-async; fi)
+ JS ?= $(shell if ocamlfind query js_of_ocaml >/dev/null 2>&1; then echo --enable-js; fi)
+ 
+-setup.bin: setup.ml
++setu.bin: setup.ml
+ 	ocamlopt.opt -o $@ $< 2>/dev/null || ocamlopt -o $@ $< 2>/dev/null || ocamlc -o $@ $<
+-	rm -f setup.cmx setup.cmi setup.o setup.cmo
++	rm -f setup.cmx setup.cmi setup.o setup.cmo setup.obj
+ 
+-setup.data: setup.bin
+-	./setup.bin -configure $(LWT) $(ASYNC) $(LWT_UNIX) $(JS) $(TESTS) --prefix $(PREFIX)
++setup.data: setu.bin
++	./setu.bin -configure $(LWT) $(ASYNC) $(LWT_UNIX) $(JS) $(TESTS) --prefix $(PREFIX)
+ 
+-build: setup.data setup.bin
+-	./setup.bin -build -classic-display
++build: setup.data setu.bin
++	./setu.bin -build -classic-display
+ 
+-doc: setup.data setup.bin
+-	./setup.bin -doc
++doc: setup.data setu.bin
++	./setu.bin -doc
+ 
+ DOCDIR = .gh-pages
+ DOC_COHTTP = $(DOCDIR)/core
+@@ -45,25 +45,25 @@
+ 	git -C .gh-pages push origin gh-pages -f
+ 	rm -rf .gh-pages
+ 
+-install: setup.bin
+-	./setup.bin -install
++install: setu.bin
++	./setu.bin -install
+ 
+-test: setup.bin build
+-	./setup.bin -test
++test: setu.bin build
++	./setu.bin -test
+ 
+-fulltest: setup.bin build
+-	./setup.bin -test
++fulltest: setu.bin build
++	./setu.bin -test
+ 
+-reinstall: setup.bin
++reinstall: setu.bin
+ 	ocamlfind remove $(NAME) || true
+-	./setup.bin -reinstall
++	./setu.bin -reinstall
+ 
+ generate:
+ 	cd scripts && ocaml generate.ml
+ 
+ clean:
+ 	ocamlbuild -clean
+-	rm -f setup.data setup.log setup.bin
++	rm -f setup.data setup.log setu.bin
+ 
+ revdep:
+ 	opam switch system || true

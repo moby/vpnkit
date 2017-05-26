@@ -25,11 +25,12 @@ opam install depext-cygwinports -y || true
 
 OPAMBUILDTEST=1 opam depext -u slirp
 # Don't run all the unit tests of all upstream packages in the universe
-# for speed
+# for speed. As a special exception we will run the tests for tcpip
+OPAMVERBOSE=1 opam install --deps-only tcpip -y
+OPAMVERBOSE=1 opam install tcpip -t
+
 opam install $(ls -1 ${OPAM_REPO}/packages/upstream) -y
 OPAMVERBOSE=1 opam install --deps-only slirp -y
-# ... but install tcpip with tests enabled
-OPAMVERBOSE=1 opam reinstall tcpip -y -t
 
 OPAMVERBOSE=1 make
 OPAMVERBOSE=1 make test

@@ -20,10 +20,10 @@ depends: [
   "base-bytes"
   "cstruct" {>= "1.9.0"}
   "cstruct-lwt"
-  "sexplib" {> "113.00.00" }
+  "sexplib" {> "113.00.00"}
   "result"
   "mirage-types-lwt"
-  "channel" {>= "1.1.0" }
+  "channel" {>= "1.1.0"}
   "lwt" {>= "2.4.7" & < "3.0.0"}
   "base-unix"
   "cmdliner"
@@ -39,6 +39,7 @@ depends: [
   "ppx_tools" {build}
   "topkg" {build & >= "0.7.3"}
   "alcotest" {test & >= "0.4.0"}
+  "ppx_cstruct"
 ]
 depopts: ["lambda-term"]
 available: [ocaml-version >= "4.03.0"]

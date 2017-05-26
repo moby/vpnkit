@@ -363,6 +363,7 @@ let test_tcp = [
 
 module F = Forwarding.Make(Host)
 module N = Test_nat.Make(Host)
+module H = Test_http.Make(Host)
 
 let suite = Hosts_test.suite @ [
   "Forwarding", F.test;
@@ -371,5 +372,6 @@ let suite = Hosts_test.suite @ [
   "DNS UDP via Google", test_dns false;
   "TCP", test_tcp;
   "UDP", N.suite;
+  "HTTP", H.suite;
 ]
 end

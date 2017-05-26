@@ -1,0 +1,51 @@
+--- ./src/action.ml
++++ ./src/action.ml
+@@ -312,7 +312,14 @@
+       return ()
+     | Create_file fn ->
+       let fn = Path.to_string fn in
+-      if Sys.file_exists fn then Sys.remove fn;
++      if Sys.file_exists fn then (
++        try
++          Sys.remove fn
++        with
++        | Sys_error _ when Sys.os_type = "Win32" ->
++          (try Unix.chmod fn 0o666 with Unix.Unix_error _ -> ());
++          Sys.remove fn
++      );
+       Unix.close (Unix.openfile fn [O_CREAT; O_TRUNC; O_WRONLY] 0o666);
+       return ()
+     | Copy (src, dst) ->
+@@ -352,6 +359,7 @@
+       in
+       run ~purpose ~dir ~env ~env_extra ~stdout_to ~stderr_to path [arg; cmd]
+     | Bash cmd ->
++      let cmd = if Sys.win32 then " " ^ cmd else cmd in
+       run ~purpose ~dir ~env ~env_extra ~stdout_to ~stderr_to
+         (Utils.bash_exn ~needed_to:"interpret (bash ...) actions")
+         ["-e"; "-u"; "-o"; "pipefail"; "-c"; cmd]
+--- ./src/context.ml
++++ ./src/context.ml
+@@ -310,7 +310,7 @@
+     ; toplevel_path = Option.map (get_env env "OCAML_TOPLEVEL_PATH") ~f:Path.absolute
+ 
+     ; ocaml_bin  = dir
+-    ; ocaml      = Path.relative dir "ocaml"
++    ; ocaml      = Path.relative dir (if Sys.win32 then "ocaml.exe" else "ocaml")
+     ; ocamlc
+     ; ocamlopt   = best_prog "ocamlopt"
+     ; ocamldep   = get_prog  "ocamldep"
+--- ./src/future.ml
++++ ./src/future.ml
+@@ -233,8 +233,9 @@
+     fn
+ 
+   let destroy fn =
+-    Sys.remove fn;
+-    tmp_files := String_set.remove fn !tmp_files
++    match Sys.remove fn with
++    | exception Sys_error _ -> () (* good luck at_exit *)
++    | _ -> tmp_files := String_set.remove fn !tmp_files
+ end
+ 
+ let run_capture_gen ?dir ?env ?(purpose=Internal_job) fail_mode prog args ~f =
