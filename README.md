@@ -68,7 +68,7 @@ Design
 Licensing
 ---------
 
-DataKit is licensed under the Apache License, Version 2.0. See
+VPNKit is licensed under the Apache License, Version 2.0. See
 [LICENSE](https://github.com/moby/vpnkit/blob/master/LICENSE.md) for the full
 license text.
 
