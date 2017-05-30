@@ -13,6 +13,7 @@ Binary artefacts are built by CI:
 VPNKit is a set of tools and services for helping [HyperKit](https://github.com/moby/hyperkit)
 VMs interoperate with host VPN configurations.
 
+
 Building on Unix
 ----------------
 
@@ -63,3 +64,13 @@ Design
 
 - [Using vpnkit as a default gateway](docs/ethernet.md): describes the flow of ethernet traffic to/from the VM
 - [Port forwarding](docs/ports.md): describes how ports are forwarded from the host into the VM
+
+Licensing
+---------
+
+VPNKit is licensed under the Apache License, Version 2.0. See
+[LICENSE](https://github.com/moby/vpnkit/blob/master/LICENSE.md) for the full
+license text.
+
+Contributions are welcome under the terms of this license. You may wish to browse
+the [weekly reports](reports) to read about overall activity in the repository.
