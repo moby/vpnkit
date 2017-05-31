@@ -173,9 +173,11 @@ type t = {
 
 let error_of_failure f = Lwt.catch f (fun e -> Lwt_result.fail (`Msg (Printexc.to_string e)))
 
+exception Disconnected
+
 let get_fd t = match t.fd with
   | Some fd -> fd
-  | None -> failwith "Vmnet connection is disconnected"
+  | None -> raise Disconnected
 
 let get_client_uuid t =
   t.client_uuid
@@ -455,6 +457,8 @@ let listen t callback =
         ) (function
             | End_of_file ->
               Log.debug (fun f -> f "PPP.listen: closing connection");
+              Lwt_result.return false
+            | Disconnected ->
               Lwt_result.return false
             | e ->
               Log.err (fun f -> f "PPP.listen: caught unexpected %s: disconnecting" (Printexc.to_string e));
