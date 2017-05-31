@@ -81,8 +81,6 @@ module Forward = Forward.Make(struct
     Lwt.return x
 end)(Host.Sockets)
 
-let ports_port = 1234
-
 let localhost = Ipaddr.V4.localhost
 
 module PortsServer = struct
@@ -92,8 +90,9 @@ module PortsServer = struct
   let with_server f =
     let ports = Ports.make () in
     Ports.set_context ports "";
-    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, ports_port)
+    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
     >>= fun server ->
+    let _, port = Host.Sockets.Stream.Tcp.getsockname server in
     Host.Sockets.Stream.Tcp.listen server
       (fun conn ->
         Server.connect ports conn ()
@@ -104,7 +103,7 @@ module PortsServer = struct
         | Result.Ok server ->
           Server.after_disconnect server
     );
-    f ()
+    f port
     >>= fun () ->
     Host.Sockets.Stream.Tcp.shutdown server
 end
@@ -173,7 +172,7 @@ module ForwardControl = struct
     ninep: Client.t
   }
 
-  let connect () =
+  let connect ports_port =
     Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 localhost, ports_port)
     >>= function
     | Result.Error (`Msg m) -> failwith m
@@ -183,8 +182,8 @@ module ForwardControl = struct
     Lwt.return { ninep }
 
   let disconnect { ninep } = Client.disconnect ninep
-  let with_connection f =
-    connect ()
+  let with_connection ports_port f =
+    connect ports_port
     >>= fun c ->
     Lwt.finalize (fun () -> f c) (fun () -> disconnect c)
 
@@ -253,8 +252,8 @@ let test_one_forward () =
     LocalServer.with_server
       (fun server ->
         PortsServer.with_server
-          (fun () ->
-            ForwardControl.with_connection
+          (fun ports_port ->
+            ForwardControl.with_connection ports_port
               (fun connection ->
                 let name = "tcp:127.0.0.1:0:" ^ (LocalServer.to_string server) in
                 ForwardControl.with_forward
@@ -277,8 +276,8 @@ let test_10_connections () =
     LocalServer.with_server
       (fun server ->
         PortsServer.with_server
-          (fun () ->
-            ForwardControl.with_connection
+          (fun ports_port ->
+            ForwardControl.with_connection ports_port
               (fun connection ->
                 let name = "tcp:127.0.0.1:0:" ^ (LocalServer.to_string server) in
                 ForwardControl.with_forward
