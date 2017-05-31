@@ -146,6 +146,18 @@ let test_max_connections () =
                 Log.debug (fun f -> f "Expected failure to connect to www.google.com");
                 Lwt.return ()
               end
+              >>= fun () ->
+              Host.Sockets.set_max_connections None;
+              (* Check that connections work again *)
+              begin Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
+              >>= function
+              | `Ok _ ->
+                Log.debug (fun f -> f "Connected to www.google.com");
+                Lwt.return ()
+              | `Error _ ->
+                Log.debug (fun f -> f "Failure to connect to www.google.com: removing max_connections limit didn't work");
+                failwith "wrong max connections limit"
+              end
             | _ ->
               Log.err (fun f -> f "Failed to look up an IPv4 address for www.google.com");
               failwith "http_fetch dns"
