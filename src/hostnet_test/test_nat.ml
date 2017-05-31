@@ -321,11 +321,11 @@ module Make(Host: Sig.HOST) = struct
         ) in
     Host.Main.run t
 
-  let suite = [
-    "Shared NAT rule", `Quick, test_shared_nat_rule;
-    "1 UDP connection", `Quick, test_udp;
-    "2 UDP connections", `Quick, test_udp_2;
-    "NAT punch", `Quick, test_nat_punch;
-    "Source ports", `Quick, test_source_ports;
+  let tests = [
+    "NAT: shared rule", [ "", `Quick, test_shared_nat_rule ];
+    "NAT: 1 UDP connection", [ "", `Quick, test_udp ];
+    "NAT: 2 UDP connections", [ "", `Quick, test_udp_2 ];
+    "NAT: punch", [ "", `Quick, test_nat_punch ];
+    "NAT: source ports", [ "", `Quick, test_source_ports ];
   ]
 end

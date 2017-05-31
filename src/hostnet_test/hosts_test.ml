@@ -40,9 +40,5 @@ let test_one txt expected () =
   ) (List.combine expected x)
 
 let tests = List.map (fun (name, txt, expected) ->
-  "hosts " ^ name, `Quick, test_one txt expected
+  "hosts " ^ name, [ "", `Quick, test_one txt expected ]
 ) examples
-
-let suite = [
-  "hosts", tests;
-]

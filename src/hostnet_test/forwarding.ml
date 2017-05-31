@@ -308,8 +308,8 @@ let test_10_connections () =
       ) in
   run t
 
-let test = [
-  "Test one port forward", `Quick, test_one_forward;
-  "Check speed of 10 forwarded connections", `Quick, test_10_connections;
+let tests = [
+  "Ports: 1 port forward", [ "Perform an HTTP GET through a port forward", `Quick, test_one_forward ];
+  "Ports: 10 port forwards", [ "Perform 10 HTTP GETs through a port forward", `Quick, test_10_connections ];
 ]
 end

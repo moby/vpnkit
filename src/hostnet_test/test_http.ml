@@ -197,12 +197,12 @@ module Make(Host: Sig.HOST) = struct
         )
     end
 
-  let suite = [
-    "interception", `Quick, test_interception;
-    "URI", `Quick, test_uri_absolute;
-    "custom_header", `Quick, test_x_header_preserved;
-    "user_agent", `Quick, test_user_agent_preserved;
-    "CONNECT", `Quick, test_http_connect;
+  let tests = [
+    "HTTP: interception", [ "", `Quick, test_interception ];
+    "HTTP: URI", [ "check that URIs are rewritten", `Quick, test_uri_absolute ];
+    "HTTP: custom header", [ "check that custom headers are preserved", `Quick, test_x_header_preserved ];
+    "HTTP: user-agent", [ "check that user-agent is preserved", `Quick, test_user_agent_preserved ];
+    "HTTP: CONNECT", [ "check that HTTP CONNECT works for HTTPS", `Quick, test_http_connect ];
   ]
 
 end
