@@ -50,9 +50,7 @@ vpnkit.exe: src/bin/depends.ml
 
 .PHONY: test
 test:
-	jbuilder build src/hostnet_test/main_lwt.exe
 	jbuilder build src/hostnet_test/main_uwt.exe
-	./_build/default/src/hostnet_test/main_lwt.exe
 	./_build/default/src/hostnet_test/main_uwt.exe
 
 .PHONY: OSS-LICENSES
