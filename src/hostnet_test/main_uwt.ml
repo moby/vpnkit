@@ -16,4 +16,11 @@ let () =
       (Printexc.get_backtrace ())
     )
   );
-  Alcotest.run "Hostnet" Tests.tests
+  List.iter
+    (fun (test, cases) ->
+      Printf.fprintf stderr "\n**** Starting test %s\n%!" test;
+      List.iter (fun (case, _, fn) ->
+        Printf.fprintf stderr "Starting test case %s\n%!" case;
+        fn ()
+      ) cases
+    ) Tests.tests
