@@ -27,6 +27,7 @@ module Make(Socket: Sig.SOCKETS) = struct
   let deregister_connection = Socket.deregister_connection
   let set_max_connections = Socket.set_max_connections
   let connections = Socket.connections
+  exception Too_many_connections = Socket.Too_many_connections
 
   let of_fd fd =
     let buf = Cstruct.create Init.sizeof in

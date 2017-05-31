@@ -83,7 +83,7 @@ module Sockets = struct
       let now = Unix.gettimeofday () in
       if (now -. !last_error_log) > 30. then begin
         (* Avoid hammering the logging system *)
-        Log.err (fun f -> f "exceeded maximum number of forwarded connections (%d)" m);
+        Log.warn (fun f -> f "exceeded maximum number of forwarded connections (%d)" m);
         last_error_log := now;
       end;
       Lwt.fail Too_many_connections

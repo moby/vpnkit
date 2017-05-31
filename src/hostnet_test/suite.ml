@@ -333,24 +333,21 @@ let test_stream_data connections length () =
   run t
 
 let test_dhcp = [
-  "Simple query", `Quick, test_dhcp_query;
+  "DHCP: simple query", [ "check that the DHCP server works", `Quick, test_dhcp_query ];
 ]
 
 let test_dns use_host =
-  let descr = if use_host then "local Host resolver" else "Google via 8.8.8.8" in [
-  "Use " ^ descr ^ " to lookup www.google.com", `Quick, test_dns_query primary_dns_ip use_host;
-  "Check that builtin DNS queries work", `Quick, test_builtin_dns_query primary_dns_ip use_host;
-  "Service a query from /etc/hosts cache", `Quick, test_etc_hosts_query primary_dns_ip use_host;
-  "Check that localhost.local fails fast via " ^ descr, `Quick, test_localhost_local_query primary_dns_ip use_host;
-] @ (List.map (fun ip ->
-  "Use " ^ descr ^ " to lookup www.google.com via " ^ (Ipaddr.V4.to_string ip), `Quick, test_dns_query ip use_host;
-  ) extra_dns_ip
-)
+  let prefix = if use_host then "Host resolver" else "DNS forwarder" in [
+  prefix ^ ": lookup ", [ "", `Quick, test_dns_query primary_dns_ip use_host ];
+  prefix ^ ": builtins", [ "", `Quick, test_builtin_dns_query primary_dns_ip use_host ];
+  prefix ^ ": _etc_hosts", [ "", `Quick, test_etc_hosts_query primary_dns_ip use_host ];
+  prefix ^ ": localhost.local", [ "localhost.local should fail fast", `Quick, test_localhost_local_query primary_dns_ip use_host ];
+]
 
 let test_tcp = [
-  "HTTP GET http://www.google.com/", `Quick, test_http_fetch;
-  "HTTP GET fails beyond max connections", `Quick, test_max_connections;
-  "1 TCP connection transferring 1 KiB", `Quick, test_stream_data 1 1024;
+  "HTTP GET", [ "HTTP GET http://www.google.com/", `Quick, test_http_fetch ];
+  "Max connections", [ "HTTP GET fails beyond max connections", `Quick, test_max_connections ];
+  "TCP streaming", [ "1 TCP connection transferring 1 KiB", `Quick, test_stream_data 1 1024 ];
   (*
   "10 TCP connections each transferring 1 KiB", `Quick, test_stream_data 10 1024;
   "32 TCP connections each transferring 1 KiB", `Quick, test_stream_data 32 1024;
@@ -365,13 +362,6 @@ module F = Forwarding.Make(Host)
 module N = Test_nat.Make(Host)
 module H = Test_http.Make(Host)
 
-let suite = Hosts_test.suite @ [
-  "Forwarding", F.test;
-  "DHCP", test_dhcp;
-  "DNS UDP via Host", test_dns true;
-  "DNS UDP via Google", test_dns false;
-  "TCP", test_tcp;
-  "UDP", N.suite;
-  "HTTP", H.suite;
-]
+let tests = Hosts_test.tests @
+  F.tests @ test_dhcp @ (test_dns true) @ (test_dns false) @ test_tcp @ N.tests @ H.tests
 end

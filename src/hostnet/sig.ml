@@ -70,6 +70,8 @@ module type SOCKETS = sig
   val connections: unit -> Vfs.File.t
   (** A filesystem which allows the connections to be introspected *)
 
+  exception Too_many_connections
+
   module Datagram: sig
 
     type address = Ipaddr.t * int

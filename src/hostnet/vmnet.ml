@@ -173,9 +173,11 @@ type t = {
 
 let error_of_failure f = Lwt.catch f (fun e -> Lwt_result.fail (`Msg (Printexc.to_string e)))
 
+exception Disconnected
+
 let get_fd t = match t.fd with
   | Some fd -> fd
-  | None -> failwith "Vmnet connection is disconnected"
+  | None -> raise Disconnected
 
 let get_client_uuid t =
   t.client_uuid
@@ -441,13 +443,18 @@ let listen t callback =
            let buf = Cstruct.concat bufs in
            let callback buf =
              Lwt.catch (fun () -> callback buf)
-               (fun e ->
-                 let now = Unix.gettimeofday () in
-                 if (now -. !last_error_log) > 30. then begin
-                   Log.err (fun f -> f "PPP.listen callback caught %s" (Printexc.to_string e));
-                   last_error_log := now;
-                 end;
-                 Lwt.return_unit
+               (function
+                 | Host_uwt.Sockets.Too_many_connections
+                 | Host_lwt_unix.Sockets.Too_many_connections ->
+                   (* No need to log this again *)
+                   Lwt.return_unit
+                 | e ->
+                   let now = Unix.gettimeofday () in
+                   if (now -. !last_error_log) > 30. then begin
+                     Log.err (fun f -> f "PPP.listen callback caught %s" (Printexc.to_string e));
+                     last_error_log := now;
+                   end;
+                   Lwt.return_unit
                 ) in
            Lwt.async (fun () -> callback buf);
            List.iter (fun callback -> Lwt.async (fun () -> callback buf)) t.listeners;
@@ -455,6 +462,8 @@ let listen t callback =
         ) (function
             | End_of_file ->
               Log.debug (fun f -> f "PPP.listen: closing connection");
+              Lwt_result.return false
+            | Disconnected ->
               Lwt_result.return false
             | e ->
               Log.err (fun f -> f "PPP.listen: caught unexpected %s: disconnecting" (Printexc.to_string e));

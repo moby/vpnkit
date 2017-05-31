@@ -7,10 +7,6 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Tests = Suite.Make(Host_uwt)
 
-let tests =
-  (List.map (fun (name, test) -> name ^ "_with_Uwt", test) Tests.suite) @
-  Hosts_test.suite
-
 (* Run it *)
 let () =
   Logs.set_reporter (Logs_fmt.reporter ());
@@ -20,4 +16,11 @@ let () =
       (Printexc.get_backtrace ())
     )
   );
-  Alcotest.run "Hostnet" tests
+  List.iter
+    (fun (test, cases) ->
+      Printf.fprintf stderr "\n**** Starting test %s\n%!" test;
+      List.iter (fun (case, _, fn) ->
+        Printf.fprintf stderr "Starting test case %s\n%!" case;
+        fn ()
+      ) cases
+    ) Tests.tests
