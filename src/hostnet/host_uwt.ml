@@ -69,6 +69,7 @@ module Sockets = struct
   exception Too_many_connections
 
   let connection_table = Hashtbl.create 511
+  let get_num_connections () = Hashtbl.length connection_table
   let connections () =
     let xs = Hashtbl.fold (fun _ c acc -> c :: acc) connection_table [] in
     Vfs.File.ro_of_string (String.concat "\n" xs)

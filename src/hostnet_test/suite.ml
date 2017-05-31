@@ -261,6 +261,38 @@ end
 
 let rec count = function 0 -> [] | n -> () :: (count (n - 1))
 
+let test_many_connections n () =
+  let t =
+    (* Note that the stack will consume a small number of file descriptors itself
+       and each loopback connection will consume 2: one for client and one for
+       server. *)
+    DevNullServer.with_server
+      (fun { DevNullServer.local_port; _ } ->
+        with_stack
+          (fun _ stack ->
+            (* Instead of counting calls to `connect` and trying to calculate
+               overheads, we connect until the system tells us we've hit the
+               target number of connections. *)
+            let rec loop acc i =
+              if Host.Sockets.get_num_connections () >= n
+              then Lwt.return acc
+              else
+                Client.TCPV4.create_connection (Client.tcpv4 stack) (Ipaddr.V4.localhost, local_port)
+                >>= function
+                | `Ok c ->
+                  Log.info (fun f -> f "Connected %d, total tracked connections %d" i (Host.Sockets.get_num_connections ()));
+                  loop (c :: acc) (i + 1)
+                | `Error _ ->
+                  failwith (Printf.sprintf "Connection %d failed, total tracked connections %d" i (Host.Sockets.get_num_connections ())) in
+            loop [] 0
+            >>= fun flows ->
+            Log.info (fun f -> f "Connected %d, total tracked connections %d" (List.length flows) (Host.Sockets.get_num_connections ()));
+            (* How many connections is this? *)
+            Lwt.return_unit
+          )
+      ) in
+  run ~timeout:240.0 t
+
 let test_stream_data connections length () =
   let t =
     DevNullServer.with_server
@@ -364,4 +396,9 @@ module H = Test_http.Make(Host)
 
 let tests = Hosts_test.tests @
   F.tests @ test_dhcp @ (test_dns true) @ (test_dns false) @ test_tcp @ N.tests @ H.tests
+
+let scalability = [
+  "1026conns", [ "Test many connections", `Quick, test_many_connections (1024 + 2) ];
+]
+
 end
