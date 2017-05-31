@@ -443,13 +443,18 @@ let listen t callback =
            let buf = Cstruct.concat bufs in
            let callback buf =
              Lwt.catch (fun () -> callback buf)
-               (fun e ->
-                 let now = Unix.gettimeofday () in
-                 if (now -. !last_error_log) > 30. then begin
-                   Log.err (fun f -> f "PPP.listen callback caught %s" (Printexc.to_string e));
-                   last_error_log := now;
-                 end;
-                 Lwt.return_unit
+               (function
+                 | Host_uwt.Sockets.Too_many_connections
+                 | Host_lwt_unix.Sockets.Too_many_connections ->
+                   (* No need to log this again *)
+                   Lwt.return_unit
+                 | e ->
+                   let now = Unix.gettimeofday () in
+                   if (now -. !last_error_log) > 30. then begin
+                     Log.err (fun f -> f "PPP.listen callback caught %s" (Printexc.to_string e));
+                     last_error_log := now;
+                   end;
+                   Lwt.return_unit
                 ) in
            Lwt.async (fun () -> callback buf);
            List.iter (fun callback -> Lwt.async (fun () -> callback buf)) t.listeners;
