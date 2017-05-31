@@ -23,4 +23,4 @@ let () =
         Printf.fprintf stderr "Starting test case %s\n%!" case;
         fn ()
       ) cases
-    ) Tests.tests
+    ) (Tests.tests @ Tests.scalability)
