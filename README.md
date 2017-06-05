@@ -64,6 +64,8 @@ Design
 
 - [Using vpnkit as a default gateway](docs/ethernet.md): describes the flow of ethernet traffic to/from the VM
 - [Port forwarding](docs/ports.md): describes how ports are forwarded from the host into the VM
+- [Experimental transparent HTTP proxy](docs/transparent-http-proxy.md): describes the
+  experimental support for transparent HTTP(S) proxying
 
 Licensing
 ---------
