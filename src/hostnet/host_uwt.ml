@@ -1006,6 +1006,9 @@ module Dns = struct
       | { q_class = Q_IN; q_name; _ } when is_mdns q_name ->
         Log.debug (fun f -> f "DNS lookup of %s: return NXDomain" (Dns.Name.to_string q_name));
         Lwt.return []
+      | { q_class = Q_IN; q_type = Q_AAAA; q_name; _ } ->
+        Log.debug (fun f -> f "DNS lookup of AAAA %s: return NXDomain" (Dns.Name.to_string q_name));
+        Lwt.return []
       | { q_class = Q_IN; q_type; q_name; _ } ->
         begin
           query q_name q_type
