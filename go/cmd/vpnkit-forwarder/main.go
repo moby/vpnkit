@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	if path.Base(os.Args[0]) == "proxy-vsockd" {
+	if path.Base(os.Args[0]) == "vpnkit-forwarder" {
 		manyPorts()
 		return
 	}
