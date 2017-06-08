@@ -1,0 +1,9 @@
+FROM golang:1.8.1-alpine
+
+RUN apk add --update build-base
+
+ADD . /go/src/github.com/moby/vpnkit/go
+WORKDIR /go/src/github.com/moby/vpnkit/go
+
+CMD GOPATH=/go make all
+
