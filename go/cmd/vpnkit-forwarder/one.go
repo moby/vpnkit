@@ -6,9 +6,10 @@ import (
 	"log"
 	"net"
 	"os"
-	"proxy/libproxy"
 	"strings"
 	"syscall"
+
+	"github.com/moby/vpnkit/go/pkg/libproxy"
 )
 
 func onePort() {
