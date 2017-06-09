@@ -12,7 +12,7 @@ build-in-container: $(DEPS)
 
 build/vpnkit-forwarder.linux: $(DEPS)
 	GOOS=linux GOARCH=amd64 \
-	go build -o $@ --ldflags -s --buildmode pie \
+	go build -o $@ --ldflags '-s -w -extldflags "-static"' --buildmode pie \
 	$(DEPS)
 
 build/vpnkit-expose-port.linux: build/vpnkit-forwarder.linux
