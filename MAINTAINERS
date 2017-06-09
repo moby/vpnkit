@@ -15,7 +15,6 @@
 			"avsm",
 			"djs55",
 			"samoht",
-			"yomimono",
 		]
 
 [people]
@@ -40,8 +39,3 @@
 	Name = "Thomas Gazagnaire"
 	Email = "thomas@gazagnaire.org"
 	GitHub = "samoht"
-
-	[people.yomimono]
-	Name = "Mindy Preston"
-	Email = "mindy.preston@docker.com"
-	GitHub = "yomimono"
