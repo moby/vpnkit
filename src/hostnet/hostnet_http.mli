@@ -5,7 +5,7 @@ module Exclude: sig
   val of_string: string -> t
   val to_string: t -> string
 
-  val matches: Ipaddr.V4.t -> Cohttp.Request.t -> t -> bool
+  val matches: Ipaddr.V4.t -> Cohttp.Request.t option -> t -> bool
   (** If true, the given request should bypass the proxy *)
 end
 

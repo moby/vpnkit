@@ -11,34 +11,34 @@ module Exclude = struct
 
   let test_cidr_match () =
     let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
-    let req = Cohttp.Request.make (Uri.of_string "http://localhost") in
+    let req = Some (Cohttp.Request.make (Uri.of_string "http://localhost")) in
     assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude)
 
   let test_cidr_no_match () =
     let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
-    let req = Cohttp.Request.make (Uri.of_string "http://localhost") in
+    let req = Some (Cohttp.Request.make (Uri.of_string "http://localhost")) in
     assert (not(Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "192.168.0.1") req exclude))
 
   let test_domain_match () =
     let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
-    let req = Cohttp.Request.make (Uri.of_string "http://dave.mit.edu/") in
+    let req = Some (Cohttp.Request.make (Uri.of_string "http://dave.mit.edu/")) in
     assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude)
 
   let test_domain_star_match () =
     let exclude = Hostnet_http.Exclude.of_string "*.mit.edu" in
-    let req = Cohttp.Request.make (Uri.of_string "http://dave.mit.edu/") in
+    let req = Some (Cohttp.Request.make (Uri.of_string "http://dave.mit.edu/")) in
     assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude)
 
   let test_domain_no_match () =
     let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
-    let req = Cohttp.Request.make (Uri.of_string "http://dave.recoil.org/") in
+    let req = Some (Cohttp.Request.make (Uri.of_string "http://dave.recoil.org/")) in
     assert (not(Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude))
 
   let test_list () =
     let exclude = Hostnet_http.Exclude.of_string "*.local, 169.254.0.0/16" in
-    let req = Cohttp.Request.make (Uri.of_string "http://dave.local/") in
+    let req = Some (Cohttp.Request.make (Uri.of_string "http://dave.local/")) in
     assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude);
-    let req' = Cohttp.Request.make (Uri.of_string "http://dave.recoil.org/") in
+    let req' = Some (Cohttp.Request.make (Uri.of_string "http://dave.recoil.org/")) in
     assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "169.254.0.1") req' exclude);
     assert (not(Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req' exclude))
 

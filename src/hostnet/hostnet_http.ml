@@ -43,16 +43,20 @@ module Exclude = struct
     let matches dst req = function
       | CIDR prefix -> Ipaddr.V4.Prefix.mem dst prefix
       | Subdomain domains ->
-        let h = req.Cohttp.Request.headers in
-        begin match Cohttp.Header.get h "host" with
-        | Some host ->
-          let bits = Astring.String.cuts ~sep:"." host in
-          (* does 'bits' match 'domains' *)
-          let rec loop bits domains = match bits, domains with
-            | _, [] -> true
-            | [], _ :: _ -> false
-            | b :: bs, d :: ds -> Element.matches b d && loop bs ds in
-          loop (List.rev bits) (List.rev domains)
+        begin match req with
+        | Some req ->
+          let h = req.Cohttp.Request.headers in
+          begin match Cohttp.Header.get h "host" with
+          | Some host ->
+            let bits = Astring.String.cuts ~sep:"." host in
+            (* does 'bits' match 'domains' *)
+            let rec loop bits domains = match bits, domains with
+              | _, [] -> true
+              | [], _ :: _ -> false
+              | b :: bs, d :: ds -> Element.matches b d && loop bs ds in
+            loop (List.rev bits) (List.rev domains)
+          | None -> false
+          end
         | None -> false
         end
   end
@@ -202,7 +206,7 @@ module Make
                 (* The scheme from cohttp is missing. If we send to an HTTP proxy
                    then we need it. *)
                 let uri = Uri.with_scheme (Cohttp.Request.uri req) (Some "http") in
-                let address = match Exclude.matches dst req t.exclude, choose_proxy_for ~t uri with
+                let address = match Exclude.matches dst (Some req) t.exclude, choose_proxy_for ~t uri with
                   | true, _
                   | false, None -> Ipaddr.V4 dst, 80 (* direct connection *)
                   | false, Some (ip, port) -> ip, port in
@@ -305,11 +309,12 @@ module Make
       Some (fun flow ->
         Lwt.finalize
           (fun () ->
-            match t.https with
-            | None ->
+            match Exclude.matches dst None t.exclude, t.https with
+            | true, _
+            | false, None ->
               Log.warn (fun f -> f "Failed to proxy https: no proxy defined");
               Lwt.return_unit
-            | Some ((ip, port) as address) ->
+            | false, Some ((ip, port) as address) ->
               let host = Ipaddr.V4.to_string dst in
               Log.info (fun f -> f "%s:443 --> %s:%d\n%!" host (Ipaddr.to_string ip) port);
               let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
