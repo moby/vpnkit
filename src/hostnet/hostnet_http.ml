@@ -5,6 +5,72 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+module Exclude = struct
+
+  module One = struct
+    module Element = struct
+      type t =
+        | Any
+        | String of string
+      (* One element of a DNS name *)
+
+      let of_string = function
+        | "*" -> Any
+        | x -> String x
+      let to_string = function
+        | Any -> "*"
+        | String x -> x
+      let matches x = function
+        | Any -> true
+        | String y -> x = y
+    end
+
+    type t =
+      | Subdomain of Element.t list
+      | CIDR of Ipaddr.V4.Prefix.t
+
+    let of_string s =
+      match Ipaddr.V4.Prefix.of_string s with
+      | None ->
+        let bits = Astring.String.cuts ~sep:"." s in
+        Subdomain (List.map Element.of_string bits)
+      | Some prefix -> CIDR prefix
+
+    let to_string = function
+      | Subdomain x -> "Subdomain " ^ (String.concat "." @@ List.map Element.to_string x)
+      | CIDR prefix -> "CIDR " ^ (Ipaddr.V4.Prefix.to_string prefix)
+
+    let matches dst req = function
+      | CIDR prefix -> Ipaddr.V4.Prefix.mem dst prefix
+      | Subdomain domains ->
+        let h = req.Cohttp.Request.headers in
+        begin match Cohttp.Header.get h "host" with
+        | Some host ->
+          let bits = Astring.String.cuts ~sep:"." host in
+          (* does 'bits' match 'domains' *)
+          let rec loop bits domains = match bits, domains with
+            | _, [] -> true
+            | [], _ :: _ -> false
+            | b :: bs, d :: ds -> Element.matches b d && loop bs ds in
+          loop (List.rev bits) (List.rev domains)
+        | None -> false
+        end
+  end
+
+  type t = One.t list
+
+  let of_string s =
+    let open Astring in
+    (* Accept either space or comma-separated ignoring whitespace *)
+    let parts = String.fields ~is_sep:(fun c -> c = ',' || Char.Ascii.is_white c) s in
+    List.map One.of_string parts
+
+  let to_string t = String.concat " " @@ (List.map One.to_string t)
+
+  let matches dst req t = List.fold_left (||) false (List.map (One.matches dst req) t)
+
+end
+
 module Make
     (Ip: V1_LWT.IPV4 with type prefix = Ipaddr.V4.t)
     (Udp: V1_LWT.UDPV4)

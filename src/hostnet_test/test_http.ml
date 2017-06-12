@@ -7,6 +7,51 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+module Exclude = struct
+
+  let test_cidr_match () =
+    let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
+    let req = Cohttp.Request.make (Uri.of_string "http://localhost") in
+    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude)
+
+  let test_cidr_no_match () =
+    let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
+    let req = Cohttp.Request.make (Uri.of_string "http://localhost") in
+    assert (not(Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "192.168.0.1") req exclude))
+
+  let test_domain_match () =
+    let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
+    let req = Cohttp.Request.make (Uri.of_string "http://dave.mit.edu/") in
+    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude)
+
+  let test_domain_star_match () =
+    let exclude = Hostnet_http.Exclude.of_string "*.mit.edu" in
+    let req = Cohttp.Request.make (Uri.of_string "http://dave.mit.edu/") in
+    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude)
+
+  let test_domain_no_match () =
+    let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
+    let req = Cohttp.Request.make (Uri.of_string "http://dave.recoil.org/") in
+    assert (not(Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude))
+
+  let test_list () =
+    let exclude = Hostnet_http.Exclude.of_string "*.local, 169.254.0.0/16" in
+    let req = Cohttp.Request.make (Uri.of_string "http://dave.local/") in
+    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req exclude);
+    let req' = Cohttp.Request.make (Uri.of_string "http://dave.recoil.org/") in
+    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "169.254.0.1") req' exclude);
+    assert (not(Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1") req' exclude))
+
+  let tests = [
+    "HTTP: no_proxy CIDR match", [ "", `Quick, test_cidr_match ];
+    "HTTP: no_proxy CIDR no match", [ "", `Quick, test_cidr_no_match ];
+    "HTTP: no_proxy domain match", [ "", `Quick, test_domain_match ];
+    "HTTP: no_proxy domain no match", [ "", `Quick, test_domain_no_match ];
+    "HTTP: no_proxy domain star match", [ "", `Quick, test_domain_star_match ];
+    "HTTP: no_proxy list", [ "", `Quick, test_list ];
+  ]
+end
+
 module Make(Host: Sig.HOST) = struct
 
   module Slirp_stack = Slirp_stack.Make(Host)
