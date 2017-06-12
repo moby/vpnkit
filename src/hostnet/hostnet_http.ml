@@ -59,6 +59,8 @@ module Exclude = struct
 
   type t = One.t list
 
+  let none = []
+
   let of_string s =
     let open Astring in
     (* Accept either space or comma-separated ignoring whitespace *)
@@ -85,7 +87,7 @@ module Make
   type t = {
     http: address option;
     https: address option;
-    exclude: string list;
+    exclude: Exclude.t;
   }
 
   let parse_host_port x : (Ipaddr.t * int) option Error.t =
@@ -134,13 +136,13 @@ module Make
     let open Ezjsonm in
     let http    = match t.http  with None -> [] | Some x -> [ "http",  string @@ string_of_address x ] in
     let https   = match t.https with None -> [] | Some x -> [ "https", string @@ string_of_address x ] in
-    let exclude = [ "exclude", strings t.exclude ] in
+    let exclude = [ "exclude", string @@ Exclude.to_string t.exclude ] in
     dict (http @ https @ exclude)
   let of_json j =
     let open Ezjsonm in
     let http  = try Some (get_string @@ find j [ "http" ])  with Not_found -> None in
     let https = try Some (get_string @@ find j [ "https" ]) with Not_found -> None in
-    let exclude = try get_strings @@ find j [ "exclude" ] with _ -> [] in
+    let exclude = try Exclude.of_string @@ get_string @@ find j [ "exclude" ] with Not_found -> Exclude.none in
     let open Error.Infix in
     (match http with None -> Lwt.return (Ok None) | Some x -> parse_host_port x)
     >>= fun http ->
@@ -200,10 +202,11 @@ module Make
                 (* The scheme from cohttp is missing. If we send to an HTTP proxy
                    then we need it. *)
                 let uri = Uri.with_scheme (Cohttp.Request.uri req) (Some "http") in
+                let address = match Exclude.matches dst req t.exclude, choose_proxy_for ~t uri with
+                  | true, _
+                  | false, None -> Ipaddr.V4 dst, 80 (* direct connection *)
+                  | false, Some (ip, port) -> ip, port in
                 (* Log the request to the console *)
-                let address = match choose_proxy_for ~t uri with
-                  | None -> Ipaddr.V4 dst, 80 (* direct connection *)
-                  | Some (ip, port) -> ip, port in
                 Log.info (fun f -> f "%s:80 --> %s:%d %s %s %s\n%!"
                   (Ipaddr.V4.to_string dst)
                   (Ipaddr.to_string @@ fst address)
