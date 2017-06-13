@@ -15,7 +15,7 @@ general:
   - OSS-LICENSES
 dependencies:
   override:
-  - brew install wget opam dylibbundler libffi pkg-config
+  - brew install wget opam dylibbundler pkg-config
   - scripts/common.sh
 test:
   override:
