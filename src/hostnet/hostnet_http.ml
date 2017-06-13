@@ -209,13 +209,18 @@ module Make
                   then Ipaddr.V4 dst, 80 (* direct connection *)
                   else h in
                 (* Log the request to the console *)
-                Log.info (fun f -> f "%s:80 --> %s:%d %s %s %s\n%!"
-                  (Ipaddr.V4.to_string dst)
-                  (Ipaddr.to_string @@ fst address)
-                  (snd address)
+                let description outgoing =
+                  Printf.sprintf "%s:80 %s %s:%d Host:%s"
+                    (Ipaddr.V4.to_string dst)
+                    (if outgoing then "-->" else "<--")
+                    (Ipaddr.to_string @@ fst address)
+                    (snd address)
+                    (match Uri.host uri with Some x -> x | None -> "(unknown host)") in
+                Log.info (fun f -> f "%s: %s %s"
+                  (description true)
                   (Cohttp.(Code.string_of_method (Cohttp.Request.meth req)))
-                  (Uri.to_string uri)
-                  (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t req)));
+                  (Uri.path uri)
+                );
                 begin
                     Socket.Stream.Tcp.connect address
                     >>= function
@@ -260,10 +265,14 @@ module Make
                             Log.warn (fun f -> f "Failed to parse HTTP response on port %s: %s" (string_of_address address) x);
                             Lwt.return_unit
                           | `Ok res ->
-                            Log.info (fun f -> f "<-- %s %s %s\n%!"
-                              (Cohttp.Code.string_of_status res.Cohttp.Response.status)
+                            Log.info (fun f -> f "%s: %s %s"
+                              (description false)
                               (Cohttp.Code.string_of_version res.Cohttp.Response.version)
-                              (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t res)));
+                              (Cohttp.Code.string_of_status res.Cohttp.Response.status)
+                            );
+                            Log.debug (fun f -> f "%s"
+                              (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t res))
+                            );
                             let reader = Outgoing.Response.make_body_reader res outgoing in
                             Incoming.Response.write ~flush:true
                               (fun writer ->
@@ -308,7 +317,10 @@ module Make
         Lwt.finalize
           (fun () ->
             let host = Ipaddr.V4.to_string dst in
-            Log.info (fun f -> f "%s:443 --> %s:%d\n%!" host (Ipaddr.to_string ip) port);
+            let description outgoing =
+              Printf.sprintf "%s:443 %s %s:%d"
+                host (if outgoing then "-->" else "<--") (Ipaddr.to_string ip) port in
+            Log.info (fun f -> f "%s: CONNECT" (description true));
             let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
             let connect = { connect with Cohttp.Request.resource = Printf.sprintf "%s:%d" (Ipaddr.V4.to_string dst) 443 } in
             Socket.Stream.Tcp.connect address
@@ -332,10 +344,14 @@ module Make
                     Lwt.return_unit
                   | `Ok res ->
                     begin
-                      Log.info (fun f -> f "<-- %s %s %s\n%!"
-                        (Cohttp.Code.string_of_status res.Cohttp.Response.status)
+                      Log.info (fun f -> f "%s: %s %s"
+                        (description false)
                         (Cohttp.Code.string_of_version res.Cohttp.Response.version)
-                        (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t res)));
+                        (Cohttp.Code.string_of_status res.Cohttp.Response.status)
+                      );
+                      Log.debug (fun f -> f "%s"
+                        (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t res))
+                      );
                       (* Since we've already layered a channel on top, we can't
                          use the Mirage_flow.proxy since it would miss the contents
                          already buffered. Therefore we write out own channel-level
