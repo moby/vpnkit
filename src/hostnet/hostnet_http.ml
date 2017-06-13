@@ -68,7 +68,7 @@ module Exclude = struct
   let of_string s =
     let open Astring in
     (* Accept either space or comma-separated ignoring whitespace *)
-    let parts = String.fields ~is_sep:(fun c -> c = ',' || Char.Ascii.is_white c) s in
+    let parts = String.fields ~empty:false ~is_sep:(fun c -> c = ',' || Char.Ascii.is_white c) s in
     List.map One.of_string parts
 
   let to_string t = String.concat " " @@ (List.map One.to_string t)
