@@ -1,3 +1,14 @@
+module Exclude: sig
+  type t
+  (** A request destination which should bypass the proxy *)
+
+  val of_string: string -> t
+  val to_string: t -> string
+
+  val matches: Ipaddr.V4.t -> Cohttp.Request.t option -> t -> bool
+  (** If true, the given request should bypass the proxy *)
+end
+
 module Make
     (Ip: V1_LWT.IPV4 with type prefix = Ipaddr.V4.t)
     (Udp: V1_LWT.UDPV4)
