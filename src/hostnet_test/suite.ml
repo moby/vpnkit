@@ -88,9 +88,9 @@ let test_localhost_local_query server use_host () =
                 Log.info (fun f -> f "Failed to lookup localhost.local: this is good");
                 Lwt.return_unit in
             let timeout =
-              Host.Time.sleep 1.
+              Host.Time.sleep 5.
               >>= fun () ->
-              Lwt.fail_with "DNS resolution of localhost.local took more than 1s" in
+              Lwt.fail_with "DNS resolution of localhost.local took more than 5s" in
             Lwt.pick [ request; timeout ]
         ) [ "localhost.local"; "moby.local"; "vpnkit.local" ]
       ) in
