@@ -1,9 +1,9 @@
-FROM golang:1.8.1-alpine
+FROM linuxkit/alpine:630ee558e4869672fae230c78364e367b8ea67a9
 
-RUN apk add --update build-base
+RUN apk add --no-cache go musl-dev build-base
 
 ADD . /go/src/github.com/moby/vpnkit/go
 WORKDIR /go/src/github.com/moby/vpnkit/go
 
-CMD GOPATH=/go make all
+CMD GOPATH=/go make build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux
 

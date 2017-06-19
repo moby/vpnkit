@@ -1,0 +1,9 @@
+language: c
+
+sudo: required
+
+services:
+  - docker
+
+script:
+  - cd go && make from-scratch

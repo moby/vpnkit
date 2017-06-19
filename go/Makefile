@@ -1,14 +1,18 @@
 .PHONY: all clean fmt lint
 
+ORG?=vpnkit
+IMAGE=vpnkit-forwarder
 DEPS:=$(wildcard cmd/vpnkit-forwarder/*.go)
+HASH?=$(shell git ls-tree HEAD -- ../$(notdir $(CURDIR)) | awk '{print $$3}')
 
-all: build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux
-
-build-in-container: $(DEPS) 
-	@docker build -t vpnkit-forwarder-build -f ./Dockerfile.build .
-	@docker run --rm \
+build-in-container: $(DEPS)
+	docker build -t vpnkit-forwarder-build -f ./Dockerfile.build .
+	docker run --rm \
 		-v ${CURDIR}/build:/go/src/github.com/moby/vpnkit/go/build \
 		vpnkit-forwarder-build
+
+from-scratch: build-in-container
+	docker build -t $(ORG)/$(IMAGE):$(HASH) -f ./Dockerfile.scratch .
 
 build/vpnkit-forwarder.linux: $(DEPS)
 	GOOS=linux GOARCH=amd64 \
