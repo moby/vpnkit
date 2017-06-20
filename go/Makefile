@@ -14,6 +14,9 @@ build-in-container: $(DEPS)
 from-scratch: build-in-container
 	docker build -t $(ORG)/$(IMAGE):$(HASH) -f ./Dockerfile.scratch .
 
+multi-stage: $(DEPS)
+	docker build -t $(ORG)/$(IMAGE):$(HASH) .
+
 build/vpnkit-forwarder.linux: $(DEPS)
 	GOOS=linux GOARCH=amd64 \
 	go build -o $@ --ldflags '-s -w -extldflags "-static"' --buildmode pie \
