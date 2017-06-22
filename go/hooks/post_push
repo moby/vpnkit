@@ -1,0 +1,10 @@
+#!/bin/bash
+
+echo hooks/post_push: attempting to compute the tree SHA of the current directory
+pwd
+
+HASH=$(git ls-tree HEAD -- ../$(basename $(pwd)) | awk '{print $3}')
+
+echo Tagging "${IMAGE_NAME}" with "${DOCKER_REPO}:${HASH}"
+docker tag "${IMAGE_NAME}" "${DOCKER_REPO}:${HASH}"
+docker push "${DOCKER_REPO}:${HASH}"
