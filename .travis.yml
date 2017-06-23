@@ -5,5 +5,11 @@ sudo: required
 services:
   - docker
 
+before_install: # update to 17.05 to get multistage builds
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) edge"
+  - sudo apt-get update
+  - sudo apt-get -y install docker-ce=17.05.0~ce-0~ubuntu-trusty
+
 script:
-  - cd go && make from-scratch
+  - cd go && make build-in-container
