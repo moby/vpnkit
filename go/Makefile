@@ -5,16 +5,11 @@ IMAGE=vpnkit-forwarder
 DEPS:=$(wildcard cmd/vpnkit-forwarder/*.go)
 HASH?=$(shell git ls-tree HEAD -- ../$(notdir $(CURDIR)) | awk '{print $$3}')
 
+# This may fail when cross compiling as virtsock requires cgo
+all: build/vpnkit-forwarder.linux build/vpnkit-expost-port.linux
+
+# Build in linux container
 build-in-container: $(DEPS)
-	docker build -t vpnkit-forwarder-build -f ./Dockerfile.build .
-	docker run --rm \
-		-v ${CURDIR}/build:/go/src/github.com/moby/vpnkit/go/build \
-		vpnkit-forwarder-build
-
-from-scratch: build-in-container
-	docker build -t $(ORG)/$(IMAGE):$(HASH) -f ./Dockerfile.scratch .
-
-multi-stage: $(DEPS)
 	docker build -t $(ORG)/$(IMAGE):$(HASH) .
 
 build/vpnkit-forwarder.linux: $(DEPS)

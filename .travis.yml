@@ -12,4 +12,4 @@ before_install: # update to 17.05 to get multistage builds
   - sudo apt-get -y install docker-ce=17.05.0~ce-0~ubuntu-trusty
 
 script:
-  - cd go && make multi-stage
+  - cd go && make build-in-container
