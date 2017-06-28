@@ -9,8 +9,13 @@ HASH?=$(shell git ls-tree HEAD -- ../$(notdir $(CURDIR)) | awk '{print $$3}')
 all: build/vpnkit-forwarder.linux build/vpnkit-expost-port.linux
 
 # Build in linux container
-build-in-container: $(DEPS)
-	docker build -t $(ORG)/$(IMAGE):$(HASH) .
+build-in-container: build-forwarder-in-container build-expose-port-in-container
+
+build-forwarder-in-container: $(DEPS)
+	docker build -t $(ORG)/vpnkit-forwarder:$(HASH) -f Dockerfile .
+
+build-expose-port-in-container: $(DEPS)
+	docker build -t $(ORG)/vpnkit-expose-port:$(HASH) -f Dockerfile.expose-port .
 
 build/vpnkit-forwarder.linux: $(DEPS)
 	GOOS=linux GOARCH=amd64 \
