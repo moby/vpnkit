@@ -2,28 +2,35 @@
 
 ORG?=vpnkit
 IMAGE=vpnkit-forwarder
-DEPS:=$(wildcard cmd/vpnkit-forwarder/*.go)
+DEPS_FORWARDER:=$(wildcard cmd/vpnkit-forwarder/*.go)
+DEPS_IPTABLES:=$(wildcard cmd/vpnkit-iptables-wrapper/*.go)
+DEPS:=$(DEPS_IPTABLES) $(DEPS_FORWARDER)
 HASH?=$(shell git ls-tree HEAD -- ../$(notdir $(CURDIR)) | awk '{print $$3}')
 
 # This may fail when cross compiling as virtsock requires cgo
-all: build/vpnkit-forwarder.linux build/vpnkit-expost-port.linux
+all: build/vpnkit-iptables-wrapper.linux build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux
 
 # Build in linux container
 build-in-container: build-forwarder-in-container build-expose-port-in-container
 
-build-forwarder-in-container: $(DEPS)
+build-forwarder-in-container: $(DEPS_FORWARDER)
 	docker build -t $(ORG)/vpnkit-forwarder:$(HASH) -f Dockerfile .
 
 build-expose-port-in-container: $(DEPS)
 	docker build -t $(ORG)/vpnkit-expose-port:$(HASH) -f Dockerfile.expose-port .
 
-build/vpnkit-forwarder.linux: $(DEPS)
+build/vpnkit-forwarder.linux: $(DEPS_FORWARDER)
 	GOOS=linux GOARCH=amd64 \
 	go build -o $@ --ldflags '-s -w -extldflags "-static"' --buildmode pie \
-	$(DEPS)
+	$(DEPS_FORWARDER)
 
 build/vpnkit-expose-port.linux: build/vpnkit-forwarder.linux
 	cp -v build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux
+
+build/vpnkit-iptables-wrapper.linux: $(DEPS_IPTABLES)
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+	go build -o $@ --ldflags '-s -w' --buildmode pie \
+	$(DEPS_IPTABLES)
 
 clean:
 	rm -rf build
