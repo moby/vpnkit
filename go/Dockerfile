@@ -5,7 +5,7 @@ RUN apk add --no-cache go musl-dev build-base
 ADD . /go/src/github.com/moby/vpnkit/go
 WORKDIR /go/src/github.com/moby/vpnkit/go
 
-RUN GOPATH=/go make build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux
+RUN GOPATH=/go make build/vpnkit-forwarder.linux
 
 FROM scratch
 COPY --from=mirror /go/src/github.com/moby/vpnkit/go/build/vpnkit-forwarder.linux /vpnkit-forwarder
