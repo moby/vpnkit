@@ -8,7 +8,4 @@ WORKDIR /go/src/github.com/moby/vpnkit/go
 RUN GOPATH=/go make build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux
 
 FROM scratch
-COPY --from=mirror /go/src/github.com/moby/vpnkit/go/build/vpnkit-forwarder.linux /vpnkit-forwarder
-CMD ["/vpnkit-forwarder"]
-
-
+COPY --from=mirror /go/src/github.com/moby/vpnkit/go/build/vpnkit-expose-port.linux /vpnkit-expose-port
