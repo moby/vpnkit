@@ -19,6 +19,7 @@ type config = {
   server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
+  highest_ip: Ipaddr.V4.t;
   extra_dns_ip: Ipaddr.V4.t list;
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;

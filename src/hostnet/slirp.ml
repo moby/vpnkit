@@ -85,6 +85,7 @@ type config = {
   server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
+  highest_ip: Ipaddr.V4.t;
   extra_dns_ip: Ipaddr.V4.t list;
   get_domain_search: unit -> string list;
   get_domain_name: unit -> string;
@@ -663,7 +664,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun () ->
     delete_unused_endpoints t ()
 
-  let connect x l2_switch l2_client_id client_macaddr server_macaddr peer_ip local_ip extra_dns_ip mtu get_domain_search get_domain_name (global_arp_table:arp_table) use_bridge =
+  let connect x l2_switch l2_client_id client_macaddr server_macaddr peer_ip local_ip highest_ip extra_dns_ip mtu get_domain_search get_domain_name (global_arp_table:arp_table) use_bridge =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
     let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
@@ -695,7 +696,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let highest_peer_ip =
         if use_bridge then begin
-            Some default_highest_ip
+            Some highest_ip
         end else begin
             None (* just set smallest available prefix *)
         end
@@ -976,6 +977,13 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun host_ips ->
     Lwt.async (fun () -> restart_on_change "slirp/host" Ipaddr.V4.to_string host_ips);
 
+    let highest_ips_path = driver @ [ "slirp"; "highest-ip" ] in
+    Config.string config ~default:"" highest_ips_path
+    >>= fun string_highest_ips ->
+    Active_config.map (parse_ipv4 default_highest_ip) string_highest_ips
+    >>= fun highest_ips ->
+    Lwt.async (fun () -> restart_on_change "slirp/highest-ips" Ipaddr.V4.to_string highest_ips);
+
     let extra_dns_ips_path = driver @ [ "slirp"; "extra_dns" ] in
     Config.string config ~default:(String.concat "," default_dns_extra) extra_dns_ips_path
     >>= fun string_extra_dns_ips ->
@@ -985,6 +993,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let peer_ip = Active_config.hd peer_ips in
     let local_ip = Active_config.hd host_ips in
+    let highest_ip = Active_config.hd highest_ips in
     let extra_dns_ip = Active_config.hd extra_dns_ips in
 
     let upstream_servers = ref Dns_forward.Config.({servers = Server.Set.empty; search = []; assume_offline_after_drops = None }) in
@@ -1085,6 +1094,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       server_macaddr;
       peer_ip;
       local_ip;
+      highest_ip;
       extra_dns_ip;
       get_domain_search;
       get_domain_name;
@@ -1186,14 +1196,14 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
             let client_uuid = Vmnet.get_client_uuid x in
             get_client_ip_id t client_uuid
             >>= fun (client_ip, l2_client_id) ->
-            connect x l2_switch l2_client_id client_macaddr t.server_macaddr client_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
+            connect x l2_switch l2_client_id client_macaddr t.server_macaddr client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
         end else begin
             (* When bridge is disabled, just use fixed uuid and peer_ip from t *)
             or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(fun _ -> Lwt.return default_client_macaddr)
                 ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
             >>= fun x ->
             let client_macaddr = Vmnet.get_client_macaddr x in
-            connect x l2_switch (-1) client_macaddr t.server_macaddr t.peer_ip t.local_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
+            connect x l2_switch (-1) client_macaddr t.server_macaddr t.peer_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
         end
     end
 

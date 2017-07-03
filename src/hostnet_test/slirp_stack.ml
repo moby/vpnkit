@@ -111,6 +111,7 @@ let extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
 
 let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
 let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
+let highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
 let server_macaddr = Slirp.default_server_macaddr
 
 let global_arp_table : Slirp.arp_table =
@@ -127,6 +128,7 @@ let config_without_bridge =
   {
     Slirp.peer_ip;
     local_ip;
+    highest_ip;
     extra_dns_ip;
     server_macaddr;
     get_domain_search = (fun () -> []);
