@@ -961,16 +961,13 @@ module Dns = struct
         | _ -> acc
       ) [] x
 
-  let is_mdns name =
-    match List.rev @@ Dns.Name.to_string_list name with
-    | [] -> false
-    | n :: _ -> n = "local"
+  let localhost_local = Dns.Name.of_string "localhost.local"
 
   let resolve_getaddrinfo question =
     let open Dns.Packet in
     begin match question with
-      | { q_class = Q_IN; q_name; _ } when is_mdns q_name ->
-        Log.debug (fun f -> f "DNS lookup of %s: return NXDomain" (Dns.Name.to_string q_name));
+      | { q_class = Q_IN; q_name; _ } when q_name = localhost_local ->
+        Log.debug (fun f -> f "DNS lookup of localhost.local: return NXDomain");
         Lwt.return (q_name, [])
       | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
         getaddrinfo (Dns.Name.to_string q_name) Unix.PF_INET
@@ -1003,8 +1000,8 @@ module Dns = struct
         ) () in
 
     begin match question with
-      | { q_class = Q_IN; q_name; _ } when is_mdns q_name ->
-        Log.debug (fun f -> f "DNS lookup of %s: return NXDomain" (Dns.Name.to_string q_name));
+      | { q_class = Q_IN; q_name; _ } when q_name = localhost_local ->
+        Log.debug (fun f -> f "DNS lookup of localhost.local: return NXDomain");
         Lwt.return []
       | { q_class = Q_IN; q_type; q_name; _ } ->
         begin
