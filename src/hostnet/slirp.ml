@@ -903,7 +903,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       ) string_resolver_settings
     >>= fun resolver_settings ->
 
-    let domain_name = ref "local" in
+    let domain_name = ref "localdomain" in
     let get_domain_name () = !domain_name in
     let domain_name_path = driver @ [ "slirp"; "domain" ] in
     Config.string config ~default:(!domain_name) domain_name_path
