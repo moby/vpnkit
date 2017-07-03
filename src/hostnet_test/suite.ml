@@ -67,35 +67,6 @@ let test_builtin_dns_query server use_host () =
       ) in
   run t
 
-(* `docker push` will attempt to resolve `localhost.local` if the host has
-   domain set to `local` which is common on Macs. We don't want this query to
-   take 5s to fail. *)
-let test_localhost_local_query server use_host () =
-  set_dns_policy use_host;
-  let t =
-    with_stack
-      (fun _ stack ->
-        let resolver = DNS.create stack in
-        Lwt_list.iter_s
-          (fun _ ->
-            let request =
-              DNS.gethostbyname ~server resolver "localhost.local"
-              >>= function
-              | _ :: _ ->
-                Log.err (fun f -> f "successfully resolved localhost.local: this shouldn't happen");
-                failwith "Successfully resolved localhost.local"
-              | _ ->
-                Log.info (fun f -> f "Failed to lookup localhost.local: this is good");
-                Lwt.return_unit in
-            let timeout =
-              Host.Time.sleep 5.
-              >>= fun () ->
-              Lwt.fail_with "DNS resolution of localhost.local took more than 5s" in
-            Lwt.pick [ request; timeout ]
-        ) [ "localhost.local"; "moby.local"; "vpnkit.local" ]
-      ) in
-  run t
-
 let test_etc_hosts_query server use_host () =
   set_dns_policy use_host;
   let test_name = "vpnkit.is.cool.yes.really" in
@@ -385,7 +356,6 @@ let test_dns use_host =
   prefix ^ ": lookup ", [ "", `Quick, test_dns_query primary_dns_ip use_host ];
   prefix ^ ": builtins", [ "", `Quick, test_builtin_dns_query primary_dns_ip use_host ];
   prefix ^ ": _etc_hosts", [ "", `Quick, test_etc_hosts_query primary_dns_ip use_host ];
-  prefix ^ ": localhost.local", [ "localhost.local should fail fast", `Quick, test_localhost_local_query primary_dns_ip use_host ];
 ]
 
 let test_tcp = [
