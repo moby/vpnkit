@@ -265,6 +265,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
     let server_macaddr = Slirp.default_server_macaddr in
     let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2" in
     let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1" in
+    let highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254" in
     let client_uuids : Slirp.uuid_table = {
         Slirp.mutex = Lwt_mutex.create ();
         table = Hashtbl.create 50;
@@ -277,6 +278,7 @@ let main_t socket_url port_control_url introspection_url diagnostics_url max_con
       Slirp.server_macaddr;
       peer_ip;
       local_ip;
+      highest_ip;
       extra_dns_ip = [];
       get_domain_search = (fun () -> []);
       get_domain_name = (fun () -> "local");
