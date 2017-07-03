@@ -1135,7 +1135,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
                     let preferred_ip = Ipaddr.V4.of_bytes_exn uuid_suffix in
                     Log.info (fun f -> f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
                     let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
-                    let highest_ip_int32 = Ipaddr.V4.to_int32 default_highest_ip in
+                    let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
                     let lowest_ip_int32 = Ipaddr.V4.to_int32 first_ip in
                     if (preferred_ip_int32 > highest_ip_int32) || (preferred_ip_int32 <  lowest_ip_int32) then
                     begin
@@ -1152,7 +1152,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
             (* look for a new unique IP *)
             let rec next_unique_ip next_ip =
-                if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 default_highest_ip) then
+                if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 t.highest_ip) then
                 begin
                     failwith "No IP addresses available."
                 end;
