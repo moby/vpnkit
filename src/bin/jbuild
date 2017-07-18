@@ -1,5 +1,7 @@
-(executables
-  ((names (main))
+(jbuild_version 1)
+
+(executable
+  ((name main)
    (libraries   (
      cmdliner ofs logs.fmt hostnet hvsock hvsock.lwt-unix
      datakit-server.fs9p win-eventlog asl fd-send-recv

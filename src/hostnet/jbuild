@@ -1,3 +1,5 @@
+(jbuild_version 1)
+
 (library
   ((name        hostnet)
    (public_name hostnet)
