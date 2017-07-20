@@ -70,7 +70,7 @@ module Make(Netif: V1_LWT.NETWORK) = struct
     Vfs.File.ro_of_string (String.concat "\n" xs)
 
   let remove t rule =
-    Log.debug (fun f -> f "removing switch port for %s" (Ipaddr.V4.to_string rule));
+    Log.warn (fun f -> f "removing switch port for %s" (Ipaddr.V4.to_string rule));
     t.rules <- RuleMap.remove rule t.rules
 
   let callback t buf =

@@ -643,7 +643,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         Lwt.return (Ok ())
   end
 
-  (* If no traffic is received for 5 minutes, delete the endpoint and
+  (* If no traffic is received for 50 minutes, delete the endpoint and
      the switch port. *)
   let rec delete_unused_endpoints t () =
     Host.Time.sleep 30.
@@ -653,7 +653,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
          let now = Unix.gettimeofday () in
          let old_ips = IPMap.fold (fun ip endpoint acc ->
              let age = now -. endpoint.Endpoint.last_active_time in
-             if age > 300.0 then ip :: acc else acc
+             if age > 3000.0 then ip :: acc else acc
            ) t.endpoints [] in
          List.iter (fun ip ->
              Switch.remove t.switch ip;
