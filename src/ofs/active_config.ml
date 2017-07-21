@@ -1,5 +1,4 @@
-open Lwt
-open Result
+open Lwt.Infix
 
 let src =
   let src = Logs.Src.create "active_config" ~doc:"Database configuration values" in
@@ -36,7 +35,7 @@ let rec map f = function Value(first, next) ->
     next
     >>= fun next ->
     map f next in
-  return (Value(first', next'))
+  Lwt.return (Value(first', next'))
 
 let rec iter f = function Value(first, next) ->
   f first
@@ -52,7 +51,7 @@ let changes values =
     next >>= function Value(first, next) ->
       if Some first = last
       then loop last next
-      else return (Value(first, loop (Some first) next)) in
+      else Lwt.return (Value(first, loop (Some first) next)) in
   loop None values
 
 module type S = sig
@@ -83,7 +82,7 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
       | i ->
         let line = String.sub buf 0 i in
         let buf = String.sub buf (i + 1) (String.length buf - i - 1) in
-        return (Value (line, loop ~saw_flush ~buf ~off))
+        Lwt.return (Value (line, loop ~saw_flush ~buf ~off))
       | exception Not_found ->
         Client.LowLevel.read conn fid off 256l >>*= fun resp ->
         match Cstruct.to_string resp.Protocol_9p.Response.Read.data with
@@ -103,7 +102,7 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
       >>*= fun bufs ->
       let n = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
       if n = 0
-      then return @@ Buffer.contents buffer
+      then Lwt.return @@ Buffer.contents buffer
       else begin
         List.iter (fun x -> Buffer.add_string buffer (Cstruct.to_string x)) bufs;
         loop Int64.(add ofs (of_int n))
@@ -112,8 +111,8 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
       (fun () ->
          loop 0L
          >>= fun text ->
-         return (Some text)
-      ) (fun _ -> return None)
+         Lwt.return (Some text)
+      ) (fun _ -> Lwt.return None)
 
   let rwx = [`Read; `Write; `Execute]
   let rx = [`Read; `Execute]
@@ -130,11 +129,11 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
              >>|= fun flow ->
              Client.connect flow ?username ()
            ) >>= function
-           | Result.Error (`Msg x) ->
+           | Error (`Msg x) ->
              Time.sleep 0.1
              >>= fun () ->
              loop ~x (n - 1)
-           | Result.Ok conn ->
+           | Ok conn ->
              Lwt.return conn
         ) (fun e ->
             Time.sleep 0.1
@@ -167,7 +166,7 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
         )
 
   type t = {
-    reconnect: unit -> (FLOW.flow, [ `Msg of string ]) Result.result Lwt.t;
+    reconnect: unit -> (FLOW.flow, [ `Msg of string ]) result Lwt.t;
     username: string option;
     branch: string;
     mutable transport: transport option;
@@ -229,13 +228,13 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
   let int t ~default path =
     string t ~default:(string_of_int default) path
     >>= fun strings ->
-    let parse s = return (try int_of_string s with _ -> default) in
+    let parse s = Lwt.return (try int_of_string s with _ -> default) in
     changes @@ map parse strings
 
   let bool t ~default path =
     string t ~default:(string_of_bool default) path
     >>= fun strings ->
-    let parse s = return (try bool_of_string s with _ -> default) in
+    let parse s = Lwt.return (try bool_of_string s with _ -> default) in
     changes @@ map parse strings
 
 end

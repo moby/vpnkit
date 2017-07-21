@@ -173,7 +173,7 @@ module Sockets = struct
         Lwt.catch (fun () -> Lwt_unix.Versioned.bind_2 fd (Lwt_unix.ADDR_INET(addr, 0))) (fun _ -> Lwt.return_unit)
         >>= fun () ->
         let sockaddr = sockaddr_of_address address in
-        Lwt.return (Result.Ok (of_fd ~idx ~description ?read_buffer_size sockaddr address fd))
+        Lwt.return (Ok (of_fd ~idx ~description ?read_buffer_size sockaddr address fd))
 
       let read t = match t.fd, t.already_read with
       | None, _ -> Lwt.return `Eof
@@ -764,7 +764,7 @@ module Files = struct
       >>= fun () ->
       loop () in
     let handle = loop () in
-    Result.Ok handle
+    Ok handle
 
   let unwatch = Lwt.cancel
 end

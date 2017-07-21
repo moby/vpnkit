@@ -68,6 +68,7 @@ module type SOCKETS = sig
   val register_connection: string -> int Lwt.t
   val deregister_connection: int -> unit
   val get_num_connections: unit -> int
+
   (** Fetch the number of tracked connections *)
   val connections: unit -> Vfs.File.t
   (** A filesystem which allows the connections to be introspected *)
@@ -140,7 +141,7 @@ module type FILES = sig
 
   type watch
 
-  val watch_file: string -> (unit -> unit) -> (watch, [ `Msg of string ]) Result.result
+  val watch_file: string -> (unit -> unit) -> (watch, [ `Msg of string ]) result
   (** [watch_file path callback] executes [callback] whenever the contents of
       [path] may have changed. *)
 

@@ -57,7 +57,7 @@ module Port = struct
       | _ ->
         Result.errorf "port should be of the form proto:IP:port"
     with
-    | _ -> Result.Error (`Msg (Printf.sprintf "port is not a proto:IP:port: '%s'" x))
+    | _ -> Error (`Msg (Printf.sprintf "port is not a proto:IP:port: '%s'" x))
 
 end
 
@@ -318,16 +318,16 @@ module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
                t.local );
            start_tcp_proxy (to_string t) vsock_path_var t.remote_port server
            >>= fun () ->
-           Lwt.return (Result.Ok t)
+           Lwt.return (Ok t)
         ) (function
           | Unix.Unix_error(Unix.EADDRINUSE, _, _) ->
-            Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: port is already allocated" (Ipaddr.to_string local_ip) local_port)))
+            Lwt.return (Error (`Msg (Printf.sprintf "Bind for %s:%d failed: port is already allocated" (Ipaddr.to_string local_ip) local_port)))
           | Unix.Unix_error(Unix.EADDRNOTAVAIL, _, _) ->
-            Lwt.return (Result.Error (`Msg (Printf.sprintf "listen tcp %s:%d: bind: cannot assign requested address" (Ipaddr.to_string local_ip) local_port)))
+            Lwt.return (Error (`Msg (Printf.sprintf "listen tcp %s:%d: bind: cannot assign requested address" (Ipaddr.to_string local_ip) local_port)))
           | Unix.Unix_error(Unix.EPERM, _, _) ->
-            Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: permission denied" (Ipaddr.to_string local_ip) local_port)))
+            Lwt.return (Error (`Msg (Printf.sprintf "Bind for %s:%d failed: permission denied" (Ipaddr.to_string local_ip) local_port)))
           | e ->
-            Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d: unexpected error %s" (Ipaddr.to_string local_ip) local_port (Printexc.to_string e))))
+            Lwt.return (Error (`Msg (Printf.sprintf "Bind for %s:%d: unexpected error %s" (Ipaddr.to_string local_ip) local_port (Printexc.to_string e))))
           )
     | `Udp (local_ip, local_port) ->
       let description = Printf.sprintf "forwarding from udp:%s:%d" (Ipaddr.to_string local_ip) local_port in
@@ -340,16 +340,16 @@ module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
            t.server <- Some (`Udp server);
            start_udp_proxy (to_string t) vsock_path_var t.remote_port server
            >>= fun () ->
-           Lwt.return (Result.Ok t)
+           Lwt.return (Ok t)
         ) (function
           | Unix.Unix_error(Unix.EADDRINUSE, _, _) ->
-            Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: port is already allocated" (Ipaddr.to_string local_ip) local_port)))
+            Lwt.return (Error (`Msg (Printf.sprintf "Bind for %s:%d failed: port is already allocated" (Ipaddr.to_string local_ip) local_port)))
           | Unix.Unix_error(Unix.EADDRNOTAVAIL, _, _) ->
-            Lwt.return (Result.Error (`Msg (Printf.sprintf "listen udp %s:%d: bind: cannot assign requested address" (Ipaddr.to_string local_ip) local_port)))
+            Lwt.return (Error (`Msg (Printf.sprintf "listen udp %s:%d: bind: cannot assign requested address" (Ipaddr.to_string local_ip) local_port)))
           | Unix.Unix_error(Unix.EPERM, _, _) ->
-            Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d failed: permission denied" (Ipaddr.to_string local_ip) local_port)))
+            Lwt.return (Error (`Msg (Printf.sprintf "Bind for %s:%d failed: permission denied" (Ipaddr.to_string local_ip) local_port)))
           | e ->
-            Lwt.return (Result.Error (`Msg (Printf.sprintf "Bind for %s:%d: unexpected error %s" (Ipaddr.to_string local_ip) local_port (Printexc.to_string e))))
+            Lwt.return (Error (`Msg (Printf.sprintf "Bind for %s:%d: unexpected error %s" (Ipaddr.to_string local_ip) local_port (Printexc.to_string e))))
           )
 
 
@@ -368,10 +368,10 @@ module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
           Port.of_string (proto1 ^ ":" ^ ip1 ^ ":" ^ port1),
           Port.of_string (proto2 ^ ":" ^ ip2 ^ ":" ^ port2)
         with
-        | Result.Error x, _ -> Result.Error x
-        | _, Result.Error x -> Result.Error x
-        | Result.Ok local, Result.Ok remote_port ->
-          Result.Ok { local; remote_port; server = None }
+        | Error x, _ -> Error x
+        | _, Error x -> Error x
+        | Ok local, Ok remote_port ->
+          Ok { local; remote_port; server = None }
       end
     | _ ->
       Result.errorf "Failed to parse request [%s], expected %s" x description_of_format

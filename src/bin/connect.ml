@@ -20,10 +20,10 @@ module Make_unix(Host: Sig.HOST) = struct
   let connect () =
     connect (!vsock_path)
     >>= function
-    | Result.Error (`Msg msg) ->
+    | Error (`Msg msg) ->
       Log.err (fun f -> f "vsock connect write got %s" msg);
       Lwt.fail (Failure msg)
-    | Result.Ok flow ->
+    | Ok flow ->
       let address = Cstruct.of_string (Printf.sprintf "00000003.%08lx\n" vsock_port) in
       write flow address
       >>= function

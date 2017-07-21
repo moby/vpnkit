@@ -1,7 +1,7 @@
 (** The same error type is supported in Lwt > 2.5.2. Once that is released we
     can remove this shim. *)
 
-type ('a, 'b) t = ('a, 'b) Result.result Lwt.t
+type ('a, 'b) t = ('a, 'b) result Lwt.t
 
 val return : 'a -> ('a, 'b) t
 

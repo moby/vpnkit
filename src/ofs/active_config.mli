@@ -36,7 +36,7 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW): sig
   include S
 
   val create: ?username:string -> branch:string
-    -> reconnect:(unit -> (FLOW.flow, [ `Msg of string ]) Result.result Lwt.t)
+    -> reconnect:(unit -> (FLOW.flow, [ `Msg of string ]) result Lwt.t)
     -> unit -> t
     (** [create ?username branch reconnect] creates an active configuration system
         backed by the database connected to by [reconnect ()] where the values

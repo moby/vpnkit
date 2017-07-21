@@ -1,5 +1,3 @@
-module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
-
 let src =
   let src = Logs.Src.create "port forward" ~doc:"forward local ports to the VM" in
   Logs.Src.set_level src (Some Logs.Info);
@@ -108,8 +106,8 @@ module Make(Socket: Sig.SOCKETS) = struct
           if local_port < 1024 && not is_windows then begin
             request_privileged_port ipv4 local_port false
             >>= function
-            | Result.Error (`Msg x) -> Lwt.fail (Failure x)
-            | Result.Ok fd ->
+            | Error (`Msg x) -> Lwt.fail (Failure x)
+            | Ok fd ->
               Lwt.return (Socket.Datagram.Udp.of_bound_fd fd)
           end else bind ?description (local_ip, local_port)
         | _ -> bind ?description (local_ip, local_port)
@@ -126,8 +124,8 @@ module Make(Socket: Sig.SOCKETS) = struct
           if local_port < 1024 && not is_windows then begin
             request_privileged_port ipv4 local_port true
             >>= function
-            | Result.Error (`Msg x) -> Lwt.fail (Failure x)
-            | Result.Ok fd ->
+            | Error (`Msg x) -> Lwt.fail (Failure x)
+            | Ok fd ->
               Lwt.return (Socket.Stream.Tcp.of_bound_fd fd)
           end else bind ?description (local_ip, local_port)
         | _ -> bind ?description (local_ip, local_port)

@@ -1,5 +1,3 @@
-module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
-
 open Lwt
 
 let src =
@@ -119,10 +117,10 @@ module Main(Host: Sig.HOST) = struct
                (fun flow ->
                   Server.accept ~root ~msg:introspection_url flow
                   >>= function
-                  | Result.Error (`Msg m) ->
+                  | Error (`Msg m) ->
                     Log.err (fun f -> f "failed to establish 9P connection: %s" m);
                     Lwt.return ()
-                  | Result.Ok () ->
+                  | Ok () ->
                     Lwt.return_unit
                );
              Lwt.return_unit
@@ -167,10 +165,10 @@ module Main(Host: Sig.HOST) = struct
            let flow = HV.connect fd in
            Server.connect fs flow ()
            >>= function
-           | Result.Error (`Msg m) ->
+           | Error (`Msg m) ->
              Log.err (fun f -> f "failed to establish 9P connection: %s" m);
              Lwt.return ()
-           | Result.Ok server ->
+           | Ok server ->
              Server.after_disconnect server
         )
     | _ ->
@@ -184,10 +182,10 @@ module Main(Host: Sig.HOST) = struct
         (fun conn ->
            Server.connect fs conn ()
            >>= function
-           | Result.Error (`Msg m) ->
+           | Error (`Msg m) ->
              Log.err (fun f -> f "failed to establish 9P connection: %s" m);
              Lwt.return ()
-           | Result.Ok server ->
+           | Ok server ->
              Server.after_disconnect server
         );
       Lwt.return_unit
@@ -241,8 +239,8 @@ module Main(Host: Sig.HOST) = struct
       Dns_policy.add ~priority:1 ~config:(`Upstream { servers; search = []; assume_offline_after_drops = None }) );
 
     let etc_hosts_watch = match Hosts.watch ~path:hosts () with
-    | Result.Ok watch -> Some watch
-    | Result.Error (`Msg m) ->
+    | Ok watch -> Some watch
+    | Error (`Msg m) ->
       Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
       None in
 

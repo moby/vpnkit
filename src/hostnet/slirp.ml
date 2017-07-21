@@ -49,8 +49,8 @@ let or_failwith name m =
 
 let or_failwith_result name m =
   m >>= function
-  | Result.Error _ -> Lwt.fail (Failure (Printf.sprintf "Failed to connect %s device" name))
-  | Result.Ok x -> Lwt.return x
+  | Error _ -> Lwt.fail (Failure (Printf.sprintf "Failed to connect %s device" name))
+  | Ok x -> Lwt.return x
 
 let or_error name m =
   m >>= function
@@ -296,10 +296,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         (fun () ->
            Host.Sockets.Stream.Tcp.connect (ip, port)
            >>= function
-           | Result.Error (`Msg m) ->
+           | Error (`Msg m) ->
              Log.debug (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.to_string ip) port m);
              Lwt.return (fun _ -> None)
-           | Result.Ok socket ->
+           | Ok socket ->
              let t = Tcp.Flow.create id socket in
              let listeners port =
                Log.debug (fun f -> f "%s:%d handshake complete" (Ipaddr.to_string ip) port);
@@ -568,8 +568,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     (* Operator which logs Vfs errors and returns *)
     let (>>?=) m f = m >>= function
-      | Result.Ok x -> f x
-      | Result.Error err ->
+      | Ok x -> f x
+      | Error err ->
         Log.err (fun l -> l "diagnostics error: %a" Vfs.Error.pp err);
         Lwt.return_unit in
 
@@ -883,10 +883,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       | Some txt ->
         let open Dns_forward in
         begin match Config.of_string txt with
-        | Result.Ok config ->
+        | Ok config ->
           domain_search := config.Config.search;
           Lwt.return (Some config)
-        | Result.Error (`Msg m) ->
+        | Error (`Msg m) ->
           Log.err (fun f -> f "failed to parse %s: %s" (String.concat "/" dns_path) m);
           Lwt.return None
         end

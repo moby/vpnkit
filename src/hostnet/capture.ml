@@ -177,8 +177,8 @@ module Make(Input: Sig.VMNET) = struct
       Hashtbl.iter
         (fun _ rule ->
            match Frame.parse bufs with
-           | Result.Ok f -> if rule.predicate f then push rule bufs
-           | Result.Error (`Msg m) -> failwith m
+           | Ok f -> if rule.predicate f then push rule bufs
+           | Error (`Msg m) -> failwith m
         ) t.rules
     with e ->
       Log.err (fun f -> f "caught %s matching packet" (Printexc.to_string e));

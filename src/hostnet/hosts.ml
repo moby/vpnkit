@@ -50,10 +50,10 @@ module Make(Files: Sig.FILES) = struct
       (fun () ->
          Files.read_file filename
          >>= function
-         | Result.Error (`Msg msg) ->
+         | Error (`Msg msg) ->
            Log.err (fun f -> f "Failed to read %s: %s" filename msg);
            Lwt.return ()
-         | Result.Ok txt ->
+         | Ok txt ->
            etc_hosts := of_string txt;
            Log.info (fun f -> f "hosts file has bindings for %s" (String.concat " " @@ List.map fst !etc_hosts));
            Lwt.return ()

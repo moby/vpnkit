@@ -5,7 +5,7 @@ module Port : sig
     | `Udp of Ipaddr.t * int
   ]
 
-  val of_string: string -> (t, [ `Msg of string ]) Result.result
+  val of_string: string -> (t, [ `Msg of string ]) result
 end
 
 module Make(Connector: Sig.Connector)(Sockets: Sig.SOCKETS) : sig

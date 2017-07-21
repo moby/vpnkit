@@ -8,8 +8,8 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 let (>>*=) m f = m >>= function
-  | Result.Ok x -> f x
-  | Result.Error (`Msg m) -> failwith m
+  | Ok x -> f x
+  | Error (`Msg m) -> failwith m
 
 module Make(Host: Sig.HOST) = struct
 
@@ -41,8 +41,8 @@ module Make(Host: Sig.HOST) = struct
 
         Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 ip, port)
         >>= function
-        | Result.Error (`Msg x) -> failwith x
-        | Result.Ok remote ->
+        | Error (`Msg x) -> failwith x
+        | Ok remote ->
           Lwt.finalize
             (fun () ->
                Mirage_flow.proxy (module Clock) (module Host.Sockets.Stream.Tcp) flow (module Host.Sockets.Stream.Tcp) remote ()
@@ -76,8 +76,8 @@ module Make(Host: Sig.HOST) = struct
         >>= fun port ->
         Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 Ipaddr.V4.localhost, port)
         >>= function
-        | Result.Error (`Msg m) -> failwith m
-        | Result.Ok x ->
+        | Error (`Msg m) -> failwith m
+        | Ok x ->
           Lwt.return x
     end)(Host.Sockets)
 
@@ -97,10 +97,10 @@ module Make(Host: Sig.HOST) = struct
         (fun conn ->
            Server.connect ports conn ()
            >>= function
-           | Result.Error (`Msg m) ->
+           | Error (`Msg m) ->
              Log.err (fun f -> f "failed to establish 9P connection: %s" m);
              Lwt.return ()
-           | Result.Ok server ->
+           | Ok server ->
              Server.after_disconnect server
         );
       f port
@@ -112,8 +112,8 @@ module Make(Host: Sig.HOST) = struct
     let connect (ip, port) =
       Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 ip, port)
       >>= function
-      | Result.Ok fd -> Lwt.return fd
-      | Result.Error (`Msg m) -> failwith m
+      | Ok fd -> Lwt.return fd
+      | Error (`Msg m) -> failwith m
     let disconnect fd = Host.Sockets.Stream.Tcp.close fd
   end
 
@@ -175,8 +175,8 @@ module Make(Host: Sig.HOST) = struct
     let connect ports_port =
       Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 localhost, ports_port)
       >>= function
-      | Result.Error (`Msg m) -> failwith m
-      | Result.Ok flow ->
+      | Error (`Msg m) -> failwith m
+      | Ok flow ->
         Client.connect flow ()
         >>*= fun ninep ->
         Lwt.return { ninep }

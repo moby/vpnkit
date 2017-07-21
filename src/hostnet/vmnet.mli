@@ -45,7 +45,7 @@ module Init : sig
   val default: t
 
   val marshal: t -> Cstruct.t -> Cstruct.t
-  val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) Result.result
+  val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) result
 end
 
 module Command : sig
@@ -58,5 +58,5 @@ module Command : sig
   val sizeof: int
 
   val marshal: t -> Cstruct.t -> Cstruct.t
-  val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) Result.result
+  val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) result
 end

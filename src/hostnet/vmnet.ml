@@ -41,7 +41,7 @@ module Init = struct
     let version = Cstruct.LE.get_uint32 rest 5 in
     let commit = Cstruct.(to_string @@ sub rest 9 40) in
     let rest = Cstruct.shift rest sizeof in
-    Result.Ok ({ magic; version; commit }, rest)
+    Ok ({ magic; version; commit }, rest)
 end
 
 module Command = struct
@@ -82,17 +82,17 @@ module Command = struct
         begin
           let random_uuid = (Uuidm.v `V4) in
           Log.info (fun f -> f "Generated UUID on behalf of client: %s" (Uuidm.to_string random_uuid));
-          Result.Ok (Ethernet random_uuid, rest) (* generate random uuid on behalf of client if client sent array of \0 *)
+          Ok (Ethernet random_uuid, rest) (* generate random uuid on behalf of client if client sent array of \0 *)
         end else  begin
         let result = match (Uuidm.of_string uuid_str) with (* parse uuid from client *)
         | Some uuid -> begin
-            Result.Ok (Ethernet uuid, rest)
+            Ok (Ethernet uuid, rest)
           end
-        | None -> Result.Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str))
+        | None -> Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str))
         in 
         result
       end
-    | n -> Result.Error (`Msg (Printf.sprintf "Unknown command: %d" n))
+    | n -> Error (`Msg (Printf.sprintf "Unknown command: %d" n))
 
 end
 
@@ -124,9 +124,9 @@ module Vif = struct
     let mac = Cstruct.(to_string @@ sub rest 4 6) in
     try
       let client_macaddr = Macaddr.of_bytes_exn mac in
-      Result.Ok ({ mtu; max_packet_size; client_macaddr }, Cstruct.shift rest sizeof)
+      Ok ({ mtu; max_packet_size; client_macaddr }, Cstruct.shift rest sizeof)
     with _ ->
-      Result.Error (`Msg (Printf.sprintf "Failed to parse MAC: [%s]" mac))
+      Error (`Msg (Printf.sprintf "Failed to parse MAC: [%s]" mac))
 
 end
 
@@ -138,7 +138,7 @@ module Packet = struct
 
   let unmarshal rest =
     let t = Cstruct.LE.get_uint16 rest 0 in
-    Result.Ok (t, Cstruct.shift rest sizeof)
+    Ok (t, Cstruct.shift rest sizeof)
 end
 
 module Make(C: Sig.CONN) = struct

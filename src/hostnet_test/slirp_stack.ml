@@ -179,8 +179,8 @@ module Make(Host: Sig.HOST) = struct
     >>= fun port ->
     Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 Ipaddr.V4.localhost, port)
     >>= function
-    | Result.Error (`Msg x) -> failwith x
-    | Result.Ok flow ->
+    | Error (`Msg x) -> failwith x
+    | Ok flow ->
       Log.info (fun f -> f "Made a loopback connection");
       let client_macaddr = Slirp.default_client_macaddr in
       let uuid = (match Uuidm.of_string "d1d9cd61-d0dc-4715-9bb3-4c11da7ad7a5" with
@@ -188,12 +188,12 @@ module Make(Host: Sig.HOST) = struct
         | None -> failwith "unable to parse test uuid") in
       VMNET.client_of_fd ~uuid ~server_macaddr:client_macaddr flow
       >>= function
-      | Result.Error (`Msg x ) ->
+      | Error (`Msg x ) ->
         (* Server will close when it gets EOF *)
         Host.Sockets.Stream.Tcp.close flow
         >>= fun () ->
         failwith x
-      | Result.Ok client' ->
+      | Ok client' ->
         Lwt.finalize (fun () ->
             Log.info (fun f -> f "Initialising client TCP/IP stack");
             Client.connect client'

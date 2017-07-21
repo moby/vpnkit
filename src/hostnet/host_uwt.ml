@@ -903,18 +903,18 @@ module Files = struct
 
   let watch_file path callback =
     let cb _h res = match res with
-    | Result.Ok _ ->
+    | Ok _ ->
       callback ()
-    | Result.Error err ->
+    | Error err ->
       Log.err (fun f -> f "While watching %s: %s" path (Uwt.err_name err));
       () in
     match Uwt.Fs_poll.start path 5000 ~cb with
-    | Result.Ok handle ->
+    | Ok handle ->
       callback ();
-      Result.Ok handle
-    | Result.Error err ->
+      Ok handle
+    | Error err ->
       Log.err (fun f -> f "Starting to watch %s: %s" path (Uwt.err_name err));
-      Result.Error (`Msg (Uwt.strerror err))
+      Error (`Msg (Uwt.strerror err))
 
 end
 

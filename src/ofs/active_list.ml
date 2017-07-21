@@ -34,14 +34,14 @@ end
 module type Instance = sig
   type t
   val to_string: t -> string
-  val of_string: string -> (t, [ `Msg of string ]) Result.result
+  val of_string: string -> (t, [ `Msg of string ]) result
 
   val description_of_format: string
 
   type context
   (** The context in which a [t] is [start]ed, for example a TCP/IP stack *)
 
-  val start: context Var.t -> t -> (t, [ `Msg of string ]) Result.result Lwt.t
+  val start: context Var.t -> t -> (t, [ `Msg of string ]) result Lwt.t
 
   val stop: t -> unit Lwt.t
 
@@ -145,7 +145,7 @@ Immediately read the file contents and check whether it says:
 The directory will be deleted and replaced with a file of the same name.
 |} Instance.description_of_format)
 
-  let return x = Lwt.return (Result.Ok x)
+  let return x = Lwt.return (Ok x)
 
   let attach connection ~cancel:_ { Request.Attach.fid; _ } =
     connection.fids := Types.Fid.Map.add fid Root !(connection.fids);
@@ -240,7 +240,7 @@ The directory will be deleted and replaced with a file of the same name.
         u       = None;
       })
 
-  let errors_to_client = Result.(function
+  let errors_to_client = (function
     | Error (`Msg msg) -> Error { Response.Err.ename = msg; errno = None }
     | Ok _ as ok -> ok
     )
@@ -262,10 +262,10 @@ The directory will be deleted and replaced with a file of the same name.
     let open Lwt.Infix in
     write 0 buf children
     >>= function
-    | Result.Ok offset' ->
+    | Ok offset' ->
       let data = Cstruct.sub buf 0 (max 0 (offset' - offset)) in
       return { Response.Read.data }
-    | Result.Error _ -> Error.badfid
+    | Error _ -> Error.badfid
 
   let dot = make_stat ~is_directory:true ~writable:false ~name:"."
   let dotdot = make_stat ~is_directory:true ~writable:false ~name:".."
@@ -354,19 +354,19 @@ The directory will be deleted and replaced with a file of the same name.
           Log.err (fun f -> f "EPERM writing to an already-configured control file");
           Error.eperm
         end else begin match Instance.of_string @@ Cstruct.to_string data with
-        | Result.Ok f ->
+        | Ok f ->
           let open Lwt.Infix in
           begin Instance.start connection.t.context f >>= function
-            | Result.Ok f' -> (* local_port is resolved *)
+            | Ok f' -> (* local_port is resolved *)
               entry.instance <- Some f';
               entry.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
               Log.debug (fun f -> f "Created instance %s" (Instance.to_string f'));
               return ok
-            | Result.Error (`Msg m) ->
+            | Error (`Msg m) ->
               entry.result <- Some ("ERROR " ^ m ^ "\n");
               return ok
           end
-        | Result.Error (`Msg m) ->
+        | Error (`Msg m) ->
           Log.err (fun f -> f "Return an error message via the control file: %s" m);
           entry.result <- Some ("ERROR " ^ m ^ "\n");
           return ok

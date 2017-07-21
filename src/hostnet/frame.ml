@@ -1,4 +1,3 @@
-
 type t =
   | Ethernet: { src: Macaddr.t; dst: Macaddr.t; payload: t } -> t
   | Arp:      { op: [ `Request | `Reply | `Unknown ] } -> t
@@ -9,7 +8,6 @@ type t =
   | Payload:  Cstruct.t -> t
   | Unknown:  t
 
-open Result
 let ( >>= ) m f = match m with
 | Ok x -> f x
 | Error x -> Error x

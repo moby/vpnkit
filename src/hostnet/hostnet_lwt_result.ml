@@ -1,12 +1,12 @@
 open Lwt.Infix
 
-type ('a, 'b) t = ('a, 'b) Result.result Lwt.t
+type ('a, 'b) t = ('a, 'b) result Lwt.t
 
-let return x = Lwt.return (Result.Ok x)
-let fail   y = Lwt.return (Result.Error y)
+let return x = Lwt.return (Ok x)
+let fail   y = Lwt.return (Error y)
 
 module Infix = struct
   let (>>=) m f = m >>= function
-    | Result.Error y -> Lwt.return (Result.Error y)
-    | Result.Ok x -> f x
+    | Error y -> Lwt.return (Error y)
+    | Ok x -> f x
 end

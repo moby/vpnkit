@@ -9,5 +9,5 @@ type t =
   | Payload:  Cstruct.t -> t
   | Unknown:  t
 
-val parse: Cstructs.t -> (t, [ `Msg of string]) Result.result
+val parse: Cstructs.t -> (t, [ `Msg of string]) result
 (** [parse buffers] parses the frame in [buffers] *)

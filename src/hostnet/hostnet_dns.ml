@@ -77,17 +77,17 @@ module Policy(Files: Sig.FILES) = struct
                     Files.read_file resolv_conf
                     >>= fun txt ->
                     match Dns_forward.Config.Unix.of_resolv_conf txt with
-                    | Result.Error (`Msg m) ->
+                    | Error (`Msg m) ->
                       Log.err (fun f -> f "Failed to parse %s: %s" resolv_conf m);
                       Lwt_result.return ()
-                    | Result.Ok servers ->
+                    | Ok servers ->
                       add ~priority:2 ~config:(`Upstream servers);
                       Lwt_result.return ()
                  )
             ) with
-    | Result.Error (`Msg m) ->
+    | Error (`Msg m) ->
       Log.info (fun f -> f "Cannot watch %s: %s" resolv_conf m)
-    | Result.Ok _watch ->
+    | Ok _watch ->
       Log.info (fun f -> f "Will watch %s for changes" resolv_conf)
 
 end
@@ -246,7 +246,7 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     let buf = Dns.Buf.of_cstruct buffer in
     match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
     | None ->
-      Lwt.return (Result.Error (`Msg "failed to parse DNS packet"))
+      Lwt.return (Error (`Msg "failed to parse DNS packet"))
     | Some ({ questions = [ question ]; _ } as request) ->
       let marshal pkt =
         let buf = Dns.Buf.create 1024 in
@@ -261,12 +261,12 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
       begin try_etc_hosts question
         >>= function
         | Some answers ->
-          Lwt.return (Result.Ok (marshal @@ reply answers))
+          Lwt.return (Ok (marshal @@ reply answers))
         | None ->
           try_builtins t.local_ip t.host_names question
           >>= function
           | Some answers ->
-            Lwt.return (Result.Ok (marshal @@ reply answers))
+            Lwt.return (Ok (marshal @@ reply answers))
           | None ->
             begin match is_tcp, t.resolver with
             | true, Upstream { dns_tcp_resolver; _ } ->
@@ -283,13 +283,13 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
                   let questions = request.questions in
                   let authorities = [] and additionals = [] and answers = [] in
                   { Dns.Packet.id; detail; questions; answers; authorities; additionals } in
-                Lwt.return (Result.Ok (marshal nxdomain))
+                Lwt.return (Ok (marshal nxdomain))
               | answers ->
-                Lwt.return (Result.Ok (marshal @@ reply answers))
+                Lwt.return (Ok (marshal @@ reply answers))
             end
       end
     | _ ->
-      Lwt.return (Result.Error (`Msg "DNS packet had multiple questions"))
+      Lwt.return (Error (`Msg "DNS packet had multiple questions"))
 
   let describe buf =
     let len = Cstruct.len buf in
@@ -301,10 +301,10 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
   let handle_udp ~t ~udp ~src ~dst:_ ~src_port buf =
     answer t false buf
     >>= function
-    | Result.Error (`Msg m) ->
+    | Error (`Msg m) ->
       Log.warn (fun f -> f "%s lookup failed: %s" (describe buf) m);
       Lwt.return_unit
-    | Result.Ok buffer ->
+    | Ok buffer ->
       Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer
 
   let handle_tcp ~t =
@@ -316,24 +316,24 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
           let rec loop () =
             Dns_tcp_framing.read packets
             >>= function
-            | Result.Error _ ->
+            | Error _ ->
               Lwt.return_unit
-            | Result.Ok request ->
+            | Ok request ->
               (* Perform queries in background threads *)
               Lwt.async
                 (fun () ->
                    answer t true request
                    >>= function
-                   | Result.Error (`Msg m) ->
+                   | Error (`Msg m) ->
                      Log.warn (fun f -> f "%s lookup failed: %s" (describe request) m);
                      Lwt.return_unit
-                   | Result.Ok buffer ->
+                   | Ok buffer ->
                      begin Dns_tcp_framing.write packets buffer
                        >>= function
-                       | Result.Error (`Msg m) ->
+                       | Error (`Msg m) ->
                          Log.warn (fun f -> f "%s failed to write response: %s" (describe buffer) m);
                          Lwt.return_unit
-                       | Result.Ok () ->
+                       | Ok () ->
                          Lwt.return_unit
                      end
                 );
