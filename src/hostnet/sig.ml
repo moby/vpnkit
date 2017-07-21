@@ -1,4 +1,3 @@
-
 module type READ_INTO = sig
   type flow
   type error
@@ -12,10 +11,10 @@ module type FLOW_CLIENT = sig
 
   type address
 
-  val connect: ?read_buffer_size:int -> address
-    -> flow Error.t
-    (** [connect address] creates a connection to [address] and returns
-        he connected flow. *)
+  val connect: ?read_buffer_size:int -> address ->
+    (flow, [`Msg of string]) result Lwt.t
+  (** [connect address] creates a connection to [address] and returns
+      he connected flow. *)
 end
 
 module type CONN = sig
@@ -136,7 +135,7 @@ end
 module type FILES = sig
   (** An OS-based file reading implementation *)
 
-  val read_file: string -> string Error.t
+  val read_file: string -> (string, [`Msg of string]) result Lwt.t
   (** Read a whole file into a string *)
 
   type watch
@@ -210,7 +209,7 @@ module type VMNET = sig
   type fd
 
   val of_fd: client_macaddr_of_uuid:(Uuidm.t -> Macaddr.t Lwt.t) -> server_macaddr:Macaddr.t
-    -> mtu:int -> fd -> t Error.t
+    -> mtu:int -> fd -> (t, [`Msg of string]) result Lwt.t
 
   val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 

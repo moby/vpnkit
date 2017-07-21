@@ -1,5 +1,3 @@
-module Lwt_result = Hostnet_lwt_result (* remove when we have later lwt *)
-
 open Lwt.Infix
 
 let src =
@@ -73,7 +71,7 @@ module Policy(Files: Sig.FILES) = struct
             (fun () ->
                Lwt.async
                  (fun () ->
-                    let open Error.Infix in
+                    let open Lwt_result.Infix in
                     Files.read_file resolv_conf
                     >>= fun txt ->
                     match Dns_forward.Config.Unix.of_resolv_conf txt with

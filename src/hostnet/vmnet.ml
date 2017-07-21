@@ -1,6 +1,4 @@
-module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
-
-open Lwt
+open Lwt.Infix
 
 let src =
   let src = Logs.Src.create "vmnet" ~doc:"vmnet" in
@@ -89,7 +87,7 @@ module Command = struct
             Ok (Ethernet uuid, rest)
           end
         | None -> Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str))
-        in 
+        in
         result
       end
     | n -> Error (`Msg (Printf.sprintf "Unknown command: %d" n))
@@ -115,7 +113,7 @@ module Vif = struct
   let marshal t rest =
     Cstruct.LE.set_uint16 rest 0 t.mtu;
     Cstruct.LE.set_uint16 rest 2 t.max_packet_size;
-    Cstruct.blit_from_bytes (Macaddr.to_bytes t.client_macaddr) 0 rest 4 6; 
+    Cstruct.blit_from_bytes (Macaddr.to_bytes t.client_macaddr) 0 rest 4 6;
     Cstruct.shift rest sizeof
 
   let unmarshal rest =

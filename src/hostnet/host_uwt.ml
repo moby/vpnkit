@@ -1,5 +1,3 @@
-module Lwt_result = Hostnet_lwt_result (* remove when new Lwt is released *)
-
 open Lwt.Infix
 
 let src =

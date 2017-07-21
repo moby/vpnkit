@@ -94,7 +94,7 @@ module Make
     exclude: Exclude.t;
   }
 
-  let parse_host_port x : (Ipaddr.t * int) option Error.t =
+  let parse_host_port x =
     (* host:port or [host]:port *)
     let find_host name_or_ip =
       match Ipaddr.of_string name_or_ip with
@@ -117,7 +117,7 @@ module Make
     let uri = Uri.of_string x in
     begin match Uri.host uri, Uri.port uri with
     | Some host, Some port ->
-      let open Error.Infix in
+      let open Lwt_result.Infix in
       find_host host
       >>= fun ip ->
       Lwt.return (Ok (Some (ip, port)))
@@ -126,7 +126,7 @@ module Make
       begin match String.cuts ~sep:":" x with
       | [] -> Lwt.return (Error (`Msg ("Failed to find a :port in " ^ x)))
       | [host; port] ->
-        let open Error.Infix in
+        let open Lwt_result.Infix in
         find_host host
         >>= fun ip ->
         parse_port port
@@ -147,7 +147,7 @@ module Make
     let http  = try Some (get_string @@ find j [ "http" ])  with Not_found -> None in
     let https = try Some (get_string @@ find j [ "https" ]) with Not_found -> None in
     let exclude = try Exclude.of_string @@ get_string @@ find j [ "exclude" ] with Not_found -> Exclude.none in
-    let open Error.Infix in
+    let open Lwt_result.Infix in
     (match http with None -> Lwt.return (Ok None) | Some x -> parse_host_port x)
     >>= fun http ->
     (match https with None -> Lwt.return (Ok None) | Some x -> parse_host_port x)
@@ -156,8 +156,8 @@ module Make
 
   let to_string t = Ezjsonm.to_string ~minify:false @@ to_json t
 
-  let create ?http ?https ?exclude:_ () : t Error.t =
-    let open Error.Infix in
+  let create ?http ?https ?exclude:_ () =
+    let open Lwt_result.Infix in
     ( match http with
     | None -> Lwt.return (Ok None)
     | Some http -> parse_host_port http )
