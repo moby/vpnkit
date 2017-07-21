@@ -128,8 +128,8 @@ Every active Instance is represented by a file. To shut down an Instance,
 remove the file.
 
 To request an additional Instance, make a directory with a unique name,
-then open the special file `ctl` inside, and `write` a single string of the following
-form:
+then open the special file `ctl` inside, and `write` a single string of the
+following form:
 
 %s
 
@@ -139,8 +139,8 @@ Immediately read the file contents and check whether it says:
   the details returned to you. For some instance types the server might modify
   the request slightly, for example by choosing a local port number or
   temporary path.
-- `ERROR some error message`: this means the Instance creation has failed, perhaps
-  some needed resource is still in use.
+- `ERROR some error message`: this means the Instance creation has failed,
+  perhaps some needed resource is still in use.
 
 The directory will be deleted and replaced with a file of the same name.
 |} Instance.description_of_format)
@@ -211,7 +211,10 @@ The directory will be deleted and replaced with a file of the same name.
 
   let disconnect connection _ =
     Log.debug (fun f -> f "disconnecting 9P client");
-    let resources = Types.Fid.Map.fold (fun _ resource acc -> resource :: acc) !(connection.fids) [] in
+    let resources =
+      Types.Fid.Map.fold (fun _ resource acc -> resource :: acc)
+        !(connection.fids) []
+    in
     Lwt_list.iter_s free_resource resources
 
   let open_ _connection ~cancel:_ _ =
