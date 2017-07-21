@@ -98,42 +98,42 @@ module Make(Host: Sig.HOST) = struct
       Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
     | `Error _ ->
       Log.err (fun f -> f "Failed to connect to %s:80" (Ipaddr.V4.to_string ip));
-        failwith "http_fetch"
+      failwith "http_fetch"
 
   let intercept request =
     let forwarded, forwarded_u = Lwt.task () in
     Slirp_stack.with_stack
       (fun _ stack ->
-        with_server
-          (fun flow ->
-            let ic = Incoming.C.create flow in
-            Incoming.Request.read ic
-            >>= function
-            | `Eof ->
-              Log.err (fun f -> f "Failed to request");
-              failwith "Failed to read request"
-            | `Invalid x ->
-              Log.err (fun f -> f "Failed to parse request: %s" x);
-              failwith ("Failed to parse request: " ^ x)
-            | `Ok req ->
-              (* parse the response *)
-              Lwt.wakeup_later forwarded_u req;
-              Lwt.return_unit
-          ) (fun server ->
-            let json = Ezjsonm.from_string (" { \"http\": \"127.0.0.1:" ^ (string_of_int server.Server.port) ^ "\" }") in
-            Slirp_stack.Slirp_stack.Debug.update_http_json json ()
-            >>= function
-            | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
-            | Ok () ->
-              send_http_request stack (Ipaddr.V4.of_string_exn "127.0.0.1") request
-              >>= fun () ->
-              Lwt.pick [ (Host.Time.sleep 100. >>= fun () -> Lwt.return `Timeout); (forwarded >>= fun x -> Lwt.return (`Result x)) ]
-          )
-        >>= function
-        | `Timeout ->
-          failwith "HTTP interception failed"
-        | `Result x ->
-          Lwt.return x
+         with_server
+           (fun flow ->
+              let ic = Incoming.C.create flow in
+              Incoming.Request.read ic
+              >>= function
+              | `Eof ->
+                Log.err (fun f -> f "Failed to request");
+                failwith "Failed to read request"
+              | `Invalid x ->
+                Log.err (fun f -> f "Failed to parse request: %s" x);
+                failwith ("Failed to parse request: " ^ x)
+              | `Ok req ->
+                (* parse the response *)
+                Lwt.wakeup_later forwarded_u req;
+                Lwt.return_unit
+           ) (fun server ->
+               let json = Ezjsonm.from_string (" { \"http\": \"127.0.0.1:" ^ (string_of_int server.Server.port) ^ "\" }") in
+               Slirp_stack.Slirp_stack.Debug.update_http_json json ()
+               >>= function
+               | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
+               | Ok () ->
+                 send_http_request stack (Ipaddr.V4.of_string_exn "127.0.0.1") request
+                 >>= fun () ->
+                 Lwt.pick [ (Host.Time.sleep 100. >>= fun () -> Lwt.return `Timeout); (forwarded >>= fun x -> Lwt.return (`Result x)) ]
+             )
+         >>= function
+         | `Timeout ->
+           failwith "HTTP interception failed"
+         | `Result x ->
+           Lwt.return x
       )
 
   (* Test that HTTP interception works at all *)
@@ -194,51 +194,51 @@ module Make(Host: Sig.HOST) = struct
     Host.Main.run begin
       Slirp_stack.with_stack
         (fun _ stack ->
-          with_server
-            (fun flow ->
-              let ic = Incoming.C.create flow in
-              Incoming.Request.read ic
-              >>= function
-              | `Eof ->
-                Log.err (fun f -> f "Failed to request");
-                failwith "Failed to read request"
-              | `Invalid x ->
-                Log.err (fun f -> f "Failed to parse request: %s" x);
-                failwith ("Failed to parse request: " ^ x)
-              | `Ok req ->
-                Log.info (fun f -> f "received: %s" (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t req)));
-                Alcotest.check Alcotest.string "method" (Cohttp.Code.string_of_method `CONNECT) (Cohttp.Code.string_of_method req.Cohttp.Request.meth);
-                let uri = Cohttp.Request.uri req in
-                Alcotest.check Alcotest.(option string) "host" (Some (Ipaddr.V4.to_string test_dst_ip)) (Uri.host uri);
-                Alcotest.check Alcotest.(option int) "port" (Some 443) (Uri.port uri);
-                (* Unfortunately cohttp always adds transfer-encoding: chunked
-                   so we write the header ourselves *)
-                Incoming.C.write_line ic "HTTP/1.0 200 OK\r";
-                Incoming.C.write_line ic "\r";
-                Incoming.C.flush ic
-                >>= fun () ->
-                Incoming.C.write_line ic "hello";
-                Incoming.C.flush ic
-            ) (fun server ->
-              Slirp_stack.Slirp_stack.Debug.update_http ~https:("127.0.0.1:" ^ (string_of_int server.Server.port)) ()
-              >>= function
-              | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
-              | Ok () ->
-                let open Slirp_stack in
-                begin Client.TCPV4.create_connection (Client.tcpv4 stack) (test_dst_ip, 443)
+           with_server
+             (fun flow ->
+                let ic = Incoming.C.create flow in
+                Incoming.Request.read ic
                 >>= function
-                | `Error _ ->
-                  Log.err (fun f -> f "TCPV4.create_connection %s:443 failed" (Ipaddr.V4.to_string test_dst_ip));
-                  failwith "TCPV4.create_connection"
-                | `Ok flow ->
-                  let ic = Outgoing.C.create flow in
-                  Outgoing.C.read_some ~len:5 ic
-                  >>= fun buf ->
-                  let txt = Cstruct.to_string buf in
-                  Alcotest.check Alcotest.string "message" "hello" txt;
-                  Lwt.return_unit
-                end
-            )
+                | `Eof ->
+                  Log.err (fun f -> f "Failed to request");
+                  failwith "Failed to read request"
+                | `Invalid x ->
+                  Log.err (fun f -> f "Failed to parse request: %s" x);
+                  failwith ("Failed to parse request: " ^ x)
+                | `Ok req ->
+                  Log.info (fun f -> f "received: %s" (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t req)));
+                  Alcotest.check Alcotest.string "method" (Cohttp.Code.string_of_method `CONNECT) (Cohttp.Code.string_of_method req.Cohttp.Request.meth);
+                  let uri = Cohttp.Request.uri req in
+                  Alcotest.check Alcotest.(option string) "host" (Some (Ipaddr.V4.to_string test_dst_ip)) (Uri.host uri);
+                  Alcotest.check Alcotest.(option int) "port" (Some 443) (Uri.port uri);
+                  (* Unfortunately cohttp always adds transfer-encoding: chunked
+                     so we write the header ourselves *)
+                  Incoming.C.write_line ic "HTTP/1.0 200 OK\r";
+                  Incoming.C.write_line ic "\r";
+                  Incoming.C.flush ic
+                  >>= fun () ->
+                  Incoming.C.write_line ic "hello";
+                  Incoming.C.flush ic
+             ) (fun server ->
+                 Slirp_stack.Slirp_stack.Debug.update_http ~https:("127.0.0.1:" ^ (string_of_int server.Server.port)) ()
+                 >>= function
+                 | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
+                 | Ok () ->
+                   let open Slirp_stack in
+                   begin Client.TCPV4.create_connection (Client.tcpv4 stack) (test_dst_ip, 443)
+                     >>= function
+                     | `Error _ ->
+                       Log.err (fun f -> f "TCPV4.create_connection %s:443 failed" (Ipaddr.V4.to_string test_dst_ip));
+                       failwith "TCPV4.create_connection"
+                     | `Ok flow ->
+                       let ic = Outgoing.C.create flow in
+                       Outgoing.C.read_some ~len:5 ic
+                       >>= fun buf ->
+                       let txt = Cstruct.to_string buf in
+                       Alcotest.check Alcotest.string "message" "hello" txt;
+                       Lwt.return_unit
+                   end
+               )
         )
     end
 

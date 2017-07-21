@@ -60,23 +60,23 @@ module Make(Socket: Sig.SOCKETS) = struct
     let n, _, fd = Fd_send_recv.recv_fd rawfd result 0 8 [] in
 
     ( if n <> 8 then Lwt.return (`Error (`Msg (Printf.sprintf "Message only contained %d bytes" n))) else begin
-        let buf = Cstruct.create 8 in
-        Cstruct.blit_from_string result 0 buf 0 8;
-        Log.debug (fun f ->
-            let b = Buffer.create 16 in
-            Cstruct.hexdump_to_buffer b buf;
-            f "received result bytes: %s which is %s" (String.escaped result) (Buffer.contents b)
-          );
-        match Cstruct.LE.get_uint64 buf 0 with
-        | 0L -> Lwt.return (`Ok fd)
-        | n ->
-          begin match n with
+          let buf = Cstruct.create 8 in
+          Cstruct.blit_from_string result 0 buf 0 8;
+          Log.debug (fun f ->
+              let b = Buffer.create 16 in
+              Cstruct.hexdump_to_buffer b buf;
+              f "received result bytes: %s which is %s" (String.escaped result) (Buffer.contents b)
+            );
+          match Cstruct.LE.get_uint64 buf 0 with
+          | 0L -> Lwt.return (`Ok fd)
+          | n ->
+            begin match n with
             | 48L -> Lwt.return (`Error (`Msg "EADDRINUSE"))
             | 49L -> Lwt.return (`Error (`Msg "EADDRNOTAVAIL"))
             | n   ->
               Lwt.return (`Error (`Msg ("Failed to bind: unrecognised errno: " ^ (Int64.to_string n))))
-          end
-      end )
+            end
+        end )
     >>= function
     | `Error x ->
       Unix.close fd;

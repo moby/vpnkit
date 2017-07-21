@@ -63,18 +63,18 @@ module Make_hvsock(Host: Sig.HOST) = struct
     F.close flow.flow
 
   let connect () = match !hvsockaddr with
-    | None ->
-      Log.err (fun f -> f "Please set a Hyper-V socket address for port forwarding");
-      failwith "Hyper-V socket forwarding not initialised"
-    | Some sockaddr ->
-      let description = "hvsock" in
-      Host.Sockets.register_connection description
-      >>= fun idx ->
-      let fd = F.Hvsock.create () in
-      F.Hvsock.connect fd sockaddr
-      >>= fun () ->
-      let flow = F.connect fd in
-      Lwt.return { idx; flow }
+  | None ->
+    Log.err (fun f -> f "Please set a Hyper-V socket address for port forwarding");
+    failwith "Hyper-V socket forwarding not initialised"
+  | Some sockaddr ->
+    let description = "hvsock" in
+    Host.Sockets.register_connection description
+    >>= fun idx ->
+    let fd = F.Hvsock.create () in
+    F.Hvsock.connect fd sockaddr
+    >>= fun () ->
+    let flow = F.connect fd in
+    Lwt.return { idx; flow }
 
   let read_into t = F.read_into t.flow
   let read t = F.read t.flow

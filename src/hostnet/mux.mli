@@ -3,14 +3,14 @@ module Make(Netif: V1_LWT.NETWORK) : sig
 
   (** A simple ethernet multiplexer/demultiplexer
 
-     An instance has an underlying ethernet NETWORK which it receives
-     packets from. If a packet matches a rule associated with a downstream
-     port, it is sent there. Packets which don't match any rules are sent
-     to the default callback for processing. All transmissions from downstream
-     ports are sent on the underlying network.
+      An instance has an underlying ethernet NETWORK which it receives
+      packets from. If a packet matches a rule associated with a downstream
+      port, it is sent there. Packets which don't match any rules are sent
+      to the default callback for processing. All transmissions from downstream
+      ports are sent on the underlying network.
 
-     The default callback (set by [listen]) acts as the control-path: it's function
-     is to accept flows and set up new rules.
+      The default callback (set by [listen]) acts as the control-path: it's function
+      is to accept flows and set up new rules.
 
   *)
 

@@ -16,14 +16,14 @@ module Config = struct
   ]
 
   let to_string = function
-    | `Upstream x -> "use upstream DNS servers " ^ (Dns_forward.Config.to_string x)
-    | `Host -> "use host resolver"
+  | `Upstream x -> "use upstream DNS servers " ^ (Dns_forward.Config.to_string x)
+  | `Host -> "use host resolver"
 
   let compare a b = match a, b with
-    | `Upstream x, `Upstream y -> Dns_forward.Config.compare x y
-    | `Host, `Upstream _ -> -1
-    | `Upstream _, `Host -> 1
-    | `Host, `Host -> 0
+  | `Upstream x, `Upstream y -> Dns_forward.Config.compare x y
+  | `Host, `Upstream _ -> -1
+  | `Upstream _, `Host -> 1
+  | `Host, `Host -> 0
 end
 
 
@@ -31,10 +31,10 @@ module Policy(Files: Sig.FILES) = struct
   let config_of_ips ips =
     let open Dns_forward.Config in
     let servers = Server.Set.of_list (
-      List.map (fun (ip, _) ->
-        { Server.address = { Address.ip; port = 53 }; zones = Domain.Set.empty;
-        timeout_ms = Some 2000; order = 0 }
-      ) ips) in
+        List.map (fun (ip, _) ->
+            { Server.address = { Address.ip; port = 53 }; zones = Domain.Set.empty;
+              timeout_ms = Some 2000; order = 0 }
+          ) ips) in
     { servers; search = []; assume_offline_after_drops = None }
 
   module IntMap = Map.Make(struct type t = int let compare (a: int) (b: int) = Pervasives.compare a b end)
@@ -70,21 +70,21 @@ module Policy(Files: Sig.FILES) = struct
   let resolv_conf = "/etc/resolv.conf"
   let _ =
     match Files.watch_file resolv_conf
-      (fun () ->
-        Lwt.async
-          (fun () ->
-            let open Error.Infix in
-            Files.read_file resolv_conf
-            >>= fun txt ->
-            match Dns_forward.Config.Unix.of_resolv_conf txt with
-            | Result.Error (`Msg m) ->
-              Log.err (fun f -> f "Failed to parse %s: %s" resolv_conf m);
-              Lwt_result.return ()
-            | Result.Ok servers ->
-              add ~priority:2 ~config:(`Upstream servers);
-              Lwt_result.return ()
-          )
-      ) with
+            (fun () ->
+               Lwt.async
+                 (fun () ->
+                    let open Error.Infix in
+                    Files.read_file resolv_conf
+                    >>= fun txt ->
+                    match Dns_forward.Config.Unix.of_resolv_conf txt with
+                    | Result.Error (`Msg m) ->
+                      Log.err (fun f -> f "Failed to parse %s: %s" resolv_conf m);
+                      Lwt_result.return ()
+                    | Result.Ok servers ->
+                      add ~priority:2 ~config:(`Upstream servers);
+                      Lwt_result.return ()
+                 )
+            ) with
     | Result.Error (`Msg m) ->
       Log.info (fun f -> f "Cannot watch %s: %s" resolv_conf m)
     | Result.Ok _watch ->
@@ -101,7 +101,7 @@ let try_etc_hosts =
       | None,   Ipaddr.V4 v4 ->
         if Dns.Name.to_string q_name = name then Some v4 else None
       | None,   Ipaddr.V6 _  -> None
-    ) None !(Hosts.etc_hosts) with
+      ) None !(Hosts.etc_hosts) with
     | None -> Lwt.return_none
     | Some v4 ->
       Log.info (fun f -> f "DNS: %s is %s in in /etc/hosts" (Dns.Name.to_string q_name) (Ipaddr.V4.to_string v4));
@@ -113,7 +113,7 @@ let try_etc_hosts =
       | None,   Ipaddr.V6 v6 ->
         if Dns.Name.to_string q_name = name then Some v6 else None
       | None,   Ipaddr.V4 _  -> None
-    ) None !(Hosts.etc_hosts) with
+      ) None !(Hosts.etc_hosts) with
     | None -> Lwt.return_none
     | Some v6 ->
       Log.info (fun f -> f "DNS: %s is %s in in /etc/hosts" (Dns.Name.to_string q_name) (Ipaddr.V6.to_string v6));
@@ -162,12 +162,12 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
   let set_recorder r = recorder := Some r
 
   let destroy = function
-    | { resolver = Upstream { dns_tcp_resolver; dns_udp_resolver; _ }; _ } ->
-      Dns_tcp_resolver.destroy dns_tcp_resolver
-      >>= fun () ->
-      Dns_udp_resolver.destroy dns_udp_resolver
-    | { resolver = Host; _ } ->
-      Lwt.return_unit
+  | { resolver = Upstream { dns_tcp_resolver; dns_udp_resolver; _ }; _ } ->
+    Dns_tcp_resolver.destroy dns_tcp_resolver
+    >>= fun () ->
+    Dns_udp_resolver.destroy dns_udp_resolver
+  | { resolver = Host; _ } ->
+    Lwt.return_unit
 
   let record_udp ~source_ip ~source_port ~dest_ip ~dest_port bufs =
     match !recorder with
@@ -259,34 +259,34 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
         let authorities = [] and additionals = [] in
         { Dns.Packet.id; detail; questions; answers; authorities; additionals } in
       begin try_etc_hosts question
-      >>= function
-      | Some answers ->
-        Lwt.return (Result.Ok (marshal @@ reply answers))
-      | None ->
-        try_builtins t.local_ip t.host_names question
         >>= function
         | Some answers ->
           Lwt.return (Result.Ok (marshal @@ reply answers))
         | None ->
-          begin match is_tcp, t.resolver with
-          | true, Upstream { dns_tcp_resolver; _ } ->
-            Dns_tcp_resolver.answer buffer dns_tcp_resolver
-          | false, Upstream { dns_udp_resolver; _ } ->
-            Dns_udp_resolver.answer buffer dns_udp_resolver
-          | _, Host ->
-            D.resolve question
-            >>= function
-            | [] ->
-              let nxdomain =
-                let id = request.id in
-                let detail = { request.detail with Dns.Packet.qr = Dns.Packet.Response; ra = true; rcode = Dns.Packet.NXDomain } in
-                let questions = request.questions in
-                let authorities = [] and additionals = [] and answers = [] in
-                { Dns.Packet.id; detail; questions; answers; authorities; additionals } in
-              Lwt.return (Result.Ok (marshal nxdomain))
-            | answers ->
-              Lwt.return (Result.Ok (marshal @@ reply answers))
-          end
+          try_builtins t.local_ip t.host_names question
+          >>= function
+          | Some answers ->
+            Lwt.return (Result.Ok (marshal @@ reply answers))
+          | None ->
+            begin match is_tcp, t.resolver with
+            | true, Upstream { dns_tcp_resolver; _ } ->
+              Dns_tcp_resolver.answer buffer dns_tcp_resolver
+            | false, Upstream { dns_udp_resolver; _ } ->
+              Dns_udp_resolver.answer buffer dns_udp_resolver
+            | _, Host ->
+              D.resolve question
+              >>= function
+              | [] ->
+                let nxdomain =
+                  let id = request.id in
+                  let detail = { request.detail with Dns.Packet.qr = Dns.Packet.Response; ra = true; rcode = Dns.Packet.NXDomain } in
+                  let questions = request.questions in
+                  let authorities = [] and additionals = [] and answers = [] in
+                  { Dns.Packet.id; detail; questions; answers; authorities; additionals } in
+                Lwt.return (Result.Ok (marshal nxdomain))
+              | answers ->
+                Lwt.return (Result.Ok (marshal @@ reply answers))
+            end
       end
     | _ ->
       Lwt.return (Result.Error (`Msg "DNS packet had multiple questions"))
@@ -312,34 +312,34 @@ module Make(Ip: V1_LWT.IPV4) (Udp:V1_LWT.UDPV4) (Tcp:V1_LWT.TCPV4) (Socket: Sig.
     let listeners _ =
       Log.debug (fun f -> f "DNS TCP handshake complete");
       Some (fun flow ->
-        let packets = Dns_tcp_framing.connect flow in
-        let rec loop () =
-          Dns_tcp_framing.read packets
-          >>= function
-          | Result.Error _ ->
-            Lwt.return_unit
-          | Result.Ok request ->
-            (* Perform queries in background threads *)
-            Lwt.async
-              (fun () ->
-                answer t true request
-                >>= function
-                | Result.Error (`Msg m) ->
-                  Log.warn (fun f -> f "%s lookup failed: %s" (describe request) m);
-                  Lwt.return_unit
-                | Result.Ok buffer ->
-                  begin Dns_tcp_framing.write packets buffer
-                  >>= function
-                  | Result.Error (`Msg m) ->
-                    Log.warn (fun f -> f "%s failed to write response: %s" (describe buffer) m);
-                    Lwt.return_unit
-                  | Result.Ok () ->
-                    Lwt.return_unit
-                  end
-              );
+          let packets = Dns_tcp_framing.connect flow in
+          let rec loop () =
+            Dns_tcp_framing.read packets
+            >>= function
+            | Result.Error _ ->
+              Lwt.return_unit
+            | Result.Ok request ->
+              (* Perform queries in background threads *)
+              Lwt.async
+                (fun () ->
+                   answer t true request
+                   >>= function
+                   | Result.Error (`Msg m) ->
+                     Log.warn (fun f -> f "%s lookup failed: %s" (describe request) m);
+                     Lwt.return_unit
+                   | Result.Ok buffer ->
+                     begin Dns_tcp_framing.write packets buffer
+                       >>= function
+                       | Result.Error (`Msg m) ->
+                         Log.warn (fun f -> f "%s failed to write response: %s" (describe buffer) m);
+                         Lwt.return_unit
+                       | Result.Ok () ->
+                         Lwt.return_unit
+                     end
+                );
               loop () in
-        loop ()
-      ) in
+          loop ()
+        ) in
     Lwt.return listeners
 
 end

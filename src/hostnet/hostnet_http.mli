@@ -15,7 +15,7 @@ module Make
     (Tcp: Mirage_flow_s.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
-    : sig
+  : sig
 
     type t
     (** An HTTP proxy instance with a fixed configuration *)
@@ -34,4 +34,4 @@ module Make
     (** [to_json t] encodes [t] into json *)
 
     val handle: dst:(Ipaddr.V4.t * int) -> t:t -> (int -> (Tcp.flow -> unit Lwt.t) option) Lwt.t option
-end
+  end

@@ -23,11 +23,11 @@ module Var = struct
   let read t =
     let open Lwt.Infix in
     let rec loop () = match t.thing with
-      | Some c -> Lwt.return c
-      | None ->
-        Lwt_condition.wait t.c
-        >>= fun () ->
-        loop () in
+    | Some c -> Lwt.return c
+    | None ->
+      Lwt_condition.wait t.c
+      >>= fun () ->
+      loop () in
     loop ()
 end
 
@@ -88,10 +88,10 @@ module Make(Instance: Instance) = struct
     | Root
 
   let string_of_resource = function
-    | ControlFile entry -> Printf.sprintf "ControlFile(%s)" entry.name
-    | README -> "README"
-    | Entry entry -> Printf.sprintf "Entry(%s)" entry.name
-    | Root -> "Root"
+  | ControlFile entry -> Printf.sprintf "ControlFile(%s)" entry.name
+  | README -> "README"
+  | Entry entry -> Printf.sprintf "Entry(%s)" entry.name
+  | Root -> "Root"
 
   type connection = {
     t: t;
@@ -157,24 +157,24 @@ The directory will be deleted and replaced with a file of the same name.
     try
       let from = Types.Fid.Map.find fid !(connection.fids) in
       let from, wqids = List.fold_left (fun (from,qids) x -> match x, fst from with
-          | "..", _ ->
-            (Root, root_qid), root_qid::qids
-          | "README", _ ->
-            let qid = next_qid [] in
-            (README, qid), qid :: qids
-          | name, Root ->
-            if StringMap.mem name !active then begin
-              let entry = StringMap.find name !active in
-              let qid = next_qid (match entry.instance with
-                | None -> [ Types.Qid.Directory ]
-                | Some _ -> []
+        | "..", _ ->
+          (Root, root_qid), root_qid::qids
+        | "README", _ ->
+          let qid = next_qid [] in
+          (README, qid), qid :: qids
+        | name, Root ->
+          if StringMap.mem name !active then begin
+            let entry = StringMap.find name !active in
+            let qid = next_qid (match entry.instance with
+              | None -> [ Types.Qid.Directory ]
+              | Some _ -> []
               ) in
-              (Entry entry, qid), qid :: qids
-            end else raise Enoent
-          | "ctl", Entry entry ->
-            let qid = next_qid [] in
-            (ControlFile entry, qid), qid :: qids
-          | _, _ -> raise Enoent
+            (Entry entry, qid), qid :: qids
+          end else raise Enoent
+        | "ctl", Entry entry ->
+          let qid = next_qid [] in
+          (ControlFile entry, qid), qid :: qids
+        | _, _ -> raise Enoent
         ) ((from, next_qid []), []) wnames in
       connection.fids := Types.Fid.Map.add newfid (fst from) !(connection.fids);
       let wqids = List.rev wqids in
@@ -184,25 +184,25 @@ The directory will be deleted and replaced with a file of the same name.
     | Enoent -> Error.enoent
 
   let free_resource = function
-    | ControlFile entry ->
-      Log.debug (fun f -> f "freeing entry %s" entry.name);
-      let open Lwt.Infix in
-      ( match entry.instance with
-        | None -> Lwt.return ()
-        | Some f -> Instance.stop f )
-      >>= fun () ->
-      entry.instance <- None;
-      active := StringMap.remove entry.name !active;
-      Lwt.return ()
-    | _ ->
-      Lwt.return ()
+  | ControlFile entry ->
+    Log.debug (fun f -> f "freeing entry %s" entry.name);
+    let open Lwt.Infix in
+    ( match entry.instance with
+    | None -> Lwt.return ()
+    | Some f -> Instance.stop f )
+    >>= fun () ->
+    entry.instance <- None;
+    active := StringMap.remove entry.name !active;
+    Lwt.return ()
+  | _ ->
+    Lwt.return ()
 
   let clunk connection ~cancel:_ { Request.Clunk.fid } =
     let open Lwt.Infix in
     ( if Types.Fid.Map.mem fid !(connection.fids) then begin
-        let resource = Types.Fid.Map.find fid !(connection.fids) in
-        free_resource resource
-      end else Lwt.return () )
+          let resource = Types.Fid.Map.find fid !(connection.fids) in
+          free_resource resource
+        end else Lwt.return () )
     >>= fun () ->
     connection.fids := Types.Fid.Map.remove fid !(connection.fids);
     return ()
@@ -241,24 +241,24 @@ The directory will be deleted and replaced with a file of the same name.
       })
 
   let errors_to_client = Result.(function
-      | Error (`Msg msg) -> Error { Response.Err.ename = msg; errno = None }
-      | Ok _ as ok -> ok
+    | Error (`Msg msg) -> Error { Response.Err.ename = msg; errno = None }
+    | Ok _ as ok -> ok
     )
 
   let read_children count offset children =
     let buf = Cstruct.create count in
     let rec write off rest = function
-      | [] -> return off
-      | stat :: xs ->
-        let open Infix in
-        let n = Types.Stat.sizeof stat in
-        if off < offset
-        then write (off + n) rest xs
-        else if Cstruct.len rest < n then return off
-        else
-          Lwt.return (Types.Stat.write stat rest)
-          >>*= fun rest ->
-          write (off + n) rest xs in
+    | [] -> return off
+    | stat :: xs ->
+      let open Infix in
+      let n = Types.Stat.sizeof stat in
+      if off < offset
+      then write (off + n) rest xs
+      else if Cstruct.len rest < n then return off
+      else
+        Lwt.return (Types.Stat.write stat rest)
+        >>*= fun rest ->
+        write (off + n) rest xs in
     let open Lwt.Infix in
     write 0 buf children
     >>= function
@@ -285,8 +285,8 @@ The directory will be deleted and replaced with a file of the same name.
       match resource with
       | ControlFile entry ->
         let message = match entry.result with
-          | None -> "ERROR no request received. Please read the README.\n"
-          | Some x -> x in
+        | None -> "ERROR no request received. Please read the README.\n"
+        | Some x -> x in
         read_string count offset message
       | README ->
         let len = min count Cstruct.(len readme - offset) in
@@ -308,8 +308,8 @@ The directory will be deleted and replaced with a file of the same name.
           :: make_stat ~is_directory:false ~writable:false ~name:"README"
           :: (StringMap.fold (fun name entry acc ->
               let is_directory = match entry.instance with
-                | None -> true
-                | Some _ -> false in
+              | None -> true
+              | Some _ -> false in
               make_stat ~is_directory ~writable:false ~name
               :: acc) !active []) in
         read_children count offset children
@@ -319,11 +319,11 @@ The directory will be deleted and replaced with a file of the same name.
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       let stat = match resource with
-        | Root -> make_stat ~is_directory:true ~writable:true ~name:""
-        | README -> make_stat ~is_directory:false ~writable:false ~name:"README"
-        | ControlFile _ -> make_stat ~is_directory:false ~writable:true ~name:"ctl"
-        | Entry { name; instance = None; _ } -> make_stat ~is_directory:true ~writable:false ~name
-        | Entry { name; instance = Some _; _ } -> make_stat ~is_directory:false ~writable:false ~name in
+      | Root -> make_stat ~is_directory:true ~writable:true ~name:""
+      | README -> make_stat ~is_directory:false ~writable:false ~name:"README"
+      | ControlFile _ -> make_stat ~is_directory:false ~writable:true ~name:"ctl"
+      | Entry { name; instance = None; _ } -> make_stat ~is_directory:true ~writable:false ~name
+      | Entry { name; instance = Some _; _ } -> make_stat ~is_directory:false ~writable:false ~name in
       return { Response.Stat.stat }
     with Not_found -> Error.badfid
 
@@ -340,7 +340,7 @@ The directory will be deleted and replaced with a file of the same name.
       return { Response.Create.qid; iounit = 512l }
     | resource ->
       Log.err (fun f -> f "EPERM creating resource = %s"
-        (string_of_resource resource));
+                  (string_of_resource resource));
       Error.eperm
 
   let write connection ~cancel:_ { Request.Write.fid; offset; data } =

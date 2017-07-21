@@ -12,17 +12,17 @@ module Exclude = struct
       type t =
         | Any
         | String of string
-      (* One element of a DNS name *)
+        (* One element of a DNS name *)
 
       let of_string = function
-        | "*" -> Any
-        | x -> String x
+      | "*" -> Any
+      | x -> String x
       let to_string = function
-        | Any -> "*"
-        | String x -> x
+      | Any -> "*"
+      | String x -> x
       let matches x = function
-        | Any -> true
-        | String y -> x = y
+      | Any -> true
+      | String y -> x = y
     end
 
     type t =
@@ -37,28 +37,28 @@ module Exclude = struct
       | Some prefix -> CIDR prefix
 
     let to_string = function
-      | Subdomain x -> "Subdomain " ^ (String.concat "." @@ List.map Element.to_string x)
-      | CIDR prefix -> "CIDR " ^ (Ipaddr.V4.Prefix.to_string prefix)
+    | Subdomain x -> "Subdomain " ^ (String.concat "." @@ List.map Element.to_string x)
+    | CIDR prefix -> "CIDR " ^ (Ipaddr.V4.Prefix.to_string prefix)
 
     let matches dst req = function
-      | CIDR prefix -> Ipaddr.V4.Prefix.mem dst prefix
-      | Subdomain domains ->
-        begin match req with
-        | Some req ->
-          let h = req.Cohttp.Request.headers in
-          begin match Cohttp.Header.get h "host" with
-          | Some host ->
-            let bits = Astring.String.cuts ~sep:"." host in
-            (* does 'bits' match 'domains' *)
-            let rec loop bits domains = match bits, domains with
-              | _, [] -> true
-              | [], _ :: _ -> false
-              | b :: bs, d :: ds -> Element.matches b d && loop bs ds in
-            loop (List.rev bits) (List.rev domains)
-          | None -> false
-          end
+    | CIDR prefix -> Ipaddr.V4.Prefix.mem dst prefix
+    | Subdomain domains ->
+      begin match req with
+      | Some req ->
+        let h = req.Cohttp.Request.headers in
+        begin match Cohttp.Header.get h "host" with
+        | Some host ->
+          let bits = Astring.String.cuts ~sep:"." host in
+          (* does 'bits' match 'domains' *)
+          let rec loop bits domains = match bits, domains with
+          | _, [] -> true
+          | [], _ :: _ -> false
+          | b :: bs, d :: ds -> Element.matches b d && loop bs ds in
+          loop (List.rev bits) (List.rev domains)
         | None -> false
         end
+      | None -> false
+      end
   end
 
   type t = One.t list
@@ -83,7 +83,7 @@ module Make
     (Tcp:Mirage_flow_s.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
-    = struct
+= struct
 
   type address = Ipaddr.t * int
   let string_of_address (ip, port)  = Printf.sprintf "%s:%d" (Ipaddr.to_string ip) port
@@ -103,10 +103,10 @@ module Make
         let open Dns.Packet in
         let question = make_question ~q_class:Q_IN Q_A (Dns.Name.of_string name_or_ip) in
         begin Dns_resolver.resolve question
-        >>= function
-        | { cls = RR_IN; rdata = A ipv4; _ } :: _ ->
-          Lwt.return (Ok (Ipaddr.V4 ipv4))
-        | _ -> Lwt.return (Error (`Msg ("Failed to lookup host: " ^ name_or_ip)))
+          >>= function
+          | { cls = RR_IN; rdata = A ipv4; _ } :: _ ->
+            Lwt.return (Ok (Ipaddr.V4 ipv4))
+          | _ -> Lwt.return (Error (`Msg ("Failed to lookup host: " ^ name_or_ip)))
         end
       | Some x -> Lwt.return (Ok x) in
     let parse_port port =
@@ -159,12 +159,12 @@ module Make
   let create ?http ?https ?exclude:_ () : t Error.t =
     let open Error.Infix in
     ( match http with
-      | None -> Lwt.return (Ok None)
-      | Some http -> parse_host_port http )
+    | None -> Lwt.return (Ok None)
+    | Some http -> parse_host_port http )
     >>= fun http ->
     ( match https with
-      | None -> Lwt.return (Ok None)
-      | Some https -> parse_host_port https )
+    | None -> Lwt.return (Ok None)
+    | Some https -> parse_host_port https )
     >>= fun https ->
     (* FIXME: parse excludes *)
     let exclude = [] in
@@ -190,123 +190,123 @@ module Make
     let listeners _port =
       Log.debug (fun f -> f "HTTP TCP handshake complete");
       Some (fun flow ->
-        Lwt.finalize
-          (fun () ->
-            let incoming = Incoming.C.create flow in
-            let proxy_one () =
-              Incoming.Request.read incoming
-              >>= function
-              | `Eof -> Lwt.return_unit
-              | `Invalid x ->
-                Log.warn (fun f -> f "Failed to parse HTTP request on port %s:80: %s" (Ipaddr.V4.to_string dst) x);
-                Lwt.return_unit
-              | `Ok req ->
-                (* The scheme from cohttp is missing. If we send to an HTTP proxy
-                   then we need it. *)
-                let uri = Uri.with_scheme (Cohttp.Request.uri req) (Some "http") in
-                let address =
-                  if Exclude.matches dst (Some req) t.exclude
-                  then Ipaddr.V4 dst, 80 (* direct connection *)
-                  else h in
-                (* Log the request to the console *)
-                let description outgoing =
-                  Printf.sprintf "%s:80 %s %s:%d Host:%s"
-                    (Ipaddr.V4.to_string dst)
-                    (if outgoing then "-->" else "<--")
-                    (Ipaddr.to_string @@ fst address)
-                    (snd address)
-                    (match Uri.host uri with Some x -> x | None -> "(unknown host)") in
-                Log.info (fun f -> f "%s: %s %s"
-                  (description true)
-                  (Cohttp.(Code.string_of_method (Cohttp.Request.meth req)))
-                  (Uri.path uri)
-                );
-                begin
-                    Socket.Stream.Tcp.connect address
-                    >>= function
-                    | Error _ ->
-                      Log.err (fun f -> f "Failed to connect to %s" (string_of_address address));
-                      Lwt.return_unit
-                    | Ok remote ->
-                      (* Make the resource a full URI *)
-                      let req = { req with Cohttp.Request.resource = Uri.to_string uri } in
+          Lwt.finalize
+            (fun () ->
+               let incoming = Incoming.C.create flow in
+               let proxy_one () =
+                 Incoming.Request.read incoming
+                 >>= function
+                 | `Eof -> Lwt.return_unit
+                 | `Invalid x ->
+                   Log.warn (fun f -> f "Failed to parse HTTP request on port %s:80: %s" (Ipaddr.V4.to_string dst) x);
+                   Lwt.return_unit
+                 | `Ok req ->
+                   (* The scheme from cohttp is missing. If we send to an HTTP proxy
+                      then we need it. *)
+                   let uri = Uri.with_scheme (Cohttp.Request.uri req) (Some "http") in
+                   let address =
+                     if Exclude.matches dst (Some req) t.exclude
+                     then Ipaddr.V4 dst, 80 (* direct connection *)
+                     else h in
+                   (* Log the request to the console *)
+                   let description outgoing =
+                     Printf.sprintf "%s:80 %s %s:%d Host:%s"
+                       (Ipaddr.V4.to_string dst)
+                       (if outgoing then "-->" else "<--")
+                       (Ipaddr.to_string @@ fst address)
+                       (snd address)
+                       (match Uri.host uri with Some x -> x | None -> "(unknown host)") in
+                   Log.info (fun f -> f "%s: %s %s"
+                                (description true)
+                                (Cohttp.(Code.string_of_method (Cohttp.Request.meth req)))
+                                (Uri.path uri)
+                            );
+                   begin
+                     Socket.Stream.Tcp.connect address
+                     >>= function
+                     | Error _ ->
+                       Log.err (fun f -> f "Failed to connect to %s" (string_of_address address));
+                       Lwt.return_unit
+                     | Ok remote ->
+                       (* Make the resource a full URI *)
+                       let req = { req with Cohttp.Request.resource = Uri.to_string uri } in
 
-                      Lwt.finalize
-                        (fun () ->
-                          let outgoing = Outgoing.C.create remote in
-                          let reader = Incoming.Request.make_body_reader req incoming in
-                          Outgoing.Request.write ~flush:true
-                            (fun writer ->
-                              let rec proxy_body () =
-                                Incoming.Request.read_body_chunk reader
-                                >>= function
-                                | Cohttp.Transfer.Done ->
-                                  Lwt.return_unit
-                                | Cohttp.Transfer.Chunk x ->
-                                  Outgoing.Request.write_body writer x
-                                  >>= fun () ->
-                                  proxy_body ()
-                                | Cohttp.Transfer.Final_chunk x ->
-                                  Outgoing.Request.write_body writer x in
-                              match Incoming.Request.has_body req with
-                              | `Yes -> proxy_body ()
-                              | `No -> Lwt.return_unit
-                              | `Unknown ->
-                                Log.warn (fun f -> f "Request.has_body returned `Unknown: not sure what to do");
-                                Lwt.return_unit
-                            ) req outgoing
-                          >>= fun () ->
-                          Outgoing.Response.read outgoing
-                          >>= function
-                          | `Eof ->
-                            Log.warn (fun f -> f "EOF from %s" (string_of_address address));
-                            Lwt.return_unit
-                          | `Invalid x ->
-                            Log.warn (fun f -> f "Failed to parse HTTP response on port %s: %s" (string_of_address address) x);
-                            Lwt.return_unit
-                          | `Ok res ->
-                            Log.info (fun f -> f "%s: %s %s"
-                              (description false)
-                              (Cohttp.Code.string_of_version res.Cohttp.Response.version)
-                              (Cohttp.Code.string_of_status res.Cohttp.Response.status)
-                            );
-                            Log.debug (fun f -> f "%s"
-                              (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t res))
-                            );
-                            let reader = Outgoing.Response.make_body_reader res outgoing in
-                            Incoming.Response.write ~flush:true
+                       Lwt.finalize
+                         (fun () ->
+                            let outgoing = Outgoing.C.create remote in
+                            let reader = Incoming.Request.make_body_reader req incoming in
+                            Outgoing.Request.write ~flush:true
                               (fun writer ->
-                                let rec proxy_body () =
-                                  Outgoing.Response.read_body_chunk reader
-                                  >>= function
-                                  | Cohttp.Transfer.Done ->
-                                    Lwt.return_unit
-                                  | Cohttp.Transfer.Chunk x ->
-                                    Incoming.Response.write_body writer x
-                                    >>= fun () ->
-                                    proxy_body ()
-                                  | Cohttp.Transfer.Final_chunk x ->
-                                    Incoming.Response.write_body writer x in
-                                match Incoming.Response.has_body res with
-                                | `Yes -> proxy_body ()
-                                | `No -> Lwt.return_unit
-                                | `Unknown ->
-                                  Log.warn (fun f -> f "Response.has_body returned `Unknown: not sure what to do");
-                                  Lwt.return_unit
-                              ) res incoming
-                        ) (fun () ->
-                          Socket.Stream.Tcp.close remote
-                        )
-                  end in
-          let rec loop () =
-            proxy_one ()
-            >>= fun () ->
-            loop () in
-          loop ()
-        ) (fun () ->
-          Tcp.close flow
-        )
-      ) in
+                                 let rec proxy_body () =
+                                   Incoming.Request.read_body_chunk reader
+                                   >>= function
+                                   | Cohttp.Transfer.Done ->
+                                     Lwt.return_unit
+                                   | Cohttp.Transfer.Chunk x ->
+                                     Outgoing.Request.write_body writer x
+                                     >>= fun () ->
+                                     proxy_body ()
+                                   | Cohttp.Transfer.Final_chunk x ->
+                                     Outgoing.Request.write_body writer x in
+                                 match Incoming.Request.has_body req with
+                                 | `Yes -> proxy_body ()
+                                 | `No -> Lwt.return_unit
+                                 | `Unknown ->
+                                   Log.warn (fun f -> f "Request.has_body returned `Unknown: not sure what to do");
+                                   Lwt.return_unit
+                              ) req outgoing
+                            >>= fun () ->
+                            Outgoing.Response.read outgoing
+                            >>= function
+                            | `Eof ->
+                              Log.warn (fun f -> f "EOF from %s" (string_of_address address));
+                              Lwt.return_unit
+                            | `Invalid x ->
+                              Log.warn (fun f -> f "Failed to parse HTTP response on port %s: %s" (string_of_address address) x);
+                              Lwt.return_unit
+                            | `Ok res ->
+                              Log.info (fun f -> f "%s: %s %s"
+                                           (description false)
+                                           (Cohttp.Code.string_of_version res.Cohttp.Response.version)
+                                           (Cohttp.Code.string_of_status res.Cohttp.Response.status)
+                                       );
+                              Log.debug (fun f -> f "%s"
+                                            (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t res))
+                                        );
+                              let reader = Outgoing.Response.make_body_reader res outgoing in
+                              Incoming.Response.write ~flush:true
+                                (fun writer ->
+                                   let rec proxy_body () =
+                                     Outgoing.Response.read_body_chunk reader
+                                     >>= function
+                                     | Cohttp.Transfer.Done ->
+                                       Lwt.return_unit
+                                     | Cohttp.Transfer.Chunk x ->
+                                       Incoming.Response.write_body writer x
+                                       >>= fun () ->
+                                       proxy_body ()
+                                     | Cohttp.Transfer.Final_chunk x ->
+                                       Incoming.Response.write_body writer x in
+                                   match Incoming.Response.has_body res with
+                                   | `Yes -> proxy_body ()
+                                   | `No -> Lwt.return_unit
+                                   | `Unknown ->
+                                     Log.warn (fun f -> f "Response.has_body returned `Unknown: not sure what to do");
+                                     Lwt.return_unit
+                                ) res incoming
+                         ) (fun () ->
+                             Socket.Stream.Tcp.close remote
+                           )
+                   end in
+               let rec loop () =
+                 proxy_one ()
+                 >>= fun () ->
+                 loop () in
+               loop ()
+            ) (fun () ->
+                Tcp.close flow
+              )
+        ) in
     Lwt.return listeners
 
   let https ~dst ((ip, port) as address) =
@@ -314,103 +314,103 @@ module Make
     let listeners _port =
       Log.debug (fun f -> f "HTTPS TCP handshake complete");
       Some (fun flow ->
-        Lwt.finalize
-          (fun () ->
-            let host = Ipaddr.V4.to_string dst in
-            let description outgoing =
-              Printf.sprintf "%s:443 %s %s:%d"
-                host (if outgoing then "-->" else "<--") (Ipaddr.to_string ip) port in
-            Log.info (fun f -> f "%s: CONNECT" (description true));
-            let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
-            let connect = { connect with Cohttp.Request.resource = Printf.sprintf "%s:%d" (Ipaddr.V4.to_string dst) 443 } in
-            Socket.Stream.Tcp.connect address
-            >>= function
-            | Error _ ->
-              Log.err (fun f -> f "Failed to connect to %s" (string_of_address address));
-              Lwt.return_unit
-            | Ok remote ->
-              let outgoing = Outgoing.C.create remote in
-              Lwt.finalize
-                (fun () ->
-                  Outgoing.Request.write ~flush:true (fun _ -> Lwt.return_unit) connect outgoing
-                  >>= fun () ->
-                  Outgoing.Response.read outgoing
-                  >>= function
-                  | `Eof ->
-                    Log.warn (fun f -> f "EOF from %s" (string_of_address address));
-                    Lwt.return_unit
-                  | `Invalid x ->
-                    Log.warn (fun f -> f "Failed to parse HTTP response on port %s: %s" (string_of_address address) x);
-                    Lwt.return_unit
-                  | `Ok res ->
-                    begin
-                      Log.info (fun f -> f "%s: %s %s"
-                        (description false)
-                        (Cohttp.Code.string_of_version res.Cohttp.Response.version)
-                        (Cohttp.Code.string_of_status res.Cohttp.Response.status)
-                      );
-                      Log.debug (fun f -> f "%s"
-                        (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t res))
-                      );
-                      (* Since we've already layered a channel on top, we can't
-                         use the Mirage_flow.proxy since it would miss the contents
-                         already buffered. Therefore we write out own channel-level
-                         proxy here: *)
-                      let incoming = Incoming.C.create flow in
-                      let a_t =
-                        let rec loop () =
-                          Lwt.catch
-                            (fun () ->
-                              Outgoing.C.read_some outgoing
-                              >>= fun buf ->
-                              Incoming.C.write_buffer incoming buf;
-                              Incoming.C.flush incoming
-                              >>= fun () ->
-                              Lwt.return true
-                            ) (function
-                              | End_of_file -> Lwt.return false
-                              | e ->
-                                Log.warn (fun f -> f "Possibly unexpected exeption %s in proxy" (Printexc.to_string e));
-                                Lwt.return false)
-                          >>= fun continue ->
-                          if continue then loop () else begin
-                            Tcp.shutdown_write flow
-                            >>= fun () ->
-                            Lwt.return_unit
-                          end in
-                        loop () in
-                      let b_t =
-                        let rec loop () =
-                          Lwt.catch
-                            (fun () ->
-                              Incoming.C.read_some incoming
-                              >>= fun buf ->
-                              Outgoing.C.write_buffer outgoing buf;
-                              Outgoing.C.flush outgoing
-                              >>= fun () ->
-                              Lwt.return true
-                            ) (function
-                              | End_of_file -> Lwt.return false
-                              | e ->
-                                Log.warn (fun f -> f "Possibly unexpected exeption %s in proxy" (Printexc.to_string e));
-                                Lwt.return false)
-                          >>= fun continue ->
-                          if continue then loop () else begin
-                            Socket.Stream.Tcp.shutdown_write remote
-                            >>= fun () ->
-                            Lwt.return_unit
-                          end in
-                        loop () in
-                      Lwt.join [ a_t; b_t ]
+          Lwt.finalize
+            (fun () ->
+               let host = Ipaddr.V4.to_string dst in
+               let description outgoing =
+                 Printf.sprintf "%s:443 %s %s:%d"
+                   host (if outgoing then "-->" else "<--") (Ipaddr.to_string ip) port in
+               Log.info (fun f -> f "%s: CONNECT" (description true));
+               let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
+               let connect = { connect with Cohttp.Request.resource = Printf.sprintf "%s:%d" (Ipaddr.V4.to_string dst) 443 } in
+               Socket.Stream.Tcp.connect address
+               >>= function
+               | Error _ ->
+                 Log.err (fun f -> f "Failed to connect to %s" (string_of_address address));
+                 Lwt.return_unit
+               | Ok remote ->
+                 let outgoing = Outgoing.C.create remote in
+                 Lwt.finalize
+                   (fun () ->
+                      Outgoing.Request.write ~flush:true (fun _ -> Lwt.return_unit) connect outgoing
                       >>= fun () ->
-                      Lwt.return_unit
-                    end
-              ) (fun () ->
-                Socket.Stream.Tcp.close remote
+                      Outgoing.Response.read outgoing
+                      >>= function
+                      | `Eof ->
+                        Log.warn (fun f -> f "EOF from %s" (string_of_address address));
+                        Lwt.return_unit
+                      | `Invalid x ->
+                        Log.warn (fun f -> f "Failed to parse HTTP response on port %s: %s" (string_of_address address) x);
+                        Lwt.return_unit
+                      | `Ok res ->
+                        begin
+                          Log.info (fun f -> f "%s: %s %s"
+                                       (description false)
+                                       (Cohttp.Code.string_of_version res.Cohttp.Response.version)
+                                       (Cohttp.Code.string_of_status res.Cohttp.Response.status)
+                                   );
+                          Log.debug (fun f -> f "%s"
+                                        (Sexplib.Sexp.to_string_hum (Cohttp.Response.sexp_of_t res))
+                                    );
+                          (* Since we've already layered a channel on top, we can't
+                             use the Mirage_flow.proxy since it would miss the contents
+                             already buffered. Therefore we write out own channel-level
+                             proxy here: *)
+                          let incoming = Incoming.C.create flow in
+                          let a_t =
+                            let rec loop () =
+                              Lwt.catch
+                                (fun () ->
+                                   Outgoing.C.read_some outgoing
+                                   >>= fun buf ->
+                                   Incoming.C.write_buffer incoming buf;
+                                   Incoming.C.flush incoming
+                                   >>= fun () ->
+                                   Lwt.return true
+                                ) (function
+                                  | End_of_file -> Lwt.return false
+                                  | e ->
+                                    Log.warn (fun f -> f "Possibly unexpected exeption %s in proxy" (Printexc.to_string e));
+                                    Lwt.return false)
+                              >>= fun continue ->
+                              if continue then loop () else begin
+                                Tcp.shutdown_write flow
+                                >>= fun () ->
+                                Lwt.return_unit
+                              end in
+                            loop () in
+                          let b_t =
+                            let rec loop () =
+                              Lwt.catch
+                                (fun () ->
+                                   Incoming.C.read_some incoming
+                                   >>= fun buf ->
+                                   Outgoing.C.write_buffer outgoing buf;
+                                   Outgoing.C.flush outgoing
+                                   >>= fun () ->
+                                   Lwt.return true
+                                ) (function
+                                  | End_of_file -> Lwt.return false
+                                  | e ->
+                                    Log.warn (fun f -> f "Possibly unexpected exeption %s in proxy" (Printexc.to_string e));
+                                    Lwt.return false)
+                              >>= fun continue ->
+                              if continue then loop () else begin
+                                Socket.Stream.Tcp.shutdown_write remote
+                                >>= fun () ->
+                                Lwt.return_unit
+                              end in
+                            loop () in
+                          Lwt.join [ a_t; b_t ]
+                          >>= fun () ->
+                          Lwt.return_unit
+                        end
+                   ) (fun () ->
+                       Socket.Stream.Tcp.close remote
+                     )
+            ) (fun () ->
+                Tcp.close flow
               )
-          ) (fun () ->
-            Tcp.close flow
-          )
         ) in
     Lwt.return listeners
 

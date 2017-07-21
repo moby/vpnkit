@@ -111,8 +111,8 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
                         with the client behind the NAT. *)
                      let reply = { src = from; dst = src, src_port; payload = Cstruct.sub buf 0 n } in
                      ( match t.send_reply with
-                       | Some fn -> fn reply
-                       | None -> Lwt.return_unit )
+                     | Some fn -> fn reply
+                     | None -> Lwt.return_unit )
                      >>= fun () ->
                      Lwt.return true
                   ) (function

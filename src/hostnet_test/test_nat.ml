@@ -293,31 +293,31 @@ module Make(Host: Sig.HOST) = struct
     let t =
       EchoServer.with_server
         (fun { EchoServer.local_port = local_port1; _ } ->
-          EchoServer.with_server
-            (fun { EchoServer.local_port = local_port2; _ } ->
-               with_stack
-                 (fun _ stack ->
-                    let buffer = Cstruct.create 1024 in
-                    let udpv4 = Client.udpv4 stack in
-                    (* This is the port we shall send from *)
-                    let virtual_port = 1024 in
-                    let server = UdpServer.make stack virtual_port in
-                    let rec loop remaining =
-                    Printf.fprintf stderr "remaining=%d\n%!" remaining;
-                      if remaining = 0 then failwith "Timed-out before both UDP ports were seen";
-                      Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port1 (Cstruct.get_uint8 buffer 0));
-                      Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port1 udpv4 buffer
-                      >>= fun () ->
-                      Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port2 (Cstruct.get_uint8 buffer 0));
-                      Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port2 udpv4 buffer
-                      >>= fun () ->
-                      UdpServer.wait_for_ports ~num:2 server
-                      >>= function
-                      | true -> Lwt.return_unit
-                      | false -> loop (remaining - 1) in
-                    loop 5
+           EchoServer.with_server
+             (fun { EchoServer.local_port = local_port2; _ } ->
+                with_stack
+                  (fun _ stack ->
+                     let buffer = Cstruct.create 1024 in
+                     let udpv4 = Client.udpv4 stack in
+                     (* This is the port we shall send from *)
+                     let virtual_port = 1024 in
+                     let server = UdpServer.make stack virtual_port in
+                     let rec loop remaining =
+                       Printf.fprintf stderr "remaining=%d\n%!" remaining;
+                       if remaining = 0 then failwith "Timed-out before both UDP ports were seen";
+                       Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port1 (Cstruct.get_uint8 buffer 0));
+                       Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port1 udpv4 buffer
+                       >>= fun () ->
+                       Log.debug (fun f -> f "Sending %d -> %d value %d" virtual_port local_port2 (Cstruct.get_uint8 buffer 0));
+                       Client.UDPV4.write ~source_port:virtual_port ~dest_ip:Ipaddr.V4.localhost ~dest_port:local_port2 udpv4 buffer
+                       >>= fun () ->
+                       UdpServer.wait_for_ports ~num:2 server
+                       >>= function
+                       | true -> Lwt.return_unit
+                       | false -> loop (remaining - 1) in
+                     loop 5
                   )
-            )
+             )
         ) in
     Host.Main.run t
 

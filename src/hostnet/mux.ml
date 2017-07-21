@@ -65,7 +65,7 @@ module Make(Netif: V1_LWT.NETWORK) = struct
     let xs =
       RuleMap.fold
         (fun ip t acc ->
-          Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.last_active_time :: acc
+           Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.last_active_time :: acc
         ) t.rules [] in
     Vfs.File.ro_of_string (String.concat "\n" xs)
 

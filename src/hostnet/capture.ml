@@ -82,18 +82,18 @@ module Make(Input: Sig.VMNET) = struct
         let hdr = 0, fun () -> file_header_buf in
         let offset = Cstruct.len file_header_buf in
         let _, packets = Queue.fold (fun (offset, acc) pkt ->
-          let packet_hdr = offset, fun () -> frame_header pkt in
-          let offset = offset + (Cstruct.len frame_header_buf) in
-          (* assemble packet bodies reversed, in a reversed list of packets *)
-          let offset, packet_bodies = List.fold_left (fun (offset, acc) buf ->
-            let this = offset, fun () -> buf in
-            offset + (Cstruct.len buf), this :: acc
-          ) (offset, []) pkt.bufs in
-          offset, packet_bodies @ [ packet_hdr ] @ acc
-        ) (offset, []) rule.packets in
+            let packet_hdr = offset, fun () -> frame_header pkt in
+            let offset = offset + (Cstruct.len frame_header_buf) in
+            (* assemble packet bodies reversed, in a reversed list of packets *)
+            let offset, packet_bodies = List.fold_left (fun (offset, acc) buf ->
+                let this = offset, fun () -> buf in
+                offset + (Cstruct.len buf), this :: acc
+              ) (offset, []) pkt.bufs in
+            offset, packet_bodies @ [ packet_hdr ] @ acc
+          ) (offset, []) rule.packets in
         let length = match packets with
-          | [] -> Cstruct.len file_header_buf
-          | (x, buf_fn) :: _ -> x + (Cstruct.len (buf_fn ())) in
+        | [] -> Cstruct.len file_header_buf
+        | (x, buf_fn) :: _ -> x + (Cstruct.len (buf_fn ())) in
         length, hdr :: (List.rev packets) in
       let read ~offset ~count =
         (* Check if we try to read beyond the end of the file *)
@@ -102,19 +102,19 @@ module Make(Input: Sig.VMNET) = struct
         let dst = Cstruct.create dst_len in
 
         List.iter (fun (offset', src_fn) ->
-          let src = src_fn () in
-          let count' = Cstruct.len src in
-          (* Consider 4 cases of this packet relative to the requested region
-            - this packet is completely before
-            - this packet is completely after
-            - this packet partially overlaps from the left
-            - this packet partially overlaps with the right *)
-          let before = offset' + count' < offset  (* completely before *)
-          and after  = (offset + count) < offset' (* completely after  *) in
-          let srcoff, dstoff, len =
-            if before || after
-            then 0, 0, 0
-            else
+            let src = src_fn () in
+            let count' = Cstruct.len src in
+            (* Consider 4 cases of this packet relative to the requested region
+               - this packet is completely before
+               - this packet is completely after
+               - this packet partially overlaps from the left
+               - this packet partially overlaps with the right *)
+            let before = offset' + count' < offset  (* completely before *)
+            and after  = (offset + count) < offset' (* completely after  *) in
+            let srcoff, dstoff, len =
+              if before || after
+              then 0, 0, 0
+              else
               if offset' > offset then begin
                 let dstoff = offset' - offset in
                 let srcoff = 0 in
@@ -126,8 +126,8 @@ module Make(Input: Sig.VMNET) = struct
                 let len = min (count' - srcoff) count in
                 srcoff, dstoff, len
               end in
-          Cstruct.blit src srcoff dst dstoff len
-        ) fragments;
+            Cstruct.blit src srcoff dst dstoff len
+          ) fragments;
         Vfs.ok dst in
       let write ~offset:_ _ =
         Vfs.error "write" in
@@ -162,11 +162,11 @@ module Make(Input: Sig.VMNET) = struct
   let filesystem t =
     Vfs.Dir.of_list
       (fun () ->
-        Vfs.ok (
-          Hashtbl.fold
-            (fun name rule acc -> Vfs.Inode.file name (pcap rule) :: acc)
-          t.rules []
-        )
+         Vfs.ok (
+           Hashtbl.fold
+             (fun name rule acc -> Vfs.Inode.file name (pcap rule) :: acc)
+             t.rules []
+         )
       )
 
   let disconnect t = Input.disconnect t.input
@@ -176,9 +176,9 @@ module Make(Input: Sig.VMNET) = struct
     try
       Hashtbl.iter
         (fun _ rule ->
-          match Frame.parse bufs with
-          | Result.Ok f -> if rule.predicate f then push rule bufs
-          | Result.Error (`Msg m) -> failwith m
+           match Frame.parse bufs with
+           | Result.Ok f -> if rule.predicate f then push rule bufs
+           | Result.Error (`Msg m) -> failwith m
         ) t.rules
     with e ->
       Log.err (fun f -> f "caught %s matching packet" (Printexc.to_string e));

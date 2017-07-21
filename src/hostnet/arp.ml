@@ -72,12 +72,12 @@ module Make(Ethif: V1_LWT.ETHIF) = struct
     end
 
   type arp = {
-      op: [ `Request |`Reply |`Unknown of int ];
-      sha: Macaddr.t;
-      spa: Ipaddr.V4.t;
-      tha: Macaddr.t;
-      tpa: Ipaddr.V4.t;
-    }
+    op: [ `Request |`Reply |`Unknown of int ];
+    sha: Macaddr.t;
+    spa: Ipaddr.V4.t;
+    tha: Macaddr.t;
+    tpa: Ipaddr.V4.t;
+  }
 
   let rec input t frame =
     let open Arpv4_wire in

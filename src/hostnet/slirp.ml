@@ -67,9 +67,9 @@ let restart_on_change name to_string values =
 type pcap = (string * int64 option) option
 
 let print_pcap = function
-  | None -> "disabled"
-  | Some (file, None) -> "capturing to " ^ file ^ " with no limit"
-  | Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
+| None -> "disabled"
+| Some (file, None) -> "capturing to " ^ file ^ " with no limit"
+| Some (file, Some limit) -> "capturing to " ^ file ^ " but limited to " ^ (Int64.to_string limit)
 
 type arp_table = {
   mutex: Lwt_mutex.t;
@@ -294,40 +294,40 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let input_tcp t ~id ~syn (ip, port) (buf: Cstruct.t) =
       intercept_tcp_syn t ~id ~syn
         (fun () ->
-          Host.Sockets.Stream.Tcp.connect (ip, port)
-          >>= function
-          | Result.Error (`Msg m) ->
-            Log.debug (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.to_string ip) port m);
-            Lwt.return (fun _ -> None)
-          | Result.Ok socket ->
-            let t = Tcp.Flow.create id socket in
-            let listeners port =
-              Log.debug (fun f -> f "%s:%d handshake complete" (Ipaddr.to_string ip) port);
-              Some (fun flow ->
-                match t.Tcp.Flow.socket with
-                  | None ->
-                    Log.err (fun f -> f "%s callback called on closed socket" (Tcp.Flow.to_string t));
-                    Lwt.return_unit
-                  | Some socket ->
-                    Lwt.finalize
-                      (fun () ->
-                         Mirage_flow.proxy (module Clock) (module Stack_tcp) flow (module Host.Sockets.Stream.Tcp) socket ()
-                         >>= function
-                         | `Error (`Msg m) ->
-                           Log.debug (fun f -> f "%s proxy failed with %s" (Tcp.Flow.to_string t) m);
+           Host.Sockets.Stream.Tcp.connect (ip, port)
+           >>= function
+           | Result.Error (`Msg m) ->
+             Log.debug (fun f -> f "%s:%d: failed to connect, sending RST: %s" (Ipaddr.to_string ip) port m);
+             Lwt.return (fun _ -> None)
+           | Result.Ok socket ->
+             let t = Tcp.Flow.create id socket in
+             let listeners port =
+               Log.debug (fun f -> f "%s:%d handshake complete" (Ipaddr.to_string ip) port);
+               Some (fun flow ->
+                   match t.Tcp.Flow.socket with
+                   | None ->
+                     Log.err (fun f -> f "%s callback called on closed socket" (Tcp.Flow.to_string t));
+                     Lwt.return_unit
+                   | Some socket ->
+                     Lwt.finalize
+                       (fun () ->
+                          Mirage_flow.proxy (module Clock) (module Stack_tcp) flow (module Host.Sockets.Stream.Tcp) socket ()
+                          >>= function
+                          | `Error (`Msg m) ->
+                            Log.debug (fun f -> f "%s proxy failed with %s" (Tcp.Flow.to_string t) m);
+                            Lwt.return_unit
+                          | `Ok (_l_stats, _r_stats) ->
+                            Lwt.return_unit
+                       ) (fun () ->
+                           Log.debug (fun f -> f "closing flow %s" (string_of_id t.Tcp.Flow.id));
+                           t.Tcp.Flow.socket <- None;
+                           Tcp.Flow.remove t.Tcp.Flow.id;
+                           Host.Sockets.Stream.Tcp.close socket
+                           >>= fun () ->
                            Lwt.return_unit
-                         | `Ok (_l_stats, _r_stats) ->
-                           Lwt.return_unit
-                      ) (fun () ->
-                          Log.debug (fun f -> f "closing flow %s" (string_of_id t.Tcp.Flow.id));
-                          t.Tcp.Flow.socket <- None;
-                          Tcp.Flow.remove t.Tcp.Flow.id;
-                          Host.Sockets.Stream.Tcp.close socket
-                          >>= fun () ->
-                          Lwt.return_unit
-                        )
-                  )  in
-            Lwt.return listeners
+                         )
+                 )  in
+             Lwt.return listeners
         ) buf
 
     (* Send an ICMP destination reachable message in response to the given
@@ -344,12 +344,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
         set_icmpv4_id header 0x00;
         set_icmpv4_seq header safe_outgoing_mtu;
         let icmp_payload = match ip_payload with
-          | Some ip_payload ->
-            if (Cstruct.len ip_payload > 8) then begin
-              let ip_payload = Cstruct.sub ip_payload 0 8 in
-              Cstruct.append ip_header ip_payload
-            end else Cstruct.append ip_header ip_payload
-          | None -> ip_header
+        | Some ip_payload ->
+          if (Cstruct.len ip_payload > 8) then begin
+            let ip_payload = Cstruct.sub ip_payload 0 8 in
+            Cstruct.append ip_header ip_payload
+          end else Cstruct.append ip_header ip_payload
+        | None -> ip_header
         in
         set_icmpv4_csum header
           (Tcpip_checksum.ones_complement_list [ header;
@@ -400,55 +400,55 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     (** Handle IPv4 datagrams by proxying them to a remote system *)
     let input_ipv4 t ipv4 = match ipv4 with
-      (* Respond to ICMP *)
-      | Ipv4 { raw; payload = Icmp _; _ } ->
-        let none ~src:_ ~dst:_ _ = Lwt.return_unit in
-        let default ~proto ~src ~dst buf = match proto with
-          | 1 (* ICMP *) ->
-            Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
-          | _ ->
-            Lwt.return_unit in
-        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
-      (* UDP on port 53 -> DNS forwarder *)
-      | Ipv4 { src; dst; payload = Udp { src = src_port; dst = 53; payload = Payload payload; _ }; _ } ->
-        let udp = t.endpoint.Endpoint.udp4 in
-        !dns >>= fun t ->
-        Dns_forwarder.handle_udp ~t ~udp ~src ~dst ~src_port payload
-      (* TCP to port 53 -> DNS forwarder *)
-      | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = 53; syn; raw; payload = Payload _; _ }; _ } ->
-        let id = { Stack_tcp_wire.local_port = 53; dest_ip = src; local_ip = dst; dest_port = src_port } in
-        Endpoint.intercept_tcp_syn t.endpoint ~id ~syn
-          (fun () ->
-            !dns >>= fun t ->
-            Dns_forwarder.handle_tcp ~t
-          ) raw
-      (* UDP to port 123: localhost NTP *)
-      | Ipv4 { src; payload = Udp { src = src_port; dst = 123; payload = Payload payload; _ }; _ } ->
-        let localhost = Ipaddr.V4.localhost in
-        Log.debug (fun f -> f "UDP/123 request from port %d -- sending it to %a:%d" src_port Ipaddr.V4.pp_hum localhost 123);
-        let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 localhost, 123; payload } in
-        Udp_nat.input ~t:t.udp_nat ~datagram ()
-      (* UDP to any other port: localhost *)
-      | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
-        let description = Printf.sprintf "%s:%d -> %s:%d"
-            (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in
-        if Cstruct.len payload < len then begin
-          Log.err (fun f -> f "%s: dropping because reported len %d actual len %d" description len (Cstruct.len payload));
-          Lwt.return_unit
-        end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
-          Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
-        end else begin
-          (* [1] For UDP to our local address, rewrite the destination to localhost.
-             This is the inverse of the rewrite below[2] *)
-          let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.(V4 V4.localhost), dst_port; payload } in
-          Udp_nat.input ~t:t.udp_nat ~datagram ()
-        end
-      (* TCP to local ports *)
-      | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = dst_port; syn; raw; payload = Payload _; _ }; _ } ->
-        let id = { Stack_tcp_wire.local_port = dst_port; dest_ip = src; local_ip = dst; dest_port = src_port } in
-        Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 Ipaddr.V4.localhost, dst_port) raw
+    (* Respond to ICMP *)
+    | Ipv4 { raw; payload = Icmp _; _ } ->
+      let none ~src:_ ~dst:_ _ = Lwt.return_unit in
+      let default ~proto ~src ~dst buf = match proto with
+      | 1 (* ICMP *) ->
+        Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
       | _ ->
+        Lwt.return_unit in
+      Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
+    (* UDP on port 53 -> DNS forwarder *)
+    | Ipv4 { src; dst; payload = Udp { src = src_port; dst = 53; payload = Payload payload; _ }; _ } ->
+      let udp = t.endpoint.Endpoint.udp4 in
+      !dns >>= fun t ->
+      Dns_forwarder.handle_udp ~t ~udp ~src ~dst ~src_port payload
+    (* TCP to port 53 -> DNS forwarder *)
+    | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = 53; syn; raw; payload = Payload _; _ }; _ } ->
+      let id = { Stack_tcp_wire.local_port = 53; dest_ip = src; local_ip = dst; dest_port = src_port } in
+      Endpoint.intercept_tcp_syn t.endpoint ~id ~syn
+        (fun () ->
+           !dns >>= fun t ->
+           Dns_forwarder.handle_tcp ~t
+        ) raw
+    (* UDP to port 123: localhost NTP *)
+    | Ipv4 { src; payload = Udp { src = src_port; dst = 123; payload = Payload payload; _ }; _ } ->
+      let localhost = Ipaddr.V4.localhost in
+      Log.debug (fun f -> f "UDP/123 request from port %d -- sending it to %a:%d" src_port Ipaddr.V4.pp_hum localhost 123);
+      let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 localhost, 123; payload } in
+      Udp_nat.input ~t:t.udp_nat ~datagram ()
+    (* UDP to any other port: localhost *)
+    | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
+      let description = Printf.sprintf "%s:%d -> %s:%d"
+          (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in
+      if Cstruct.len payload < len then begin
+        Log.err (fun f -> f "%s: dropping because reported len %d actual len %d" description len (Cstruct.len payload));
         Lwt.return_unit
+      end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
+        Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
+      end else begin
+        (* [1] For UDP to our local address, rewrite the destination to localhost.
+           This is the inverse of the rewrite below[2] *)
+        let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.(V4 V4.localhost), dst_port; payload } in
+        Udp_nat.input ~t:t.udp_nat ~datagram ()
+      end
+    (* TCP to local ports *)
+    | Ipv4 { src; dst; payload = Tcp { src = src_port; dst = dst_port; syn; raw; payload = Payload _; _ }; _ } ->
+      let id = { Stack_tcp_wire.local_port = dst_port; dest_ip = src; local_ip = dst; dest_port = src_port } in
+      Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 Ipaddr.V4.localhost, dst_port) raw
+    | _ ->
+      Lwt.return_unit
 
     let create endpoint udp_nat dns_ips =
       let tcp_stack = { endpoint; udp_nat; dns_ips } in
@@ -462,7 +462,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
            | _ ->
-              Lwt.return_unit
+             Lwt.return_unit
         )
       >>= fun () ->
 
@@ -480,41 +480,41 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     (** Handle IPv4 datagrams by proxying them to a remote system *)
     let input_ipv4 t ipv4 = match ipv4 with
-      (* Respond to ICMP *)
-      | Ipv4 { raw; payload = Icmp _; _ } ->
-        let none ~src:_ ~dst:_ _ = Lwt.return_unit in
-        let default ~proto ~src ~dst buf = match proto with
-          | 1 (* ICMP *) ->
-            Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
-          | _ ->
-            Lwt.return_unit in
-        Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
-      (* Transparent HTTP intercept? *)
-      | Ipv4 { src = dest_ip; dst = local_ip; payload = Tcp { src = dest_port; dst = local_port; syn; raw; _ }; _ } ->
-        let id = { Stack_tcp_wire.local_port; dest_ip; local_ip; dest_port } in
-        let callback = match !http with
-          | None -> None
-          | Some http -> Http_forwarder.handle ~dst:(local_ip, local_port) ~t:http in
-        begin match callback with
-        | None ->
-          Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 local_ip, local_port) raw (* common case *)
-        | Some cb ->
-          Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
-        end
-      | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
-        let description = Printf.sprintf "%s:%d -> %s:%d"
-            (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in
-        if Cstruct.len payload < len then begin
-          Log.err (fun f -> f "%s: dropping because reported len %d actual len %d" description len (Cstruct.len payload));
-          Lwt.return_unit
-        end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
-          Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
-        end else begin
-          let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 dst, dst_port; payload } in
-          Udp_nat.input ~t:t.udp_nat ~datagram ()
-        end
+    (* Respond to ICMP *)
+    | Ipv4 { raw; payload = Icmp _; _ } ->
+      let none ~src:_ ~dst:_ _ = Lwt.return_unit in
+      let default ~proto ~src ~dst buf = match proto with
+      | 1 (* ICMP *) ->
+        Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
       | _ ->
+        Lwt.return_unit in
+      Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
+    (* Transparent HTTP intercept? *)
+    | Ipv4 { src = dest_ip; dst = local_ip; payload = Tcp { src = dest_port; dst = local_port; syn; raw; _ }; _ } ->
+      let id = { Stack_tcp_wire.local_port; dest_ip; local_ip; dest_port } in
+      let callback = match !http with
+      | None -> None
+      | Some http -> Http_forwarder.handle ~dst:(local_ip, local_port) ~t:http in
+      begin match callback with
+      | None ->
+        Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 local_ip, local_port) raw (* common case *)
+      | Some cb ->
+        Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
+      end
+    | Ipv4 { src; dst; ihl; dnf; raw; payload = Udp { src = src_port; dst = dst_port; len; payload = Payload payload; _ }; _ } ->
+      let description = Printf.sprintf "%s:%d -> %s:%d"
+          (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in
+      if Cstruct.len payload < len then begin
+        Log.err (fun f -> f "%s: dropping because reported len %d actual len %d" description len (Cstruct.len payload));
         Lwt.return_unit
+      end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
+        Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port ~dst_port ~ihl raw
+      end else begin
+        let datagram = { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 dst, dst_port; payload } in
+        Udp_nat.input ~t:t.udp_nat ~datagram ()
+      end
+    | _ ->
+      Lwt.return_unit
 
     let create endpoint udp_nat =
       let tcp_stack = { endpoint; udp_nat } in
@@ -528,7 +528,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
              Endpoint.touch endpoint;
              input_ipv4 tcp_stack (Ipv4 ipv4)
            | _ ->
-            Lwt.return_unit
+             Lwt.return_unit
         )
       >>= fun () ->
 
@@ -558,12 +558,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   let diagnostics t flow =
     let module C = Channel.Make(Host.Sockets.Stream.Unix) in
     let module Writer = Tar.HeaderWriter(Lwt)(struct
-      type out_channel = C.t
-      type 'a t = 'a Lwt.t
-      let really_write oc buf =
-        C.write_buffer oc buf;
-        C.flush oc
-    end) in
+        type out_channel = C.t
+        type 'a t = 'a Lwt.t
+        let really_write oc buf =
+          C.write_buffer oc buf;
+          C.flush oc
+      end) in
     let c = C.create flow in
 
     (* Operator which logs Vfs errors and returns *)
@@ -579,39 +579,39 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
       >>?= fun inodes ->
       Lwt_list.iter_s
         (fun inode ->
-          match Vfs.Inode.kind inode with
-          | `Dir dir ->
-            tar (Filename.concat pwd @@ Vfs.Inode.basename inode) dir
-          | `File file ->
-            (* Buffer the whole file temporarily in memory so we can calculate
-               the exact length needed by the tar header. Note the `stat`
-               won't be accurate because the file can change after we open it.
-               If there was an `fstat` API this could be fixed. *)
-            Vfs.File.open_ file
-            >>?= fun fd ->
-            let copy () =
-              let fragments = ref [] in
-              let rec aux offset =
-                let count = 1048576 in
-                Vfs.File.read fd ~offset ~count
-                >>?= fun buf ->
-                fragments := buf :: !fragments;
-                let len = Int64.of_int @@ Cstruct.len buf in
-                if len = 0L
-                then Lwt.return_unit
-                else aux (Int64.add offset len) in
-              aux 0L
-              >>= fun () ->
-              Lwt.return (List.rev !fragments) in
-            copy ()
-            >>= fun fragments ->
-            let length = List.fold_left (+) 0 (List.map Cstruct.len fragments) in
-            let header = Tar.Header.make ~file_mode:0o0644 ~mod_time (Filename.concat pwd @@ Vfs.Inode.basename inode) (Int64.of_int length) in
-            Writer.write header c
-            >>= fun () ->
-            List.iter (C.write_buffer c) fragments;
-            C.write_buffer c (Tar.Header.zero_padding header);
-            C.flush c
+           match Vfs.Inode.kind inode with
+           | `Dir dir ->
+             tar (Filename.concat pwd @@ Vfs.Inode.basename inode) dir
+           | `File file ->
+             (* Buffer the whole file temporarily in memory so we can calculate
+                the exact length needed by the tar header. Note the `stat`
+                won't be accurate because the file can change after we open it.
+                If there was an `fstat` API this could be fixed. *)
+             Vfs.File.open_ file
+             >>?= fun fd ->
+             let copy () =
+               let fragments = ref [] in
+               let rec aux offset =
+                 let count = 1048576 in
+                 Vfs.File.read fd ~offset ~count
+                 >>?= fun buf ->
+                 fragments := buf :: !fragments;
+                 let len = Int64.of_int @@ Cstruct.len buf in
+                 if len = 0L
+                 then Lwt.return_unit
+                 else aux (Int64.add offset len) in
+               aux 0L
+               >>= fun () ->
+               Lwt.return (List.rev !fragments) in
+             copy ()
+             >>= fun fragments ->
+             let length = List.fold_left (+) 0 (List.map Cstruct.len fragments) in
+             let header = Tar.Header.make ~file_mode:0o0644 ~mod_time (Filename.concat pwd @@ Vfs.Inode.basename inode) (Int64.of_int length) in
+             Writer.write header c
+             >>= fun () ->
+             List.iter (C.write_buffer c) fragments;
+             C.write_buffer c (Tar.Header.zero_padding header);
+             C.flush c
         ) inodes in
     tar "" (filesystem t)
     >>= fun () ->
@@ -684,7 +684,7 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun switch ->
 
     (* Serve a static ARP table *)
-   let local_arp_table = [
+    let local_arp_table = [
       peer_ip, client_macaddr;
       local_ip, server_macaddr;
     ] @ (List.map (fun ip -> ip, server_macaddr) extra_dns_ip) in
@@ -695,14 +695,14 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let local_ips = local_ip :: extra_dns_ip in
 
     let highest_peer_ip =
-        if use_bridge then begin
-            Some highest_ip
-        end else begin
-            None (* just set smallest available prefix *)
-        end
+      if use_bridge then begin
+        Some highest_ip
+      end else begin
+        None (* just set smallest available prefix *)
+      end
     in
     let dhcp = Dhcp.make ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
-      ~extra_dns_ip ~get_domain_search ~get_domain_name switch in
+        ~extra_dns_ip ~get_domain_search ~get_domain_name switch in
 
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
@@ -722,49 +722,49 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let find_endpoint ip =
       Lwt_mutex.with_lock t.endpoints_m
         (fun () ->
-          if IPMap.mem ip t.endpoints
-          then Lwt.return (`Ok (IPMap.find ip t.endpoints))
-          else begin
-            let open Infix in
-            Endpoint.create interface switch local_arp_table ip mtu
-            >>= fun endpoint ->
-            t.endpoints <- IPMap.add ip endpoint t.endpoints;
-            Lwt.return (`Ok endpoint)
-          end
+           if IPMap.mem ip t.endpoints
+           then Lwt.return (`Ok (IPMap.find ip t.endpoints))
+           else begin
+             let open Infix in
+             Endpoint.create interface switch local_arp_table ip mtu
+             >>= fun endpoint ->
+             t.endpoints <- IPMap.add ip endpoint t.endpoints;
+             Lwt.return (`Ok endpoint)
+           end
         ) in
 
     (* Send a UDP datagram *)
     let send_reply = function
-      | { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 dst, dst_port; payload } ->
-        (* [2] If the source address is localhost on the Mac, rewrite it to the
-           virtual IP. This is the inverse of the rewrite above[1] *)
-        let src =
-          if Ipaddr.V4.compare src Ipaddr.V4.localhost = 0
-          then local_ip
-          else src in
-        begin
-          find_endpoint src
-          >>= function
-          | `Error (`Msg m) ->
-            Log.err (fun f -> f "Failed to create an endpoint for %s: %s" (Ipaddr.V4.to_string dst) m);
-            Lwt.return_unit
-          | `Ok endpoint ->
-            Stack_udp.write ~source_port:src_port ~dest_ip:dst ~dest_port:dst_port endpoint.Endpoint.udp4 payload
-        end
-      | { Hostnet_udp.src = src, src_port; dst = dst, dst_port; _ } ->
-        Log.err (fun f -> f "Failed to send non-IPv4 UDP datagram %s:%d -> %s:%d" (Ipaddr.to_string src) src_port (Ipaddr.to_string dst) dst_port);
-        Lwt.return_unit in
+    | { Hostnet_udp.src = Ipaddr.V4 src, src_port; dst = Ipaddr.V4 dst, dst_port; payload } ->
+      (* [2] If the source address is localhost on the Mac, rewrite it to the
+         virtual IP. This is the inverse of the rewrite above[1] *)
+      let src =
+        if Ipaddr.V4.compare src Ipaddr.V4.localhost = 0
+        then local_ip
+        else src in
+      begin
+        find_endpoint src
+        >>= function
+        | `Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to create an endpoint for %s: %s" (Ipaddr.V4.to_string dst) m);
+          Lwt.return_unit
+        | `Ok endpoint ->
+          Stack_udp.write ~source_port:src_port ~dest_ip:dst ~dest_port:dst_port endpoint.Endpoint.udp4 payload
+      end
+    | { Hostnet_udp.src = src, src_port; dst = dst, dst_port; _ } ->
+      Log.err (fun f -> f "Failed to send non-IPv4 UDP datagram %s:%d -> %s:%d" (Ipaddr.to_string src) src_port (Ipaddr.to_string dst) dst_port);
+      Lwt.return_unit in
 
     Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
 
     (* If using bridge, add listener *)
     if use_bridge then begin
-        Vnet.set_listen_fn t.l2_switch t.l2_client_id (fun buf ->
-            match parse [ buf ] with
-            | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) ->
-                Log.debug (fun f -> f "%d: received from bridge %s->%s, sent to switch.write" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
-                Switch.write switch buf
-            | _ -> Lwt.return_unit ); (* write packets from virtual network directly to client *)
+      Vnet.set_listen_fn t.l2_switch t.l2_client_id (fun buf ->
+          match parse [ buf ] with
+          | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) ->
+            Log.debug (fun f -> f "%d: received from bridge %s->%s, sent to switch.write" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+            Switch.write switch buf
+          | _ -> Lwt.return_unit ); (* write packets from virtual network directly to client *)
     end;
 
     (* Add a listener which looks for new flows *)
@@ -774,14 +774,14 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
          let open Frame in
          match parse [ buf ] with
          | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
-            (not (Macaddr.compare eth_dst client_macaddr = 0 ||
-                  Macaddr.compare eth_dst server_macaddr = 0 ||
-                  Macaddr.compare eth_dst Macaddr.broadcast = 0)) -> (* not to server, client or broadcast.. *)
+             (not (Macaddr.compare eth_dst client_macaddr = 0 ||
+                   Macaddr.compare eth_dst server_macaddr = 0 ||
+                   Macaddr.compare eth_dst Macaddr.broadcast = 0)) -> (* not to server, client or broadcast.. *)
            if use_bridge then begin
-               Log.debug (fun f -> f "%d: forwarded to bridge for %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
-               Vnet.write t.l2_switch t.l2_client_id buf (* pass to virtual network *)
+             Log.debug (fun f -> f "%d: forwarded to bridge for %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+             Vnet.write t.l2_switch t.l2_client_id buf (* pass to virtual network *)
            end else begin
-               Lwt.return_unit (* drop if bridge is not used *)
+             Lwt.return_unit (* drop if bridge is not used *)
            end
          | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Ipv4 { payload = Udp { dst = 67; _ }; _ }; _ })
          | Ok (Ethernet { dst = eth_dst ; src = eth_src ; payload = Ipv4 { payload = Udp { dst = 68; _ }; _ }; _ }) ->
@@ -791,12 +791,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
            Log.debug (fun f -> f "%d: arp %s->%s" l2_client_id (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
            (* Arp.input expects only the ARP packet, with no ethernet header prefix *)
            begin
-               if use_bridge then begin (* reply with global table if bridge is in use *)
-                   Lwt_mutex.with_lock global_arp_table.mutex (fun _ ->
-                       or_failwith "arp" @@ Global_arp.connect ~table:global_arp_table.table global_arp_ethif)
-               end else begin (* if not, use local table *)
-                   or_failwith "arp" @@ Global_arp.connect ~table:local_arp_table global_arp_ethif
-               end
+             if use_bridge then begin (* reply with global table if bridge is in use *)
+               Lwt_mutex.with_lock global_arp_table.mutex (fun _ ->
+                   or_failwith "arp" @@ Global_arp.connect ~table:global_arp_table.table global_arp_ethif)
+             end else begin (* if not, use local table *)
+               or_failwith "arp" @@ Global_arp.connect ~table:local_arp_table global_arp_ethif
+             end
            end
            >>= fun arp ->
            Global_arp.input arp (Cstruct.shift buf Wire_structs.sizeof_ethernet)
@@ -846,23 +846,23 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     Config.string_option config max_connections_path
     >>= fun string_max_connections ->
     let parse_max = function
-      | None -> Lwt.return None
-      | Some x -> Lwt.return (
-          try Some (int_of_string @@ String.trim x)
-          with _ ->
-            Log.err (fun f -> f "Failed to parse slirp/max-connections value: '%s'" x);
-            None
-        ) in
+    | None -> Lwt.return None
+    | Some x -> Lwt.return (
+        try Some (int_of_string @@ String.trim x)
+        with _ ->
+          Log.err (fun f -> f "Failed to parse slirp/max-connections value: '%s'" x);
+          None
+      ) in
     Active_config.map parse_max string_max_connections
     >>= fun max_connections ->
     let rec monitor_max_connections_settings settings =
       begin match Active_config.hd settings with
-        | None ->
-          Log.info (fun f -> f "remove connection limit");
-          Host.Sockets.set_max_connections None
-        | Some limit ->
-          Log.info (fun f -> f "updating connection limit to %d" limit);
-          Host.Sockets.set_max_connections (Some limit)
+      | None ->
+        Log.info (fun f -> f "remove connection limit");
+        Host.Sockets.set_max_connections None
+      | Some limit ->
+        Log.info (fun f -> f "updating connection limit to %d" limit);
+        Host.Sockets.set_max_connections (Some limit)
       end;
       Active_config.tl settings
       >>= fun settings ->
@@ -880,18 +880,18 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun string_dns_settings ->
     Active_config.map
       (function
-        | Some txt ->
-          let open Dns_forward in
-          begin match Config.of_string txt with
-          | Result.Ok config ->
-            domain_search := config.Config.search;
-            Lwt.return (Some config)
-          | Result.Error (`Msg m) ->
-            Log.err (fun f -> f "failed to parse %s: %s" (String.concat "/" dns_path) m);
-            Lwt.return None
-          end
-        | None ->
+      | Some txt ->
+        let open Dns_forward in
+        begin match Config.of_string txt with
+        | Result.Ok config ->
+          domain_search := config.Config.search;
+          Lwt.return (Some config)
+        | Result.Error (`Msg m) ->
+          Log.err (fun f -> f "failed to parse %s: %s" (String.concat "/" dns_path) m);
           Lwt.return None
+        end
+      | None ->
+        Lwt.return None
       ) string_dns_settings
     >>= fun dns_settings ->
     let resolver_path = driver @ [ "slirp"; "resolver" ] in
@@ -899,8 +899,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun string_resolver_settings ->
     Active_config.map
       (function
-        | Some "host" -> Lwt.return `Host
-        | _ -> Lwt.return `Upstream
+      | Some "host" -> Lwt.return `Host
+      | _ -> Lwt.return `Upstream
       ) string_resolver_settings
     >>= fun resolver_settings ->
 
@@ -911,32 +911,32 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     >>= fun domain_name_settings ->
     Lwt.async
       (fun () ->
-        Active_config.iter
-          (fun x ->
-            domain_name := x;
-            Lwt.return_unit
-          ) domain_name_settings
+         Active_config.iter
+           (fun x ->
+              domain_name := x;
+              Lwt.return_unit
+           ) domain_name_settings
       );
 
     let bind_path = driver @ [ "allowed-bind-address" ] in
     Config.string_option config bind_path
     >>= fun string_allowed_bind_address ->
     let parse_bind_address = function
-      | None -> Lwt.return None
-      | Some x ->
-        let strings = List.map String.trim @@ Stringext.split x ~on:',' in
-        let ip_opts = List.map
-            (fun x ->
-               try
-                 if x = ""
-                 then None
-                 else Some (Ipaddr.of_string_exn x)
-               with _ ->
-                 Log.err (fun f -> f "Failed to parse IP address in allowed-bind-address: %s" x);
-                 None
-            ) strings in
-        let ips = List.fold_left (fun acc x -> match x with None -> acc | Some x -> x :: acc) [] ip_opts in
-        Lwt.return (Some ips) in
+    | None -> Lwt.return None
+    | Some x ->
+      let strings = List.map String.trim @@ Stringext.split x ~on:',' in
+      let ip_opts = List.map
+          (fun x ->
+             try
+               if x = ""
+               then None
+               else Some (Ipaddr.of_string_exn x)
+             with _ ->
+               Log.err (fun f -> f "Failed to parse IP address in allowed-bind-address: %s" x);
+               None
+          ) strings in
+      let ips = List.fold_left (fun acc x -> match x with None -> acc | Some x -> x :: acc) [] ip_opts in
+      Lwt.return (Some ips) in
     Active_config.map parse_bind_address string_allowed_bind_address
     >>= fun allowed_bind_address ->
 
@@ -949,15 +949,15 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let peer_ips_path = driver @ [ "slirp"; "docker" ] in
     let parse_ipv4 default x = match Ipaddr.V4.of_string @@ String.trim x with
-      | None ->
-        Log.err (fun f -> f "Failed to parse IPv4 address '%s', using default of %s" x (Ipaddr.V4.to_string default));
-        Lwt.return default
-      | Some x -> Lwt.return x in
+    | None ->
+      Log.err (fun f -> f "Failed to parse IPv4 address '%s', using default of %s" x (Ipaddr.V4.to_string default));
+      Lwt.return default
+    | Some x -> Lwt.return x in
     let parse_ipv4_list default x =
       let all = List.map Ipaddr.V4.of_string @@ List.filter (fun x -> x <> "") @@ List.map String.trim @@ Astring.String.cuts ~sep:"," x in
       let any_none, some = List.fold_left (fun (any_none, some) x -> match x with
-          | None -> true, some
-          | Some x -> any_none, x :: some
+        | None -> true, some
+        | Some x -> any_none, x :: some
         ) (false, []) all in
       if any_none then begin
         Log.err (fun f -> f "Failed to parse IPv4 address list '%s', using default of %s" x (String.concat "," (List.map Ipaddr.V4.to_string default)));
@@ -1000,8 +1000,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     let resolver = ref `Upstream in
     let update_dns () =
       let config = match !resolver, !upstream_servers with
-        | `Upstream, servers -> `Upstream servers
-        | `Host, _ -> `Host in
+      | `Upstream, servers -> `Upstream servers
+      | `Host, _ -> `Host in
       Log.info (fun f -> f "updating resolvers to %s" (Hostnet_dns.Config.to_string config));
       !dns >>= fun t ->
       Dns_forwarder.destroy t
@@ -1014,10 +1014,10 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
 
     let rec monitor_dns_settings settings =
       begin match Active_config.hd settings with
-        | None ->
-          upstream_servers := Dns_forward.Config.({ servers = Server.Set.empty; search = []; assume_offline_after_drops = None });
-        | Some (servers: Dns_forward.Config.t) ->
-          upstream_servers := servers;
+      | None ->
+        upstream_servers := Dns_forward.Config.({ servers = Server.Set.empty; search = []; assume_offline_after_drops = None });
+      | Some (servers: Dns_forward.Config.t) ->
+        upstream_servers := servers;
       end;
       update_dns ()
       >>= fun () ->
@@ -1050,28 +1050,28 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     Config.string_option config http_intercept_path
     >>= fun string_http_intercept_settings ->
     let parse_http_intercept = function
-      | None -> Lwt.return None
-      | Some txt ->
-        begin match Ezjsonm.from_string txt with
-        | exception _ ->
-          Log.err (fun f -> f "Failed to parse http-intercept json: %s" txt);
+    | None -> Lwt.return None
+    | Some txt ->
+      begin match Ezjsonm.from_string txt with
+      | exception _ ->
+        Log.err (fun f -> f "Failed to parse http-intercept json: %s" txt);
+        Lwt.return None
+      | j ->
+        Http_forwarder.of_json j
+        >>= function
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to decode http-intercept json: %s" m);
           Lwt.return None
-        | j ->
-          Http_forwarder.of_json j
-          >>= function
-          | Error (`Msg m) ->
-            Log.err (fun f -> f "Failed to decode http-intercept json: %s" m);
-            Lwt.return None
-          | Ok t ->
-            Lwt.return (Some t)
-        end in
+        | Ok t ->
+          Lwt.return (Some t)
+      end in
     Active_config.map parse_http_intercept string_http_intercept_settings
     >>= fun http_intercept_settings ->
     let rec monitor_http_intercept_settings settings =
       http := Active_config.hd settings;
       ( match !http with
-        | None -> Log.info (fun f -> f "Disabling transparent HTTP redirection")
-        | Some x -> Log.info (fun f -> f "Enabling transparent HTTP redirection to %s" (Http_forwarder.to_string x)) );
+      | None -> Log.info (fun f -> f "Disabling transparent HTTP redirection")
+      | Some x -> Log.info (fun f -> f "Enabling transparent HTTP redirection to %s" (Http_forwarder.to_string x)) );
       Active_config.tl settings
       >>= fun settings ->
       monitor_http_intercept_settings settings in
@@ -1083,12 +1083,12 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
              );
 
     let global_arp_table : arp_table = {
-        mutex = Lwt_mutex.create();
-        table = [(local_ip, server_macaddr)];
+      mutex = Lwt_mutex.create();
+      table = [(local_ip, server_macaddr)];
     } in
     let client_uuids : uuid_table = {
-        mutex = Lwt_mutex.create();
-        table = Hashtbl.create 50;
+      mutex = Lwt_mutex.create();
+      table = Hashtbl.create 50;
     } in
     let t = {
       server_macaddr;
@@ -1109,102 +1109,102 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   let client_macaddr_of_uuid t first_ip l2_switch (uuid:Uuidm.t) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
         if (Hashtbl.mem t.client_uuids.table uuid) then begin (* uuid already used, get config *)
-            let (ip, l2_client_id) = (Hashtbl.find t.client_uuids.table uuid) in
-            let mac = (Vnet.mac l2_switch l2_client_id) in
-            Log.info (fun f-> f "Reconnecting MAC %s with IP %s" (Macaddr.to_string mac) (Ipaddr.V4.to_string ip));
-            Lwt.return mac (* may raise Not_found if id is unknown to the bridge *)
+          let (ip, l2_client_id) = (Hashtbl.find t.client_uuids.table uuid) in
+          let mac = (Vnet.mac l2_switch l2_client_id) in
+          Log.info (fun f-> f "Reconnecting MAC %s with IP %s" (Macaddr.to_string mac) (Ipaddr.V4.to_string ip));
+          Lwt.return mac (* may raise Not_found if id is unknown to the bridge *)
         end else begin (* new uuid, register in bridge *)
-            (* register new client on bridge *)
-            or_failwith "l2_switch" @@ Lwt.return @@ Vnet.register l2_switch
-            >>= fun l2_client_id ->
-            let client_macaddr = (Vnet.mac l2_switch l2_client_id) in
+          (* register new client on bridge *)
+          or_failwith "l2_switch" @@ Lwt.return @@ Vnet.register l2_switch
+          >>= fun l2_client_id ->
+          let client_macaddr = (Vnet.mac l2_switch l2_client_id) in
 
-            let used_ips =
-                Hashtbl.fold (fun _ v l ->
-                    let ip, _ = v in
-                    l @ [ip]) t.client_uuids.table []
-            in
+          let used_ips =
+            Hashtbl.fold (fun _ v l ->
+                let ip, _ = v in
+                l @ [ip]) t.client_uuids.table []
+          in
 
-            (* check if a specific IP is requested *)
-            let preferred_ip =
-                let uuid_bytes = Uuidm.to_bytes uuid in
-                let uuid_prefix = Bytes.sub uuid_bytes 0 (Bytes.length default_uuid_preferred_ip_prefix) in
-                if (Bytes.compare uuid_prefix default_uuid_preferred_ip_prefix) = 0 then
-                begin
-                    let uuid_suffix = Bytes.sub uuid_bytes 12 4 in
-                    let preferred_ip = Ipaddr.V4.of_bytes_exn uuid_suffix in
-                    Log.info (fun f -> f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
-                    let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
-                    let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
-                    let lowest_ip_int32 = Ipaddr.V4.to_int32 first_ip in
-                    if (preferred_ip_int32 > highest_ip_int32) || (preferred_ip_int32 <  lowest_ip_int32) then
-                    begin
-                        failwith "Preferred IP address out of range."
-                    end;
-                    if not (List.mem preferred_ip used_ips) then begin
-                        Some preferred_ip
-                    end else begin
-                        failwith (Printf.sprintf "Preferred IP address %s not available" (Ipaddr.V4.to_string preferred_ip))
-                    end
+          (* check if a specific IP is requested *)
+          let preferred_ip =
+            let uuid_bytes = Uuidm.to_bytes uuid in
+            let uuid_prefix = Bytes.sub uuid_bytes 0 (Bytes.length default_uuid_preferred_ip_prefix) in
+            if (Bytes.compare uuid_prefix default_uuid_preferred_ip_prefix) = 0 then
+              begin
+                let uuid_suffix = Bytes.sub uuid_bytes 12 4 in
+                let preferred_ip = Ipaddr.V4.of_bytes_exn uuid_suffix in
+                Log.info (fun f -> f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
+                let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
+                let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
+                let lowest_ip_int32 = Ipaddr.V4.to_int32 first_ip in
+                if (preferred_ip_int32 > highest_ip_int32) || (preferred_ip_int32 <  lowest_ip_int32) then
+                  begin
+                    failwith "Preferred IP address out of range."
+                  end;
+                if not (List.mem preferred_ip used_ips) then begin
+                  Some preferred_ip
                 end else begin
-                    None
-                end in
-
-            (* look for a new unique IP *)
-            let rec next_unique_ip next_ip =
-                if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 t.highest_ip) then
-                begin
-                    failwith "No IP addresses available."
-                end;
-                if not (List.mem next_ip used_ips) then begin
-                    next_ip
-                end else begin
-                    let next_ip = Ipaddr.V4.of_int32 (Int32.succ (Ipaddr.V4.to_int32 next_ip)) in
-                    next_unique_ip next_ip
+                  failwith (Printf.sprintf "Preferred IP address %s not available" (Ipaddr.V4.to_string preferred_ip))
                 end
-            in
+              end else begin
+              None
+            end in
 
-            let client_ip = (match preferred_ip with
-                | None -> next_unique_ip first_ip
-                | Some ip -> ip) in
+          (* look for a new unique IP *)
+          let rec next_unique_ip next_ip =
+            if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 t.highest_ip) then
+              begin
+                failwith "No IP addresses available."
+              end;
+            if not (List.mem next_ip used_ips) then begin
+              next_ip
+            end else begin
+              let next_ip = Ipaddr.V4.of_int32 (Int32.succ (Ipaddr.V4.to_int32 next_ip)) in
+              next_unique_ip next_ip
+            end
+          in
 
-            (* Add IP to global ARP table *)
-            Lwt_mutex.with_lock t.global_arp_table.mutex (fun () ->
-                t.global_arp_table.table <- (client_ip, client_macaddr) :: t.global_arp_table.table;
-                Lwt.return_unit)  >>= fun () ->
+          let client_ip = (match preferred_ip with
+            | None -> next_unique_ip first_ip
+            | Some ip -> ip) in
 
-            (* add to client table and return mac *)
-            Hashtbl.replace t.client_uuids.table uuid (client_ip, l2_client_id);
-            Lwt.return client_macaddr
+          (* Add IP to global ARP table *)
+          Lwt_mutex.with_lock t.global_arp_table.mutex (fun () ->
+              t.global_arp_table.table <- (client_ip, client_macaddr) :: t.global_arp_table.table;
+              Lwt.return_unit)  >>= fun () ->
+
+          (* add to client table and return mac *)
+          Hashtbl.replace t.client_uuids.table uuid (client_ip, l2_client_id);
+          Lwt.return client_macaddr
         end
-    )
+      )
 
   let get_client_ip_id t uuid =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
         Lwt.return (Hashtbl.find t.client_uuids.table uuid)
-    )
+      )
 
   let connect t client l2_switch =
     Log.debug (fun f -> f "accepted vmnet connection");
     begin
-        (* If bridge is in use, create unique IP and update global ARP *)
-        if t.bridge_connections then begin
-            or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(client_macaddr_of_uuid t t.peer_ip l2_switch)
-                ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
-             >>= fun x ->
-            let client_macaddr = Vmnet.get_client_macaddr x in
-            let client_uuid = Vmnet.get_client_uuid x in
-            get_client_ip_id t client_uuid
-            >>= fun (client_ip, l2_client_id) ->
-            connect x l2_switch l2_client_id client_macaddr t.server_macaddr client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
-        end else begin
-            (* When bridge is disabled, just use fixed uuid and peer_ip from t *)
-            or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(fun _ -> Lwt.return default_client_macaddr)
-                ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
-            >>= fun x ->
-            let client_macaddr = Vmnet.get_client_macaddr x in
-            connect x l2_switch (-1) client_macaddr t.server_macaddr t.peer_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
-        end
+      (* If bridge is in use, create unique IP and update global ARP *)
+      if t.bridge_connections then begin
+        or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(client_macaddr_of_uuid t t.peer_ip l2_switch)
+          ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
+        >>= fun x ->
+        let client_macaddr = Vmnet.get_client_macaddr x in
+        let client_uuid = Vmnet.get_client_uuid x in
+        get_client_ip_id t client_uuid
+        >>= fun (client_ip, l2_client_id) ->
+        connect x l2_switch l2_client_id client_macaddr t.server_macaddr client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
+      end else begin
+        (* When bridge is disabled, just use fixed uuid and peer_ip from t *)
+        or_failwith_result "vmnet" @@ Vmnet.of_fd ~client_macaddr_of_uuid:(fun _ -> Lwt.return default_client_macaddr)
+          ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
+        >>= fun x ->
+        let client_macaddr = Vmnet.get_client_macaddr x in
+        connect x l2_switch (-1) client_macaddr t.server_macaddr t.peer_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu t.get_domain_search t.get_domain_name t.global_arp_table t.bridge_connections
+      end
     end
 
 end

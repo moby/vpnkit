@@ -14,8 +14,8 @@ module type FLOW_CLIENT = sig
 
   val connect: ?read_buffer_size:int -> address
     -> flow Error.t
-  (** [connect address] creates a connection to [address] and returns
-      he connected flow. *)
+    (** [connect address] creates a connection to [address] and returns
+        he connected flow. *)
 end
 
 module type CONN = sig
@@ -121,7 +121,7 @@ module type SOCKETS = sig
 
       include FLOW_SERVER
         with type address := address
-        and type flow := flow
+         and type flow := flow
 
       val unsafe_get_raw_fd: flow -> Unix.file_descr
       (** Return the underlying fd. This is intended for careful integration
@@ -223,16 +223,16 @@ end
 module type DNS_POLICY = sig
   (** Policy settings
 
-    DNS configuration is taken from 4 places, lowest to highest priority:
+      DNS configuration is taken from 4 places, lowest to highest priority:
 
-    - 0: a built-in default of the Google public DNS servers
-    - 1: a default configuration (from a command-line argument or a configuration
+      - 0: a built-in default of the Google public DNS servers
+      - 1: a default configuration (from a command-line argument or a configuration
       file)
-    - 2: the `/etc/resolv.conf` file if present
-    - 3: the database key `slirp/dns`
+      - 2: the `/etc/resolv.conf` file if present
+      - 3: the database key `slirp/dns`
 
-    If configuration with a higher priority is found then it completely overrides
-    lower priority configuration.
+      If configuration with a higher priority is found then it completely overrides
+      lower priority configuration.
   *)
 
   type priority = int (** higher is more important *)

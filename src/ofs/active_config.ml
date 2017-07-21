@@ -50,9 +50,9 @@ type path = string list
 let changes values =
   let rec loop last next =
     next >>= function Value(first, next) ->
-    if Some first = last
-    then loop last next
-    else return (Value(first, loop (Some first) next)) in
+      if Some first = last
+      then loop last next
+      else return (Value(first, loop (Some first) next)) in
   loop None values
 
 module type S = sig
@@ -90,10 +90,10 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
         | "" when saw_flush -> Lwt.fail End_of_file
         | "" -> loop ~saw_flush:true ~buf ~off
         | data ->
-            loop
-              ~saw_flush:false
-              ~buf:(buf ^ data)
-              ~off:(off ++ Int64.of_int (String.length data)) in
+          loop
+            ~saw_flush:false
+            ~buf:(buf ^ data)
+            ~off:(off ++ Int64.of_int (String.length data)) in
     loop ~saw_flush:false ~buf:"" ~off:0L
 
   let read conn path =
@@ -110,9 +110,9 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
       end in
     Lwt.catch
       (fun () ->
-        loop 0L
-        >>= fun text ->
-        return (Some text)
+         loop 0L
+         >>= fun text ->
+         return (Some text)
       ) (fun _ -> return None)
 
   let rwx = [`Read; `Write; `Execute]
@@ -126,16 +126,16 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
       let n = if n = 0 then log_every else n - 1 in
       Lwt.catch
         (fun () ->
-          ( reconnect ()
-            >>|= fun flow ->
-            Client.connect flow ?username ()
-          ) >>= function
-          | Result.Error (`Msg x) ->
-            Time.sleep 0.1
-            >>= fun () ->
-            loop ~x (n - 1)
-          | Result.Ok conn ->
-            Lwt.return conn
+           ( reconnect ()
+             >>|= fun flow ->
+             Client.connect flow ?username ()
+           ) >>= function
+           | Result.Error (`Msg x) ->
+             Time.sleep 0.1
+             >>= fun () ->
+             loop ~x (n - 1)
+           | Result.Ok conn ->
+             Lwt.return conn
         ) (fun e ->
             Time.sleep 0.1
             >>= fun () ->
@@ -148,23 +148,23 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
     >>= fun conn ->
     Lwt.catch
       (fun () ->
-        (* If we start first we need to create the branch *)
-        Client.mkdir conn ["branch"] branch rwxr_xr_x
-        >>|= fun () ->
-        Client.LowLevel.allocate_fid conn
-        >>|= fun fid ->
-        Client.walk_from_root conn fid ["branch"; branch; "watch"; "tree.live"]
-        >>|= fun _walk ->
-        Client.LowLevel.openfid conn fid Protocol_9p.Types.OpenMode.read_only
-        >>|= fun _openfid ->
-        lines conn fid
-        >>= fun shas ->
-        Lwt.return (Ok { conn; fid; shas })
+         (* If we start first we need to create the branch *)
+         Client.mkdir conn ["branch"] branch rwxr_xr_x
+         >>|= fun () ->
+         Client.LowLevel.allocate_fid conn
+         >>|= fun fid ->
+         Client.walk_from_root conn fid ["branch"; branch; "watch"; "tree.live"]
+         >>|= fun _walk ->
+         Client.LowLevel.openfid conn fid Protocol_9p.Types.OpenMode.read_only
+         >>|= fun _openfid ->
+         lines conn fid
+         >>= fun shas ->
+         Lwt.return (Ok { conn; fid; shas })
       ) (fun e ->
-        Client.disconnect conn
-        >>= fun () ->
-        Lwt.return (Error (`Msg ("Transport.create: " ^ (Printexc.to_string e))))
-      )
+          Client.disconnect conn
+          >>= fun () ->
+          Lwt.return (Error (`Msg ("Transport.create: " ^ (Printexc.to_string e))))
+        )
 
   type t = {
     reconnect: unit -> (FLOW.flow, [ `Msg of string ]) Result.result Lwt.t;
@@ -183,59 +183,59 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
   let transport ({ username; reconnect; branch; _ } as t) =
     Lwt_mutex.with_lock t.transport_m
       (fun () ->
-        match t.transport with
-          | Some transport -> Lwt.return transport
-          | None ->
-            Log.info (fun f -> f "attempting to reconnect to database");
-            retry_forever (fun () -> create_transport reconnect branch ?username ())
-            >>= fun transport ->
-            Log.info (fun f -> f "reconnected transport layer");
-            t.transport <- Some transport;
-            Lwt.return transport
+         match t.transport with
+         | Some transport -> Lwt.return transport
+         | None ->
+           Log.info (fun f -> f "attempting to reconnect to database");
+           retry_forever (fun () -> create_transport reconnect branch ?username ())
+           >>= fun transport ->
+           Log.info (fun f -> f "reconnected transport layer");
+           t.transport <- Some transport;
+           Lwt.return transport
       )
 
-let rec values t path =
-  transport t
-  >>= fun { conn; shas; _ } ->
-  let rec loop = function
-  | Value(hd, tl_t) ->
-    read conn ("trees" :: hd :: path)
-    >>= fun v_opt ->
-    let next =
-      Lwt.catch
-        (fun () -> tl_t >>= fun tl -> loop tl)
-        (fun _e ->
-          if Lwt.state (Client.after_disconnect conn) <> Lwt.Sleep && t.transport <> None then begin
-            t.transport <- None;
-            Log.info (fun f -> f "transport layer has disconnected");
-          end;
-          values t path
-        ) in
-    Lwt.return (Value(v_opt, next )) in
-  loop shas
+  let rec values t path =
+    transport t
+    >>= fun { conn; shas; _ } ->
+    let rec loop = function
+    | Value(hd, tl_t) ->
+      read conn ("trees" :: hd :: path)
+      >>= fun v_opt ->
+      let next =
+        Lwt.catch
+          (fun () -> tl_t >>= fun tl -> loop tl)
+          (fun _e ->
+             if Lwt.state (Client.after_disconnect conn) <> Lwt.Sleep && t.transport <> None then begin
+               t.transport <- None;
+               Log.info (fun f -> f "transport layer has disconnected");
+             end;
+             values t path
+          ) in
+      Lwt.return (Value(v_opt, next )) in
+    loop shas
 
 
-let string_option t path =
-  changes @@ values t path
+  let string_option t path =
+    changes @@ values t path
 
-let string t ~default path =
-  values t path
-  >>= fun vs ->
-  changes @@ map (function
-    | None -> Lwt.return default
-    | Some x -> Lwt.return x
-  ) vs
+  let string t ~default path =
+    values t path
+    >>= fun vs ->
+    changes @@ map (function
+      | None -> Lwt.return default
+      | Some x -> Lwt.return x
+      ) vs
 
-let int t ~default path =
-  string t ~default:(string_of_int default) path
-  >>= fun strings ->
-  let parse s = return (try int_of_string s with _ -> default) in
-  changes @@ map parse strings
+  let int t ~default path =
+    string t ~default:(string_of_int default) path
+    >>= fun strings ->
+    let parse s = return (try int_of_string s with _ -> default) in
+    changes @@ map parse strings
 
-let bool t ~default path =
-  string t ~default:(string_of_bool default) path
-  >>= fun strings ->
-  let parse s = return (try bool_of_string s with _ -> default) in
-  changes @@ map parse strings
+  let bool t ~default path =
+    string t ~default:(string_of_bool default) path
+    >>= fun strings ->
+    let parse s = return (try bool_of_string s with _ -> default) in
+    changes @@ map parse strings
 
 end
