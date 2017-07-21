@@ -1,7 +1,9 @@
 open Lwt.Infix
 
 let src =
-  let src = Logs.Src.create "active_config" ~doc:"Database configuration values" in
+  let src =
+    Logs.Src.create "active_config" ~doc:"Database configuration values"
+  in
   Logs.Src.set_level src (Some Logs.Info);
   src
 
@@ -204,7 +206,8 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
         Lwt.catch
           (fun () -> tl_t >>= fun tl -> loop tl)
           (fun _e ->
-             if Lwt.state (Client.after_disconnect conn) <> Lwt.Sleep && t.transport <> None then begin
+             if Lwt.state (Client.after_disconnect conn) <> Lwt.Sleep
+             && t.transport <> None then begin
                t.transport <- None;
                Log.info (fun f -> f "transport layer has disconnected");
              end;

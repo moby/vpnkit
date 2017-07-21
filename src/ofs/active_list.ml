@@ -1,3 +1,5 @@
+open Lwt.Infix
+
 let src =
   let src = Logs.Src.create "ofs" ~doc:"active_list" in
   Logs.Src.set_level src (Some Logs.Info);
@@ -5,30 +7,28 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let finally f g =
-  let open Lwt.Infix in
-  Lwt.catch (fun () -> f () >>= fun r -> g () >>= fun () -> Lwt.return r) (fun e -> g () >>= fun () -> Lwt.fail e)
-
 module Var = struct
+
   type 'a t = {
     mutable thing: 'a option;
     c: unit Lwt_condition.t;
   }
+
   let create () =
     let c = Lwt_condition.create () in
     { thing = None; c }
+
   let fill t thing =
     t.thing <- Some thing;
     Lwt_condition.broadcast t.c ()
+
   let read t =
-    let open Lwt.Infix in
     let rec loop () = match t.thing with
     | Some c -> Lwt.return c
-    | None ->
-      Lwt_condition.wait t.c
-      >>= fun () ->
-      loop () in
+    | None   -> Lwt_condition.wait t.c >>= loop
+    in
     loop ()
+
 end
 
 module type Instance = sig
@@ -156,26 +156,28 @@ The directory will be deleted and replaced with a file of the same name.
   let walk connection ~cancel:_ { Request.Walk.fid; newfid; wnames } =
     try
       let from = Types.Fid.Map.find fid !(connection.fids) in
-      let from, wqids = List.fold_left (fun (from,qids) x -> match x, fst from with
-        | "..", _ ->
-          (Root, root_qid), root_qid::qids
-        | "README", _ ->
-          let qid = next_qid [] in
-          (README, qid), qid :: qids
-        | name, Root ->
-          if StringMap.mem name !active then begin
-            let entry = StringMap.find name !active in
-            let qid = next_qid (match entry.instance with
-              | None -> [ Types.Qid.Directory ]
-              | Some _ -> []
-              ) in
-            (Entry entry, qid), qid :: qids
-          end else raise Enoent
-        | "ctl", Entry entry ->
-          let qid = next_qid [] in
-          (ControlFile entry, qid), qid :: qids
-        | _, _ -> raise Enoent
-        ) ((from, next_qid []), []) wnames in
+      let from, wqids = List.fold_left (fun (from,qids) x ->
+          match x, fst from with
+          | "..", _ ->
+            (Root, root_qid), root_qid::qids
+          | "README", _ ->
+            let qid = next_qid [] in
+            (README, qid), qid :: qids
+          | name, Root ->
+            if StringMap.mem name !active then begin
+              let entry = StringMap.find name !active in
+              let qid = next_qid (match entry.instance with
+                | None -> [ Types.Qid.Directory ]
+                | Some _ -> []
+                ) in
+              (Entry entry, qid), qid :: qids
+            end else raise Enoent
+          | "ctl", Entry entry ->
+            let qid = next_qid [] in
+            (ControlFile entry, qid), qid :: qids
+          | _, _ -> raise Enoent
+        ) ((from, next_qid []), []) wnames
+      in
       connection.fids := Types.Fid.Map.add newfid (fst from) !(connection.fids);
       let wqids = List.rev wqids in
       return { Response.Walk.wqids }
@@ -321,9 +323,12 @@ The directory will be deleted and replaced with a file of the same name.
       let stat = match resource with
       | Root -> make_stat ~is_directory:true ~writable:true ~name:""
       | README -> make_stat ~is_directory:false ~writable:false ~name:"README"
-      | ControlFile _ -> make_stat ~is_directory:false ~writable:true ~name:"ctl"
-      | Entry { name; instance = None; _ } -> make_stat ~is_directory:true ~writable:false ~name
-      | Entry { name; instance = Some _; _ } -> make_stat ~is_directory:false ~writable:false ~name in
+      | ControlFile _ ->
+        make_stat ~is_directory:false ~writable:true ~name:"ctl"
+      | Entry { name; instance = None; _ } ->
+        make_stat ~is_directory:true ~writable:false ~name
+      | Entry { name; instance = Some _; _ } ->
+        make_stat ~is_directory:false ~writable:false ~name in
       return { Response.Stat.stat }
     with Not_found -> Error.badfid
 
@@ -344,14 +349,16 @@ The directory will be deleted and replaced with a file of the same name.
       Error.eperm
 
   let write connection ~cancel:_ { Request.Write.fid; offset; data } =
-    Log.debug (fun f -> f "Write offset=%Ld data=[%s] to file" offset (Cstruct.to_string data));
+    Log.debug (fun f ->
+        f "Write offset=%Ld data=[%s] to file" offset (Cstruct.to_string data));
     let ok = { Response.Write.count = Int32.of_int @@ Cstruct.len data } in
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with
       | ControlFile entry ->
         if entry.result <> None then begin
-          Log.err (fun f -> f "EPERM writing to an already-configured control file");
+          Log.err (fun f ->
+              f "EPERM writing to an already-configured control file");
           Error.eperm
         end else begin match Instance.of_string @@ Cstruct.to_string data with
         | Ok f ->
@@ -360,19 +367,22 @@ The directory will be deleted and replaced with a file of the same name.
             | Ok f' -> (* local_port is resolved *)
               entry.instance <- Some f';
               entry.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");
-              Log.debug (fun f -> f "Created instance %s" (Instance.to_string f'));
+              Log.debug (fun f ->
+                  f "Created instance %s" (Instance.to_string f'));
               return ok
             | Error (`Msg m) ->
               entry.result <- Some ("ERROR " ^ m ^ "\n");
               return ok
           end
         | Error (`Msg m) ->
-          Log.err (fun f -> f "Return an error message via the control file: %s" m);
+          Log.err (fun f ->
+              f "Return an error message via the control file: %s" m);
           entry.result <- Some ("ERROR " ^ m ^ "\n");
           return ok
         end
       | _ ->
-        Log.err (fun f -> f "EPERM writing to resource %s" (string_of_resource resource));
+        Log.err (fun f ->
+            f "EPERM writing to resource %s" (string_of_resource resource));
         Error.eperm
     with Not_found ->
       Log.err (fun f -> f "Fid not bound, returning badfid");
@@ -385,7 +395,8 @@ The directory will be deleted and replaced with a file of the same name.
       | Entry _ | ControlFile _ ->
         clunk connection ~cancel { Request.Clunk.fid }
       | _ ->
-        Log.err (fun f -> f "EPERM removing resource %s" (string_of_resource resource));
+        Log.err (fun f ->
+            f "EPERM removing resource %s" (string_of_resource resource));
         Error.eperm
     with Not_found ->
       Log.err (fun f -> f "Fid not bound, returning badfid");
