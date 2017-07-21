@@ -66,6 +66,7 @@ COMMIT:
 
 .PHONY: clean
 clean:
+	jbuilder clean
 	rm -rf _build
 	rm -f vpnkit.exe
 	rm -f vpnkit.tgz
