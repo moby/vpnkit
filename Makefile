@@ -57,7 +57,7 @@ test:
 OSS-LICENSES:
 	mkdir -p $(LICENSEDIRS)
 	cd $(LICENSEDIRS) && \
-	  $(OPAMFLAGS) $(REPO_ROOT)/repo/opam-licenses.sh slirp
+	  $(OPAMFLAGS) $(REPO_ROOT)/repo/opam-licenses.sh vpnkit
 	$(REPO_ROOT)/repo/list-licenses.sh $(LICENSEDIRS) > OSS-LICENSES
 
 .PHONY: COMMIT

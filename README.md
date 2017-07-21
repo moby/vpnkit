@@ -24,7 +24,7 @@ Build all the dependencies and the program itself with:
 ```
 cd [path to vpnkit source]
 opam remote add vpnkit ./repo/darwin
-opam install --deps-only slirp
+opam install --deps-only vpnkit
 make
 ```
 
