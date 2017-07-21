@@ -18,7 +18,8 @@ module Init = struct
   }
 
   let to_string t =
-    Printf.sprintf "{ magic = %s; version = %ld; commit = %s }" t.magic t.version t.commit
+    Fmt.strf "{ magic = %s; version = %ld; commit = %s }"
+      t.magic t.version t.commit
 
   let sizeof = 5 + 4 + 40
 
@@ -49,8 +50,9 @@ module Command = struct
     | Bind_ipv4 of Ipaddr.V4.t * int * bool
 
   let to_string = function
-  | Ethernet x -> "Ethernet " ^ (Uuidm.to_string x)
-  | Bind_ipv4 (ip, port, tcp) -> "Bind_ipv4 " ^ (Ipaddr.V4.to_string ip) ^ " " ^ (string_of_int port) ^ " " ^ (string_of_bool tcp)
+  | Ethernet x -> Fmt.strf "Ethernet %a" Uuidm.pp x
+  | Bind_ipv4 (ip, port, tcp) ->
+    Fmt.strf "Bind_ipv4 %a %d %b" Ipaddr.V4.pp_hum ip port tcp
 
   let sizeof = 1 + 36
 
@@ -79,14 +81,16 @@ module Command = struct
       if (Bytes.compare (Bytes.make 36 '\000') uuid_str) = 0 then
         begin
           let random_uuid = (Uuidm.v `V4) in
-          Log.info (fun f -> f "Generated UUID on behalf of client: %s" (Uuidm.to_string random_uuid));
-          Ok (Ethernet random_uuid, rest) (* generate random uuid on behalf of client if client sent array of \0 *)
+          Log.info (fun f ->
+              f "Generated UUID on behalf of client: %a" Uuidm.pp random_uuid);
+          (* generate random uuid on behalf of client if client sent
+             array of \0 *)
+          Ok (Ethernet random_uuid, rest)
         end else  begin
-        let result = match (Uuidm.of_string uuid_str) with (* parse uuid from client *)
-        | Some uuid -> begin
-            Ok (Ethernet uuid, rest)
-          end
-        | None -> Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str))
+        let result = match (Uuidm.of_string uuid_str) with
+        (* parse uuid from client *)
+        | Some uuid -> Ok (Ethernet uuid, rest)
+        | None      -> Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str))
         in
         result
       end
@@ -102,7 +106,9 @@ module Vif = struct
     client_macaddr: Macaddr.t;
   }
 
-  let to_string t = Printf.sprintf "{ mtu = %d; max_packet_size = %d; client_macaddr = %s }" t.mtu t.max_packet_size (Macaddr.to_string t.client_macaddr)
+  let to_string t =
+    Fmt.strf "{ mtu = %d; max_packet_size = %d; client_macaddr = %s }"
+      t.mtu t.max_packet_size (Macaddr.to_string t.client_macaddr)
 
   let create client_macaddr mtu () =
     let max_packet_size = mtu + 50 in
@@ -168,8 +174,8 @@ module Make(C: Sig.CONN) = struct
     after_disconnect_u: unit Lwt.u;
   }
 
-
-  let error_of_failure f = Lwt.catch f (fun e -> Lwt_result.fail (`Msg (Printexc.to_string e)))
+  let error_of_failure f =
+    Lwt.catch f (fun e -> Lwt_result.fail (`Msg (Printexc.to_string e)))
 
   exception Disconnected
 
@@ -184,43 +190,45 @@ module Make(C: Sig.CONN) = struct
     t.client_macaddr
 
   let server_negotiate ~fd ~client_macaddr_of_uuid ~mtu =
-    error_of_failure
-      (fun () ->
-         Channel.read_exactly ~len:Init.sizeof fd
-         >>= fun bufs ->
-         let buf = Cstruct.concat bufs in
-         let open Lwt_result.Infix in
-         Lwt.return (Init.unmarshal buf)
-         >>= fun (init, _) ->
-         Log.info (fun f -> f "PPP.negotiate: received %s" (Init.to_string init));
-         let (_: Cstruct.t) = Init.marshal Init.default buf in
-         let open Lwt.Infix in
-         Channel.write_buffer fd buf;
-         Channel.flush fd
-         >>= fun () ->
-         Channel.read_exactly ~len:Command.sizeof fd
-         >>= fun bufs ->
-         let buf = Cstruct.concat bufs in
-         let open Lwt_result.Infix in
-         Lwt.return (Command.unmarshal buf)
-         >>= fun (command, _) ->
-         Log.info (fun f -> f "PPP.negotiate: received %s" (Command.to_string command));
-         match command with
-         | Command.Ethernet uuid -> begin
-             let open Lwt.Infix in
-             client_macaddr_of_uuid uuid
-             >>= fun client_macaddr ->
-             let vif = Vif.create client_macaddr mtu () in
-             let buf = Cstruct.create Vif.sizeof in
-             let (_: Cstruct.t) = Vif.marshal vif buf in
-             let open Lwt.Infix in
-             Log.info (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
-             Channel.write_buffer fd buf;
-             Channel.flush fd
-             >>= fun () ->
-             Lwt_result.return (uuid, client_macaddr)
-           end
-         | Command.Bind_ipv4 _ -> (raise (Failure "PPP.negotiate: unsupported command Bind_ipv4"))
+    error_of_failure (fun () ->
+        Channel.read_exactly ~len:Init.sizeof fd
+        >>= fun bufs ->
+        let buf = Cstruct.concat bufs in
+        let open Lwt_result.Infix in
+        Lwt.return (Init.unmarshal buf)
+        >>= fun (init, _) ->
+        Log.info (fun f ->
+            f "PPP.negotiate: received %s" (Init.to_string init));
+        let (_: Cstruct.t) = Init.marshal Init.default buf in
+        let open Lwt.Infix in
+        Channel.write_buffer fd buf;
+        Channel.flush fd
+        >>= fun () ->
+        Channel.read_exactly ~len:Command.sizeof fd
+        >>= fun bufs ->
+        let buf = Cstruct.concat bufs in
+        let open Lwt_result.Infix in
+        Lwt.return (Command.unmarshal buf)
+        >>= fun (command, _) ->
+        Log.info (fun f ->
+            f "PPP.negotiate: received %s" (Command.to_string command));
+        match command with
+        | Command.Ethernet uuid -> begin
+            let open Lwt.Infix in
+            client_macaddr_of_uuid uuid
+            >>= fun client_macaddr ->
+            let vif = Vif.create client_macaddr mtu () in
+            let buf = Cstruct.create Vif.sizeof in
+            let (_: Cstruct.t) = Vif.marshal vif buf in
+            let open Lwt.Infix in
+            Log.info (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
+            Channel.write_buffer fd buf;
+            Channel.flush fd
+            >>= fun () ->
+            Lwt_result.return (uuid, client_macaddr)
+          end
+        | Command.Bind_ipv4 _ ->
+          raise (Failure "PPP.negotiate: unsupported command Bind_ipv4")
       )
 
   let client_negotiate ~uuid ~fd =
@@ -230,27 +238,22 @@ module Make(C: Sig.CONN) = struct
          let buf = Cstruct.create Init.sizeof in
          let (_: Cstruct.t) = Init.marshal Init.default buf in
          Channel.write_buffer fd buf;
-         Channel.flush fd
-         >>= fun () ->
-         Channel.read_exactly ~len:Init.sizeof fd
-         >>= fun bufs ->
+         Channel.flush fd >>= fun () ->
+         Channel.read_exactly ~len:Init.sizeof fd >>= fun bufs ->
          let buf = Cstruct.concat bufs in
          let open Lwt_result.Infix in
-         Lwt.return (Init.unmarshal buf)
-         >>= fun (init, _) ->
-         Log.info (fun f -> f "Client.negotiate: received %s" (Init.to_string init));
+         Lwt.return (Init.unmarshal buf) >>= fun (init, _) ->
+         Log.info (fun f ->
+             f "Client.negotiate: received %s" (Init.to_string init));
          let buf = Cstruct.create Command.sizeof in
          let (_: Cstruct.t) = Command.marshal (Command.Ethernet uuid) buf in
          let open Lwt.Infix in
          Channel.write_buffer fd buf;
-         Channel.flush fd
-         >>= fun () ->
-         Channel.read_exactly ~len:Vif.sizeof fd
-         >>= fun bufs ->
+         Channel.flush fd >>= fun () ->
+         Channel.read_exactly ~len:Vif.sizeof fd >>= fun bufs ->
          let buf = Cstruct.concat bufs in
          let open Lwt_result.Infix in
-         Lwt.return (Vif.unmarshal buf)
-         >>= fun (vif, _) ->
+         Lwt.return (Vif.unmarshal buf)>>= fun (vif, _) ->
          Log.debug (fun f -> f "Client.negotiate: vif %s" (Vif.to_string vif));
          Lwt_result.return (vif)
       )
@@ -263,47 +266,44 @@ module Make(C: Sig.CONN) = struct
       then ()
       else
         let n = Unix.write fd str ofs (String.length str - ofs) in
-        loop (ofs + n) in
+        loop (ofs + n)
+    in
     loop 0
 
   let start_capture t ?size_limit filename =
-    Lwt_mutex.with_lock t.pcap_m
-      (fun () ->
-         ( match t.pcap with
-         | Some fd ->
-           Unix.close fd;
-           Lwt.return ()
-         | None ->
-           Lwt.return ()
-         ) >>= fun () ->
-         let fd = Unix.openfile filename [ Unix.O_WRONLY; Unix.O_TRUNC; Unix.O_CREAT ] 0o0644 in
-         let buf = Cstruct.create Pcap.LE.sizeof_pcap_header in
-         let open Pcap.LE in
-         set_pcap_header_magic_number buf Pcap.magic_number;
-         set_pcap_header_version_major buf Pcap.major_version;
-         set_pcap_header_version_minor buf Pcap.minor_version;
-         set_pcap_header_thiszone buf 0l;
-         set_pcap_header_sigfigs buf 4l;
-         set_pcap_header_snaplen buf 1500l;
-         set_pcap_header_network buf (Pcap.Network.to_int32 Pcap.Network.Ethernet);
-         really_write fd (Cstruct.to_string buf);
-         t.pcap <- Some fd;
-         t.pcap_size_limit <- size_limit;
-         Lwt.return ()
+    Lwt_mutex.with_lock t.pcap_m (fun () ->
+        (match t.pcap with Some fd -> Unix.close fd | None -> ());
+        let fd =
+          Unix.openfile filename [ Unix.O_WRONLY; Unix.O_TRUNC; Unix.O_CREAT ]
+            0o0644
+        in
+        let buf = Cstruct.create Pcap.LE.sizeof_pcap_header in
+        let open Pcap.LE in
+        set_pcap_header_magic_number buf Pcap.magic_number;
+        set_pcap_header_version_major buf Pcap.major_version;
+        set_pcap_header_version_minor buf Pcap.minor_version;
+        set_pcap_header_thiszone buf 0l;
+        set_pcap_header_sigfigs buf 4l;
+        set_pcap_header_snaplen buf 1500l;
+        set_pcap_header_network buf
+          (Pcap.Network.to_int32 Pcap.Network.Ethernet);
+        really_write fd (Cstruct.to_string buf);
+        t.pcap <- Some fd;
+        t.pcap_size_limit <- size_limit;
+        Lwt.return ()
       )
 
   let stop_capture_already_locked t = match t.pcap with
-  | None -> Lwt.return ()
+  | None    -> ()
   | Some fd ->
     Unix.close fd;
     t.pcap <- None;
-    t.pcap_size_limit <- None;
-    Lwt.return ()
+    t.pcap_size_limit <- None
 
   let stop_capture t =
-    Lwt_mutex.with_lock t.pcap_m
-      (fun () ->
-         stop_capture_already_locked t
+    Lwt_mutex.with_lock t.pcap_m  (fun () ->
+        stop_capture_already_locked t;
+        Lwt.return_unit
       )
 
   let make ~client_macaddr ~server_macaddr ~mtu ~client_uuid fd =
@@ -317,15 +317,17 @@ module Make(C: Sig.CONN) = struct
     let listeners = [] in
     let listening = false in
     let after_disconnect, after_disconnect_u = Lwt.task () in
-    { fd; stats; client_macaddr; client_uuid; server_macaddr; mtu; write_header; write_m; pcap;
-      pcap_size_limit; pcap_m; listeners; listening; after_disconnect; after_disconnect_u }
+    { fd; stats; client_macaddr; client_uuid; server_macaddr; mtu; write_header;
+      write_m; pcap; pcap_size_limit; pcap_m; listeners; listening;
+      after_disconnect; after_disconnect_u }
 
   type fd = C.flow
 
   let of_fd ~client_macaddr_of_uuid ~server_macaddr ~mtu flow =
     let open Lwt_result.Infix in
     let channel = Channel.create flow in
-    server_negotiate ~fd:channel ~client_macaddr_of_uuid ~mtu >>= fun (client_uuid, client_macaddr) ->
+    server_negotiate ~fd:channel ~client_macaddr_of_uuid ~mtu
+    >>= fun (client_uuid, client_macaddr) ->
     let t = make ~client_macaddr ~server_macaddr ~mtu ~client_uuid channel in
     Lwt_result.return t
 
@@ -334,16 +336,18 @@ module Make(C: Sig.CONN) = struct
     let channel = Channel.create flow in
     client_negotiate ~uuid ~fd:channel
     >>= fun vif ->
-    let t = make ~client_macaddr:vif.Vif.client_macaddr ~server_macaddr:server_macaddr ~mtu:vif.Vif.mtu ~client_uuid:uuid channel in
+    let t =
+      make ~client_macaddr:vif.Vif.client_macaddr
+        ~server_macaddr:server_macaddr ~mtu:vif.Vif.mtu ~client_uuid:uuid
+        channel in
     Lwt_result.return t
 
   let disconnect t = match t.fd with
-  | None -> Lwt.return ()
+  | None    -> Lwt.return ()
   | Some fd ->
     t.fd <- None;
     Log.debug (fun f -> f "Vmnet.disconnect flushing channel");
-    Channel.flush fd
-    >>= fun () ->
+    Channel.flush fd >>= fun () ->
     Lwt.wakeup_later t.after_disconnect_u ();
     Lwt.return ()
 
@@ -353,60 +357,55 @@ module Make(C: Sig.CONN) = struct
     match t.pcap with
     | None -> Lwt.return ()
     | Some pcap ->
-      Lwt_mutex.with_lock t.pcap_m
-        (fun () ->
-           let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
-           let time = Unix.gettimeofday () in
-           let secs = Int32.of_float time in
-           let usecs = Int32.of_float (1e6 *. (time -. (floor time))) in
-           let buf = Cstruct.create Pcap.sizeof_pcap_packet in
-           let open Pcap.LE in
-           set_pcap_packet_ts_sec buf secs;
-           set_pcap_packet_ts_usec buf usecs;
-           set_pcap_packet_incl_len buf @@ Int32.of_int len;
-           set_pcap_packet_orig_len buf @@ Int32.of_int len;
-           really_write pcap (Cstruct.to_string buf);
-           List.iter (fun buf -> really_write pcap (Cstruct.to_string buf)) bufs;
-           match t.pcap_size_limit with
-           | None -> Lwt.return () (* no limit *)
-           | Some limit ->
-             let limit = Int64.(sub limit (of_int len)) in
-             t.pcap_size_limit <- Some limit;
-             if limit < 0L
-             then stop_capture_already_locked t
-             else Lwt.return ()
+      Lwt_mutex.with_lock t.pcap_m (fun () ->
+          let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
+          let time = Unix.gettimeofday () in
+          let secs = Int32.of_float time in
+          let usecs = Int32.of_float (1e6 *. (time -. (floor time))) in
+          let buf = Cstruct.create Pcap.sizeof_pcap_packet in
+          let open Pcap.LE in
+          set_pcap_packet_ts_sec buf secs;
+          set_pcap_packet_ts_usec buf usecs;
+          set_pcap_packet_incl_len buf @@ Int32.of_int len;
+          set_pcap_packet_orig_len buf @@ Int32.of_int len;
+          really_write pcap (Cstruct.to_string buf);
+          List.iter (fun buf -> really_write pcap (Cstruct.to_string buf)) bufs;
+          match t.pcap_size_limit with
+          | None -> Lwt.return () (* no limit *)
+          | Some limit ->
+            let limit = Int64.(sub limit (of_int len)) in
+            t.pcap_size_limit <- Some limit;
+            if limit < 0L then stop_capture_already_locked t;
+            Lwt.return_unit
         )
 
   let drop_on_error f = Lwt.catch f (fun _ -> Lwt.return ())
 
-
   let writev t bufs =
-    Lwt_mutex.with_lock t.write_m
-      (fun () ->
-         drop_on_error
-           (fun () ->
-              capture t bufs
-              >>= fun () ->
-              let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
-              if len > (t.mtu + ethernet_header_length) then begin
-                Log.err (fun f ->
-                    f "Dropping over-large ethernet frame, length = %d, mtu = %d" len t.mtu
-                  );
-                Lwt.return_unit
-              end else begin
-                let buf = Cstruct.create Packet.sizeof in
-                Packet.marshal len buf;
-                let fd = get_fd t in
-                Channel.write_buffer fd buf;
-                Log.debug (fun f ->
-                    let b = Buffer.create 128 in
-                    List.iter (Cstruct.hexdump_to_buffer b) bufs;
-                    f "sending\n%s" (Buffer.contents b)
-                  );
-                List.iter (Channel.write_buffer fd) bufs;
-                Channel.flush fd
-              end
-           )
+    Lwt_mutex.with_lock t.write_m (fun () ->
+        drop_on_error (fun () ->
+            capture t bufs >>= fun () ->
+            let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
+            if len > (t.mtu + ethernet_header_length) then begin
+              Log.err (fun f ->
+                  f "Dropping over-large ethernet frame, length = %d, mtu = \
+                     %d" len t.mtu
+                );
+              Lwt.return_unit
+            end else begin
+              let buf = Cstruct.create Packet.sizeof in
+              Packet.marshal len buf;
+              let fd = get_fd t in
+              Channel.write_buffer fd buf;
+              Log.debug (fun f ->
+                  let b = Buffer.create 128 in
+                  List.iter (Cstruct.hexdump_to_buffer b) bufs;
+                  f "sending\n%s" (Buffer.contents b)
+                );
+              List.iter (Channel.write_buffer fd) bufs;
+              Channel.flush fd
+            end
+          )
       )
 
   let listen t callback =
@@ -449,13 +448,16 @@ module Make(C: Sig.CONN) = struct
                  | e ->
                    let now = Unix.gettimeofday () in
                    if (now -. !last_error_log) > 30. then begin
-                     Log.err (fun f -> f "PPP.listen callback caught %s" (Printexc.to_string e));
+                     Log.err (fun f ->
+                         f "PPP.listen callback caught %a" Fmt.exn e);
                      last_error_log := now;
                    end;
                    Lwt.return_unit
                  ) in
              Lwt.async (fun () -> callback buf);
-             List.iter (fun callback -> Lwt.async (fun () -> callback buf)) t.listeners;
+             List.iter (fun callback ->
+                 Lwt.async (fun () -> callback buf)
+               ) t.listeners;
              Lwt_result.return true
           ) (function
             | End_of_file ->
@@ -464,7 +466,8 @@ module Make(C: Sig.CONN) = struct
             | Disconnected ->
               Lwt_result.return false
             | e ->
-              Log.err (fun f -> f "PPP.listen: caught unexpected %s: disconnecting" (Printexc.to_string e));
+              Log.err (fun f ->
+                  f "PPP.listen: caught unexpected %a: disconnecting" Fmt.exn e);
               let open Lwt.Infix in
               disconnect t
               >>= fun () ->
@@ -478,36 +481,33 @@ module Make(C: Sig.CONN) = struct
 
 
   let write t buf =
-    Lwt_mutex.with_lock t.write_m
-      (fun () ->
-         drop_on_error
-           (fun () ->
-              capture t [ buf ]
-              >>= fun () ->
-              let len = Cstruct.len buf in
-              if len > (t.mtu + ethernet_header_length) then begin
-                Log.err (fun f ->
-                    f "Dropping over-large ethernet frame, length = %d, mtu = %d" len t.mtu
-                  );
-                Lwt.return_unit
-              end else begin
-                if Cstruct.len t.write_header < Packet.sizeof then begin
-                  t.write_header <- Cstruct.create (1024 * Packet.sizeof)
-                end;
-                Packet.marshal len t.write_header;
-                let fd = get_fd t in
-                Channel.write_buffer fd (Cstruct.sub t.write_header 0 Packet.sizeof);
-                t.write_header <- Cstruct.shift t.write_header Packet.sizeof;
-                Log.debug (fun f ->
-                    let b = Buffer.create 128 in
-                    Cstruct.hexdump_to_buffer b buf;
-                    f "sending\n%s" (Buffer.contents b)
-                  );
-                Channel.write_buffer fd buf;
-                Channel.flush fd
-              end
-           )
-      )
+    Lwt_mutex.with_lock t.write_m (fun () ->
+        drop_on_error (fun () ->
+            capture t [ buf ] >>= fun () ->
+            let len = Cstruct.len buf in
+            if len > (t.mtu + ethernet_header_length) then begin
+              Log.err (fun f ->
+                  f "Dropping over-large ethernet frame, length = %d, mtu = \
+                     %d" len t.mtu
+                );
+              Lwt.return_unit
+            end else begin
+              if Cstruct.len t.write_header < Packet.sizeof then begin
+                t.write_header <- Cstruct.create (1024 * Packet.sizeof)
+              end;
+              Packet.marshal len t.write_header;
+              let fd = get_fd t in
+              Channel.write_buffer fd
+                (Cstruct.sub t.write_header 0 Packet.sizeof);
+              t.write_header <- Cstruct.shift t.write_header Packet.sizeof;
+              Log.debug (fun f ->
+                  let b = Buffer.create 128 in
+                  Cstruct.hexdump_to_buffer b buf;
+                  f "sending\n%s" (Buffer.contents b)
+                );
+              Channel.write_buffer fd buf;
+              Channel.flush fd
+            end))
 
   let add_listener t callback =
     t.listeners <- callback :: t.listeners

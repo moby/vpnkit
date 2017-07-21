@@ -32,42 +32,52 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module Make(Ethif: V1_LWT.ETHIF) = struct
-  type 'a io = 'a Lwt.t
 
+  module Table = Map.Make(Ipaddr.V4)
+
+  type 'a io = 'a Lwt.t
   type ipaddr = Ipaddr.V4.t
   type buffer = Cstruct.t
   type macaddr = Macaddr.t
-  module Table = Map.Make(Ipaddr.V4)
-  type t = {
-    ethif: Ethif.t;
-    mutable table: macaddr Table.t;
-  }
+  type t = { ethif: Ethif.t; mutable table: macaddr Table.t }
   type error = unit
   type id = unit
-
   type repr = string
-
   type result = [ `Ok of macaddr | `Timeout ]
+
   let to_repr t =
-    Lwt.return (String.concat "; " (List.map (fun (ip, mac) -> Printf.sprintf "%s -> %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac)) (Table.bindings t.table)))
-  let pp fmt repr =
-    Format.fprintf fmt "%s" repr
+    let pp_one (ip, mac) =
+      Fmt.strf "%s -> %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac)
+    in
+    Table.bindings t.table
+    |> List.map pp_one
+    |> String.concat "; "
+    |> Lwt.return
+
+  let pp fmt repr = Fmt.string fmt repr
 
   let get_ips t = List.map fst (Table.bindings t.table)
+
   let add_ip t ip =
     let mac = Ethif.mac t.ethif in
-    Log.debug (fun f -> f "ARP: adding %s -> %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac));
+    Log.debug (fun f ->
+        f "ARP: adding %s -> %s"
+          (Ipaddr.V4.to_string ip) (Macaddr.to_string mac));
     Lwt.return_unit
+
   let set_ips t ips = Lwt_list.iter_s (add_ip t) ips
+
   let remove_ip t ip =
     Log.debug (fun f -> f "ARP: removing %s" (Ipaddr.V4.to_string ip));
     t.table <- Table.remove ip t.table;
     Lwt.return_unit
+
   let query t ip =
     if Table.mem ip t.table
     then Lwt.return (`Ok (Table.find ip t.table))
     else begin
-      Log.warn (fun f -> f "ARP table has no entry for %s" (Ipaddr.V4.to_string ip));
+      Log.warn (fun f ->
+          f "ARP table has no entry for %s" (Ipaddr.V4.to_string ip));
       Lwt.return `Timeout
     end
 
@@ -85,15 +95,19 @@ module Make(Ethif: V1_LWT.ETHIF) = struct
     |1 -> (* Request *)
       let req_ipv4 = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
       if Table.mem req_ipv4 t.table then begin
-        Log.debug (fun f -> f "ARP responding to: who-has %s?" (Ipaddr.V4.to_string req_ipv4));
+        Log.debug (fun f ->
+            f "ARP responding to: who-has %s?" (Ipaddr.V4.to_string req_ipv4));
         let sha = Table.find req_ipv4 t.table in
         let tha = Macaddr.of_bytes_exn (copy_arp_sha frame) in
-        let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in (* the requested address *)
-        let tpa = Ipaddr.V4.of_int32 (get_arp_spa frame) in (* the requesting host IPv4 *)
+        (* the requested address *)
+        let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
+        (* the requesting host IPv4 *)
+        let tpa = Ipaddr.V4.of_int32 (get_arp_spa frame) in
         output t { op=`Reply; sha; tha; spa; tpa }
       end else Lwt.return_unit
     |2 -> (* Reply *)
-      let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in (* the requested address *)
+       (* the requested address *)
+      let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
       Log.debug (fun f -> f "ARP ignoring reply %s" (Ipaddr.V4.to_string spa));
       Lwt.return_unit
     |n ->
@@ -135,7 +149,12 @@ module Make(Ethif: V1_LWT.ETHIF) = struct
   type ethif = Ethif.t
 
   let connect ~table ethif =
-    let table = List.fold_left (fun acc (ip, mac) -> Table.add ip mac acc) Table.empty table in
+    let table =
+      List.fold_left (fun acc (ip, mac) ->
+        Table.add ip mac acc
+      ) Table.empty table
+    in
     Lwt.return (`Ok { table; ethif })
+
   let disconnect _t = Lwt.return_unit
 end

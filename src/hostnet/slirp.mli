@@ -1,4 +1,3 @@
-
 type pcap = (string * int64 option) option
 (** Packet capture configuration. None means don't capture; Some (file, limit)
     means write pcap-formatted data to file. If the limit is None then the
@@ -32,7 +31,13 @@ type config = {
 
 (** A slirp TCP/IP stack ready to accept connections *)
 
-module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLICY)(Host: Sig.HOST)(Vnet : Vnetif.BACKEND) : sig
+module Make
+    (Config: Active_config.S)
+    (Vmnet: Sig.VMNET)
+    (Dns_policy: Sig.DNS_POLICY)
+    (Host: Sig.HOST)
+    (Vnet : Vnetif.BACKEND) :
+sig
 
   val create: ?host_names:Dns.Name.t list -> Config.t -> config Lwt.t
   (** Initialise a TCP/IP stack, taking configuration from the Config.t *)
@@ -40,7 +45,8 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
   type t
 
   val connect: config -> Vmnet.fd -> Vnet.t -> t Lwt.t
-  (** Read and write ethernet frames on the given fd, connected to the specified Vnetif backend *)
+  (** Read and write ethernet frames on the given fd, connected to the
+      specified Vnetif backend *)
 
   val after_disconnect: t -> unit Lwt.t
   (** Waits until the stack has been disconnected *)
@@ -55,15 +61,16 @@ module Make(Config: Active_config.S)(Vmnet: Sig.VMNET)(Dns_policy: Sig.DNS_POLIC
     val get_nat_table_size: t -> int
     (** Return the number of active NAT table entries *)
 
-    val update_dns: ?local_ip:Ipaddr.t -> ?host_names:Dns.Name.t list -> unit -> unit
+    val update_dns: ?local_ip:Ipaddr.t -> ?host_names:Dns.Name.t list ->
+      unit -> unit
     (** Update the DNS forwarder following a configuration change *)
 
-    val update_http: ?http:string -> ?https:string -> ?exclude:string -> unit ->
-      (unit, [`Msg of string]) result Lwt.t
+    val update_http: ?http:string -> ?https:string -> ?exclude:string ->
+      unit -> (unit, [`Msg of string]) result Lwt.t
     (** Update the HTTP forwarder following a configuration change *)
 
-    val update_http_json: Ezjsonm.value -> unit ->
-      (unit, [`Msg of string]) result Lwt.t
+    val update_http_json: Ezjsonm.value ->
+      unit -> (unit, [`Msg of string]) result Lwt.t
     (** Update the HTTP forwarder using the json interface *)
   end
 end

@@ -1,9 +1,9 @@
-
 type t = Cstruct.t list
 
 let pp_t ppf t =
   List.iter (fun t ->
-      Format.fprintf ppf "[%d,%d](%d)" t.Cstruct.off t.Cstruct.len (Bigarray.Array1.dim t.Cstruct.buffer)
+      Fmt.pf ppf "[%d,%d](%d)"
+        t.Cstruct.off t.Cstruct.len (Bigarray.Array1.dim t.Cstruct.buffer)
     ) t
 
 let len = List.fold_left (fun acc c -> Cstruct.len c + acc) 0
@@ -36,9 +36,10 @@ let sub t off len =
   | _, [] -> err "invalid bounds in Cstructs.sub %a off=%d len=%d" pp_t t off len
   | n, t :: ts ->
     let to_take = min (Cstruct.len t) n in
-    (* either t is consumed and we only need ts, or t has data remaining in which
-       case we're finished *)
-    trim (Cstruct.sub t 0 to_take :: acc) ts (remaining - to_take) in
+    (* either t is consumed and we only need ts, or t has data
+       remaining in which case we're finished *)
+    trim (Cstruct.sub t 0 to_take :: acc) ts (remaining - to_take)
+  in
   trim [] t' len
 
 let to_cstruct = function
@@ -65,7 +66,8 @@ let get f t off len =
         | x :: xs ->
           let to_copy = min (Cstruct.len x) (Cstruct.len remaining) in
           Cstruct.blit x 0 remaining 0 to_copy;
-          (* either we've copied all of x, or we've filled the remaining buffer *)
+          (* either we've copied all of x, or we've filled the
+             remaining buffer *)
           copy (Cstruct.shift remaining to_copy) xs in
       let result = Cstruct.create len in
       copy result (x :: xs);

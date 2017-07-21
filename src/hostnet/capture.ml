@@ -36,7 +36,8 @@ module Make(Input: Sig.VMNET) = struct
     let bufs =
       if Cstructs.len bufs > rule.snaplen
       then Cstructs.sub bufs 0 rule.snaplen
-      else bufs in
+      else bufs
+    in
     let len = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
     let time = Unix.gettimeofday () in
     let packet = { len; orig_len; time; bufs } in
@@ -62,7 +63,8 @@ module Make(Input: Sig.VMNET) = struct
     set_pcap_header_thiszone file_header_buf 0l;
     set_pcap_header_sigfigs file_header_buf 4l;
     set_pcap_header_snaplen file_header_buf (Int32.of_int rule.snaplen);
-    set_pcap_header_network file_header_buf (Pcap.Network.to_int32 Pcap.Network.Ethernet);
+    set_pcap_header_network file_header_buf
+      (Pcap.Network.to_int32 Pcap.Network.Ethernet);
 
     let frame_header_buf = Cstruct.create Pcap.sizeof_pcap_packet in
     let frame_header p =
@@ -156,17 +158,17 @@ module Make(Input: Sig.VMNET) = struct
     let t = { input; rules; stats } in
     (* Add a special capture rule for packets for which there is an error
        processing the packet captures. Ideally there should be no matches! *)
-    add_match ~t ~name:bad_pcap ~limit:1048576 ~snaplen:1500 ~predicate:(fun _ -> false);
+    add_match ~t ~name:bad_pcap ~limit:1048576 ~snaplen:1500
+      ~predicate:(fun _ -> false);
     Lwt.return (`Ok t)
 
   let filesystem t =
-    Vfs.Dir.of_list
-      (fun () ->
-         Vfs.ok (
-           Hashtbl.fold
-             (fun name rule acc -> Vfs.Inode.file name (pcap rule) :: acc)
-             t.rules []
-         )
+    Vfs.Dir.of_list (fun () ->
+        Vfs.ok (
+          Hashtbl.fold
+            (fun name rule acc -> Vfs.Inode.file name (pcap rule) :: acc)
+            t.rules []
+        )
       )
 
   let disconnect t = Input.disconnect t.input
@@ -174,11 +176,10 @@ module Make(Input: Sig.VMNET) = struct
 
   let record t bufs =
     try
-      Hashtbl.iter
-        (fun _ rule ->
-           match Frame.parse bufs with
-           | Ok f -> if rule.predicate f then push rule bufs
-           | Error (`Msg m) -> failwith m
+      Hashtbl.iter (fun _ rule ->
+          match Frame.parse bufs with
+          | Ok f -> if rule.predicate f then push rule bufs
+          | Error (`Msg m) -> failwith m
         ) t.rules
     with e ->
       Log.err (fun f -> f "caught %s matching packet" (Printexc.to_string e));

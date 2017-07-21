@@ -1,4 +1,3 @@
-
 val default_etc_hosts_path: string
 (** Default path where /etc/hosts should be on this machine *)
 

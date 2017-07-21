@@ -1,4 +1,3 @@
-
 open Lwt.Infix
 
 let src =
@@ -48,27 +47,30 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
       Time.sleep max_idle_time
       >>= fun () ->
       let now = Unix.gettimeofday () in
-      let to_shutdown = Hashtbl.fold (fun k flow acc ->
-          if now -. flow.last_use > max_idle_time then begin
-            Log.debug (fun f -> f "Hostnet_udp %s: expiring UDP NAT rule" flow.description);
-            (k, flow) :: acc
-          end else acc
-        ) table [] in
-      Lwt_list.iter_s
-        (fun (k, flow) ->
-           Lwt.catch
-             (fun () ->
-                Udp.shutdown flow.server
-             ) (fun e ->
-                 Log.err (fun f -> f "Hostnet_udp %s: close raised %s" flow.description (Printexc.to_string e));
-                 Lwt.return_unit
-               )
-           >>= fun () ->
-           Hashtbl.remove table k;
-           Lwt.return_unit
+      let to_shutdown =
+        Hashtbl.fold (fun k flow acc ->
+            if now -. flow.last_use > max_idle_time then begin
+              Log.debug (fun f ->
+                  f "Hostnet_udp %s: expiring UDP NAT rule" flow.description);
+              (k, flow) :: acc
+            end else acc
+          ) table []
+      in
+      Lwt_list.iter_s (fun (k, flow) ->
+          Lwt.catch (fun () ->
+              Udp.shutdown flow.server
+            ) (fun e ->
+              Log.err (fun f ->
+                  f "Hostnet_udp %s: close raised %a" flow.description Fmt.exn e);
+              Lwt.return_unit
+            )
+          >>= fun () ->
+          Hashtbl.remove table k;
+          Lwt.return_unit
         ) to_shutdown
       >>= fun () ->
-      loop () in
+      loop ()
+    in
     loop ()
 
   let create ?(max_idle_time = 60.) () =
@@ -77,74 +79,82 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     let send_reply = None in
     { max_idle_time; background_gc_t; table; send_reply }
 
-  let input ~t ~datagram:{ src = src, src_port; dst = dst, dst_port; payload } () =
-    (if Hashtbl.mem t.table (src, src_port) then begin
-        Lwt.return (Some (Hashtbl.find t.table (src, src_port)))
+  let description { src = src, src_port; dst = dst, dst_port; _ } =
+    Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp_hum src src_port Ipaddr.pp_hum
+      dst dst_port
+
+  let rec loop t server d buf =
+    Lwt.catch (fun () ->
+        Udp.recvfrom server buf
+        >>= fun (n, from) ->
+        (* The from address should be the true external address so the
+           client behind the NAT can tell different peers apart.  It
+           is not necessarily the same as the original external
+           address that we created the rule for -- it's possible for a
+           client to send data to a rendezvous server, which then
+           communicates the NAT IP and port to other peers who can
+           then communicate with the client behind the NAT. *)
+        let reply = { src = from; dst = d.src; payload = Cstruct.sub buf 0 n } in
+        ( match t.send_reply with
+        | Some fn -> fn reply
+        | None -> Lwt.return_unit )
+        >>= fun () ->
+        Lwt.return true
+      ) (function
+      | Unix.Unix_error(e, _, _) when
+          Uwt.of_unix_error e = Uwt.ECANCELED ->
+        Log.debug (fun f ->
+            f "Hostnet_udp %s: shutting down listening thread" (description d));
+        Lwt.return false
+      | e ->
+        Log.err (fun f ->
+            f "Hostnet_udp %s: caught unexpected exception %a"
+              (description d) Fmt.exn e);
+        Lwt.return false
+      )
+    >>= function
+    | false ->
+      Lwt.return ()
+    | true -> loop t server d buf
+
+  let input ~t ~datagram () =
+    let d = description datagram in
+    (if Hashtbl.mem t.table datagram.src then begin
+        Lwt.return (Some (Hashtbl.find t.table datagram.src))
       end else begin
-       let description = "udp:" ^ (String.concat "" [ Ipaddr.to_string src; ":"; string_of_int src_port; "-"; Ipaddr.to_string dst; ":"; string_of_int dst_port ]) in
-       if Ipaddr.compare dst Ipaddr.(V4 V4.broadcast) = 0 then begin
-         Log.debug (fun f -> f "Hostnet_udp %s: ignoring broadcast packet" description);
+       if Ipaddr.compare (fst datagram.dst) Ipaddr.(V4 V4.broadcast) = 0
+       then begin
+         Log.debug (fun f -> f "Hostnet_udp %s: ignoring broadcast packet" d);
          Lwt.return None
        end else begin
-         Log.debug (fun f -> f "Hostnet_udp %s: creating UDP NAT rule" description);
-
-         Lwt.catch
-           (fun () ->
-              Udp.bind ~description (Ipaddr.(V4 V4.any), 0)
-              >>= fun server ->
-              let last_use = Unix.gettimeofday () in
-              let flow = { description; server; last_use } in
-              Hashtbl.replace t.table (src, src_port) flow;
-              (* Start a listener *)
-              let buf = Cstruct.create Constants.max_udp_length in
-              let rec loop () =
-                Lwt.catch
-                  (fun () ->
-                     Udp.recvfrom server buf
-                     >>= fun (n, from) ->
-                     (* The from address should be the true external address so
-                        the client behind the NAT can tell different peers apart.
-                        It is not necessarily the same as the original external address
-                        that we created the rule for -- it's possible for a client
-                        to send data to a rendezvous server, which then communicates
-                        the NAT IP and port to other peers who can then communicate
-                        with the client behind the NAT. *)
-                     let reply = { src = from; dst = src, src_port; payload = Cstruct.sub buf 0 n } in
-                     ( match t.send_reply with
-                     | Some fn -> fn reply
-                     | None -> Lwt.return_unit )
-                     >>= fun () ->
-                     Lwt.return true
-                  ) (function
-                    | Unix.Unix_error(e, _, _) when Uwt.of_unix_error e = Uwt.ECANCELED ->
-                      Log.debug (fun f -> f "Hostnet_udp %s: shutting down listening thread" description);
-                      Lwt.return false
-                    | e ->
-                      Log.err (fun f -> f "Hostnet_udp %s: caught unexpected exception %s" description (Printexc.to_string e));
-                      Lwt.return false
-                    )
-                >>= function
-                | false ->
-                  Lwt.return ()
-                | true -> loop () in
-              Lwt.async loop;
-              Lwt.return (Some flow)
+         Log.debug (fun f -> f "Hostnet_udp %s: creating UDP NAT rule" d);
+         Lwt.catch (fun () ->
+             Udp.bind ~description:(description datagram) (Ipaddr.(V4 V4.any), 0)
+             >>= fun server ->
+             let last_use = Unix.gettimeofday () in
+             let flow = { description = d; server; last_use } in
+             Hashtbl.replace t.table datagram.src flow;
+             (* Start a listener *)
+             let buf = Cstruct.create Constants.max_udp_length in
+             Lwt.async (fun () -> loop t server datagram buf);
+             Lwt.return (Some flow)
            ) (fun e ->
-               Log.err (fun f -> f "Hostnet_udp.input: bind raised %s" (Printexc.to_string e));
-               Lwt.return None
-             )
+             Log.err (fun f -> f "Hostnet_udp.input: bind raised %a" Fmt.exn e);
+             Lwt.return None
+           )
        end
      end) >>= function
     | None -> Lwt.return ()
     | Some flow ->
-      Lwt.catch
-        (fun () ->
-           Udp.sendto flow.server (dst, dst_port) payload
-           >>= fun () ->
-           flow.last_use <- Unix.gettimeofday ();
-           Lwt.return ()
+      Lwt.catch (fun () ->
+          Udp.sendto flow.server datagram.dst datagram.payload
+          >>= fun () ->
+          flow.last_use <- Unix.gettimeofday ();
+          Lwt.return ()
         ) (fun e ->
-            Log.err (fun f -> f "Hostnet_udp %s: Lwt_bytes.send caught %s" flow.description (Printexc.to_string e));
-            Lwt.return ()
-          )
+          Log.err (fun f ->
+              f "Hostnet_udp %s: Lwt_bytes.send caught %a"
+                flow.description Fmt.exn e);
+          Lwt.return ()
+        )
 end
