@@ -11,6 +11,4 @@
     dnssd uuidm mirage-http cohttp channel ezjsonm
    ))
    (c_names (stubs_utils))
-   (wrapped false)
-   (flags (:standard -warn-error "+1..49-3" -w "A-4-41-42-44"))
-))
+   (wrapped false)))

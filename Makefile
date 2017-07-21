@@ -45,12 +45,12 @@ vpnkit.tgz: vpnkit.exe
 
 .PHONY: vpnkit.exe
 vpnkit.exe: src/bin/depends.ml
-	jbuilder build src/bin/main.exe
+	jbuilder build --dev src/bin/main.exe
 	cp _build/default/src/bin/main.exe vpnkit.exe
 
 .PHONY: test
 test:
-	jbuilder build src/hostnet_test/main_uwt.exe
+	jbuilder build --dev src/hostnet_test/main_uwt.exe
 	./_build/default/src/hostnet_test/main_uwt.exe
 
 .PHONY: OSS-LICENSES
