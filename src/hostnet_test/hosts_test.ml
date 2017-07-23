@@ -1,5 +1,3 @@
-
-
 let examples = [
   "Windows-style", String.concat "\n" [
     "# For example:";
@@ -33,7 +31,9 @@ let test_one txt expected () =
   let expected' = List.length expected in
   let x' = List.length x in
   if expected' <> x'
-  then failwith (Printf.sprintf "Expected %d hosts in /etc/hosts but found %d" expected' x');
+  then
+    Fmt.kstrf failwith "Expected %d hosts in /etc/hosts but found %d"
+      expected' x';
   List.iter (fun ((a_name, a_ip), (b_name, b_ip)) ->
       if Ipaddr.compare a_ip b_ip <> 0 then failwith "IP doesn't match";
       if a_name <> b_name then failwith "name doesn't match"
