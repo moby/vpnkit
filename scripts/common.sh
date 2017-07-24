@@ -23,14 +23,14 @@ export PATH="${OPAMROOT}/${OPAM_COMP}/bin:${PATH}"
 opam install depext -y -v
 opam install depext-cygwinports -y || true
 
-OPAMBUILDTEST=1 opam depext -u slirp
+OPAMBUILDTEST=1 opam depext -u vpnkit
 # Don't run all the unit tests of all upstream packages in the universe
 # for speed. As a special exception we will run the tests for tcpip
 OPAMVERBOSE=1 opam install --deps-only tcpip -y
 OPAMVERBOSE=1 opam install tcpip -t
 
 opam install $(ls -1 ${OPAM_REPO}/packages/upstream) -y
-OPAMVERBOSE=1 opam install --deps-only slirp -y
+OPAMVERBOSE=1 opam install --deps-only vpnkit -y
 
 OPAMVERBOSE=1 make
 # One test requires 1026 file descriptors
