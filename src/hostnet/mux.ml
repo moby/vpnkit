@@ -67,6 +67,7 @@ module Make (Netif: Mirage_net_lwt.S) = struct
   let remove t rule =
     Log.debug (fun f ->
         f "removing switch port for %s" (Ipaddr.V4.to_string rule));
+    let (_:unit io)  = Netif.disconnect t.netif in
     t.rules <- RuleMap.remove rule t.rules
 
   let callback t buf =
