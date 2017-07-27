@@ -19,4 +19,4 @@ commit:
 	$(MAKE) update-win
 	git add win32/packages/upstream
 	git add darwin/packages/upstream
-	git commit -a -s -m "AUTO: Update upstream packages"
+	git commit . -s -m "AUTO: Update upstream packages"
