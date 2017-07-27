@@ -14,7 +14,10 @@ type uuid_table = {
   table: (Uuidm.t, Ipaddr.V4.t * int) Hashtbl.t;
 }
 
-type config = {
+(** A slirp TCP/IP stack ready to accept connections *)
+
+
+type 'clock config = {
   server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
@@ -27,24 +30,29 @@ type config = {
   bridge_connections: bool;
   mtu: int;
   host_names: Dns.Name.t list;
+  clock: 'clock;
 }
-
-(** A slirp TCP/IP stack ready to accept connections *)
 
 module Make
     (Config: Active_config.S)
     (Vmnet: Sig.VMNET)
     (Dns_policy: Sig.DNS_POLICY)
+    (Clock: sig
+       include Mirage_clock_lwt.MCLOCK
+       val connect: unit -> t Lwt.t
+     end)
+    (Random: Mirage_random.C)
     (Host: Sig.HOST)
-    (Vnet : Vnetif.BACKEND) :
+    (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) :
 sig
 
-  val create: ?host_names:Dns.Name.t list -> Config.t -> config Lwt.t
+  val create: ?host_names:Dns.Name.t list -> Clock.t -> Config.t ->
+    Clock.t config Lwt.t
   (** Initialise a TCP/IP stack, taking configuration from the Config.t *)
 
   type t
 
-  val connect: config -> Vmnet.fd -> Vnet.t -> t Lwt.t
+  val connect: Clock.t config -> Vmnet.fd -> Vnet.t -> t Lwt.t
   (** Read and write ethernet frames on the given fd, connected to the
       specified Vnetif backend *)
 
@@ -62,7 +70,7 @@ sig
     (** Return the number of active NAT table entries *)
 
     val update_dns: ?local_ip:Ipaddr.t -> ?host_names:Dns.Name.t list ->
-      unit -> unit
+      Clock.t -> unit
     (** Update the DNS forwarder following a configuration change *)
 
     val update_http: ?http:string -> ?https:string -> ?exclude:string ->

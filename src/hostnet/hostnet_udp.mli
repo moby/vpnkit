@@ -14,12 +14,16 @@ type datagram = {
 
 type reply = Cstruct.t -> unit Lwt.t
 
-module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME): sig
+module Make
+    (Sockets: Sig.SOCKETS)
+    (Clock: Mirage_clock_lwt.MCLOCK)
+    (Time: Mirage_time_lwt.S):
+sig
 
   type t
   (** A UDP NAT implementation *)
 
-  val create: ?max_idle_time:float -> unit -> t
+  val create: ?max_idle_time:int64 -> Clock.t -> t
   (** Create a UDP NAT implementation which will keep "NAT rules" alive until
       they become idle for the given [?max_idle_time] *)
 

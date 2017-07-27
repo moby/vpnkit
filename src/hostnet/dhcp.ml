@@ -7,9 +7,10 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make(Netif: V1_LWT.NETWORK) = struct
+module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
 
   type t = {
+    clock: Clock.t;
     netif: Netif.t;
     server_macaddr: Macaddr.t;
     get_dhcp_configuration : unit -> Dhcp_server.Config.t;
@@ -32,7 +33,7 @@ module Make(Netif: V1_LWT.NETWORK) = struct
 
   (* given some MACs and IPs, construct a usable DHCP configuration *)
   let make ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip ~extra_dns_ip
-      ~get_domain_search ~get_domain_name netif =
+      ~get_domain_search ~get_domain_name clock netif =
     let open Dhcp_server.Config in
     (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
        intend only to serve IPs to one downstream host.
@@ -84,9 +85,9 @@ module Make(Netif: V1_LWT.NETWORK) = struct
         mac_addr = server_macaddr;
         network = prefix;
         (* FIXME: this needs https://github.com/haesbaert/charrua-core/pull/31 *)
-        range = (peer_ip, peer_ip); (* allow one dynamic client *)
+        range = Some (peer_ip, peer_ip); (* allow one dynamic client *)
       } in
-    { netif; server_macaddr; get_dhcp_configuration }
+    { clock; netif; server_macaddr; get_dhcp_configuration }
 
   let of_interest mac dest =
     Macaddr.compare dest mac = 0 || not (Macaddr.is_unicast dest)
@@ -96,14 +97,19 @@ module Make(Netif: V1_LWT.NETWORK) = struct
   let logged_bootrequest = ref false
   let logged_bootreply = ref false
 
-  let input net (config : Dhcp_server.Config.t) database buf =
+  let input clock net (config : Dhcp_server.Config.t) database buf =
     let open Dhcp_server in
     match Dhcp_wire.pkt_of_buf buf (Cstruct.len buf) with
-    | `Error e ->
+    | Error e ->
       Log.err (fun f -> f "failed to parse DHCP packet: %s" e);
       Lwt.return database
-    | `Ok pkt ->
-      match (Input.input_pkt config database pkt (Clock.time ())) with
+    | Ok pkt ->
+      let elapsed_seconds =
+        Clock.elapsed_ns clock
+        |> Duration.to_sec
+        |> Int32.of_int
+      in
+      match Input.input_pkt config database pkt elapsed_seconds with
       | Input.Silence -> Lwt.return database
       | Input.Update database ->
         Log.debug (fun f -> f "lease database updated");
@@ -122,27 +128,30 @@ module Make(Netif: V1_LWT.NETWORK) = struct
               (Macaddr.to_string (pkt.srcmac)));
         logged_bootrequest :=
           !logged_bootrequest || (pkt.op = Dhcp_wire.BOOTREQUEST);
-        Netif.write net (Dhcp_wire.buf_of_pkt reply)
-        >>= fun () ->
-        let domain = List.fold_left (fun acc x -> match x with
-          | Domain_name y -> y
-          | _ -> acc) "unknown" reply.options in
-        let dns = List.fold_left (fun acc x -> match x with
-          | Dns_servers ys -> String.concat ", " (List.map Ipaddr.V4.to_string ys)
-          | _ -> acc) "none" reply.options in
-        let routers = List.fold_left (fun acc x -> match x with
-          | Routers ys -> String.concat ", " (List.map Ipaddr.V4.to_string ys)
-          | _ -> acc) "none" reply.options in
-        if reply.op <> Dhcp_wire.BOOTREPLY || not !logged_bootreply
-        then Log.info (fun f ->
-            f "%s to %s yiddr %a siddr %a dns %s router %s domain %s"
-              (op_to_string reply.op) (Macaddr.to_string (reply.dstmac))
-              Ipaddr.V4.pp_hum reply.yiaddr Ipaddr.V4.pp_hum reply.siaddr
-              dns routers domain
-          );
-        logged_bootreply :=
-          !logged_bootreply || (reply.op = Dhcp_wire.BOOTREPLY);
-        Lwt.return database
+        Netif.write net (Dhcp_wire.buf_of_pkt reply) >>= function
+        | Error e ->
+          Log.err (fun f -> f "failed to parse DHCP reply: %a" Netif.pp_error e);
+          Lwt.return database
+        | Ok () ->
+          let domain = List.fold_left (fun acc x -> match x with
+            | Domain_name y -> y
+            | _ -> acc) "unknown" reply.options in
+          let dns = List.fold_left (fun acc x -> match x with
+            | Dns_servers ys -> String.concat ", " (List.map Ipaddr.V4.to_string ys)
+            | _ -> acc) "none" reply.options in
+          let routers = List.fold_left (fun acc x -> match x with
+            | Routers ys -> String.concat ", " (List.map Ipaddr.V4.to_string ys)
+            | _ -> acc) "none" reply.options in
+          if reply.op <> Dhcp_wire.BOOTREPLY || not !logged_bootreply
+          then Log.info (fun f ->
+              f "%s to %s yiddr %a siddr %a dns %s router %s domain %s"
+                (op_to_string reply.op) (Macaddr.to_string (reply.dstmac))
+                Ipaddr.V4.pp_hum reply.yiaddr Ipaddr.V4.pp_hum reply.siaddr
+                dns routers domain
+            );
+          logged_bootreply :=
+            !logged_bootreply || (reply.op = Dhcp_wire.BOOTREPLY);
+          Lwt.return database
 
   let callback t buf =
     (* TODO: the scope of this reference ensures that the database
@@ -151,12 +160,13 @@ module Make(Netif: V1_LWT.NETWORK) = struct
        pre-allocated IP anyway, but this will present a problem if
        that assumption ever changes.  *)
     let database = ref (Dhcp_server.Lease.make_db ()) in
-    match (Wire_structs.parse_ethernet_frame buf) with
-    | Some (proto, dst, _payload) when of_interest t.server_macaddr dst ->
-      (match proto with
-      | Some Wire_structs.IPv4 ->
+    match Ethif_packet.Unmarshal.of_cstruct buf with
+    | Ok (pkt, _payload) when
+        of_interest t.server_macaddr pkt.Ethif_packet.destination ->
+      (match pkt.Ethif_packet.ethertype with
+      | Ethif_wire.IPv4 ->
         if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then begin
-          input t.netif (t.get_dhcp_configuration ()) !database buf
+          input t.clock t.netif (t.get_dhcp_configuration ()) !database buf
           >|= fun db ->
           database := db
         end

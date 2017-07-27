@@ -30,16 +30,15 @@ module Make_unix(Host: Sig.HOST) = struct
         Cstruct.of_string (Printf.sprintf "00000003.%08lx\n" vsock_port)
       in
       write flow address >>= function
-      | `Ok () -> Lwt.return flow
-      | `Eof ->
+      | Ok () -> Lwt.return flow
+      | Error `Closed ->
         Log.err (fun f -> f "vsock connect write got Eof");
         close flow >>= fun () ->
         Lwt.fail End_of_file
-      | `Error e ->
-        let msg = error_message e in
-        Log.err (fun f -> f "vsock connect write got %s" msg);
+      | Error e ->
+        Log.err (fun f -> f "vsock connect write got %a" pp_write_error e);
         close flow >>= fun () ->
-        Lwt.fail_with msg
+        Fmt.kstrf Lwt.fail_with "%a" pp_write_error e
 end
 
 module Make_hvsock(Host: Sig.HOST) = struct
@@ -83,8 +82,10 @@ module Make_hvsock(Host: Sig.HOST) = struct
   let writev t = F.writev t.flow
   let shutdown_read t = F.shutdown_read t.flow
   let shutdown_write t = F.shutdown_write t.flow
-  let error_message = F.error_message
+  let pp_error = F.pp_error
+  let pp_write_error = F.pp_write_error
   type 'a io = 'a F.io
   type buffer = F.buffer
   type error = F.error
+  type write_error = F.write_error
 end

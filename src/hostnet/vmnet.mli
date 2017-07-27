@@ -4,8 +4,7 @@ module Make(C: Sig.CONN): sig
 
   type fd = C.flow
 
-  include V1_LWT.NETWORK
-    with type buffer = Cstruct.t
+  include Mirage_net_lwt.S with type buffer = Cstruct.t
 
   val after_disconnect: t -> unit Lwt.t
   (** [after_disconnect connection] resolves after [connection] has
@@ -52,7 +51,7 @@ module Init : sig
   val default: t
 
   val marshal: t -> Cstruct.t -> Cstruct.t
-  val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) result
+  val unmarshal: Cstruct.t -> t * Cstruct.t
 end
 
 module Command : sig

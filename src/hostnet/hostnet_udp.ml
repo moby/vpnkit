@@ -17,14 +17,18 @@ type datagram = {
   payload: Cstruct.t;
 }
 
-module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
+module Make
+    (Sockets: Sig.SOCKETS)
+    (Clock: Mirage_clock_lwt.MCLOCK)
+    (Time: Mirage_time_lwt.S) =
+struct
 
   module Udp = Sockets.Datagram.Udp
 
   type flow = {
     description: string;
     server: Udp.server;
-    mutable last_use: float;
+    mutable last_use: int64;
   }
 
   (* For every src, src_port behind the NAT we create one listening socket
@@ -32,7 +36,8 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
      but preserve them on the way in. *)
 
   type t = {
-    max_idle_time: float;
+    clock: Clock.t;
+    max_idle_time: int64;
     background_gc_t: unit Lwt.t;
     table: (address, flow) Hashtbl.t; (* src -> flow *)
     mutable send_reply: (datagram -> unit Lwt.t) option;
@@ -42,14 +47,13 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
 
   let get_nat_table_size t = Hashtbl.length t.table
 
-  let start_background_gc table max_idle_time =
+  let start_background_gc clock table max_idle_time =
     let rec loop () =
-      Time.sleep max_idle_time
-      >>= fun () ->
-      let now = Unix.gettimeofday () in
+      Time.sleep_ns max_idle_time >>= fun () ->
+      let now_ns = Clock.elapsed_ns clock in
       let to_shutdown =
         Hashtbl.fold (fun k flow acc ->
-            if now -. flow.last_use > max_idle_time then begin
+            if Int64.(sub now_ns flow.last_use) > max_idle_time then begin
               Log.debug (fun f ->
                   f "Hostnet_udp %s: expiring UDP NAT rule" flow.description);
               (k, flow) :: acc
@@ -73,11 +77,11 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     in
     loop ()
 
-  let create ?(max_idle_time = 60.) () =
+  let create ?(max_idle_time = Duration.(of_sec 60)) clock =
     let table = Hashtbl.create 7 in
-    let background_gc_t = start_background_gc table max_idle_time in
+    let background_gc_t = start_background_gc clock table max_idle_time in
     let send_reply = None in
-    { max_idle_time; background_gc_t; table; send_reply }
+    { clock; max_idle_time; background_gc_t; table; send_reply }
 
   let description { src = src, src_port; dst = dst, dst_port; _ } =
     Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp_hum src src_port Ipaddr.pp_hum
@@ -131,7 +135,7 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
          Lwt.catch (fun () ->
              Udp.bind ~description:(description datagram) (Ipaddr.(V4 V4.any), 0)
              >>= fun server ->
-             let last_use = Unix.gettimeofday () in
+             let last_use = Clock.elapsed_ns t.clock in
              let flow = { description = d; server; last_use } in
              Hashtbl.replace t.table datagram.src flow;
              (* Start a listener *)
@@ -147,10 +151,8 @@ module Make(Sockets: Sig.SOCKETS)(Time: V1_LWT.TIME) = struct
     | None -> Lwt.return ()
     | Some flow ->
       Lwt.catch (fun () ->
-          Udp.sendto flow.server datagram.dst datagram.payload
-          >>= fun () ->
-          flow.last_use <- Unix.gettimeofday ();
-          Lwt.return ()
+          Udp.sendto flow.server datagram.dst datagram.payload >|= fun () ->
+          flow.last_use <- Clock.elapsed_ns t.clock;
         ) (fun e ->
           Log.err (fun f ->
               f "Hostnet_udp %s: Lwt_bytes.send caught %a"

@@ -58,7 +58,11 @@ module Port = struct
 
 end
 
-module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
+module Make
+    (Clock: Mirage_clock_lwt.MCLOCK)
+    (Connector: Sig.Connector)
+    (Socket: Sig.SOCKETS) =
+struct
 
   type server = [
     | `Tcp of Socket.Stream.Tcp.server
@@ -75,6 +79,7 @@ module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
 
   let get_key t = t.local
 
+  type clock = Clock.t
   type context = string
 
   let to_string t =
@@ -116,21 +121,22 @@ module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
     Cstruct.LE.set_uint16 header 7 port;
     (* Write the header, we should be connected to the container port *)
     Connector.write remote header >>= function
-    | `Error e ->
-      let msg =
-        Fmt.strf "%s: failed to write forwarding header: %s" description
-          (Connector.error_message e)
-      in
-      Log.err (fun f -> f "%s" msg);
-      Lwt.fail (Failure msg)
-    | `Eof ->
+    | Ok  () -> Lwt.return_unit
+    | Error `Closed ->
       let msg = Fmt.strf "%s: EOF writing forwarding header" description in
       Log.err (fun f -> f "%s" msg);
       Lwt.fail (Failure msg)
-    | `Ok () ->
-      Lwt.return_unit
+    | Error e ->
+      let msg =
+        Fmt.strf "%s: failed to write forwarding header: %a" description
+          Connector.pp_write_error e
+      in
+      Log.err (fun f -> f "%s" msg);
+      Lwt.fail (Failure msg)
 
-  let start_tcp_proxy description vsock_path_var remote_port server =
+  module Proxy = Mirage_flow_lwt.Proxy(Clock)(Connector)(Socket.Stream.Tcp)
+
+  let start_tcp_proxy clock description vsock_path_var remote_port server =
     Socket.Stream.Tcp.listen server (fun local ->
         Active_list.Var.read vsock_path_var >>= fun _vsock_path ->
         Connector.connect () >>= fun remote ->
@@ -138,18 +144,15 @@ module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
             write_forwarding_header description remote remote_port
             >>= fun () ->
             Log.debug (fun f -> f "%s: connected" description);
-            Mirage_flow.proxy
-              (module Clock)
-              (module Connector) remote
-              (module Socket.Stream.Tcp) local ()
-            >|= function
-            | `Error (`Msg m) ->
-              Log.err (fun f -> f "%s proxy failed with %s" description m)
-            | `Ok (l_stats, r_stats) ->
+            Proxy.proxy clock remote local  >|= function
+            | Error e ->
+              Log.err (fun f ->
+                  f "%s proxy failed with %a" description Proxy.pp_error e)
+            | Ok (l_stats, r_stats) ->
               Log.debug (fun f ->
-                  f "%s completed: l2r = %s; r2l = %s" description
-                    (Mirage_flow.CopyStats.to_string l_stats)
-                    (Mirage_flow.CopyStats.to_string r_stats)
+                  f "%s completed: l2r = %a; r2l = %a" description
+                    Mirage_flow.pp_stats l_stats
+                    Mirage_flow.pp_stats r_stats
                 )
           ) (fun () ->
             Connector.close remote
@@ -161,15 +164,15 @@ module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
 
   let conn_read flow buf =
     Connector.read_into flow buf >>= function
-    | `Eof     -> Lwt.fail End_of_file
-    | `Error e -> Lwt.fail_with (Connector.error_message e)
-    | `Ok ()   -> Lwt.return ()
+    | Ok `Eof       -> Lwt.fail End_of_file
+    | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Connector.pp_error e
+    | Ok (`Data ()) -> Lwt.return ()
 
   let conn_write flow buf =
     Connector.write flow buf >>= function
-    | `Eof     -> Lwt.fail End_of_file
-    | `Error e -> Lwt.fail_with (Connector.error_message e)
-    | `Ok ()   -> Lwt.return ()
+    | Error `Closed -> Lwt.fail End_of_file
+    | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Connector.pp_write_error e
+    | Ok ()         -> Lwt.return ()
 
   let start_udp_proxy description vsock_path_var remote_port server =
     let from_internet_buffer = Cstruct.create Constants.max_udp_length in
@@ -306,7 +309,7 @@ module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
         log_exception_continue "udp handle" (fun () -> handle server));
     Lwt.return ()
 
-  let start vsock_path_var t =
+  let start state vsock_path_var t =
     match t.local with
     | `Tcp (local_ip, local_port)  ->
       let description =
@@ -324,7 +327,7 @@ module Make(Connector: Sig.Connector)(Socket: Sig.SOCKETS) = struct
               `Tcp (local_ip, port)
             | _ ->
               t.local );
-          start_tcp_proxy (to_string t) vsock_path_var t.remote_port server
+          start_tcp_proxy state (to_string t) vsock_path_var t.remote_port server
           >|= fun () ->
           Ok t
         ) (function

@@ -33,6 +33,7 @@ end
 
 module type Instance = sig
   type t
+  type clock
   val to_string: t -> string
   val of_string: string -> (t, [ `Msg of string ]) result
 
@@ -41,7 +42,7 @@ module type Instance = sig
   type context
   (** The context in which a [t] is [start]ed, for example a TCP/IP stack *)
 
-  val start: context Var.t -> t -> (t, [ `Msg of string ]) result Lwt.t
+  val start: clock -> context Var.t -> t -> (t, [ `Msg of string ]) result Lwt.t
 
   val stop: t -> unit Lwt.t
 
@@ -49,28 +50,21 @@ module type Instance = sig
   val get_key: t -> key
 end
 
-module Transaction = struct
-  type t = {
-    name: string; (* directory name *)
-    mutable source: string;
-    mutable destination: string;
-  }
-end
-
 module StringMap = Map.Make(String)
 
-module Make(Instance: Instance) = struct
+module Make (Instance: Instance) = struct
   open Protocol_9p
 
   type t = {
     mutable context: Instance.context Var.t;
+    clock: Instance.clock;
   }
 
-  let make () =
+  let make clock =
     let context = Var.create () in
-    { context }
+    { context; clock }
 
-  let set_context { context } x = Var.fill context x
+  let set_context { context; _ } x = Var.fill context x
 
   (* We manage a list of named entries *)
   type entry = {
@@ -105,8 +99,6 @@ module Make(Instance: Instance) = struct
 
   module Error = struct
     let badfid = Lwt.return (Response.error "fid not found")
-    let badwalk = Lwt.return (Response.error "bad walk") (* TODO: ? *)
-
     let enoent = Lwt.return (Response.error "file not found")
     let eperm  = Lwt.return (Response.error "permission denied")
   end
@@ -209,14 +201,6 @@ The directory will be deleted and replaced with a file of the same name.
     connection.fids := Types.Fid.Map.remove fid !(connection.fids);
     return ()
 
-  let disconnect connection _ =
-    Log.debug (fun f -> f "disconnecting 9P client");
-    let resources =
-      Types.Fid.Map.fold (fun _ resource acc -> resource :: acc)
-        !(connection.fids) []
-    in
-    Lwt_list.iter_s free_resource resources
-
   let open_ _connection ~cancel:_ _ =
     try
       let qid = next_qid [] in
@@ -244,11 +228,6 @@ The directory will be deleted and replaced with a file of the same name.
         muid    = "muid";
         u       = None;
       })
-
-  let errors_to_client = (function
-    | Error (`Msg msg) -> Error { Response.Err.ename = msg; errno = None }
-    | Ok _ as ok -> ok
-    )
 
   let read_children count offset children =
     let buf = Cstruct.create count in
@@ -366,7 +345,8 @@ The directory will be deleted and replaced with a file of the same name.
         end else begin match Instance.of_string @@ Cstruct.to_string data with
         | Ok f ->
           let open Lwt.Infix in
-          begin Instance.start connection.t.context f >>= function
+          begin Instance.start connection.t.clock connection.t.context f >>=
+            function
             | Ok f' -> (* local_port is resolved *)
               entry.instance <- Some f';
               entry.result <- Some ("OK " ^ (Instance.to_string f') ^ "\n");

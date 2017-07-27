@@ -56,6 +56,7 @@ depends: [
   "astring"
   "mirage-flow-lwt" {>= "1.4.0"}
   "mirage-time-lwt" {>= "1.1.0"}
+  "mirage-time-unix"
   "mirage-protocols" {>= "1.1.0"}
   "mirage-channel" {>= "3.0.1"}
   "mirage-console-unix"
