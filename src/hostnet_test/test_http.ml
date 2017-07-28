@@ -95,13 +95,13 @@ module Make(Host: Sig.HOST) = struct
     Lwt.finalize (fun () -> f server) (fun () -> Server.destroy server)
 
   module Outgoing = struct
-    module C = Channel.Make(Slirp_stack.Client.TCPV4)
+    module C = Mirage_channel_lwt.Make(Slirp_stack.Client.TCPV4)
     module IO = Cohttp_mirage_io.Make(C)
     module Request = Cohttp.Request.Make(IO)
     module Response = Cohttp.Response.Make(IO)
   end
   module Incoming = struct
-    module C = Channel.Make(Host.Sockets.Stream.Tcp)
+    module C = Mirage_channel_lwt.Make(Host.Sockets.Stream.Tcp)
     module IO = Cohttp_mirage_io.Make(C)
     module Request = Cohttp.Request.Make(IO)
     module Response = Cohttp.Response.Make(IO)
@@ -111,12 +111,12 @@ module Make(Host: Sig.HOST) = struct
     let open Slirp_stack in
     Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
     >>= function
-    | `Ok flow ->
+    | Ok flow ->
       Log.info (fun f -> f "Connected to %s:80" (Ipaddr.V4.to_string ip));
       let oc = Outgoing.C.create flow in
       Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit)
         request oc
-    | `Error _ ->
+    | Error _ ->
       Log.err (fun f -> f "Failed to connect to %s:80" (Ipaddr.V4.to_string ip));
       failwith "http_fetch"
 
@@ -149,7 +149,8 @@ module Make(Host: Sig.HOST) = struct
                 request
               >>= fun () ->
               Lwt.pick [
-                (Host.Time.sleep 100. >>= fun () -> Lwt.return `Timeout);
+                (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () ->
+                 `Timeout);
                 (forwarded >>= fun x -> Lwt.return (`Result x))
               ]
           )
@@ -247,6 +248,8 @@ module Make(Host: Sig.HOST) = struct
       Lwt.return ()
     end
 
+  let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
+
   let test_http_connect () =
     let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
     Host.Main.run begin
@@ -276,10 +279,13 @@ module Make(Host: Sig.HOST) = struct
                    so we write the header ourselves *)
                 Incoming.C.write_line ic "HTTP/1.0 200 OK\r";
                 Incoming.C.write_line ic "\r";
-                Incoming.C.flush ic
-                >>= fun () ->
-                Incoming.C.write_line ic "hello";
-                Incoming.C.flush ic
+                Incoming.C.flush ic >>= function
+                | Error e -> err_flush e
+                | Ok ()   ->
+                  Incoming.C.write_line ic "hello";
+                  Incoming.C.flush ic >|= function
+                  | Error e -> err_flush e
+                  | Ok ()   -> ()
             ) (fun server ->
               Slirp_stack.Slirp_stack.Debug.update_http
                 ~https:("127.0.0.1:" ^ (string_of_int server.Server.port)) ()
@@ -290,17 +296,20 @@ module Make(Host: Sig.HOST) = struct
                 Client.TCPV4.create_connection (Client.tcpv4 stack)
                   (test_dst_ip, 443)
                 >>= function
-                | `Error _ ->
+                | Error _ ->
                   Log.err (fun f ->
                       f "TCPV4.create_connection %a:443 failed"
                         Ipaddr.V4.pp_hum test_dst_ip);
                   failwith "TCPV4.create_connection"
-                | `Ok flow ->
+                | Ok flow ->
                   let ic = Outgoing.C.create flow in
-                  Outgoing.C.read_some ~len:5 ic >>= fun buf ->
-                  let txt = Cstruct.to_string buf in
-                  Alcotest.check Alcotest.string "message" "hello" txt;
-                  Lwt.return_unit
+                  Outgoing.C.read_some ~len:5 ic >>= function
+                  | Error e -> Fmt.kstrf failwith "%a" Outgoing.C.pp_error e
+                  | Ok `Eof -> failwith "EOF"
+                  | Ok (`Data buf) ->
+                    let txt = Cstruct.to_string buf in
+                    Alcotest.check Alcotest.string "message" "hello" txt;
+                    Lwt.return_unit
             )
         )
     end

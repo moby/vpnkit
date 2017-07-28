@@ -66,48 +66,38 @@ module Make(Host: Sig.HOST) = struct
   module VMNET = Vmnet.Make(Host.Sockets.Stream.Tcp)
   module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
   module Vnet = Basic_backend.Make
-  module Slirp_stack = Slirp.Make(Config)(VMNET)(Dns_policy)(Host)(Vnet)
+  module Slirp_stack =
+    Slirp.Make(Config)(VMNET)(Dns_policy)(Mclock)(Stdlibrandom)(Host)(Vnet)
 
   module Client = struct
     module Netif = VMNET
     module Ethif1 = Ethif.Make(Netif)
-    module Arpv41 = Arpv4.Make(Ethif1)(Clock)(Host.Time)
-    module Ipv41 = Ipv4.Make(Ethif1)(Arpv41)
+    module Arpv41 = Arpv4.Make(Ethif1)(Mclock)(Host.Time)
+    module Ipv41 = Static_ipv4.Make(Ethif1)(Arpv41)
     module Icmpv41 = Icmpv4.Make(Ipv41)
-    module Udp1 = Udp.Make(Ipv41)
-    module Tcp1 = Tcp.Flow.Make(Ipv41)(Host.Time)(Clock)(Random)
-    include Tcpip_stack_direct.Make(Console_unix)(Host.Time)
-        (Random)(Netif)(Ethif1)(Arpv41)(Ipv41)(Icmpv41)(Udp1)(Tcp1)
+    module Udp1 = Udp.Make(Ipv41)(Stdlibrandom)
+    module Tcp1 = Tcp.Flow.Make(Ipv41)(Host.Time)(Mclock)(Stdlibrandom)
+    include Tcpip_stack_direct.Make(Host.Time)
+        (Stdlibrandom)(Netif)(Ethif1)(Arpv41)(Ipv41)(Icmpv41)(Udp1)(Tcp1)
 
     let or_error name m =
-      let open Lwt.Infix in
       m >>= function
       | `Error _ -> Fmt.kstrf failwith "Failed to connect %s device" name
       | `Ok x    -> Lwt.return x
 
     let connect (interface: VMNET.t) =
-      let open Lwt.Infix in
-      or_error "console" @@ Console_unix.connect "0"
-      >>= fun console ->
-      or_error "ethernet" @@ Ethif1.connect interface
-      >>= fun ethif ->
-      or_error "arp" @@ Arpv41.connect ethif
-      >>= fun arp ->
-      or_error "ipv4" @@ Ipv41.connect ethif arp
-      >>= fun ipv4 ->
-      or_error "icmpv4" @@ Icmpv41.connect ipv4
-      >>= fun icmpv4 ->
-      or_error "udp" @@ Udp1.connect ipv4
-      >>= fun udp4 ->
-      or_error "tcp" @@ Tcp1.connect ipv4
-      >>= fun tcp4 ->
+      Ethif1.connect interface >>= fun ethif ->
+      Mclock.connect () >>= fun clock ->
+      Arpv41.connect ethif clock >>= fun arp ->
+      Ipv41.connect ethif arp >>= fun ipv4 ->
+      Icmpv41.connect ipv4 >>= fun icmpv4 ->
+      Udp1.connect ipv4 >>= fun udp4 ->
+      Tcp1.connect ipv4 clock >>= fun tcp4 ->
       let cfg = {
-        V1_LWT. name = "stackv4_ip";
-        console;
+        Mirage_stack_lwt.name = "stackv4_ip";
         interface;
-        mode = `DHCP;
       } in
-      or_error "stack" @@ connect cfg ethif arp ipv4 icmpv4 udp4 tcp4
+      connect cfg ethif arp ipv4 icmpv4 udp4 tcp4
       >>= fun stack ->
       Lwt.return stack
   end
@@ -137,6 +127,7 @@ module Make(Host: Sig.HOST) = struct
     }
 
   let config_without_bridge =
+    Mclock.connect () >|= fun clock ->
     {
       Slirp.peer_ip;
       local_ip;
@@ -150,6 +141,7 @@ module Make(Host: Sig.HOST) = struct
       global_arp_table;
       mtu = 1500;
       host_names = [];
+      clock;
     }
 
   (* This is a hacky way to get a hancle to the server side of the stack. *)
@@ -178,7 +170,9 @@ module Make(Host: Sig.HOST) = struct
       );
     port
 
-  let connection = start_stack (Vnet.create ()) config_without_bridge ()
+  let connection =
+    config_without_bridge >>= fun config ->
+    start_stack (Vnet.create ()) config ()
 
   let with_stack f =
     connection >>= fun port ->

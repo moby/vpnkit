@@ -31,14 +31,23 @@ module Make(Host: Sig.HOST) = struct
     Lwt.finalize (fun () -> f server) (fun () -> Server.destroy server)
 
   module Outgoing = struct
-    module C = Channel.Make(Slirp_stack.Client.TCPV4)
+    module C = Mirage_channel_lwt.Make(Slirp_stack.Client.TCPV4)
   end
   module Incoming = struct
-    module C = Channel.Make(Host.Sockets.Stream.Tcp)
+    module C = Mirage_channel_lwt.Make(Host.Sockets.Stream.Tcp)
   end
 
   let request = "Hello there"
   let response = "And hello to you"
+
+  let data = function
+  | Ok (`Data x) -> x
+  | Ok `Eof      -> failwith "data: eof"
+  | Error _      -> failwith "data: error"
+
+  let unit = function
+  | Ok ()   -> ()
+  | Error _ -> failwith "unit: error"
 
   (* Run a simple server on localhost and connect to it via vpnkit.
      The Mirage client will call `close` to trigger a half-close of the TCP
@@ -53,12 +62,12 @@ module Make(Host: Sig.HOST) = struct
             (fun flow ->
               (* Read the request until EOF *)
               let ic = Incoming.C.create flow in
-              Incoming.C.read_line ic
+              Incoming.C.read_line ic >|= data
               >>= fun bufs ->
               let txt = Cstruct.(to_string @@ concat bufs) in
               if txt <> request
               then failwith (Printf.sprintf "Expected to read '%s', got '%s'" request txt);
-              Incoming.C.read_line ic
+              Incoming.C.read_line ic >|= data
               >>= fun bufs ->
               assert (Cstruct.(len @@ concat bufs) = 0);
               Log.info (fun f -> f "Read the request (up to and including EOF)");
@@ -66,7 +75,7 @@ module Make(Host: Sig.HOST) = struct
               (* Write a response. If the connection is fully closed rather than half-closed
                  then this will fail. *)
               Incoming.C.write_line ic response;
-              Incoming.C.flush ic
+              Incoming.C.flush ic >|= unit
               >>= fun () ->
               Log.info (fun f -> f "Written response");
               Lwt.wakeup_later forwarded_u ();
@@ -79,24 +88,27 @@ module Make(Host: Sig.HOST) = struct
               let port = server.Server.port in
               Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, port)
               >>= function
-              | `Ok flow ->
+              | Ok flow ->
                 Log.info (fun f -> f "Connected to %s:%d" (Ipaddr.V4.to_string ip) port);
                 let oc = Outgoing.C.create flow in
                 Outgoing.C.write_line oc request;
-                Outgoing.C.flush oc
+                Outgoing.C.flush oc >|= unit
                 >>= fun () ->
                 (* This will perform a TCP half-close *)
                 Client.TCPV4.close flow
                 >>= fun () ->
                 (* Verify the response is still intact *)
-                Outgoing.C.read_line oc
+                Outgoing.C.read_line oc >|= data
                 >>= fun bufs ->
                 let txt = Cstruct.(to_string @@ concat bufs) in
                 if txt <> response
                 then failwith (Printf.sprintf "Expected to read '%s', got '%s'" response txt);
                 Log.info (fun f -> f "Read the response. Waiting for cleanup");
-                Lwt.pick [ (Host.Time.sleep 100. >>= fun () -> Lwt.return `Timeout); (forwarded >>= fun x -> Lwt.return (`Result x)) ]
-              | `Error _ ->
+                Lwt.pick [
+                  (Host.Time.sleep_ns (Duration.of_sec 100)
+                   >|= fun () -> `Timeout);
+                  (forwarded >|= fun x -> `Result x) ]
+              | Error _ ->
                 Log.err (fun f -> f "Failed to connect to %s:%d" (Ipaddr.V4.to_string ip) port);
                 failwith "Client.TCPV4.create_connection"
             )
@@ -122,13 +134,13 @@ module Make(Host: Sig.HOST) = struct
               (* Write a request *)
               let ic = Incoming.C.create flow in
               Incoming.C.write_line ic request;
-              Incoming.C.flush ic
+              Incoming.C.flush ic >|= unit
               >>= fun () ->
               (* This will perform a TCP half-close *)
               Host.Sockets.Stream.Tcp.shutdown_write flow
               >>= fun () ->
               (* Read the response from the other side of the connection *)
-              Incoming.C.read_line ic
+              Incoming.C.read_line ic >|= data
               >>= fun bufs ->
               let txt = Cstruct.(to_string @@ concat bufs) in
               if txt <> response
@@ -144,27 +156,30 @@ module Make(Host: Sig.HOST) = struct
               let port = server.Server.port in
               Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, port)
               >>= function
-              | `Ok flow ->
+              | Ok flow ->
                 Log.info (fun f -> f "Connected to %s:%d" (Ipaddr.V4.to_string ip) port);
                 let oc = Outgoing.C.create flow in
                 (* Read the request *)
-                Outgoing.C.read_line oc
+                Outgoing.C.read_line oc >|= data
                 >>= fun bufs ->
                 let txt = Cstruct.(to_string @@ concat bufs) in
                 if txt <> request
                 then failwith (Printf.sprintf "Expected to read '%s', got '%s'" request txt);
                 (* Check we're at EOF *)
-                Outgoing.C.read_line oc
+                Outgoing.C.read_line oc >|= data
                 >>= fun bufs ->
                 assert (Cstruct.(len @@ concat bufs) = 0);
                 Log.info (fun f -> f "Read the request (up to and including EOF)");
                 (* Write response *)
                 Outgoing.C.write_line oc response;
-                Outgoing.C.flush oc
+                Outgoing.C.flush oc >|= unit
                 >>= fun () ->
                 Log.info (fun f -> f "Written response and will wait.");
-                Lwt.pick [ (Host.Time.sleep 100. >>= fun () -> Lwt.return `Timeout); (forwarded >>= fun x -> Lwt.return (`Result x)) ]
-              | `Error _ ->
+                Lwt.pick [
+                  (Host.Time.sleep_ns (Duration.of_sec 100)
+                   >|= fun () -> `Timeout);
+                  (forwarded >|= fun x -> `Result x) ]
+              | Error _ ->
                 Log.err (fun f -> f "Failed to connect to %s:%d" (Ipaddr.V4.to_string ip) port);
                 failwith "Client.TCPV4.create_connection"
             )
