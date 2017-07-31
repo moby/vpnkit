@@ -11,9 +11,9 @@ module Tests = Suite.Make(Host_lwt_unix)
 let () =
   Logs.set_reporter (Logs_fmt.reporter ());
   Lwt.async_exception_hook := (fun exn ->
-    Log.err (fun f -> f "Lwt.async failure %s: %s"
-      (Printexc.to_string exn)
-      (Printexc.get_backtrace ())
-    )
-  );
+      Log.err (fun f -> f "Lwt.async failure %s: %s"
+                  (Printexc.to_string exn)
+                  (Printexc.get_backtrace ())
+              )
+    );
   Alcotest.run "Hostnet" Tests.tests

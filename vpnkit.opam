@@ -1,16 +1,16 @@
 opam-version: "1.2"
 maintainer: "David Scott <dave.scott@docker.com>"
 authors: [
-	"Anil Madhavapeddy <anil@recoil.org>"
-	"David Scott <dave.scott@docker.com>"
-	"David Sheets <dsheets@docker.com>"
-	"Gaetan de Villele <gdevillele@gmail.com>"
-	"Ian Campbell <ian.campbell@docker.com>"
-	"Magnus Skjegstad <magnus@skjegstad.com>"
-	"Mindy Preston <mindy.preston@docker.com>"
-	"Sebastiaan van Stijn <github@gone.nl>"
-	"Thomas Gazagnaire <thomas@gazagnaire.com>"
-	"Thomas Leonard <thomas.leonard@docker.com>"
+  "Anil Madhavapeddy <anil@recoil.org>"
+  "David Scott <dave.scott@docker.com>"
+  "David Sheets <dsheets@docker.com>"
+  "Gaetan de Villele <gdevillele@gmail.com>"
+  "Ian Campbell <ian.campbell@docker.com>"
+  "Magnus Skjegstad <magnus@skjegstad.com>"
+  "Mindy Preston <mindy.preston@docker.com>"
+  "Sebastiaan van Stijn <github@gone.nl>"
+  "Thomas Gazagnaire <thomas@gazagnaire.com>"
+  "Thomas Leonard <thomas.leonard@docker.com>"
 ]
 homepage:     "https://github.com/docker/vpnkit"
 bug-reports:  "https://github.com/docker/vpnkit/issues"
@@ -35,9 +35,9 @@ depends: [
   "ipaddr"
   "lwt" { >= "2.7.0" }
   "uwt" { >= "0.0.4" }
-  "tcpip" { >= "2.8.0" & < "3.0.0" }
+  "tcpip" { = "999" }
   "pcap-format"
-  "dns"
+  "dns" { = "999" }
   "dnssd" { >= "0.2" }
   "dns-forward"
   "datakit-server"
@@ -53,11 +53,15 @@ depends: [
   "logs"
   "fmt"
   "astring"
-  "mirage-flow" { >= "1.1.0" }
+  "mirage-flow" { = "1.1.0" }
   "mirage-http"
   "cohttp"
   "channel"
-  "mirage-types-lwt"
+  "mirage-types-lwt" { = "2.8.999" }
+  "protocol-9p" { = "0.8.0" }
+  "cstruct" {< "3.0.0"}
+  "ounit" {test}
+  "alcotest" {test}
   "mirage-vnetif" { = "0.2.0" }
   "uuidm"
   "ezjsonm"

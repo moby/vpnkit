@@ -1,11 +1,7 @@
-(library
-  ((name        ofs)
-   (public_name ofs)
-   (libraries (
-    protocol-9p protocol-9p.unix cstruct cstruct.lwt lwt.unix io-page.unix logs
-    mirage-types.lwt astring named-pipe.lwt
-   ))
-   (wrapped false)
-   (flags (:standard -warn-error "+1..49-3" -w "A-4-41-42-44"))
-))
+(jbuild_version 1)
 
+(library
+  ((name      ofs)
+   (libraries (protocol-9p protocol-9p.unix cstruct cstruct.lwt lwt.unix
+               io-page.unix logs mirage-types.lwt astring named-pipe.lwt))
+   (wrapped   false)))

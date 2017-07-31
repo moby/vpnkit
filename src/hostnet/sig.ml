@@ -1,9 +1,9 @@
-
 module type READ_INTO = sig
   type flow
   type error
 
-  val read_into: flow -> Cstruct.t -> [ `Eof | `Error of error | `Ok of unit ] Lwt.t
+  val read_into: flow -> Cstruct.t ->
+    [ `Eof | `Error of error | `Ok of unit ] Lwt.t
   (** Completely fills the given buffer with data from [fd] *)
 end
 
@@ -12,8 +12,8 @@ module type FLOW_CLIENT = sig
 
   type address
 
-  val connect: ?read_buffer_size:int -> address
-    -> flow Error.t
+  val connect: ?read_buffer_size:int -> address ->
+    (flow, [`Msg of string]) result Lwt.t
   (** [connect address] creates a connection to [address] and returns
       he connected flow. *)
 end
@@ -68,6 +68,7 @@ module type SOCKETS = sig
   val register_connection: string -> int Lwt.t
   val deregister_connection: int -> unit
   val get_num_connections: unit -> int
+
   (** Fetch the number of tracked connections *)
   val connections: unit -> Vfs.File.t
   (** A filesystem which allows the connections to be introspected *)
@@ -121,7 +122,7 @@ module type SOCKETS = sig
 
       include FLOW_SERVER
         with type address := address
-        and type flow := flow
+         and type flow := flow
 
       val unsafe_get_raw_fd: flow -> Unix.file_descr
       (** Return the underlying fd. This is intended for careful integration
@@ -135,12 +136,12 @@ end
 module type FILES = sig
   (** An OS-based file reading implementation *)
 
-  val read_file: string -> string Error.t
+  val read_file: string -> (string, [`Msg of string]) result Lwt.t
   (** Read a whole file into a string *)
 
   type watch
 
-  val watch_file: string -> (unit -> unit) -> (watch, [ `Msg of string ]) Result.result
+  val watch_file: string -> (unit -> unit) -> (watch, [ `Msg of string ]) result
   (** [watch_file path callback] executes [callback] whenever the contents of
       [path] may have changed. *)
 
@@ -208,8 +209,11 @@ module type VMNET = sig
 
   type fd
 
-  val of_fd: client_macaddr_of_uuid:(Uuidm.t -> Macaddr.t Lwt.t) -> server_macaddr:Macaddr.t
-    -> mtu:int -> fd -> t Error.t
+  val of_fd:
+    client_macaddr_of_uuid:(Uuidm.t -> Macaddr.t Lwt.t) ->
+    server_macaddr:Macaddr.t ->
+    mtu:int ->
+    fd -> (t, [`Msg of string]) result Lwt.t
 
   val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
 
@@ -223,21 +227,21 @@ end
 module type DNS_POLICY = sig
   (** Policy settings
 
-    DNS configuration is taken from 4 places, lowest to highest priority:
+      DNS configuration is taken from 4 places, lowest to highest priority:
 
-    - 0: a built-in default of the Google public DNS servers
-    - 1: a default configuration (from a command-line argument or a configuration
-      file)
-    - 2: the `/etc/resolv.conf` file if present
-    - 3: the database key `slirp/dns`
+      - 0: a built-in default of the Google public DNS servers
+      - 1: a default configuration (from a command-line argument or a
+           configuration file)
+      - 2: the `/etc/resolv.conf` file if present
+      - 3: the database key `slirp/dns`
 
-    If configuration with a higher priority is found then it completely overrides
-    lower priority configuration.
-  *)
+      If configuration with a higher priority is found then it
+      completely overrides lower priority configuration.  *)
 
   type priority = int (** higher is more important *)
 
-  val add: priority:priority -> config:[ `Upstream of Dns_forward.Config.t | `Host ] -> unit
+  val add: priority:priority ->
+    config:[ `Upstream of Dns_forward.Config.t | `Host ] -> unit
   (** Add some configuration at the given priority level *)
 
   val remove: priority:priority -> unit
@@ -253,8 +257,9 @@ module type RECORDER = sig
   type t
 
   val record: t -> Cstruct.t list -> unit
-  (** Inject a packet and record it if it matches a rule. This is intended for
-      debugging: the packet will not be transmitted to the underlying network. *)
+  (** Inject a packet and record it if it matches a rule. This is
+      intended for debugging: the packet will not be transmitted to
+      the underlying network. *)
 end
 
 module type Connector = sig

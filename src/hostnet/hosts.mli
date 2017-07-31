@@ -1,4 +1,3 @@
-
 val default_etc_hosts_path: string
 (** Default path where /etc/hosts should be on this machine *)
 
@@ -12,7 +11,7 @@ module Make(Files: Sig.FILES): sig
 
   type watch
 
-  val watch: ?path:string -> unit -> (watch, [ `Msg of string ]) Result.result
+  val watch: ?path:string -> unit -> (watch, [ `Msg of string ]) result
   (** Start watching the hosts file, updating the [etc_hosts] binding in the
       background. The [?path] argument allows the location of the hosts file
       to be overriden. *)

@@ -65,12 +65,16 @@ module Make(Netif: V1_LWT.NETWORK) = struct
     let xs =
       RuleMap.fold
         (fun ip t acc ->
-          Printf.sprintf "%s last_active_time = %.1f" (Ipaddr.V4.to_string ip) t.last_active_time :: acc
-        ) t.rules [] in
+           Fmt.strf "%a last_active_time = %.1f" Ipaddr.V4.pp_hum ip
+             t.last_active_time
+           :: acc
+        ) t.rules []
+    in
     Vfs.File.ro_of_string (String.concat "\n" xs)
 
   let remove t rule =
-    Log.debug (fun f -> f "removing switch port for %s" (Ipaddr.V4.to_string rule));
+    Log.debug (fun f ->
+        f "removing switch port for %s" (Ipaddr.V4.to_string rule));
     t.rules <- RuleMap.remove rule t.rules
 
   let callback t buf =
@@ -83,7 +87,8 @@ module Make(Netif: V1_LWT.NETWORK) = struct
         port.last_active_time <- Unix.gettimeofday ();
         port.callback buf
       end else begin
-        Log.debug (fun f -> f "using default callback for packet for %s" (Ipaddr.V4.to_string dst));
+        Log.debug (fun f ->
+            f "using default callback for packet for %a" Ipaddr.V4.pp_hum dst);
         t.default_callback buf
       end
     | _ ->
@@ -123,13 +128,15 @@ module Make(Netif: V1_LWT.NETWORK) = struct
     let write t buffer = Netif.write t.netif buffer
     let writev t buffers = Netif.writev t.netif buffers
     let listen t callback =
-      Log.debug (fun f -> f "activating switch port for %s" (Ipaddr.V4.to_string t.rule));
+      Log.debug (fun f ->
+          f "activating switch port for %s" (Ipaddr.V4.to_string t.rule));
       let last_active_time = Unix.gettimeofday () in
       let port = { callback; last_active_time } in
       t.switch.rules <- RuleMap.add t.rule port t.switch.rules;
       Lwt.return_unit
     let disconnect t =
-      Log.debug (fun f -> f "deactivating switch port for %s" (Ipaddr.V4.to_string t.rule));
+      Log.debug (fun f ->
+          f "deactivating switch port for %s" (Ipaddr.V4.to_string t.rule));
       t.switch.rules <- RuleMap.remove t.rule t.switch.rules;
       Lwt.return_unit
 

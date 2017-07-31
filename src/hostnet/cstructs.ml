@@ -1,10 +1,10 @@
-
 type t = Cstruct.t list
 
 let pp_t ppf t =
   List.iter (fun t ->
-    Format.fprintf ppf "[%d,%d](%d)" t.Cstruct.off t.Cstruct.len (Bigarray.Array1.dim t.Cstruct.buffer)
-  ) t
+      Fmt.pf ppf "[%d,%d](%d)"
+        t.Cstruct.off t.Cstruct.len (Bigarray.Array1.dim t.Cstruct.buffer)
+    ) t
 
 let len = List.fold_left (fun acc c -> Cstruct.len c + acc) 0
 
@@ -32,18 +32,19 @@ let sub t off len =
   let t' = shift t off in
   (* trim the length *)
   let rec trim acc ts remaining = match remaining, ts with
-    | 0, _ -> List.rev acc
-    | _, [] -> err "invalid bounds in Cstructs.sub %a off=%d len=%d" pp_t t off len
-    | n, t :: ts ->
-      let to_take = min (Cstruct.len t) n in
-      (* either t is consumed and we only need ts, or t has data remaining in which
-         case we're finished *)
-      trim (Cstruct.sub t 0 to_take :: acc) ts (remaining - to_take) in
+  | 0, _ -> List.rev acc
+  | _, [] -> err "invalid bounds in Cstructs.sub %a off=%d len=%d" pp_t t off len
+  | n, t :: ts ->
+    let to_take = min (Cstruct.len t) n in
+    (* either t is consumed and we only need ts, or t has data
+       remaining in which case we're finished *)
+    trim (Cstruct.sub t 0 to_take :: acc) ts (remaining - to_take)
+  in
   trim [] t' len
 
 let to_cstruct = function
-  | [ common_case ] -> common_case
-  | uncommon_case -> Cstruct.concat uncommon_case
+| [ common_case ] -> common_case
+| uncommon_case -> Cstruct.concat uncommon_case
 
 (* Return a Cstruct.t representing (off, len) by either returning a reference
    or making a copy if the value is split across two fragments. Ideally this
@@ -60,13 +61,14 @@ let get f t off len =
       let rec copy remaining frags =
         if Cstruct.len remaining > 0
         then match frags with
-          | [] ->
-            err "invalid bounds in Cstructs.%s %a off=%d len=%d" f pp_t t off len
-          | x :: xs ->
-            let to_copy = min (Cstruct.len x) (Cstruct.len remaining) in
-            Cstruct.blit x 0 remaining 0 to_copy;
-            (* either we've copied all of x, or we've filled the remaining buffer *)
-            copy (Cstruct.shift remaining to_copy) xs in
+        | [] ->
+          err "invalid bounds in Cstructs.%s %a off=%d len=%d" f pp_t t off len
+        | x :: xs ->
+          let to_copy = min (Cstruct.len x) (Cstruct.len remaining) in
+          Cstruct.blit x 0 remaining 0 to_copy;
+          (* either we've copied all of x, or we've filled the
+             remaining buffer *)
+          copy (Cstruct.shift remaining to_copy) xs in
       let result = Cstruct.create len in
       copy result (x :: xs);
       result

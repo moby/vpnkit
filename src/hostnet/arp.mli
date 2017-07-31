@@ -10,5 +10,5 @@ module Make(Ethif: V1_LWT.ETHIF): sig
   val connect:
     table:(ipaddr * macaddr) list -> ethif
     -> [ `Ok of t | `Error of error ] Lwt.t
-  (** Construct a static ARP table *)
+    (** Construct a static ARP table *)
 end

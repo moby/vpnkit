@@ -18,20 +18,21 @@ module Make(Netif: V1_LWT.NETWORK) = struct
   (* Compute the smallest IPv4 network which includes both [a_ip]
      and all [other_ips]. *)
   let rec smallest_prefix a_ip other_ips = function
-    | 0 -> Ipaddr.V4.Prefix.global
-    | bits ->
-      let prefix = Ipaddr.V4.Prefix.make bits a_ip in
-      if List.for_all (fun b_ip -> Ipaddr.V4.Prefix.mem b_ip prefix) other_ips
-      then prefix
-      else smallest_prefix a_ip other_ips (bits - 1)
+  | 0 -> Ipaddr.V4.Prefix.global
+  | bits ->
+    let prefix = Ipaddr.V4.Prefix.make bits a_ip in
+    if List.for_all (fun b_ip -> Ipaddr.V4.Prefix.mem b_ip prefix) other_ips
+    then prefix
+    else smallest_prefix a_ip other_ips (bits - 1)
 
   let maximum_ip = function
-    | [] -> Ipaddr.V4.of_string_exn "0.0.0.0"
-    | hd::tl -> List.fold_left (fun acc x -> if compare acc x > 0 then acc else x) hd tl
+  | [] -> Ipaddr.V4.of_string_exn "0.0.0.0"
+  | hd::tl ->
+    List.fold_left (fun acc x -> if compare acc x > 0 then acc else x) hd tl
 
   (* given some MACs and IPs, construct a usable DHCP configuration *)
   let make ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip ~extra_dns_ip
-    ~get_domain_search ~get_domain_name netif =
+      ~get_domain_search ~get_domain_name netif =
     let open Dhcp_server.Config in
     (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
        intend only to serve IPs to one downstream host.
@@ -45,8 +46,8 @@ module Make(Netif: V1_LWT.NETWORK) = struct
       of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
     (* if highest_peer_ip is set, make the prefix mask include it *)
     let ip_list = (match highest_peer_ip with
-    | None -> [ local_ip; low_ip; high_ip ]
-    | Some max_ip -> [ local_ip; low_ip; high_ip; max_ip ]) in
+      | None -> [ local_ip; low_ip; high_ip ]
+      | Some max_ip -> [ local_ip; low_ip; high_ip; max_ip ]) in
     let prefix = smallest_prefix peer_ip ip_list 32 in
     let get_dhcp_configuration () : Dhcp_server.Config.t =
       (* The domain search is encoded using the scheme used for DNS names *)
@@ -54,8 +55,8 @@ module Make(Netif: V1_LWT.NETWORK) = struct
         let open Dns in
         let buffer = Cstruct.create 1024 in
         let _, n, _ = List.fold_left (fun (map, n, buffer) name ->
-          Name.marshal map n buffer (Name.of_string name)
-        ) (Name.Map.empty, 0, buffer) (get_domain_search ()) in
+            Name.marshal map n buffer (Name.of_string name)
+          ) (Name.Map.empty, 0, buffer) (get_domain_search ()) in
         Cstruct.(to_string (sub buffer 0 n)) in
       let domain_name = get_domain_name () in
       let options = [
@@ -68,15 +69,17 @@ module Make(Netif: V1_LWT.NETWORK) = struct
       (* domain_search and get_domain_name may produce an empty string, which is
        * invalid, so only add the option if there is content *)
       let options = if domain_search = "" then options
-      else Dhcp_wire.Domain_search domain_search :: options in
-      let options = if domain_name = "" then options 
-      else Dhcp_wire.Domain_name domain_name :: options in
+        else Dhcp_wire.Domain_search domain_search :: options in
+      let options = if domain_name = "" then options
+        else Dhcp_wire.Domain_name domain_name :: options in
       {
         options = options;
         hostname = "vpnkit"; (* it's us! *)
         hosts = [ ];
-        default_lease_time = Int32.of_int (60 * 60 * 2); (* 2 hours, from charrua defaults *)
-        max_lease_time = Int32.of_int (60 * 60 * 24) ; (* 24 hours, from charrua defaults *)
+        (* 2 hours, from charrua defaults *)
+        default_lease_time = Int32.of_int (60 * 60 * 2);
+        (* 24 hours, from charrua defaults *)
+        max_lease_time = Int32.of_int (60 * 60 * 24) ;
         ip_addr = local_ip;
         mac_addr = server_macaddr;
         network = prefix;
@@ -95,7 +98,7 @@ module Make(Netif: V1_LWT.NETWORK) = struct
 
   let input net (config : Dhcp_server.Config.t) database buf =
     let open Dhcp_server in
-    match (Dhcp_wire.pkt_of_buf buf (Cstruct.len buf)) with
+    match Dhcp_wire.pkt_of_buf buf (Cstruct.len buf) with
     | `Error e ->
       Log.err (fun f -> f "failed to parse DHCP packet: %s" e);
       Lwt.return database
@@ -114,8 +117,11 @@ module Make(Netif: V1_LWT.NETWORK) = struct
       | Input.Reply (reply, database) ->
         let open Dhcp_wire in
         if pkt.op <> Dhcp_wire.BOOTREQUEST || not !logged_bootrequest
-        then Log.info (fun f -> f "%s from %s" (op_to_string pkt.op) (Macaddr.to_string (pkt.srcmac)));
-        logged_bootrequest := !logged_bootrequest || (pkt.op = Dhcp_wire.BOOTREQUEST);
+        then Log.info (fun f ->
+            f "%s from %s" (op_to_string pkt.op)
+              (Macaddr.to_string (pkt.srcmac)));
+        logged_bootrequest :=
+          !logged_bootrequest || (pkt.op = Dhcp_wire.BOOTREQUEST);
         Netif.write net (Dhcp_wire.buf_of_pkt reply)
         >>= fun () ->
         let domain = List.fold_left (fun acc x -> match x with
@@ -128,31 +134,34 @@ module Make(Netif: V1_LWT.NETWORK) = struct
           | Routers ys -> String.concat ", " (List.map Ipaddr.V4.to_string ys)
           | _ -> acc) "none" reply.options in
         if reply.op <> Dhcp_wire.BOOTREPLY || not !logged_bootreply
-        then Log.info (fun f -> f "%s to %s yiddr %s siddr %s dns %s router %s domain %s"
-          (op_to_string reply.op) (Macaddr.to_string (reply.dstmac))
-          (Ipaddr.V4.to_string reply.yiaddr) (Ipaddr.V4.to_string reply.siaddr)
-          dns routers domain
-        );
-        logged_bootreply := !logged_bootreply || (reply.op = Dhcp_wire.BOOTREPLY);
+        then Log.info (fun f ->
+            f "%s to %s yiddr %a siddr %a dns %s router %s domain %s"
+              (op_to_string reply.op) (Macaddr.to_string (reply.dstmac))
+              Ipaddr.V4.pp_hum reply.yiaddr Ipaddr.V4.pp_hum reply.siaddr
+              dns routers domain
+          );
+        logged_bootreply :=
+          !logged_bootreply || (reply.op = Dhcp_wire.BOOTREPLY);
         Lwt.return database
 
   let callback t buf =
-    (* TODO: the scope of this reference ensures that the database won't
-       actually remain updated after any particular transaction.  In our case
-       that's OK, because we only really want to serve one pre-allocated IP
-       anyway, but this will present a problem if that assumption ever changes.  *)
+    (* TODO: the scope of this reference ensures that the database
+       won't actually remain updated after any particular transaction.
+       In our case that's OK, because we only really want to serve one
+       pre-allocated IP anyway, but this will present a problem if
+       that assumption ever changes.  *)
     let database = ref (Dhcp_server.Lease.make_db ()) in
     match (Wire_structs.parse_ethernet_frame buf) with
     | Some (proto, dst, _payload) when of_interest t.server_macaddr dst ->
       (match proto with
-       | Some Wire_structs.IPv4 ->
-         if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then begin
-           input t.netif (t.get_dhcp_configuration ()) !database buf >>= fun db ->
-           database := db;
-           Lwt.return_unit
-         end
-         else
-           Lwt.return_unit
-       | _ -> Lwt.return_unit)
+      | Some Wire_structs.IPv4 ->
+        if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then begin
+          input t.netif (t.get_dhcp_configuration ()) !database buf
+          >|= fun db ->
+          database := db
+        end
+        else
+          Lwt.return_unit
+      | _ -> Lwt.return_unit)
     | _ -> Lwt.return_unit
 end
