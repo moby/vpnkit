@@ -382,11 +382,13 @@ module Make(Host: Sig.HOST) = struct
   module F = Forwarding.Make(Host)
   module N = Test_nat.Make(Host)
   module H = Test_http.Make(Host)
+  module T = Test_half_close.Make(Host)
 
   let tests =
     Hosts_test.tests @ F.tests @ test_dhcp
     @ (test_dns true) @ (test_dns false)
     @ test_tcp @ N.tests @ H.tests @ Test_http.Exclude.tests
+    @ T.tests
 
   let scalability = [
     "1026conns",
