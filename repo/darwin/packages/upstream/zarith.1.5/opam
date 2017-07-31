@@ -1,0 +1,21 @@
+opam-version: "1.2"
+maintainer: "Vincent Bernardoff <vb@luminar.eu.org>"
+authors: "Xavier Leroy"
+homepage: "https://github.com/ocaml/Zarith"
+bug-reports: "https://github.com/ocaml/Zarith/issues"
+dev-repo: "https://github.com/ocaml/Zarith.git"
+build: [
+  ["./configure"] { os != "openbsd" & os != "freebsd" & os != "darwin"}
+  ["sh" "-exc" "LDFLAGS=\"$LDFLAGS -L/usr/local/lib\" CFLAGS=\"$CFLAGS -I/usr/local/include\" ./configure"] { os = "openbsd" | os = "freebsd" }
+  ["sh" "-exc" "LDFLAGS=\"$LDFLAGS -L/opt/local/lib -L/usr/local/lib\" CFLAGS=\"$CFLAGS -I/opt/local/include -I/usr/local/include\" ./configure"] { os = "darwin" }
+  [make]
+]
+install: [
+  [make "install"]
+]
+remove:  ["ocamlfind" "remove" "zarith"]
+depends: [
+  "ocamlfind"
+  "conf-gmp"
+  "conf-perl" {build}
+]

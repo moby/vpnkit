@@ -1,0 +1,35 @@
+opam-version: "1.2"
+authors: [
+  "Christian Lindig"
+  "David Scott"
+  "Euan Harris"
+  "John Else"
+  "Jon Ludlam"
+  "Jonathan Davies"
+  "Marcello Seri"
+  "Si Beaumont"
+  "Thomas Sanders"
+  "Vincent Bernardoff"
+]
+maintainer: "dave@recoil.org"
+homepage:    "http://github.com/xapi-project/ocaml-xenstore-clients"
+bug-reports: "http://github.com/xapi-project/ocaml-xenstore-clients/issues"
+dev-repo:    "http://github.com/xapi-project/ocaml-xenstore-clients.git"
+doc:         "http://xapi-project.github.io/ocaml-xenstore-clients"
+license:     "LGPL"
+
+tags: [
+  "org:mirage"
+  "org:xapi-project"
+]
+build: [
+  [ "jbuilder" "subst"] {pinned}
+  [ "jbuilder" "build" "-p" name "-j" jobs ]
+]
+
+depends: [
+  "ocamlfind" {build}
+  "jbuilder"  {build & >="1.0+beta9"}
+  "lwt"
+  "xenstore" {> "1.2.1"}
+]

@@ -1,0 +1,37 @@
+opam-version: "1.2"
+maintainer:    "jonathan.ludlam@eu.citrix.com"
+authors: [
+  "Vincent Bernardoff"
+  "Jon Ludlam"
+  "David Scott"
+]
+homepage:    "http://github.com/mirage/ocaml-vchan"
+bug-reports: "http://github.com/mirage/ocaml-vchan/issues"
+dev-repo:    "http://github.com/mirage/ocaml-vchan.git"
+doc:         "http://mirage.github.io/ocaml-vchan"
+license:     "ISC"
+
+build: [
+  [ "jbuilder" "subst"] {pinned}
+  [ "jbuilder" "build" "-p" name "-j" jobs ]
+]
+
+depends: [
+  "ocamlfind" {build}
+  "jbuilder"  {build & >="1.0+beta9"}
+  "lwt" {>= "2.5.0"}
+  "cstruct" {>= "3.0.0"}
+  "ppx_tools" {build}
+  "ppx_sexp_conv" {build & >="v0.9"} 
+  "ppx_cstruct" {build}
+  "io-page"
+  "mirage-flow-lwt" {>= "1.0.0"}
+  "xenstore" {>= "1.2.2"}
+  "xenstore_transport"
+  "sexplib"
+  "cmdliner"
+  "result"
+  "ounit" {test}
+]
+available: [ocaml-version >= "4.03.0"]
+tags: "org:mirage"

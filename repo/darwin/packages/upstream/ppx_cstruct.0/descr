@@ -1,4 +1,0 @@
-Access C-like structures directly from OCaml
-
-This is a dummy package to facilitate the migration to cstruct 3.0.0,
-where several package were split out of the main Cstruct package.

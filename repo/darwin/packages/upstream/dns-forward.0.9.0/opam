@@ -1,0 +1,35 @@
+opam-version: "1.2"
+maintainer:   "dave@recoil.org"
+authors:      ["David Scott"]
+license:      "ISC"
+homepage:     "https://github.com/mirage/ocaml-dns-forward"
+bug-reports:  "https://github.com/mirage/ocaml-dns-forward/issues"
+dev-repo:     "https://github.com/mirage/ocaml-dns-forward.git"
+doc:          "https://mirage.github.io/ocaml-dns-forward/"
+
+build: [
+  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+build-test: ["jbuilder" "runtest" "-p" name]
+
+depends: [
+  "jbuilder"        {build & >= "1.0+beta10"}
+  "cstruct"         {>= "3.0.0"}
+  "logs"            {>= "0.5.0"}
+  "lwt"             {>= "2.7.0"}
+  "mirage-flow-lwt" {>= "1.2.0"}
+  "mirage-clock-lwt"
+  "mirage-channel-lwt"
+  "mirage-time-lwt"
+  "duration"
+  "dns"
+  "rresult"
+  "astring"
+  "fmt"
+  "result"
+  "mtime"
+  "sexplib"
+  "ipaddr"
+]
+available: [ocaml-version >= "4.03.0"]
