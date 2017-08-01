@@ -439,51 +439,51 @@ module Make(C: Sig.CONN) = struct
   let listen t new_callback =
     Log.info (fun f -> f "PPP.listen: rebinding the primary listen callback");
     t.callback <- new_callback;
-      t.listening <- true;
-      let last_error_log = ref 0. in
-      let rec loop () =
-        (with_fd t @@ fun fd ->
-         with_read t (Channel.read_exactly ~len:Packet.sizeof fd) @@ fun bufs ->
-         let read_header = Cstruct.concat bufs in
-         with_msg t (Packet.unmarshal read_header) @@ fun (len, _) ->
-         with_read t (Channel.read_exactly ~len fd) @@ fun bufs ->
-         capture t bufs >>= fun () ->
-         Log.debug (fun f ->
-             let b = Buffer.create 128 in
-             List.iter (Cstruct.hexdump_to_buffer b) bufs;
-             f "received\n%s" (Buffer.contents b)
-           );
-         let buf = Cstruct.concat bufs in
-         let callback buf =
-           Lwt.catch (fun () -> t.callback buf)
-             (function
-             | Host_uwt.Sockets.Too_many_connections
-             | Host_lwt_unix.Sockets.Too_many_connections ->
-               (* No need to log this again *)
-               Lwt.return_unit
-             | e ->
-               let now = Unix.gettimeofday () in
-               if (now -. !last_error_log) > 30. then begin
-                 Log.err (fun f ->
-                     f "PPP.listen callback caught %a" Fmt.exn e);
-                 last_error_log := now;
-               end;
-               Lwt.return_unit
-             )
-         in
-         Lwt.async (fun () -> callback buf);
-         List.iter (fun callback ->
-             Lwt.async (fun () -> callback buf)
-           ) t.listeners;
-         Lwt.return true
-        ) >>= function
-        | true  -> loop ()
-        | false -> Lwt.return ()
-      in
-      (* This blocks forever *)
-      loop ()
-      >>= fun () ->
-      Lwt.return (Ok ())
+    t.listening <- true;
+    let last_error_log = ref 0. in
+    let rec loop () =
+      (with_fd t @@ fun fd ->
+       with_read t (Channel.read_exactly ~len:Packet.sizeof fd) @@ fun bufs ->
+       let read_header = Cstruct.concat bufs in
+       with_msg t (Packet.unmarshal read_header) @@ fun (len, _) ->
+       with_read t (Channel.read_exactly ~len fd) @@ fun bufs ->
+       capture t bufs >>= fun () ->
+       Log.debug (fun f ->
+           let b = Buffer.create 128 in
+           List.iter (Cstruct.hexdump_to_buffer b) bufs;
+           f "received\n%s" (Buffer.contents b)
+         );
+       let buf = Cstruct.concat bufs in
+       let callback buf =
+         Lwt.catch (fun () -> t.callback buf)
+           (function
+           | Host_uwt.Sockets.Too_many_connections
+           | Host_lwt_unix.Sockets.Too_many_connections ->
+             (* No need to log this again *)
+             Lwt.return_unit
+           | e ->
+             let now = Unix.gettimeofday () in
+             if (now -. !last_error_log) > 30. then begin
+               Log.err (fun f ->
+                   f "PPP.listen callback caught %a" Fmt.exn e);
+               last_error_log := now;
+             end;
+             Lwt.return_unit
+           )
+       in
+       Lwt.async (fun () -> callback buf);
+       List.iter (fun callback ->
+           Lwt.async (fun () -> callback buf)
+         ) t.listeners;
+       Lwt.return true
+      ) >>= function
+      | true  -> loop ()
+      | false -> Lwt.return ()
+    in
+    (* This blocks forever *)
+    loop ()
+    >>= fun () ->
+    Lwt.return (Ok ())
 
   let write t buf =
     Lwt_mutex.with_lock t.write_m (fun () ->
