@@ -91,9 +91,15 @@ module Make (Netif: Mirage_net_lwt.S) = struct
     let rules = RuleMap.empty in
     let default_callback = fun _ -> Lwt.return_unit in
     let t = { netif; rules; default_callback } in
-    Netif.listen netif @@ callback t >>= fun r ->
-    let r = match r with  Ok () -> Ok t | Error _ as e -> e in
-    Lwt.return r >|= lift_error
+    Lwt.async
+      (fun () ->
+        Netif.listen netif @@ callback t >>= function
+        | Ok () -> Lwt.return_unit
+        | Error _e ->
+          Log.err (fun f -> f "Mux.connect calling Netif.listen: failed");
+          Lwt.return_unit
+      );
+    Lwt.return (Ok t)
 
   let write t buffer = Netif.write t.netif buffer >|= lift_error
   let writev t buffers = Netif.writev t.netif buffers >|= lift_error

@@ -177,6 +177,11 @@ module Make(C: Sig.CONN) = struct
     mutable listening: bool;
     after_disconnect: unit Lwt.t;
     after_disconnect_u: unit Lwt.u;
+    (* NB: The Mirage DHCP client calls `listen` and then later the
+       Tcp_direct_direct will do the same. This behaviour seems to be
+       undefined, but common implementations adopt a last-caller-wins
+       semantic. This is the last caller wins callback *)
+    mutable callback: (Cstruct.t -> unit io);
   }
 
   let get_client_uuid t =
@@ -309,9 +314,10 @@ module Make(C: Sig.CONN) = struct
     let listeners = [] in
     let listening = false in
     let after_disconnect, after_disconnect_u = Lwt.task () in
+    let callback _ = Lwt.return_unit in
     { fd; stats; client_macaddr; client_uuid; server_macaddr; mtu; write_header;
       write_m; pcap; pcap_size_limit; pcap_m; listeners; listening;
-      after_disconnect; after_disconnect_u }
+      after_disconnect; after_disconnect_u; callback }
 
   type fd = C.flow
 
@@ -430,11 +436,9 @@ module Make(C: Sig.CONN) = struct
     | Error (`Msg e) -> err_unexpected t Fmt.string e
     | Ok x           -> f x
 
-  let listen t callback =
-    if t.listening then begin
-      Log.debug (fun f -> f "PPP.listen: called a second time: doing nothing");
-      Lwt.return (Ok ());
-    end else begin
+  let listen t new_callback =
+    Log.info (fun f -> f "PPP.listen: rebinding the primary listen callback");
+    t.callback <- new_callback;
       t.listening <- true;
       let last_error_log = ref 0. in
       let rec loop () =
@@ -451,7 +455,7 @@ module Make(C: Sig.CONN) = struct
            );
          let buf = Cstruct.concat bufs in
          let callback buf =
-           Lwt.catch (fun () -> callback buf)
+           Lwt.catch (fun () -> t.callback buf)
              (function
              | Host_uwt.Sockets.Too_many_connections
              | Host_lwt_unix.Sockets.Too_many_connections ->
@@ -476,10 +480,10 @@ module Make(C: Sig.CONN) = struct
         | true  -> loop ()
         | false -> Lwt.return ()
       in
-      Lwt.async @@ loop;
-      Lwt.return (Ok ());
-    end
-
+      (* This blocks forever *)
+      loop ()
+      >>= fun () ->
+      Lwt.return (Ok ())
 
   let write t buf =
     Lwt_mutex.with_lock t.write_m (fun () ->
