@@ -30,7 +30,7 @@ OPAMVERBOSE=1 opam install --deps-only tcpip -y
 OPAMVERBOSE=1 opam install tcpip -t
 
 opam install $(ls -1 ${OPAM_REPO}/packages/upstream) -y
-OPAMVERBOSE=1 opam install --deps-only vpnkit -y
+OPAMVERBOSE=1 opam install --deps-only -t vpnkit -y
 
 OPAMVERBOSE=1 make
 # One test requires 1026 file descriptors
