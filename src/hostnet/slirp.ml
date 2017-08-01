@@ -269,16 +269,14 @@ module Filteredif = Filter.Make(Vmnet)
       Stack_ethif.connect ~mtu netif >>= fun ethif ->
       Stack_arpv4.connect ~table:arp_table ethif |>fun arp ->
       Stack_ipv4.connect
+        ~ip
         ~gateway:None
-        ~network:Ipaddr.V4.(Prefix.of_addr unspecified)
+        ~network:Ipaddr.V4.Prefix.global
         ethif arp
       >>= fun ipv4 ->
       Stack_icmpv4.connect ipv4 >>= fun icmpv4 ->
       Stack_udp.connect ipv4 >>= fun udp4 ->
       Stack_tcp.connect ipv4 clock >>= fun tcp4 ->
-
-      Stack_ipv4.set_ip ipv4 ip (* I am the destination *)
-      >>= fun () ->
 
       let pending = Tcp.Id.Set.empty in
       let last_active_time = Unix.gettimeofday () in
