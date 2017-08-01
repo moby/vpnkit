@@ -15,9 +15,6 @@ build: [
   ["jbuilder" "subst"] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
-build-test: [
-  ["jbuilder" "runtest" "-p" name "-j" jobs]
-]
 
 depends: [
   "jbuilder" {>="1.0+beta9"}
