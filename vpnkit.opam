@@ -37,6 +37,7 @@ depends: [
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "3.1.4"}
   "dns" {>= "0.19.1"}
+  "dns-lwt"
   "dnssd" {>= "0.2"}
   "dns-forward"
   "cstruct-lwt" {>= "3.0.0"}
@@ -46,6 +47,7 @@ depends: [
   "pcap-format" {>= "0.4.0"}
   "cmdliner"
   "charrua-core" {>= "0.3"}
+  "charrua-client-mirage" {test}
   "named-pipe" {>= "0.4.0"}
   "hvsock" {>= "0.13.0"}
   "asl"
