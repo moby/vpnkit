@@ -182,6 +182,7 @@ module Make(C: Sig.CONN) = struct
        undefined, but common implementations adopt a last-caller-wins
        semantic. This is the last caller wins callback *)
     mutable callback: (Cstruct.t -> unit io);
+    log_prefix: string;
   }
 
   let get_client_uuid t =
@@ -210,11 +211,14 @@ module Make(C: Sig.CONN) = struct
     | Ok x -> f x
     | Error _ as e -> Lwt.return e
 
+  let server_log_prefix = "Vmnet.Server"
+  let client_log_prefix = "Vmnet.Client"
+
   let server_negotiate ~fd ~client_macaddr_of_uuid ~mtu =
     with_read (Channel.read_exactly ~len:Init.sizeof fd) @@ fun bufs ->
     let buf = Cstruct.concat bufs in
     let init, _ = Init.unmarshal buf in
-    Log.info (fun f -> f "Vmnet.negotiate: received %s" (Init.to_string init));
+    Log.info (fun f -> f "%s.negotiate: received %s" server_log_prefix (Init.to_string init));
     let (_: Cstruct.t) = Init.marshal Init.default buf in
     Channel.write_buffer fd buf;
     with_flush (Channel.flush fd) @@ fun () ->
@@ -222,15 +226,15 @@ module Make(C: Sig.CONN) = struct
     let buf = Cstruct.concat bufs in
     with_msg (Command.unmarshal buf) @@ fun (command, _) ->
     Log.info (fun f ->
-        f "Vmnet.negotiate: received %s" (Command.to_string command));
+        f "%s.negotiate: received %s" server_log_prefix (Command.to_string command));
     match command with
-    | Command.Bind_ipv4 _ -> failf "Vmnet.negotiate: unsupported command Bind_ipv4"
+    | Command.Bind_ipv4 _ -> failf "%s.negotiate: unsupported command Bind_ipv4" server_log_prefix
     | Command.Ethernet uuid ->
       client_macaddr_of_uuid uuid >>= fun client_macaddr ->
       let vif = Vif.create client_macaddr mtu () in
       let buf = Cstruct.create Vif.sizeof in
       let (_: Cstruct.t) = Vif.marshal vif buf in
-      Log.info (fun f -> f "Vmnet.negotiate: sending %s" (Vif.to_string vif));
+      Log.info (fun f -> f "%s.negotiate: sending %s" server_log_prefix (Vif.to_string vif));
       Channel.write_buffer fd buf;
       with_flush (Channel.flush fd) @@ fun () ->
       Lwt_result.return (uuid, client_macaddr)
@@ -243,7 +247,7 @@ module Make(C: Sig.CONN) = struct
     with_read (Channel.read_exactly ~len:Init.sizeof fd) @@ fun bufs ->
     let buf = Cstruct.concat bufs in
     let init, _ = Init.unmarshal buf in
-    Log.info (fun f -> f "Client.negotiate: received %s" (Init.to_string init));
+    Log.info (fun f -> f "%s.negotiate: received %s" client_log_prefix (Init.to_string init));
     let buf = Cstruct.create Command.sizeof in
     let (_: Cstruct.t) = Command.marshal (Command.Ethernet uuid) buf in
     Channel.write_buffer fd buf;
@@ -252,7 +256,7 @@ module Make(C: Sig.CONN) = struct
     let buf = Cstruct.concat bufs in
     let open Lwt_result.Infix in
     Lwt.return (Vif.unmarshal buf) >>= fun (vif, _) ->
-    Log.debug (fun f -> f "Client.negotiate: vif %s" (Vif.to_string vif));
+    Log.debug (fun f -> f "%s.negotiate: vif %s" client_log_prefix (Vif.to_string vif));
     Lwt_result.return (vif)
 
   (* Use blocking I/O here so we can avoid Using Lwt_unix or Uwt. Ideally we
@@ -303,7 +307,7 @@ module Make(C: Sig.CONN) = struct
         Lwt.return_unit
       )
 
-  let make ~client_macaddr ~server_macaddr ~mtu ~client_uuid fd =
+  let make ~client_macaddr ~server_macaddr ~mtu ~client_uuid ~log_prefix fd =
     let fd = Some fd in
     let stats = Mirage_net.Stats.create () in
     let write_header = Cstruct.create (1024 * Packet.sizeof) in
@@ -317,7 +321,7 @@ module Make(C: Sig.CONN) = struct
     let callback _ = Lwt.return_unit in
     { fd; stats; client_macaddr; client_uuid; server_macaddr; mtu; write_header;
       write_m; pcap; pcap_size_limit; pcap_m; listeners; listening;
-      after_disconnect; after_disconnect_u; callback }
+      after_disconnect; after_disconnect_u; callback; log_prefix }
 
   type fd = C.flow
 
@@ -326,7 +330,8 @@ module Make(C: Sig.CONN) = struct
     let channel = Channel.create flow in
     server_negotiate ~fd:channel ~client_macaddr_of_uuid ~mtu
     >>= fun (client_uuid, client_macaddr) ->
-    let t = make ~client_macaddr ~server_macaddr ~mtu ~client_uuid channel in
+    let t = make ~client_macaddr ~server_macaddr ~mtu ~client_uuid
+      ~log_prefix:server_log_prefix channel in
     Lwt_result.return t
 
   let client_of_fd ~uuid ~server_macaddr flow =
@@ -337,21 +342,22 @@ module Make(C: Sig.CONN) = struct
     let t =
       make ~client_macaddr:vif.Vif.client_macaddr
         ~server_macaddr:server_macaddr ~mtu:vif.Vif.mtu ~client_uuid:uuid
+        ~log_prefix:client_log_prefix
         channel in
     Lwt_result.return t
 
   let disconnect t = match t.fd with
   | None    -> Lwt.return ()
   | Some fd ->
-    Log.info (fun f -> f "Vmnet.disconnect");
+    Log.info (fun f -> f "%s.disconnect" t.log_prefix);
     t.fd <- None;
-    Log.debug (fun f -> f "Vmnet.disconnect flushing channel");
+    Log.debug (fun f -> f "%s.disconnect flushing channel" t.log_prefix);
     (Channel.flush fd >|= function
       | Ok ()   -> ()
       | Error e ->
         Log.err (fun l ->
-            l "error while disconnecting the vmtnet connection: %a"
-              Channel.pp_write_error e);
+            l "%s error while disconnecting the vmtnet connection: %a"
+              t.log_prefix Channel.pp_write_error e);
     ) >|= fun () ->
     Lwt.wakeup_later t.after_disconnect_u ()
 
@@ -389,8 +395,8 @@ module Make(C: Sig.CONN) = struct
         let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
         if len > (t.mtu + ethernet_header_length) then begin
           Log.err (fun f ->
-              f "Dropping over-large ethernet frame, length = %d, mtu = \
-                 %d" len t.mtu
+              f "%s Dropping over-large ethernet frame, length = %d, mtu = \
+                 %d" t.log_prefix len t.mtu
             );
           Lwt_result.return ()
         end else begin
@@ -412,13 +418,13 @@ module Make(C: Sig.CONN) = struct
         end
       )
 
-  let err_eof () =
-    Log.err (fun f -> f "Vmnet.listen: read EOF so closing connection");
+  let err_eof t =
+    Log.err (fun f -> f "%s.listen: read EOF so closing connection" t.log_prefix);
     Lwt.return false
 
   let err_unexpected t pp e =
     Log.err (fun f ->
-        f "Vmnet.listen: caught unexpected %a: disconnecting" pp e);
+        f "%s listen: caught unexpected %a: disconnecting" t.log_prefix pp e);
     disconnect t >>= fun () ->
     Lwt.return false
 
@@ -429,7 +435,7 @@ module Make(C: Sig.CONN) = struct
   let with_read t x f =
     x >>= function
     | Error e      -> err_unexpected t Channel.pp_error e
-    | Ok `Eof      -> err_eof ()
+    | Ok `Eof      -> err_eof t
     | Ok (`Data x) -> f x
 
   let with_msg t x f =
@@ -438,7 +444,7 @@ module Make(C: Sig.CONN) = struct
     | Ok x           -> f x
 
   let listen t new_callback =
-    Log.info (fun f -> f "Vmnet.listen: rebinding the primary listen callback");
+    Log.info (fun f -> f "%s.listen: rebinding the primary listen callback" t.log_prefix);
     t.callback <- new_callback;
 
     let last_error_log = ref 0. in
@@ -466,7 +472,7 @@ module Make(C: Sig.CONN) = struct
              let now = Unix.gettimeofday () in
              if (now -. !last_error_log) > 30. then begin
                Log.err (fun f ->
-                   f "Vmnet.listen callback caught %a" Fmt.exn e);
+                   f "%s.listen callback caught %a" t.log_prefix Fmt.exn e);
                last_error_log := now;
              end;
              Lwt.return_unit
@@ -484,19 +490,19 @@ module Make(C: Sig.CONN) = struct
     begin
       if not t.listening then begin
         t.listening <- true;
-        Log.info (fun f -> f "Vmnet.listen: starting event loop");
+        Log.info (fun f -> f "%s.listen: starting event loop" t.log_prefix);
         loop ()
       end else begin
         (* Block forever without running a second loop() *)
-        Log.info (fun f -> f "Vmnet.listen: blocking until disconnect");
+        Log.info (fun f -> f "%s.listen: blocking until disconnect" t.log_prefix);
         t.after_disconnect
         >>= fun () ->
-        Log.info (fun f -> f "Vmnet.listen: disconnected");
+        Log.info (fun f -> f "%s.listen: disconnected" t.log_prefix);
         Lwt.return_unit
       end
     end
     >>= fun () ->
-    Log.info (fun f -> f "Vmnet.listen returning Ok()");
+    Log.info (fun f -> f "%s.listen returning Ok()" t.log_prefix);
     Lwt.return (Ok ())
 
   let write t buf =
@@ -505,8 +511,8 @@ module Make(C: Sig.CONN) = struct
         let len = Cstruct.len buf in
         if len > (t.mtu + ethernet_header_length) then begin
           Log.err (fun f ->
-              f "Dropping over-large ethernet frame, length = %d, mtu = \
-                 %d" len t.mtu
+              f "%s Dropping over-large ethernet frame, length = %d, mtu = \
+                 %d" t.log_prefix len t.mtu
             );
           Lwt.return (Ok ())
         end else begin
