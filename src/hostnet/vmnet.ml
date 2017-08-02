@@ -437,9 +437,9 @@ module Make(C: Sig.CONN) = struct
     | Ok x           -> f x
 
   let listen t new_callback =
-    Log.info (fun f -> f "PPP.listen: rebinding the primary listen callback");
+    Log.info (fun f -> f "Vmnet.listen: rebinding the primary listen callback");
     t.callback <- new_callback;
-    t.listening <- true;
+
     let last_error_log = ref 0. in
     let rec loop () =
       (with_fd t @@ fun fd ->
@@ -480,9 +480,22 @@ module Make(C: Sig.CONN) = struct
       | true  -> loop ()
       | false -> Lwt.return ()
     in
-    (* This blocks forever *)
-    loop ()
+    begin
+      if not t.listening then begin
+        t.listening <- true;
+        Log.info (fun f -> f "Vmnet.listen: starting event loop");
+        loop ()
+      end else begin
+        (* Block forever without running a second loop() *)
+        Log.info (fun f -> f "Vmnet.listen: blocking until disconnect");
+        t.after_disconnect
+        >>= fun () ->
+        Log.info (fun f -> f "Vmnet.listen: disconnected");
+        Lwt.return_unit
+      end
+    end
     >>= fun () ->
+    Log.info (fun f -> f "Vmnet.listen returning Ok()");
     Lwt.return (Ok ())
 
   let write t buf =
