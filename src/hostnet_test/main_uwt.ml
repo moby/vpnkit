@@ -7,9 +7,24 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Tests = Suite.Make(Host_uwt)
 
+let ppf, flush =
+  let b = Buffer.create 255 in
+  let flush () = let s = Buffer.contents b in Buffer.clear b; s in
+  Format.formatter_of_buffer b, flush
+
+let reporter =
+  let start = Unix.gettimeofday () in
+  fun () ->
+    let report _src level ~over k msgf =
+      let k _ = Printf.printf "%s%!" (flush ()); over (); k () in
+      msgf @@ fun ?header:_ ?tags:_ fmt ->
+      let t = Unix.gettimeofday () -. start in
+      Format.kfprintf k ppf ("%.5f [%a] @[" ^^ fmt ^^ "@]@.") t Logs.pp_level level in
+   { Logs.report }
+
 (* Run it *)
 let () =
-  Logs.set_reporter (Logs_fmt.reporter ());
+  Logs.set_reporter (reporter ());
   Lwt.async_exception_hook := (fun exn ->
       Log.err (fun f -> f "Lwt.async failure %s: %s"
                   (Printexc.to_string exn)
