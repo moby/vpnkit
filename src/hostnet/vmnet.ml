@@ -214,7 +214,7 @@ module Make(C: Sig.CONN) = struct
     with_read (Channel.read_exactly ~len:Init.sizeof fd) @@ fun bufs ->
     let buf = Cstruct.concat bufs in
     let init, _ = Init.unmarshal buf in
-    Log.info (fun f -> f "PPP.negotiate: received %s" (Init.to_string init));
+    Log.info (fun f -> f "Vmnet.negotiate: received %s" (Init.to_string init));
     let (_: Cstruct.t) = Init.marshal Init.default buf in
     Channel.write_buffer fd buf;
     with_flush (Channel.flush fd) @@ fun () ->
@@ -222,15 +222,15 @@ module Make(C: Sig.CONN) = struct
     let buf = Cstruct.concat bufs in
     with_msg (Command.unmarshal buf) @@ fun (command, _) ->
     Log.info (fun f ->
-        f "PPP.negotiate: received %s" (Command.to_string command));
+        f "Vmnet.negotiate: received %s" (Command.to_string command));
     match command with
-    | Command.Bind_ipv4 _ -> failf "PPP.negotiate: unsupported command Bind_ipv4"
+    | Command.Bind_ipv4 _ -> failf "Vmnet.negotiate: unsupported command Bind_ipv4"
     | Command.Ethernet uuid ->
       client_macaddr_of_uuid uuid >>= fun client_macaddr ->
       let vif = Vif.create client_macaddr mtu () in
       let buf = Cstruct.create Vif.sizeof in
       let (_: Cstruct.t) = Vif.marshal vif buf in
-      Log.info (fun f -> f "PPP.negotiate: sending %s" (Vif.to_string vif));
+      Log.info (fun f -> f "Vmnet.negotiate: sending %s" (Vif.to_string vif));
       Channel.write_buffer fd buf;
       with_flush (Channel.flush fd) @@ fun () ->
       Lwt_result.return (uuid, client_macaddr)
@@ -343,6 +343,7 @@ module Make(C: Sig.CONN) = struct
   let disconnect t = match t.fd with
   | None    -> Lwt.return ()
   | Some fd ->
+    Log.info (fun f -> f "Vmnet.disconnect");
     t.fd <- None;
     Log.debug (fun f -> f "Vmnet.disconnect flushing channel");
     (Channel.flush fd >|= function
@@ -411,13 +412,13 @@ module Make(C: Sig.CONN) = struct
         end
       )
 
-  let err_eof =
-    Log.debug (fun f -> f "PPP.listen: closing connection");
+  let err_eof () =
+    Log.err (fun f -> f "Vmnet.listen: read EOF so closing connection");
     Lwt.return false
 
   let err_unexpected t pp e =
     Log.err (fun f ->
-        f "PPP.listen: caught unexpected %a: disconnecting" pp e);
+        f "Vmnet.listen: caught unexpected %a: disconnecting" pp e);
     disconnect t >>= fun () ->
     Lwt.return false
 
@@ -428,7 +429,7 @@ module Make(C: Sig.CONN) = struct
   let with_read t x f =
     x >>= function
     | Error e      -> err_unexpected t Channel.pp_error e
-    | Ok `Eof      -> err_eof
+    | Ok `Eof      -> err_eof ()
     | Ok (`Data x) -> f x
 
   let with_msg t x f =
@@ -465,7 +466,7 @@ module Make(C: Sig.CONN) = struct
              let now = Unix.gettimeofday () in
              if (now -. !last_error_log) > 30. then begin
                Log.err (fun f ->
-                   f "PPP.listen callback caught %a" Fmt.exn e);
+                   f "Vmnet.listen callback caught %a" Fmt.exn e);
                last_error_log := now;
              end;
              Lwt.return_unit
