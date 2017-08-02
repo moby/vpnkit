@@ -102,6 +102,7 @@ module Make(Host: Sig.HOST) = struct
           DNS.gethostbyname ~server:primary_dns_ip resolver "www.google.com"
           >>= function
           | Ipaddr.V4 ip :: _ ->
+            Log.info (fun f -> f "Setting max connections to 0");
             Host.Sockets.set_max_connections (Some 0);
             begin
               Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
@@ -115,6 +116,7 @@ module Make(Host: Sig.HOST) = struct
                     f "Expected failure to connect to www.google.com")
             end
             >>= fun () ->
+            Log.info (fun f -> f "Removing connection limit");
             Host.Sockets.set_max_connections None;
             (* Check that connections work again *)
             begin
@@ -133,6 +135,7 @@ module Make(Host: Sig.HOST) = struct
                 f "Failed to look up an IPv4 address for www.google.com");
             failwith "http_fetch dns"
         ) (fun () ->
+          Log.info (fun f -> f "Removing connection limit");
           Host.Sockets.set_max_connections None;
           Lwt.return_unit
         )
