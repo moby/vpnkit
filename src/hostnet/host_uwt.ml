@@ -92,6 +92,9 @@ module Sockets = struct
       let idx = register_connection_no_limit description in
       Lwt.return idx
 
+  let register_connection_noexn description =
+    Lwt.catch (fun () -> register_connection description >>= fun idx -> Lwt.return (Some idx)) (fun _ -> Lwt.return None)
+
   let deregister_connection idx =
     if not(Hashtbl.mem connection_table idx) then begin
       Log.warn (fun f -> f "deregistered connection %d more than once" idx)
@@ -405,12 +408,18 @@ module Sockets = struct
 
       let connect ?(read_buffer_size = default_read_buffer_size) (ip, port) =
         let description = Fmt.strf "tcp:%a:%d" Ipaddr.pp_hum ip port in
-        register_connection description
-        >>= fun idx ->
-        let label, fd =
+        let label = match ip with
+          | Ipaddr.V4 _ -> "TCPv4"
+          | Ipaddr.V6 _ -> "TCPv6" in
+        register_connection_noexn description
+        >>= function
+        | None ->
+          errorf "Socket.%s.connect %s: hit connection limit" label description
+        | Some idx ->
+        let fd =
           try match ip with
-          | Ipaddr.V4 _ -> "TCPv4", Uwt.Tcp.init_ipv4_exn ()
-          | Ipaddr.V6 _ -> "TCPv6", Uwt.Tcp.init_ipv6_exn ()
+          | Ipaddr.V4 _ -> Uwt.Tcp.init_ipv4_exn ()
+          | Ipaddr.V6 _ -> Uwt.Tcp.init_ipv6_exn ()
           with e -> deregister_connection idx; raise e in
         Lwt.catch (fun () ->
             let sockaddr = make_sockaddr (ip, port) in
