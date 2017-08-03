@@ -63,7 +63,7 @@ depends: [
   "mirage-channel" {>= "3.0.1"}
   "mirage-console-unix"
   "mirage-clock-unix"
-  "cohttp" {>= "0.22.0"}
+  "cohttp-lwt" {>= "0.99.0"}
   "protocol-9p-unix" {>= "0.11.2"}
   "mirage-vnetif" {>= "0.4.0"}
   "uuidm"
