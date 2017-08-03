@@ -4,7 +4,7 @@ module type READ_INTO = sig
 
   val read_into: flow -> Cstruct.t ->
     (unit Mirage_flow.or_eof, error) result Lwt.t
-  (** Completely fills the given buffer with data from [fd] *)
+    (** Completely fills the given buffer with data from [fd] *)
 end
 
 module type FLOW_CLIENT = sig
@@ -14,8 +14,8 @@ module type FLOW_CLIENT = sig
 
   val connect: ?read_buffer_size:int -> address ->
     (flow, [`Msg of string]) result Lwt.t
-  (** [connect address] creates a connection to [address] and returns
-      he connected flow. *)
+    (** [connect address] creates a connection to [address] and returns
+        he connected flow. *)
 end
 
 module type CONN = sig

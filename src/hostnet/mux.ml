@@ -93,11 +93,11 @@ module Make (Netif: Mirage_net_lwt.S) = struct
     let t = { netif; rules; default_callback } in
     Lwt.async
       (fun () ->
-        Netif.listen netif @@ callback t >>= function
-        | Ok () -> Lwt.return_unit
-        | Error _e ->
-          Log.err (fun f -> f "Mux.connect calling Netif.listen: failed");
-          Lwt.return_unit
+         Netif.listen netif @@ callback t >>= function
+         | Ok () -> Lwt.return_unit
+         | Error _e ->
+           Log.err (fun f -> f "Mux.connect calling Netif.listen: failed");
+           Lwt.return_unit
       );
     Lwt.return (Ok t)
 

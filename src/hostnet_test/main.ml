@@ -18,7 +18,7 @@ let reporter =
       msgf @@ fun ?header:_ ?tags:_ fmt ->
       let t = Unix.gettimeofday () -. start in
       Format.kfprintf k ppf ("%.5f [%a] @[" ^^ fmt ^^ "@]@.") t Logs.pp_level level in
-   { Logs.report }
+    { Logs.report }
 
 (* Run it *)
 let () =

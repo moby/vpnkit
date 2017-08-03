@@ -331,7 +331,7 @@ module Make(C: Sig.CONN) = struct
     server_negotiate ~fd:channel ~client_macaddr_of_uuid ~mtu
     >>= fun (client_uuid, client_macaddr) ->
     let t = make ~client_macaddr ~server_macaddr ~mtu ~client_uuid
-      ~log_prefix:server_log_prefix channel in
+        ~log_prefix:server_log_prefix channel in
     Lwt_result.return t
 
   let client_of_fd ~uuid ~server_macaddr flow =
