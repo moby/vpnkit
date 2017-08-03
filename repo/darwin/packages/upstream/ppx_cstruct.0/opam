@@ -11,7 +11,7 @@ tags: [ "org:mirage" "org:ocamllabs" ]
 build: []
 depends: [
   "cstruct" {<"3.0.0"}
-  "ppx_deriving"
-  "ppx_tools"
+  "ppx_deriving" {build & >="4.0"}
+  "ppx_tools" {build}
 ]
 available: [ocaml-version >= "4.02.3"]

@@ -19,8 +19,8 @@ remove: ["ocamlfind" "remove" "mirage-profile"]
 depends: [
   "ocamlfind" {build}
   "cstruct" {>= "1.9.0"}
-  "ppx_cstruct"
-  "ppx_tools"
+  "ppx_cstruct" {build}
+  "ppx_tools" {build}
   "ocplib-endian"
   "io-page"
   "lwt"

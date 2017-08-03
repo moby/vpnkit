@@ -18,7 +18,7 @@ build-test: [
 
 depends: [
   "base-bytes"
-  "cstruct" {>= "1.9.0"}
+  "cstruct" {>= "1.9.0" & <"3.0.0"}
   "cstruct-lwt"
   "sexplib" {> "113.00.00"}
   "result"
@@ -32,6 +32,7 @@ depends: [
   "fmt"
   "logs" {>= "0.5.0"}
   "win-error"
+  "io-page" {< "2.0.0"}
   "ppx_deriving" {build}
   "ppx_sexp_conv" {build}
   "ocamlfind" {build}

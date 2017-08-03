@@ -32,7 +32,7 @@ depends: [
   "uri" {>= "1.9.0"}
   "fieldslib"
   "sexplib"
-  "conduit" {>= "0.14.0"}
+  "conduit" {>= "0.14.0" & <"0.16.0"}
   "ppx_fields_conv"
   "ppx_deriving" {build}
   "ppx_sexp_conv"
@@ -49,5 +49,6 @@ conflicts: [
   "async" {< "113.24.00"}
   "lwt" {< "2.5.0"}
   "js_of_ocaml" {< "2.8"}
+  "js_of_ocaml" {>= "3.0"}
 ]
 available: [ocaml-version >= "4.01.0"]

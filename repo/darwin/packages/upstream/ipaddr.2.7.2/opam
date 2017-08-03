@@ -31,8 +31,9 @@ depends: [
   "base-bytes"
   "sexplib"
   "ppx_deriving" {build}
-  "ppx_sexp_conv"
+  "ppx_sexp_conv" {build}
   "ounit" {test}
 ]
 depopts: [ "base-unix" ]
 available: [ ocaml-version >= "4.02.2" ]
+conflicts: [ "ppx_sexp_conv" {="113.33.00+4.03"} ]

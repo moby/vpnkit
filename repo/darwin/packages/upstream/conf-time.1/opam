@@ -1,0 +1,16 @@
+opam-version: "1.2"
+maintainer: "Gabriel Scherer <gabriel.scherer@gmail.com>"
+authors: ["POSIX"]
+homepage: "https://github.com/ocaml/opam-repository/"
+bug-reports: "https://github.com/ocaml/opam-repository/issues"
+dev-repo: "https://github.com/ocaml/opam-repository.git"
+license: "GPL"
+build: [["which" "time"]]
+depends: ["conf-which"]
+depexts: [
+  [["debian"] ["time"]]
+  [["ubuntu"] ["time"]]
+  [["centos"] ["time"]]
+  [["fedora"] ["time"]]
+  [["archlinux"] ["time"]]
+]
