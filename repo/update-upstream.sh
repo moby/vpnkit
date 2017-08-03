@@ -26,19 +26,26 @@ git clone --depth=1 ${OPAM_REPO} ${REPO_DIR_NAME}
 cd ${REPO_DIR_NAME}
 
 ## copy the dev/ and local/ packages in the repo
-cp -LR "${TARGET_DIR}/packages/dev" packages/dev
+[ -d  "${TARGET_DIR}/packages/dev" ] && \
+    cp -LR "${TARGET_DIR}/packages/dev" packages/dev
+[ -d "${TARGET_DIR}/packages/dev" ] && \
+    git add packages/dev
+
 cp -LR "${TARGET_DIR}/packages/local" packages/local
-git add packages/dev packages/local
+git add packages/local
+
 git commit -a -m "Adding local and dev packages"
 
 # Remove the upstream packages that are copied in /dev
-for pkg in $(ls packages/dev); do
-  upstream="packages/${pkg%%.*}/${pkg}"
-  if [ -d "${upstream}" ]; then
-    rm -rf "${upstream}"
-  fi
-done
-git commit -a -m "Remove upstream source of dev packages" || echo "ok"
+if [ -d  packages/dev ]; then
+  for pkg in $(ls packages/dev); do
+    upstream="packages/${pkg%%.*}/${pkg}"
+    if [ -d "${upstream}" ]; then
+      rm -rf "${upstream}"
+    fi
+  done;
+  git commit -a -m "Remove upstream source of dev packages" || echo "ok"
+fi
 
 ## Compute the list of packages needed
 

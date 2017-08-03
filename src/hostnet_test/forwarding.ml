@@ -13,25 +13,29 @@ let (>>*=) m f = m >>= function
 
 module Make(Host: Sig.HOST) = struct
 
-  let run ?(timeout=60.) t =
+  let run ?(timeout=Duration.of_sec 60) t =
     let timeout =
-      Host.Time.sleep timeout >>= fun () ->
+      Host.Time.sleep_ns timeout >>= fun () ->
       Lwt.fail_with "timeout"
     in
     Host.Main.run @@ Lwt.pick [ timeout; t ]
 
-  module Channel = Channel.Make(Host.Sockets.Stream.Tcp)
+  module Channel = Mirage_channel_lwt.Make(Host.Sockets.Stream.Tcp)
 
   module ForwardServer = struct
     (** Accept connections, read the forwarding header and run a proxy *)
+
+    module Proxy =
+      Mirage_flow_lwt.Proxy
+        (Mclock)(Host.Sockets.Stream.Tcp)(Host.Sockets.Stream.Tcp)
 
     let accept flow =
       let sizeof = 1 + 2 + 4 + 2 in
       let header = Cstruct.create sizeof in
       Host.Sockets.Stream.Tcp.read_into flow header >>= function
-      | `Eof -> failwith "EOF"
-      | `Error e -> failwith (Host.Sockets.Stream.Tcp.error_message e)
-      | `Ok () ->
+      | Ok `Eof -> failwith "EOF"
+      | Error e -> Fmt.kstrf failwith "%a" Host.Sockets.Stream.Tcp.pp_error e
+      | Ok (`Data ()) ->
         let ip_len = Cstruct.LE.get_uint16 header 1 in
         let ip =
           let bytes = Cstruct.(to_string @@ sub header 3 ip_len) in
@@ -44,14 +48,11 @@ module Make(Host: Sig.HOST) = struct
         Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 ip, port) >>= function
         | Error (`Msg x) -> failwith x
         | Ok remote ->
+          Mclock.connect () >>= fun clock ->
           Lwt.finalize (fun () ->
-              Mirage_flow.proxy
-                (module Clock)
-                (module Host.Sockets.Stream.Tcp) flow
-                (module Host.Sockets.Stream.Tcp) remote ()
-              >>= function
-              | `Error (`Msg m) -> failwith m
-              | `Ok (_l_stats, _r_stats) -> Lwt.return ()
+              Proxy.proxy clock flow remote >>= function
+              | Error e -> Fmt.kstrf failwith "%a" Proxy.pp_error e
+              | Ok (_l_stats, _r_stats) -> Lwt.return ()
             ) (fun () ->
               Host.Sockets.Stream.Tcp.close remote
             )
@@ -69,7 +70,7 @@ module Make(Host: Sig.HOST) = struct
     }
   end
 
-  module Forward = Forward.Make(struct
+  module Forward = Forward.Make(Mclock)(struct
       include Host.Sockets.Stream.Tcp
 
       open Lwt.Infix
@@ -89,7 +90,8 @@ module Make(Host: Sig.HOST) = struct
     module Server = Protocol_9p.Server.Make(Log)(Host.Sockets.Stream.Tcp)(Ports)
 
     let with_server f =
-      let ports = Ports.make () in
+      Mclock.connect () >>= fun clock ->
+      let ports = Ports.make clock in
       Ports.set_context ports "";
       Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
       >>= fun server ->
@@ -120,11 +122,14 @@ module Make(Host: Sig.HOST) = struct
 
   let read_http ch =
     let rec loop acc =
-      Channel.read_line ch >>= fun bufs ->
-      let txt = Cstruct.(to_string (concat bufs)) in
-      if txt = ""
-      then Lwt.return acc
-      else loop (acc ^ txt)
+      Channel.read_line ch >>= function
+      | Ok `Eof
+      | Error _ -> Lwt.return acc
+      | Ok (`Data bufs) ->
+        let txt = Cstruct.(to_string (concat bufs)) in
+        if txt = ""
+        then Lwt.return acc
+        else loop (acc ^ txt)
     in
     loop ""
 
@@ -141,7 +146,9 @@ module Make(Host: Sig.HOST) = struct
       then failwith (Printf.sprintf "unrecognised HTTP GET: [%s]" request);
       let response = "HTTP/1.0 404 Not found\r\ncontent-length: 0\r\n\r\n" in
       Channel.write_string ch response 0 (String.length response);
-      Channel.flush ch
+      Channel.flush ch >|= function
+      | Ok ()   -> ()
+      | Error e -> Fmt.kstrf failwith "%a" Channel.pp_write_error e
 
     let create () =
       Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
@@ -181,13 +188,13 @@ module Make(Host: Sig.HOST) = struct
 
     type forward = {
       t: t;
-      fid: Protocol_9p_types.Fid.t;
+      fid: Protocol_9p.Types.Fid.t;
       ip: Ipaddr.V4.t;
       port: int;
     }
 
     let create t string =
-      let mode = Protocol_9p_types.FileMode.make ~is_directory:true
+      let mode = Protocol_9p.Types.FileMode.make ~is_directory:true
           ~owner:[`Read; `Write; `Execute] ~group:[`Read; `Execute]
           ~other:[`Read; `Execute ] () in
       Client.mkdir t.ninep [] string mode
@@ -196,7 +203,7 @@ module Make(Host: Sig.HOST) = struct
       >>*= fun fid ->
       Client.walk_from_root t.ninep fid [ string; "ctl" ]
       >>*= fun _walk ->
-      Client.LowLevel.openfid t.ninep fid Protocol_9p_types.OpenMode.read_write
+      Client.LowLevel.openfid t.ninep fid Protocol_9p.Types.OpenMode.read_write
       >>*= fun _open ->
       let buf = Cstruct.create (String.length string) in
       Cstruct.blit_from_string string 0 buf 0 (String.length string);
@@ -204,7 +211,7 @@ module Make(Host: Sig.HOST) = struct
       >>*= fun _write ->
       Client.LowLevel.read t.ninep fid 0L 1024l
       >>*= fun read ->
-      let response = Cstruct.to_string read.Protocol_9p_response.Read.data in
+      let response = Cstruct.to_string read.Protocol_9p.Response.Read.data in
       if Astring.String.is_prefix ~affix:"OK " response then begin
         let line = String.sub response 3 (String.length response - 3) in
         (* tcp:127.0.0.1:64500:tcp:127.0.0.1:64499 *)
@@ -229,15 +236,15 @@ module Make(Host: Sig.HOST) = struct
     let ch = Channel.create flow in
     let message = "GET / HTTP/1.0\r\nconnection: close\r\n\r\n" in
     Channel.write_string ch message 0 (String.length message);
-    Channel.flush ch
-    >>= fun () ->
-    Host.Sockets.Stream.Tcp.shutdown_write flow
-    >>= fun () ->
-    read_http ch
-    >>= fun response ->
-    if not(Astring.String.is_prefix ~affix:"HTTP" response)
-    then failwith (Printf.sprintf "unrecognised HTTP response: [%s]" response);
-    Lwt.return ()
+    Channel.flush ch >>= function
+    | Error e -> Fmt.kstrf failwith "%a" Channel.pp_write_error e
+    | Ok ()   ->
+      Host.Sockets.Stream.Tcp.shutdown_write flow
+      >>= fun () ->
+      read_http ch
+      >|= fun response ->
+      if not(Astring.String.is_prefix ~affix:"HTTP" response)
+      then failwith (Printf.sprintf "unrecognised HTTP response: [%s]" response)
 
   let test_one_forward () =
     let t = LocalServer.with_server (fun server ->

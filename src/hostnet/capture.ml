@@ -1,3 +1,5 @@
+open Lwt.Infix
+
 let src =
   let src = Logs.Src.create "capture" ~doc:"capture network traffic" in
   Logs.Src.set_level src (Some Logs.Info);
@@ -7,14 +9,21 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Make(Input: Sig.VMNET) = struct
 
+  type page_aligned_buffer = Io_page.t
+  type buffer = Cstruct.t
+  type macaddr = Macaddr.t
+  type 'a io = 'a Lwt.t
   type fd = Input.fd
+  type error = [Mirage_device.error | `Unknown of string]
 
-  type stats = {
-    mutable rx_bytes: int64;
-    mutable rx_pkts: int32;
-    mutable tx_bytes: int64;
-    mutable tx_pkts: int32;
-  }
+  let pp_error ppf = function
+  | #Mirage_device.error as e -> Mirage_device.pp_error ppf e
+  | `Unknown s -> Fmt.pf ppf "unknown: %s" s
+
+  let lift_error = function
+  | Ok x    -> Ok x
+  | Error (#Mirage_device.error as e) -> Error e
+  | Error e -> Fmt.kstrf (fun s -> Error (`Unknown s)) "%a" Input.pp_error e
 
   type packet = {
     len: int;
@@ -139,7 +148,7 @@ module Make(Input: Sig.VMNET) = struct
   type t = {
     input: Input.t;
     rules: (string, rule) Hashtbl.t;
-    stats: stats;
+    stats: Mirage_net.stats;
   }
 
   let add_match ~t ~name ~limit ~snaplen ~predicate =
@@ -152,15 +161,13 @@ module Make(Input: Sig.VMNET) = struct
 
   let connect input =
     let rules = Hashtbl.create 7 in
-    let stats = {
-      rx_bytes = 0L; rx_pkts = 0l; tx_bytes = 0L; tx_pkts = 0l;
-    } in
+    let stats = Mirage_net.Stats.create () in
     let t = { input; rules; stats } in
     (* Add a special capture rule for packets for which there is an error
        processing the packet captures. Ideally there should be no matches! *)
     add_match ~t ~name:bad_pcap ~limit:1048576 ~snaplen:1500
       ~predicate:(fun _ -> false);
-    Lwt.return (`Ok t)
+    t
 
   let filesystem t =
     Vfs.Dir.of_list (fun () ->
@@ -188,33 +195,19 @@ module Make(Input: Sig.VMNET) = struct
 
   let write t buf =
     record t [ buf ];
-    Input.write t.input buf
+    Input.write t.input buf >|= lift_error
+
   let writev t bufs =
     record t bufs;
-    Input.writev t.input bufs
+    Input.writev t.input bufs >|= lift_error
 
   let listen t callback =
     Input.listen t.input (fun buf -> record t [ buf ]; callback buf)
+    >|= lift_error
 
   let add_listener t callback = Input.add_listener t.input callback
 
   let mac t = Input.mac t.input
-
-  type page_aligned_buffer = Io_page.t
-
-  type buffer = Cstruct.t
-
-  type error = [
-    | `Unknown of string
-    | `Unimplemented
-    | `Disconnected
-  ]
-
-  type macaddr = Macaddr.t
-
-  type 'a io = 'a Lwt.t
-
-  type id = unit
 
   let get_stats_counters t = t.stats
 

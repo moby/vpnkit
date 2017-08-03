@@ -1,0 +1,21 @@
+opam-version: "1.2"
+maintainer:   "sheets@alum.mit.edu"
+homepage:     "https://github.com/backtracking/ocaml-hashcons"
+dev-repo:     "https://github.com/backtracking/ocaml-hashcons.git"
+bug-reports:  "https://github.com/backtracking/ocaml-hashcons/issues"
+authors:      [ "Jean-Christophe Filliatre" ]
+license: "LGPL-2.1 with OCaml linking exception"
+build: [
+  ["autoconf"]
+  ["./configure"]
+  [make "all"]
+]
+install: [
+  [make "install"]
+]
+remove: [["ocamlfind" "remove" "hashcons"]]
+depends: [
+  "conf-autoconf" {build}
+  "ocamlfind" {build}
+  "conf-which" {build}
+]

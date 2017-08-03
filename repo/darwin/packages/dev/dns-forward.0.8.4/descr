@@ -1,7 +1,0 @@
-DNS resolution and forwarding
-
-A library to help the construction of DNS resolvers or forwarding servers.
-Given a configuration which names upstream resolvers and policy (e.g. only
-use these servers for names within this domain), allow the creation of
-Resolvers which answer DNS questions and of forwarding servers which listen
-for requests and forward them appropriately.

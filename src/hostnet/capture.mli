@@ -2,8 +2,7 @@ module Make(Input: Sig.VMNET): sig
   include Sig.VMNET
   include Sig.RECORDER with type t := t
 
-  val connect: Input.t
-    -> [ `Ok of t | `Error of error ] Lwt.t
+  val connect: Input.t -> t
   (** Capture traffic from a network, match against a set of capture rules
       and keep a limited amount of the most recent traffic that matches. *)
 

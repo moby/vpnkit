@@ -1,0 +1,19 @@
+opam-version: "1.2"
+maintainer: "Hannes Mehnert <hannes@mehnert.org>"
+authors: ["Hannes Mehnert <hannes@mehnert.org>"]
+homepage: "https://github.com/hannesm/randomconv"
+doc: "https://hannesm.github.io/randomconv/doc"
+dev-repo: "https://github.com/hannesm/randomconv.git"
+bug-reports: "https://github.com/hannesm/randomconv/issues"
+license: "ISC"
+
+depends: [
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "topkg" {build}
+  "cstruct" {>= "1.9.0"}
+]
+
+build: [
+  [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" ]
+]

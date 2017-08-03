@@ -1,0 +1,32 @@
+opam-version: "1.2"
+maintainer:   "anil@recoil.org"
+homepage:     "https://github.com/mirage/ocaml-dns"
+dev-repo:     "https://github.com/mirage/ocaml-dns.git"
+bug-reports:  "https://github.com/mirage/ocaml-dns/issues"
+doc:          "https://mirage.github.io/ocaml-dns/"
+authors: [
+  "Anil Madhavapeddy" "Tim Deegan" "Richard Mortier"
+  "Haris Rotsos" "David Sheets" "Thomas Gazagnaire"
+  "Luke Dunstan" "David Scott"
+]
+license: "ISC"
+tags: [ "org:mirage" "org:xapi-project" ]
+
+build: [
+  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+
+depends: [
+  "base-bytes"
+  "jbuilder"         {>= "1.0+beta9"}
+  "cstruct"          {>= "3.0.2"}
+  "ppx_cstruct"      {build}
+  "re"
+  "ipaddr"           {>= "2.6.0"}
+  "uri"              {>= "1.7.0"}
+  "base64"           {>= "2.0.0"}
+  "hashcons"
+  "result"
+]
+available: [ocaml-version >= "4.03.0"]

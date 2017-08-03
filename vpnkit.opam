@@ -31,39 +31,42 @@ depends: [
   "jbuilder"   {build}
   "alcotest"   {test}
   "result"
-  "tar-format" {= "0.6.1"}
+  "tar" {>= "0.8.0"}
   "ipaddr"
-  "lwt" { >= "2.7.0" }
-  "uwt" { >= "0.0.4" }
-  "tcpip" { = "999" }
-  "pcap-format"
-  "dns" { = "999" }
-  "dnssd" { >= "0.2" }
+  "lwt" {>= "2.7.0"}
+  "uwt" {>= "0.0.4"}
+  "tcpip" {>= "3.1.4"}
+  "dns" {>= "0.19.1"}
+  "dns-lwt"
+  "dnssd" {>= "0.2"}
   "dns-forward"
-  "datakit-server"
-  "hashcons" {= "1.0.1"}
-  "pcap-format" { >= "0.4.0" }
+  "cstruct-lwt" {>= "3.0.0"}
+  "datakit-server" {>= "0.11.0"}
+  "datakit-server-9p" {>= "0.11.0"}
+  "hashcons" {>= "1.0.1"}
+  "pcap-format" {>= "0.4.0"}
   "cmdliner"
-  "charrua-core" { >= "0.3" }
-  "named-pipe" { >= "0.4.0" }
-  "hvsock" { >= "0.13.0" }
+  "charrua-core" {>= "0.3"}
+  "charrua-client-mirage" {test}
+  "named-pipe" {>= "0.4.0"}
+  "hvsock" {>= "0.13.0"}
   "asl"
   "win-eventlog"
-  "fd-send-recv"
+  "fd-send-recv" {>= "1.0.3"}
   "logs"
   "fmt"
   "astring"
-  "mirage-flow" { = "1.1.0" }
-  "mirage-http"
-  "cohttp"
-  "channel"
-  "mirage-types-lwt" { = "2.8.999" }
-  "protocol-9p" { = "0.8.0" }
-  "cstruct" {< "3.0.0"}
-  "ounit" {test}
-  "alcotest" {test}
-  "mirage-vnetif" { = "0.2.0" }
-  "mirage-conduit" { = "2.2.0" }
+  "mirage-flow-lwt" {>= "1.4.0"}
+  "mirage-time-lwt" {>= "1.1.0"}
+  "mirage-time-unix"
+  "mirage-protocols" {>= "1.1.0"}
+  "mirage-channel" {>= "3.0.1"}
+  "mirage-console-unix"
+  "mirage-clock-unix"
+  "cohttp-lwt" {>= "0.99.0"}
+  "mirage-dns"
+  "protocol-9p-unix" {>= "0.11.2"}
+  "mirage-vnetif" {>= "0.4.0"}
   "uuidm"
   "ezjsonm"
 ]

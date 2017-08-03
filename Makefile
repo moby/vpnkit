@@ -30,8 +30,6 @@ src/bin/depends.ml: src/bin/depends.ml.in
 	cp src/bin/depends.ml src/bin/depends.tmp
 	sed -e 's/££VERSION££/$(shell git rev-parse HEAD)/g' src/bin/depends.tmp > src/bin/depends.ml
 	cp src/bin/depends.ml src/bin/depends.tmp
-	sed -e 's/££HOSTNET_PINNED££/$(shell opam info hostnet -f pinned)/g' src/bin/depends.tmp > src/bin/depends.ml
-	cp src/bin/depends.ml src/bin/depends.tmp
 	sed -e 's/££HVSOCK_PINNED££/$(shell opam info hvsock -f pinned)/g' src/bin/depends.tmp > src/bin/depends.ml
 
 vpnkit.tgz: vpnkit.exe

@@ -3,12 +3,12 @@ module type READ_INTO = sig
   type error
 
   val read_into: flow -> Cstruct.t ->
-    [ `Eof | `Error of error | `Ok of unit ] Lwt.t
+    (unit Mirage_flow.or_eof, error) result Lwt.t
   (** Completely fills the given buffer with data from [fd] *)
 end
 
 module type FLOW_CLIENT = sig
-  include Mirage_flow_s.SHUTDOWNABLE
+  include Mirage_flow_lwt.SHUTDOWNABLE
 
   type address
 
@@ -19,7 +19,7 @@ module type FLOW_CLIENT = sig
 end
 
 module type CONN = sig
-  include V1_LWT.FLOW
+  include Mirage_flow_lwt.S
 
   include READ_INTO
     with type flow := flow
@@ -166,8 +166,7 @@ module type HOST = sig
     include FILES
   end
 
-  module Time: V1_LWT.TIME
-  module Clock: V1.CLOCK
+  module Time: Mirage_time_lwt.S
 
   module Dns: sig
     include DNS
@@ -199,7 +198,7 @@ end
 module type VMNET = sig
   (** A virtual ethernet link to the VM *)
 
-  include V1_LWT.NETWORK
+  include Mirage_net_lwt.S
 
   val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
   (** Add a callback which will be invoked in parallel with all received packets *)

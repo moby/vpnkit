@@ -88,9 +88,9 @@ module Exclude = struct
 end
 
 module Make
-    (Ip: V1_LWT.IPV4 with type prefix = Ipaddr.V4.t)
-    (Udp: V1_LWT.UDPV4)
-    (Tcp:Mirage_flow_s.SHUTDOWNABLE)
+    (Ip: Mirage_protocols_lwt.IPV4)
+    (Udp: Mirage_protocols_lwt.UDPV4)
+    (Tcp:Mirage_flow_lwt.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
 = struct
@@ -200,13 +200,13 @@ module Make
     Lwt.return (Ok t)
 
   module Incoming = struct
-    module C = Channel.Make(Tcp)
+    module C = Mirage_channel_lwt.Make(Tcp)
     module IO = Cohttp_mirage_io.Make(C)
     module Request = Cohttp.Request.Make(IO)
     module Response = Cohttp.Response.Make(IO)
   end
   module Outgoing = struct
-    module C = Channel.Make(Socket.Stream.Tcp)
+    module C = Mirage_channel_lwt.Make(Socket.Stream.Tcp)
     module IO = Cohttp_mirage_io.Make(C)
     module Request = Cohttp.Request.Make(IO)
     module Response = Cohttp.Response.Make(IO)
@@ -330,38 +330,40 @@ module Make
 
   (* forward outgoing to ingoing *)
   let a_t flow ~incoming ~outgoing =
+    let warn pp e =
+      Log.warn (fun f -> f "Unexpected exeption %a in proxy" pp e);
+    in
     let rec loop () =
-      Lwt.catch (fun () ->
-          Outgoing.C.read_some outgoing >>= fun buf ->
+      (Outgoing.C.read_some outgoing >>= function
+        | Ok `Eof        -> Lwt.return false
+        | Error e        -> warn Outgoing.C.pp_error e; Lwt.return false
+        | Ok (`Data buf) ->
           Incoming.C.write_buffer incoming buf;
-          Incoming.C.flush incoming >|= fun () ->
-          true
-        ) (function
-        | End_of_file -> Lwt.return false
-        | e ->
-          Log.warn (fun f ->
-              f "Possibly unexpected exeption %a in proxy" Fmt.exn e);
-          Lwt.return false)
-      >>= fun continue ->
+          Incoming.C.flush incoming >|= function
+          | Ok ()         -> true
+          | Error `Closed -> false
+          | Error e       -> warn Incoming.C.pp_write_error e; false
+      ) >>= fun continue ->
       if continue then loop () else Tcp.shutdown_write flow
     in
     loop ()
 
   (* forward ingoing to outgoing *)
   let b_t remote ~incoming ~outgoing =
+    let warn pp e =
+      Log.warn (fun f -> f "Unexpected exeption %a in proxy" pp e);
+    in
     let rec loop () =
-      Lwt.catch (fun () ->
-          Incoming.C.read_some incoming >>= fun buf ->
+      (Incoming.C.read_some incoming >>= function
+        | Ok `Eof        -> Lwt.return false
+        | Error e        -> warn Incoming.C.pp_error e; Lwt.return false
+        | Ok (`Data buf) ->
           Outgoing.C.write_buffer outgoing buf;
-          Outgoing.C.flush outgoing >|= fun () ->
-          true
-        ) (function
-        | End_of_file -> Lwt.return false
-        | e ->
-          Log.warn (fun f ->
-              f "Possibly unexpected exeption %a in proxy" Fmt.exn e);
-          Lwt.return false)
-      >>= fun continue ->
+          Outgoing.C.flush outgoing >|= function
+          | Ok ()         -> true
+          | Error `Closed -> false
+          | Error e       -> warn Outgoing.C.pp_write_error e; false
+      ) >>= fun continue ->
       if continue then loop () else Socket.Stream.Tcp.shutdown_write remote
     in
     loop ()

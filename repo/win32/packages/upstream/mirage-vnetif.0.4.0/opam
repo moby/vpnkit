@@ -1,0 +1,30 @@
+opam-version: "1.2"
+name: "mirage-vnetif"
+maintainer: "Magnus Skjegstad <magnus@skjegstad.com>"
+authors: "Magnus Skjegstad <magnus@skjegstad.com>"
+homepage: "https://github.com/mirage/mirage-vnetif"
+bug-reports: "https://github.com/mirage/mirage-vnetif/issues/"
+dev-repo: "https://github.com/mirage/mirage-vnetif.git"
+doc: "https://docs.mirage.io/mirage-vnetif"
+license: "ISC"
+
+build: [
+  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+
+depends: [
+  "jbuilder"  {build & >="1.0+beta7"}
+  "lwt"
+  "mirage-time-lwt" {>= "1.0.0"}
+  "mirage-clock-lwt" {>= "1.2.0"}
+  "mirage-net-lwt" {>= "1.0.0"}
+  "cstruct" {>="2.4.0"}
+  "ipaddr"
+  "io-page"
+  "mirage-profile"
+  "duration"
+  "result"
+  "logs"
+]
+tags: ["org:mirage"]

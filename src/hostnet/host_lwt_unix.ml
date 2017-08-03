@@ -19,6 +19,22 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
+module Common = struct
+  (** FLOW boilerplate *)
+
+  type 'a io = 'a Lwt.t
+  type buffer = Cstruct.t
+  type error = [`Msg of string]
+  type write_error = [Mirage_flow.write_error | error]
+  let pp_error ppf (`Msg x) = Fmt.string ppf x
+
+  let pp_write_error ppf = function
+  | #Mirage_flow.write_error as e -> Mirage_flow.pp_write_error ppf e
+  | #error as e                   -> pp_error ppf e
+
+  let errorf fmt = Fmt.kstrf (fun s -> Lwt_result.fail (`Msg s)) fmt
+end
+
 module Sockets = struct
 
   let max_connections = ref None
@@ -101,8 +117,7 @@ module Sockets = struct
     in
     Lwt.catch (fun () ->
         Lwt_unix.setsockopt fd Lwt_unix.SO_REUSEADDR true;
-        Lwt_unix.Versioned.bind_2 fd addr
-        >|= fun () ->
+        Lwt_unix.bind fd addr >|= fun () ->
         idx, fd
       ) (fun e ->
         Lwt_unix.close fd
@@ -148,12 +163,7 @@ module Sockets = struct
     type address = Ipaddr.t * int
 
     module Udp = struct
-
-      (* FLOW boilerplate *)
-      type 'a io = 'a Lwt.t
-      type buffer = Cstruct.t
-      type error = [`Msg of string]
-      let error_message (`Msg x) = x
+      include Common
 
       type flow = {
         mutable idx: int option;
@@ -185,19 +195,19 @@ module Sockets = struct
         (* Win32 requires all sockets to be bound however macOS and
            Linux don't *)
         Lwt.catch (fun () ->
-            Lwt_unix.Versioned.bind_2 fd (Lwt_unix.ADDR_INET(addr, 0))
+            Lwt_unix.bind fd (Lwt_unix.ADDR_INET(addr, 0))
           ) (fun _ -> Lwt.return_unit)
         >|= fun () ->
         let sockaddr = sockaddr_of_address address in
         Ok (of_fd ~idx ~description ?read_buffer_size sockaddr address fd)
 
       let read t = match t.fd, t.already_read with
-      | None, _ -> Lwt.return `Eof
+      | None, _ -> Lwt.return (Ok `Eof)
       | Some _, Some data when Cstruct.len data > 0 ->
         t.already_read <- Some (Cstruct.sub data 0 0); (* next read is `Eof *)
-        Lwt.return (`Ok data)
+        Lwt.return (Ok (`Data data))
       | Some _, Some _ ->
-        Lwt.return `Eof
+        Lwt.return (Ok `Eof)
       | Some fd, None ->
         let buffer = Cstruct.create t.read_buffer_size in
         let bytes = Bytes.make t.read_buffer_size '\000' in
@@ -207,29 +217,29 @@ module Sockets = struct
             >>= fun (n, _) ->
             Cstruct.blit_from_bytes bytes 0 buffer 0 n;
             let response = Cstruct.sub buffer 0 n in
-            Lwt.return (`Ok response)
+            Lwt.return (Ok (`Data response))
           ) (fun e ->
             Log.err (fun f ->
                 f "%s: recvfrom caught %a returning Eof" (string_of_flow t)
                   Fmt.exn e);
-            Lwt.return `Eof
+            Lwt.return (Ok `Eof)
           )
 
       let write t buf = match t.fd with
-      | None -> Lwt.return `Eof
+      | None -> Lwt.return (Error `Closed)
       | Some fd ->
         Lwt.catch (fun () ->
             (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
             let bytes = Bytes.make (Cstruct.len buf) '\000' in
             Cstruct.blit_to_bytes buf 0 bytes 0 (Cstruct.len buf);
             Lwt_unix.sendto fd bytes 0 (Bytes.length bytes) [] t.sockaddr
-            >>= fun _n ->
-            Lwt.return (`Ok ())
+            >|= fun _n ->
+            Ok ()
           ) (fun e ->
             Log.err (fun f ->
                 f "%s: sendto caught %a returning Eof" (string_of_flow t)
                   Fmt.exn e);
-            Lwt.return `Eof
+            Lwt.return (Error `Closed)
           )
 
       let writev t bufs = write t (Cstruct.concat bufs)
@@ -365,6 +375,9 @@ module Sockets = struct
     (* Using Lwt_unix we share an implementation across various
        transport types *)
     module Fd = struct
+
+      include Common
+
       type flow = {
         idx: int;
         description: string;
@@ -373,10 +386,6 @@ module Sockets = struct
         mutable read_buffer: Cstruct.t;
         mutable closed: bool;
       }
-
-      type error = [`Msg of string]
-      let error_message (`Msg x) = x
-      let errorf fmt = Fmt.kstrf (fun s -> Lwt_result.fail (`Msg s)) fmt
 
       let of_fd
           ~idx ?(read_buffer_size = default_read_buffer_size) ~description fd
@@ -410,7 +419,7 @@ module Sockets = struct
           Lwt.return ()
 
       let read t =
-        if t.closed then Lwt.return `Eof
+        if t.closed then Lwt.return (Ok `Eof)
         else begin
           if Cstruct.len t.read_buffer = 0
           then t.read_buffer <- Cstruct.create t.read_buffer_size;
@@ -418,43 +427,43 @@ module Sockets = struct
               Lwt_bytes.read t.fd t.read_buffer.Cstruct.buffer
                 t.read_buffer.Cstruct.off t.read_buffer.Cstruct.len
               >|= function
-              | 0 -> `Eof
+              | 0 -> Ok `Eof
               | n ->
                 let results = Cstruct.sub t.read_buffer 0 n in
                 t.read_buffer <- Cstruct.shift t.read_buffer n;
-                `Ok results
+                Ok (`Data results)
             ) (fun e ->
               Log.err (fun f ->
                   f "Socket.TCPV4.read %s: caught %a returning Eof"
                     t.description Fmt.exn e);
-              Lwt.return `Eof
+              Lwt.return (Ok `Eof)
             )
         end
 
       let read_into t buffer =
-        if t.closed then Lwt.return `Eof
+        if t.closed then Lwt.return (Ok `Eof)
         else Lwt.catch (fun () ->
             Lwt_cstruct.(complete (read t.fd) buffer) >|= fun () ->
-            `Ok ()
-          ) (fun _e -> Lwt.return `Eof)
+            Ok (`Data ())
+          ) (fun _e -> Lwt.return (Ok `Eof))
 
       let write t buf =
-        if t.closed then Lwt.return `Eof
+        if t.closed then Lwt.return (Error `Closed)
         else Lwt.catch (fun () ->
             Lwt_cstruct.(complete (write t.fd) buf) >|= fun () ->
-            `Ok ()
+            Ok ()
           ) (fun e ->
             Log.err (fun f ->
                 f "Socket.TCPV4.write %s: caught %a returning Eof" t.description
                   Fmt.exn e);
-            Lwt.return `Eof
+            Lwt.return (Error `Closed)
           )
 
       let writev t bufs =
         let rec loop = function
-        | []          -> Lwt.return (`Ok ())
+        | []          -> Lwt.return (Ok ())
         | buf :: bufs ->
-          if t.closed then Lwt.return `Eof
+          if t.closed then Lwt.return (Error `Closed)
           else
             Lwt_cstruct.(complete (write t.fd) buf) >>= fun () ->
             loop bufs
@@ -465,7 +474,7 @@ module Sockets = struct
              Log.err (fun f ->
                  f "Socket.TCPV4.writev %s: caught %a returning Eof"
                    t.description Fmt.exn e);
-             Lwt.return `Eof
+             Lwt.return (Error `Closed)
           )
 
       let close t =
@@ -561,9 +570,6 @@ module Sockets = struct
               )
           ) server.listening_fds
 
-      (* FLOW boilerplate *)
-      type 'a io = 'a Lwt.t
-      type buffer = Cstruct.t
     end
 
     module Tcp = struct
@@ -627,8 +633,7 @@ module Sockets = struct
           register_connection description >>= fun idx ->
           let s = Lwt_unix.socket Lwt_unix.PF_UNIX Lwt_unix.SOCK_STREAM 0 in
           Lwt.catch (fun () ->
-              Lwt_unix.Versioned.bind_2 s (Lwt_unix.ADDR_UNIX path)
-              >|= fun () ->
+              Lwt_unix.bind s (Lwt_unix.ADDR_UNIX path) >|= fun () ->
               make ~path [ idx, s ]
             ) (fun e ->
               Lwt_unix.close s >>= fun () ->
@@ -739,29 +744,7 @@ module Files = struct
   let unwatch = Lwt.cancel
 end
 
-module Time = struct
-  type 'a io = 'a Lwt.t
-
-  let sleep = Lwt_unix.sleep
-end
-
-module Clock = struct
-  type tm =
-    { tm_sec: int;
-      tm_min: int;
-      tm_hour: int;
-      tm_mday: int;
-      tm_mon: int;
-      tm_year: int;
-      tm_wday: int;
-      tm_yday: int;
-      tm_isdst: bool;
-    }
-
-  let time = Unix.gettimeofday
-
-  let gmtime _ = failwith "gmtime unimplemented"
-end
+module Time = Time
 
 module Dns = struct
 

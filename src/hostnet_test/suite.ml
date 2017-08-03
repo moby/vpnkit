@@ -16,9 +16,9 @@ module Make(Host: Sig.HOST) = struct
   module Slirp_stack = Slirp_stack.Make(Host)
   open Slirp_stack
 
-  let run_test ?(timeout=60.) t =
+  let run_test ?(timeout=Duration.of_sec 60) t =
     let timeout =
-      Host.Time.sleep timeout >>= fun () ->
+      Host.Time.sleep_ns timeout >>= fun () ->
       Lwt.fail_with "timeout"
     in
     Host.Main.run @@ Lwt.pick [ timeout; t ]
@@ -34,14 +34,15 @@ module Make(Host: Sig.HOST) = struct
     run t
 
   let set_dns_policy ?host_names use_host =
+    Mclock.connect () >|= fun clock ->
     Dns_policy.remove ~priority:3;
     Dns_policy.add ~priority:3
       ~config:(if use_host then `Host else Dns_policy.google_dns);
-    Slirp_stack.Debug.update_dns ?host_names ()
+    Slirp_stack.Debug.update_dns ?host_names clock
 
   let test_dns_query server use_host () =
-    set_dns_policy use_host;
     let t _ stack =
+      set_dns_policy use_host >>= fun () ->
       let resolver = DNS.create stack in
       DNS.gethostbyname ~server resolver "www.google.com" >|= function
       | (_ :: _) as ips ->
@@ -54,8 +55,9 @@ module Make(Host: Sig.HOST) = struct
 
   let test_builtin_dns_query server use_host () =
     let name = "experimental.host.name.localhost" in
-    set_dns_policy ~host_names:[ Dns.Name.of_string name ] use_host;
     let t _ stack =
+      set_dns_policy ~host_names:[ Dns.Name.of_string name ] use_host
+      >>= fun () ->
       let resolver = DNS.create stack in
       DNS.gethostbyname ~server resolver name >>= function
       | (_ :: _) as ips ->
@@ -68,9 +70,9 @@ module Make(Host: Sig.HOST) = struct
     run t
 
   let test_etc_hosts_query server use_host () =
-    set_dns_policy use_host;
     let test_name = "vpnkit.is.cool.yes.really" in
     let t _ stack =
+      set_dns_policy use_host >>= fun () ->
       let resolver = DNS.create stack in
       DNS.gethostbyname ~server resolver test_name >>= function
       | (_ :: _) as ips ->
@@ -100,27 +102,29 @@ module Make(Host: Sig.HOST) = struct
           DNS.gethostbyname ~server:primary_dns_ip resolver "www.google.com"
           >>= function
           | Ipaddr.V4 ip :: _ ->
+            Log.info (fun f -> f "Setting max connections to 0");
             Host.Sockets.set_max_connections (Some 0);
             begin
               Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
               >|= function
-              | `Ok _ ->
+              | Ok _ ->
                 Log.err (fun f ->
                     f "Connected to www.google.com, max_connections exceeded");
                 failwith "too many connections"
-              | `Error _ ->
+              | Error _ ->
                 Log.debug (fun f ->
                     f "Expected failure to connect to www.google.com")
             end
             >>= fun () ->
+            Log.info (fun f -> f "Removing connection limit");
             Host.Sockets.set_max_connections None;
             (* Check that connections work again *)
             begin
               Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
               >|= function
-              | `Ok _ ->
+              | Ok _ ->
                 Log.debug (fun f -> f "Connected to www.google.com");
-              | `Error _ ->
+              | Error _ ->
                 Log.debug (fun f ->
                     f "Failure to connect to www.google.com: removing \
                        max_connections limit didn't work");
@@ -131,11 +135,12 @@ module Make(Host: Sig.HOST) = struct
                 f "Failed to look up an IPv4 address for www.google.com");
             failwith "http_fetch dns"
         ) (fun () ->
+          Log.info (fun f -> f "Removing connection limit");
           Host.Sockets.set_max_connections None;
           Lwt.return_unit
         )
     in
-    run ~timeout:240.0 t
+    run ~timeout:(Duration.of_sec 240) t
 
   let test_http_fetch () =
     let t _ stack =
@@ -145,33 +150,33 @@ module Make(Host: Sig.HOST) = struct
         begin
           Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
           >>= function
-          | `Error _ ->
+          | Error _ ->
             Log.err (fun f -> f "Failed to connect to www.google.com:80");
             failwith "http_fetch"
-          | `Ok flow ->
+          | Ok flow ->
             Log.info (fun f -> f "Connected to www.google.com:80");
             let page = Io_page.(to_cstruct (get 1)) in
             let http_get = "GET / HTTP/1.0\nHost: anil.recoil.org\n\n" in
             Cstruct.blit_from_string http_get 0 page 0 (String.length http_get);
             let buf = Cstruct.sub page 0 (String.length http_get) in
             Client.TCPV4.write flow buf >>= function
-            | `Eof     ->
+            | Error `Closed ->
               Log.err (fun f ->
                   f "EOF writing HTTP request to www.google.com:80");
               failwith "EOF on writing HTTP GET"
-            | `Error _ ->
+            | Error _ ->
               Log.err (fun f ->
                   f "Failure writing HTTP request to www.google.com:80");
               failwith "Failure on writing HTTP GET"
-            | `Ok _buf ->
+            | Ok () ->
               let rec loop total_bytes =
                 Client.TCPV4.read flow >>= function
-                | `Eof     -> Lwt.return total_bytes
-                | `Error _ ->
+                | Ok `Eof     -> Lwt.return total_bytes
+                | Error _ ->
                   Log.err (fun f ->
                       f "Failure read HTTP response from www.google.com:80");
                   failwith "Failure on reading HTTP GET"
-                | `Ok buf ->
+                | Ok (`Data buf) ->
                   Log.info (fun f ->
                       f "Read %d bytes from www.google.com:80" (Cstruct.len buf));
                   Log.info (fun f -> f "%s" (Cstruct.to_string buf));
@@ -197,24 +202,24 @@ module Make(Host: Sig.HOST) = struct
     }
 
     let accept flow =
-      let module Channel = Channel.Make(Host.Sockets.Stream.Tcp) in
+      let module Channel = Mirage_channel_lwt.Make(Host.Sockets.Stream.Tcp) in
       let ch = Channel.create flow in
       (* XXX: this looks like it isn't tail recursive to me *)
       let rec drop_all_data count =
-        Lwt.catch (fun () ->
-            Channel.read_some ch >>= fun buffer ->
-            drop_all_data Int64.(add count (of_int (Cstruct.len buffer)))
-          ) (function
-          | End_of_file -> Lwt.return count
-          | e           -> Lwt.fail e
-          )
+        Channel.read_some ch >>= function
+        | Error e -> Fmt.kstrf Lwt.fail_with "%a" Channel.pp_error e
+        | Ok `Eof -> Lwt.return count
+        | Ok (`Data buffer) ->
+              drop_all_data Int64.(add count (of_int (Cstruct.len buffer)))
       in
       drop_all_data 0L
       >>= fun total ->
       let response = Cstruct.create 8 in
       Cstruct.LE.set_uint64 response 0 total;
       Channel.write_buffer ch response;
-      Channel.flush ch
+      Channel.flush ch >>= function
+      | Error e -> Fmt.kstrf Lwt.fail_with "%a" Channel.pp_write_error e
+      | Ok ()   -> Lwt.return_unit
 
     let create () =
       Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
@@ -253,12 +258,12 @@ module Make(Host: Sig.HOST) = struct
           Client.TCPV4.create_connection (Client.tcpv4 stack)
             (Ipaddr.V4.localhost, local_port)
           >>= function
-          | `Ok c ->
+          | Ok c ->
             Log.info (fun f ->
                 f "Connected %d, total tracked connections %d" i
                   (Host.Sockets.get_num_connections ()));
             loop (c :: acc) (i + 1)
-          | `Error _ ->
+          | Error _ ->
             Fmt.kstrf failwith
               "Connection %d failed, total tracked connections %d" i
               (Host.Sockets.get_num_connections ())
@@ -269,7 +274,7 @@ module Make(Host: Sig.HOST) = struct
             (List.length flows) (Host.Sockets.get_num_connections ()));
       (* How many connections is this? *)
     in
-    run' ~timeout:240.0 t
+    run' ~timeout:(Duration.of_sec 240) t
 
   let test_stream_data connections length () =
     let t local_port _ stack =
@@ -278,18 +283,20 @@ module Make(Host: Sig.HOST) = struct
             Client.TCPV4.create_connection (Client.tcpv4 stack)
               (Ipaddr.V4.localhost, local_port)
             >>= function
-            | `Error `Refused ->
+            | Error `Refused ->
               Log.info (fun f -> f "DevNullServer Refused connection");
-              Host.Time.sleep 0.2
+              Host.Time.sleep_ns (Duration.of_ms 200)
               >>= fun () ->
               connect ()
-            | `Error `Timeout ->
+            | Error `Timeout ->
               Log.err (fun f -> f "DevNullServer connection timeout");
               failwith "DevNullServer connection timeout";
-            | `Error (`Unknown x) ->
-              Log.err (fun f -> f "DevNullServer connnection failure: %s" x);
-              failwith x
-            | `Ok flow ->
+            | Error e ->
+              Log.err (fun f ->
+                  f "DevNullServer connnection failure: %a"
+                    Client.TCPV4.pp_error e);
+              Fmt.kstrf failwith "%a" Client.TCPV4.pp_error e
+            | Ok flow ->
               Log.info (fun f -> f "Connected to local server");
               Lwt.return flow
           in
@@ -304,32 +311,32 @@ module Make(Host: Sig.HOST) = struct
               let this_time = min remaining (Cstruct.len page) in
               let buf = Cstruct.sub page 0 this_time in
               Client.TCPV4.write flow buf >>= function
-              | `Eof     ->
+              | Error `Closed ->
                 Log.err (fun f ->
                     f "EOF writing to DevNullServerwith %d bytes left"
                       remaining);
                 (* failwith "EOF on writing to DevNullServer" *)
                 Lwt.return ()
-              | `Error _ ->
+              | Error _ ->
                 Log.err (fun f ->
                     f "Failure writing to DevNullServer with %d bytes left"
                       remaining);
                 (* failwith "Failure on writing to DevNullServer" *)
                 Lwt.return ()
-              | `Ok () ->
+              | Ok () ->
                 loop (remaining - this_time)
             end
           in
           loop length >>= fun () ->
           Client.TCPV4.close flow >>= fun () ->
           Client.TCPV4.read flow >|= function
-          | `Eof ->
+          | Ok `Eof ->
             Log.err (fun f -> f "EOF reading result from DevNullServer");
             (* failwith "EOF reading result from DevNullServer" *)
-          | `Error _ ->
+          | Error _ ->
             Log.err (fun f -> f "Failure reading result from DevNullServer");
             (* failwith "Failure on reading result from DevNullServer" *)
-          | `Ok buf ->
+          | Ok (`Data buf) ->
             Log.info (fun f ->
                 f "Read %d bytes from DevNullServer" (Cstruct.len buf));
             let response = Cstruct.LE.get_uint64 buf 0 in

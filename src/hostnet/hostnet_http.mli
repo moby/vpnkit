@@ -10,9 +10,9 @@ module Exclude: sig
 end
 
 module Make
-    (Ip: V1_LWT.IPV4 with type prefix = Ipaddr.V4.t)
-    (Udp: V1_LWT.UDPV4)
-    (Tcp: Mirage_flow_s.SHUTDOWNABLE)
+    (Ip: Mirage_protocols_lwt.IPV4)
+    (Udp: Mirage_protocols_lwt.UDPV4)
+    (Tcp: Mirage_flow_lwt.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS) :
 sig

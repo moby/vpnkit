@@ -54,8 +54,8 @@ module Main(Host: Sig.HOST) = struct
   module Bind = Bind.Make(Host.Sockets)
   module Dns_policy = Hostnet_dns.Policy(Host.Files)
   module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
-  module Forward_unix = Forward.Make(Connect_unix)(Bind)
-  module Forward_hvsock = Forward.Make(Connect_hvsock)(Bind)
+  module Forward_unix = Forward.Make(Mclock)(Connect_unix)(Bind)
+  module Forward_hvsock = Forward.Make(Mclock)(Connect_hvsock)(Bind)
   module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Fn)
   module Hosts = Hosts.Make(Host.Files)
 
@@ -98,10 +98,10 @@ module Main(Host: Sig.HOST) = struct
           (* no need to add more delay *)
         | Unix.Unix_error(_, _, _) ->
           HV.Hvsock.close socket >>= fun () ->
-          Host.Time.sleep 1.
+          Host.Time.sleep_ns (Duration.of_sec 1)
         | _ ->
           HV.Hvsock.close socket >>= fun () ->
-          Host.Time.sleep 1.
+          Host.Time.sleep_ns (Duration.of_sec 1)
         )
       >>= fun () ->
       aux ()
@@ -161,10 +161,11 @@ module Main(Host: Sig.HOST) = struct
              database key slirp/max-connections instead"));
     Host.Sockets.set_max_connections max_connections;
     let uri = Uri.of_string port_control_url in
+    Mclock.connect () >>= fun clock ->
     match Uri.scheme uri with
     | Some "hyperv-connect" ->
       let module Ports = Active_list.Make(Forward_hvsock) in
-      let fs = Ports.make () in
+      let fs = Ports.make clock in
       Ports.set_context fs "";
       let module Server = Protocol_9p.Server.Make(Log9P)(HV)(Ports) in
       let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid uri in
@@ -178,7 +179,7 @@ module Main(Host: Sig.HOST) = struct
           | Ok server -> Server.after_disconnect server)
     | _ ->
       let module Ports = Active_list.Make(Forward_unix) in
-      let fs = Ports.make () in
+      let fs = Ports.make clock in
       Ports.set_context fs vsock_path;
       let module Server =
         Protocol_9p.Server.Make(Log9P)(Host.Sockets.Stream.Unix)(Ports)
@@ -230,10 +231,10 @@ module Main(Host: Sig.HOST) = struct
     (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore
     with Invalid_argument _ -> ());
     Log.info (fun f ->
-        f "vpnkit version %s with hostnet version %s %s uwt version %s hvsock \
-           version %s %s"
-          Depends.version Depends.hostnet_version Depends.hostnet_pinned
-          Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
+        f "vpnkit version %s with uwt version %s hvsock version %s %s"
+          Depends.version
+          Depends.uwt_version
+          Depends.hvsock_version Depends.hvsock_pinned
       );
     Log.info (fun f -> f "System SOMAXCONN is %d" !Utils.somaxconn);
     Utils.somaxconn :=
@@ -276,6 +277,8 @@ module Main(Host: Sig.HOST) = struct
       List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names
     in
 
+    Mclock.connect () >>= fun clock ->
+
     let hardcoded_configuration =
       let server_macaddr = Slirp.default_server_macaddr in
       let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2" in
@@ -301,7 +304,8 @@ module Main(Host: Sig.HOST) = struct
         client_uuids;
         bridge_connections = true;
         mtu = 1500;
-        host_names }
+        host_names;
+        clock }
     in
 
     let config = match db_path with
@@ -325,14 +329,15 @@ module Main(Host: Sig.HOST) = struct
     match Uri.scheme uri with
     | Some "hyperv-connect" ->
       let module Slirp_stack =
-        Slirp.Make(Config)(Vmnet.Make(HV))(Dns_policy)(Host)(Vnet)
+        Slirp.Make(Config)(Vmnet.Make(HV))(Dns_policy)
+          (Mclock)(Stdlibrandom)(Host)(Vnet)
       in
       let sockaddr =
         hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid
           (Uri.of_string socket_url)
       in
       ( match config with
-      | Some config -> Slirp_stack.create ~host_names config
+      | Some config -> Slirp_stack.create ~host_names clock config
       | None -> Lwt.return hardcoded_configuration
       ) >>= fun stack_config ->
       hvsock_connect_forever socket_url sockaddr (fun fd ->
@@ -347,11 +352,11 @@ module Main(Host: Sig.HOST) = struct
     | _ ->
       let module Slirp_stack =
         Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
-          (Host)(Vnet)
+          (Mclock)(Stdlibrandom)(Host)(Vnet)
       in
       unix_listen socket_url >>= fun server ->
       ( match config with
-      | Some config -> Slirp_stack.create ~host_names config
+      | Some config -> Slirp_stack.create ~host_names clock config
       | None -> Lwt.return hardcoded_configuration
       ) >>= fun stack_config ->
       Host.Sockets.Stream.Unix.listen server (fun conn ->

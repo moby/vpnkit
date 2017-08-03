@@ -3,12 +3,14 @@
 (library
   ((name        hostnet)
    (libraries (
-    cstruct lwt.unix logs mirage-types.lwt ipaddr mirage-flow
-    ppx_sexp_conv pcap-format mirage-console.unix tcpip.ethif
+    cstruct lwt.unix logs ipaddr mirage-flow-lwt
+    ppx_sexp_conv pcap-format mirage-console-unix tcpip.ethif
     tcpip.arpv4 tcpip.ipv4 tcpip.icmpv4 tcpip.udp tcpip.tcp tcpip.stack-direct
-    charrua-core.server dns dns.lwt ofs uwt uwt.ext uwt.preemptive
-    lwt.preemptive threads astring datakit-server.vfs dns-forward tar mirage-vnetif
-    dnssd uuidm mirage-http cohttp channel ezjsonm
+    charrua-core.server dns dns-lwt ofs uwt uwt.ext uwt.preemptive
+    lwt.preemptive threads astring datakit-server dns-forward tar mirage-vnetif
+    dnssd uuidm cohttp-lwt mirage-channel ezjsonm
+    mirage-protocols-lwt duration mirage-time-lwt mirage-clock-lwt
+    mirage-time-unix mirage-random tcpip.unix
    ))
    (c_names (stubs_utils))
    (wrapped false)))

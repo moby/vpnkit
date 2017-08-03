@@ -1,0 +1,18 @@
+--- ./src/unix/config/discover.ml
++++ ./src/unix/config/discover.ml
+@@ -693,13 +693,13 @@
+     fprintf config "#define NANOSEC%s\n" conversion
+   in
+ 
+-  if not (test_basic_compilation ()) then begin
++  (* if not (test_basic_compilation ()) then begin
+     printf "
+ Error: failed to compile a trivial ocaml toplevel.
+ You may be missing core components (compiler, ncurses, etc)
+ ";
+     exit 1
+-  end;
++     end; *)
+ 
+   test_feature ~do_check:!use_libev "libev" "HAVE_LIBEV" test_libev;
+   test_feature ~do_check:!use_pthread "pthread" "HAVE_PTHREAD" test_pthread;

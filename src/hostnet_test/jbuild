@@ -3,7 +3,8 @@
 (executables
   ((names (main_lwt main_uwt))
    (libraries   (
-     hostnet cmdliner alcotest lwt.unix logs.fmt
-     dns.mirage lwt.preemptive uwt.preemptive
+     hostnet cmdliner alcotest lwt.unix logs.fmt protocol-9p
+     mirage-dns lwt.preemptive uwt.preemptive mirage-clock-unix
+     charrua-client-mirage
    ))
    (preprocess  no_preprocessing)))

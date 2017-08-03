@@ -4,6 +4,7 @@
   ((name main)
    (libraries   (
      cmdliner ofs logs.fmt hostnet hvsock hvsock.lwt-unix
-     datakit-server.fs9p win-eventlog asl fd-send-recv
+     datakit-server-9p win-eventlog asl fd-send-recv duration
+     mirage-clock-unix mirage-random
    ))
    (preprocess  no_preprocessing)))

@@ -32,7 +32,7 @@ module type S = sig
   (** The stream of bool values at [path] *)
 end
 
-module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW): sig
+module Make(Time: Mirage_time_lwt.S)(FLOW: Mirage_flow_lwt.S): sig
   include S
 
   val create: ?username:string -> branch:string

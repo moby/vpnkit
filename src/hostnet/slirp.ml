@@ -40,29 +40,12 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
-module Infix = struct
-  let ( >>= ) m f = m >>= function
-    | `Ok x -> f x
-    | `Error x -> Lwt.return (`Error x)
-end
-
 let failf fmt = Fmt.kstrf Lwt.fail_with fmt
-let errorf fmt = Fmt.kstrf (fun e -> Lwt.return (`Error (`Msg e))) fmt
 
 let or_failwith name m =
   m >>= function
-  | `Error _ -> failf "Failed to connect %s device" name
-  | `Ok x  -> Lwt.return x
-
-let or_failwith_result name m =
-  m >>= function
   | Error _ -> failf "Failed to connect %s device" name
-  | Ok x -> Lwt.return x
-
-let or_error name m =
-  m >>= function
-  | `Error _ -> errorf "Failed to connect %s device" name
-  | `Ok x -> Lwt.return (`Ok x)
+  | Ok x  -> Lwt.return x
 
 let restart_on_change name to_string values =
   Active_config.tl values
@@ -90,7 +73,7 @@ type uuid_table = {
   table: (Uuidm.t, Ipaddr.V4.t * int) Hashtbl.t;
 }
 
-type config = {
+type 'a config = {
   server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
@@ -103,22 +86,28 @@ type config = {
   bridge_connections: bool;
   mtu: int;
   host_names: Dns.Name.t list;
+  clock: 'a;
 }
 
 module Make
     (Config: Active_config.S)
     (Vmnet: Sig.VMNET)
     (Dns_policy: Sig.DNS_POLICY)
+    (Clock: sig
+       include Mirage_clock_lwt.MCLOCK
+       val connect: unit -> t Lwt.t
+     end)
+    (Random: Mirage_random.C)
     (Host: Sig.HOST)
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) =
 struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
 
-  module Filteredif = Filter.Make(Vmnet)
+module Filteredif = Filter.Make(Vmnet)
   module Netif = Capture.Make(Filteredif)
   module Recorder = (Netif: Sig.RECORDER with type t = Netif.t)
   module Switch = Mux.Make(Netif)
-  module Dhcp = Dhcp.Make(Switch)
+  module Dhcp = Dhcp.Make(Clock)(Switch)
 
   (* This ARP implementation will respond to the VM: *)
   module Global_arp_ethif = Ethif.Make(Switch)
@@ -127,10 +116,10 @@ struct
   (* This stack will attach to a switch port and represent a single remote IP *)
   module Stack_ethif = Ethif.Make(Switch.Port)
   module Stack_arpv4 = Arp.Make(Stack_ethif)
-  module Stack_ipv4 = Ipv4.Make(Stack_ethif)(Stack_arpv4)
+  module Stack_ipv4 = Static_ipv4.Make(Stack_ethif)(Stack_arpv4)
   module Stack_icmpv4 = Icmpv4.Make(Stack_ipv4)
   module Stack_tcp_wire = Tcp.Wire.Make(Stack_ipv4)
-  module Stack_udp = Udp.Make(Stack_ipv4)
+  module Stack_udp = Udp.Make(Stack_ipv4)(Random)
   module Stack_tcp = struct
     include Tcp.Flow.Make(Stack_ipv4)(Host.Time)(Clock)(Random)
     let shutdown_read _flow =
@@ -143,18 +132,23 @@ struct
 
   module Dns_forwarder =
     Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)
-      (Host.Time)(Host.Clock)(Recorder)
+      (Host.Time)(Clock)(Recorder)
   module Http_forwarder =
     Hostnet_http.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)
 
-  module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Host.Time)
+  module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Clock)(Host.Time)
+
+  let dns_forwarder ~local_address ~host_names clock =
+    Dns_forwarder.create ~local_address ~host_names clock (Dns_policy.config ())
 
   (* Global variable containing the global DNS configuration *)
   let dns =
     let ip = Ipaddr.V4 (Ipaddr.V4.of_string_exn default_host) in
     let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
-    ref (Dns_forwarder.create ~local_address ~host_names:[] @@
-         Dns_policy.config ())
+    ref (
+      Clock.connect () >>= fun clock ->
+      dns_forwarder ~local_address ~host_names:[] clock
+    )
 
   (* Global variable containing the global HTTP proxy configuration *)
   let http =
@@ -175,35 +169,39 @@ struct
     | _ -> false
 
   let string_of_id id =
+    let src = Stack_tcp_wire.src id in
+    let src_port = Stack_tcp_wire.src_port id in
+    let dst = Stack_tcp_wire.dst id in
+    let dst_port = Stack_tcp_wire.dst_port id in
     Fmt.strf "TCP %a:%d > %a:%d"
-      Ipaddr.V4.pp_hum id.Stack_tcp_wire.dest_ip id.Stack_tcp_wire.dest_port
-      Ipaddr.V4.pp_hum id.Stack_tcp_wire.local_ip id.Stack_tcp_wire.local_port
+      Ipaddr.V4.pp_hum dst dst_port
+      Ipaddr.V4.pp_hum src src_port
 
   module Tcp = struct
 
     module Id = struct
       module M = struct
-        type t = Stack_tcp_wire.id
-        let compare
-            { Stack_tcp_wire.local_ip = local_ip1;
-              local_port = local_port1;
-              dest_ip = dest_ip1;
-              dest_port = dest_port1 }
-            { Stack_tcp_wire.local_ip = local_ip2;
-              local_port = local_port2;
-              dest_ip = dest_ip2;
-              dest_port = dest_port2 } =
-          let dest_ip' = Ipaddr.V4.compare dest_ip1 dest_ip2 in
-          let local_ip' = Ipaddr.V4.compare local_ip1 local_ip2 in
-          let dest_port' = compare dest_port1 dest_port2 in
-          let local_port' = compare local_port1 local_port2 in
-          if dest_port' <> 0
-          then dest_port'
-          else if dest_ip' <> 0
-          then dest_ip'
-          else if local_ip' <> 0
-          then local_ip'
-          else local_port'
+        type t = Stack_tcp_wire.t
+        let compare id1 id2 =
+          let dst_ip1   = Stack_tcp_wire.dst id1 in
+          let dst_port1 = Stack_tcp_wire.dst_port id1 in
+          let dst_ip2   = Stack_tcp_wire.dst id2 in
+          let dst_port2 = Stack_tcp_wire.dst_port id2 in
+          let src_ip1   = Stack_tcp_wire.src id1 in
+          let src_port1 = Stack_tcp_wire.src_port id1 in
+          let src_ip2   = Stack_tcp_wire.src id2 in
+          let src_port2 = Stack_tcp_wire.src_port id2 in
+          let dst_ip'   = Ipaddr.V4.compare dst_ip1 dst_ip2 in
+          let dst_port' = compare dst_port1 dst_port2 in
+          let src_ip'   = Ipaddr.V4.compare src_ip1 src_ip2 in
+          let src_port' = compare src_port1 src_port2 in
+          if dst_port' <> 0
+          then dst_port'
+          else if dst_ip' <> 0
+          then dst_ip'
+          else if src_port' <> 0
+          then src_port'
+          else src_ip'
       end
       include M
       module Set = Set.Make(M)
@@ -214,7 +212,7 @@ struct
       (** An established flow *)
 
       type t = {
-        id: Stack_tcp_wire.id;
+        id: Stack_tcp_wire.t;
         mutable socket: Host.Sockets.Stream.Tcp.flow option;
         mutable last_active_time: float;
       }
@@ -257,6 +255,7 @@ struct
       icmpv4:                   Stack_icmpv4.t;
       udp4:                     Stack_udp.t;
       tcp4:                     Stack_tcp.t;
+      clock:                    Clock.t;
       mutable pending:          Tcp.Id.Set.t;
       mutable last_active_time: float;
     }
@@ -265,37 +264,27 @@ struct
     let touch t =
       t.last_active_time <- Unix.gettimeofday ()
 
-    let create recorder switch arp_table ip mtu =
+    let create recorder switch arp_table ip mtu clock =
       let netif = Switch.port switch ip in
-      let open Infix in
-      or_error "Stack_ethif.connect" @@ Stack_ethif.connect ~mtu netif
-      >>= fun ethif ->
-      or_error "Stack_arpv4.connect" @@ Stack_arpv4.connect ~table:arp_table ethif
-      >>= fun arp ->
-      or_error "Stack_ipv4.connect" @@ Stack_ipv4.connect ethif arp
+      Stack_ethif.connect ~mtu netif >>= fun ethif ->
+      Stack_arpv4.connect ~table:arp_table ethif |>fun arp ->
+      Stack_ipv4.connect
+        ~ip
+        ~gateway:None
+        ~network:Ipaddr.V4.Prefix.global
+        ethif arp
       >>= fun ipv4 ->
-      or_error "Stack_icmpv4.connect" @@ Stack_icmpv4.connect ipv4
-      >>= fun icmpv4 ->
-      or_error "Stack_udp.connect" @@ Stack_udp.connect ipv4
-      >>= fun udp4 ->
-      or_error "Stack_tcp.connect" @@ Stack_tcp.connect ipv4
-      >>= fun tcp4 ->
-
-      let open Lwt.Infix in
-      Stack_ipv4.set_ip ipv4 ip (* I am the destination *)
-      >>= fun () ->
-      Stack_ipv4.set_ip_netmask ipv4 Ipaddr.V4.unspecified (* 0.0.0.0 *)
-      >>= fun () ->
-      Stack_ipv4.set_ip_gateways ipv4 [ ]
-      >>= fun () ->
+      Stack_icmpv4.connect ipv4 >>= fun icmpv4 ->
+      Stack_udp.connect ipv4 >>= fun udp4 ->
+      Stack_tcp.connect ipv4 clock >>= fun tcp4 ->
 
       let pending = Tcp.Id.Set.empty in
       let last_active_time = Unix.gettimeofday () in
       let tcp_stack =
         { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; pending;
-          last_active_time }
+          last_active_time; clock }
       in
-      Lwt.return (`Ok tcp_stack)
+      Lwt.return tcp_stack
 
     let intercept_tcp_syn t ~id ~syn on_syn_callback (buf: Cstruct.t) =
       if syn then begin
@@ -311,8 +300,9 @@ struct
             (fun () ->
                on_syn_callback ()
                >>= fun listeners ->
-               Stack_tcp.input t.tcp4 ~listeners ~src:id.Stack_tcp_wire.dest_ip
-                 ~dst:id.Stack_tcp_wire.local_ip buf
+               let src = Stack_tcp_wire.dst id in
+               let dst = Stack_tcp_wire.src id in
+               Stack_tcp.input t.tcp4 ~listeners ~src ~dst buf
             ) (fun () ->
                 t.pending <- Tcp.Id.Set.remove id t.pending;
                 Lwt.return_unit;
@@ -321,9 +311,13 @@ struct
       end else begin
         Tcp.Flow.touch id;
         (* non-SYN packets are injected into the stack as normal *)
-        Stack_tcp.input t.tcp4 ~listeners:(fun _ -> None)
-          ~src:id.Stack_tcp_wire.dest_ip ~dst:id.Stack_tcp_wire.local_ip buf
+        let src = Stack_tcp_wire.dst id in
+        let dst = Stack_tcp_wire.src id in
+        Stack_tcp.input t.tcp4 ~listeners:(fun _ -> None) ~src ~dst buf
       end
+
+    module Proxy =
+      Mirage_flow_lwt.Proxy(Clock)(Stack_tcp)(Host.Sockets.Stream.Tcp)
 
     let input_tcp t ~id ~syn (ip, port) (buf: Cstruct.t) =
       intercept_tcp_syn t ~id ~syn (fun () ->
@@ -335,36 +329,33 @@ struct
                   Ipaddr.pp_hum ip port m);
             Lwt.return (fun _ -> None)
           | Ok socket ->
-            let t = Tcp.Flow.create id socket in
+            let tcp = Tcp.Flow.create id socket in
             let listeners port =
               Log.debug (fun f ->
                   f "%a:%d handshake complete" Ipaddr.pp_hum ip port);
               let f flow =
-                match t.Tcp.Flow.socket with
+                match tcp.Tcp.Flow.socket with
                 | None ->
                   Log.err (fun f ->
                       f "%s callback called on closed socket"
-                        (Tcp.Flow.to_string t));
+                        (Tcp.Flow.to_string tcp));
                   Lwt.return_unit
                 | Some socket ->
                   Lwt.finalize (fun () ->
-                      Mirage_flow.proxy
-                        (module Clock)
-                        (module Stack_tcp) flow
-                        (module Host.Sockets.Stream.Tcp) socket ()
+                      Proxy.proxy t.clock flow socket
                       >>= function
-                      | `Error (`Msg m) ->
+                      | Error e ->
                         Log.debug (fun f ->
-                            f "%s proxy failed with %s"
-                              (Tcp.Flow.to_string t) m);
+                            f "%s proxy failed with %a"
+                              (Tcp.Flow.to_string tcp) Proxy.pp_error e);
                         Lwt.return_unit
-                      | `Ok (_l_stats, _r_stats) ->
+                      | Ok (_l_stats, _r_stats) ->
                         Lwt.return_unit
                     ) (fun () ->
                       Log.debug (fun f ->
-                          f "closing flow %s" (string_of_id t.Tcp.Flow.id));
-                      t.Tcp.Flow.socket <- None;
-                      Tcp.Flow.remove t.Tcp.Flow.id;
+                          f "closing flow %s" (string_of_id tcp.Tcp.Flow.id));
+                      tcp.Tcp.Flow.socket <- None;
+                      Tcp.Flow.remove tcp.Tcp.Flow.id;
                       Host.Sockets.Stream.Tcp.close socket
                     )
               in
@@ -436,8 +427,23 @@ struct
 
   open Frame
 
+  let pp_error ppf = function
+  | `Udp e  -> Stack_udp.pp_error ppf e
+  | `Ipv4 e -> Stack_ipv4.pp_error ppf e
+
+  let lift_ipv4_error = function
+  | Ok _ as x -> x
+  | Error e   -> Error (`Ipv4 e)
+
+  let lift_udp_error = function
+  | Ok _ as x -> x
+  | Error e   -> Error (`Udp e)
+
+  let ok () = Ok ()
+
   module Local = struct
     type t = {
+      clock: Clock.t;
       endpoint: Endpoint.t;
       udp_nat: Udp_nat.t;
       dns_ips: Ipaddr.V4.t list;
@@ -456,6 +462,7 @@ struct
       | _ ->
         Lwt.return_unit in
       Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
+      >|= ok
 
     (* UDP on port 53 -> DNS forwarder *)
     | Ipv4 { src; dst;
@@ -464,20 +471,20 @@ struct
       let udp = t.endpoint.Endpoint.udp4 in
       !dns >>= fun t ->
       Dns_forwarder.handle_udp ~t ~udp ~src ~dst ~src_port payload
+      >|= lift_udp_error
 
     (* TCP to port 53 -> DNS forwarder *)
     | Ipv4 { src; dst;
              payload = Tcp { src = src_port; dst = 53; syn; raw;
                              payload = Payload _; _ }; _ } ->
       let id =
-        { Stack_tcp_wire.local_port = 53; dest_ip = src; local_ip = dst;
-          dest_port = src_port }
+        Stack_tcp_wire.v ~src_port:53 ~dst:src ~src:dst ~dst_port:src_port
       in
-      Endpoint.intercept_tcp_syn t.endpoint ~id ~syn
-        (fun () ->
-           !dns >>= fun t ->
-           Dns_forwarder.handle_tcp ~t
+      Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun () ->
+          !dns >>= fun t ->
+          Dns_forwarder.handle_tcp ~t
         ) raw
+      >|= ok
 
     (* UDP to port 123: localhost NTP *)
     | Ipv4 { src;
@@ -492,6 +499,7 @@ struct
           dst = Ipaddr.V4 localhost, 123; payload }
       in
       Udp_nat.input ~t:t.udp_nat ~datagram ()
+      >|= ok
 
     (* UDP to any other port: localhost *)
     | Ipv4 { src; dst; ihl; dnf; raw;
@@ -504,10 +512,11 @@ struct
       if Cstruct.len payload < len then begin
         Log.err (fun f -> f "%s: dropping because reported len %d actual len %d"
                     description len (Cstruct.len payload));
-        Lwt.return_unit
+        Lwt.return (Ok ())
       end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
         Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port
           ~dst_port ~ihl raw
+        >|= lift_ipv4_error
       end else begin
         (* [1] For UDP to our local address, rewrite the destination
            to localhost.  This is the inverse of the rewrite
@@ -517,6 +526,7 @@ struct
             dst = Ipaddr.(V4 V4.localhost), dst_port; payload }
         in
         Udp_nat.input ~t:t.udp_nat ~datagram ()
+        >|= ok
       end
 
     (* TCP to local ports *)
@@ -524,16 +534,16 @@ struct
              payload = Tcp { src = src_port; dst = dst_port; syn; raw;
                              payload = Payload _; _ }; _ } ->
       let id =
-        { Stack_tcp_wire.local_port = dst_port; dest_ip = src; local_ip = dst;
-          dest_port = src_port }
+        Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
       in
       Endpoint.input_tcp t.endpoint ~id ~syn
         (Ipaddr.V4 Ipaddr.V4.localhost, dst_port) raw
+      >|= ok
     | _ ->
-      Lwt.return_unit
+      Lwt.return (Ok ())
 
-    let create endpoint udp_nat dns_ips =
-      let tcp_stack = { endpoint; udp_nat; dns_ips } in
+    let create clock endpoint udp_nat dns_ips =
+      let tcp_stack = { clock; endpoint; udp_nat; dns_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -542,13 +552,17 @@ struct
            match parse [ buf ] with
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
-             input_ipv4 tcp_stack (Ipv4 ipv4)
+             (input_ipv4 tcp_stack (Ipv4 ipv4) >|= function
+               | Ok ()   -> ()
+               | Error e ->
+                 Log.err (fun l ->
+                     l "error while reading IPv4 input: %a" pp_error e))
            | _ ->
              Lwt.return_unit
         )
-      >>= fun () ->
-
-      Lwt.return (`Ok tcp_stack)
+      >|= function
+      | Ok ()         -> Ok tcp_stack
+      | Error _ as e -> e
 
   end
 
@@ -572,12 +586,16 @@ struct
       | _ -> Lwt.return_unit
       in
       Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
+      >|= ok
 
     (* Transparent HTTP intercept? *)
-    | Ipv4 { src = dest_ip; dst = local_ip;
+    | Ipv4 { src = dest_ip ; dst = local_ip;
              payload = Tcp { src = dest_port;
                              dst = local_port; syn; raw; _ }; _ } ->
-      let id = { Stack_tcp_wire.local_port; dest_ip; local_ip; dest_port } in
+      let id =
+        Stack_tcp_wire.v
+          ~src_port:local_port ~dst:dest_ip ~src:local_ip ~dst_port:dest_port
+      in
       let callback = match !http with
       | None -> None
       | Some http -> Http_forwarder.handle ~dst:(local_ip, local_port) ~t:http
@@ -586,8 +604,10 @@ struct
       | None ->
         Endpoint.input_tcp t.endpoint ~id ~syn (Ipaddr.V4 local_ip, local_port)
           raw (* common case *)
+        >|= ok
       | Some cb ->
         Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
+        >|= ok
       end
     | Ipv4 { src; dst; ihl; dnf; raw;
              payload = Udp { src = src_port; dst = dst_port; len;
@@ -598,7 +618,7 @@ struct
         Log.err (fun f ->
             f "%s: dropping because reported len %d actual len %d"
               description len (Cstruct.len payload));
-        Lwt.return_unit
+        Lwt_result.return ()
       end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
         Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port
           ~dst_port ~ihl raw
@@ -608,10 +628,10 @@ struct
             dst = Ipaddr.V4 dst, dst_port; payload }
         in
         Udp_nat.input ~t:t.udp_nat ~datagram ()
+        >|= ok
       end
 
-    | _ ->
-      Lwt.return_unit
+    | _ -> Lwt_result.return ()
 
     let create endpoint udp_nat =
       let tcp_stack = { endpoint; udp_nat } in
@@ -623,12 +643,18 @@ struct
            match parse [ buf ] with
            | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
              Endpoint.touch endpoint;
-             input_ipv4 tcp_stack (Ipv4 ipv4)
+             (input_ipv4 tcp_stack (Ipv4 ipv4) >|= function
+               | Ok ()   -> ()
+               | Error e ->
+                 Log.err (fun l ->
+                     l "error while reading IPv4 input: %a"
+                       Stack_ipv4.pp_error e))
            | _ ->
              Lwt.return_unit
         )
-      >>= fun () ->
-      Lwt.return (`Ok tcp_stack)
+      >|= function
+      | Ok ()        -> Ok tcp_stack
+      | Error _ as e -> e
   end
 
   let filesystem t =
@@ -654,13 +680,17 @@ struct
       )
 
   let diagnostics t flow =
-    let module C = Channel.Make(Host.Sockets.Stream.Unix) in
+    let module C = Mirage_channel_lwt.Make(Host.Sockets.Stream.Unix) in
     let module Writer = Tar.HeaderWriter(Lwt)(struct
         type out_channel = C.t
         type 'a t = 'a Lwt.t
         let really_write oc buf =
           C.write_buffer oc buf;
-          C.flush oc
+          C.flush oc >|= function
+          | Ok ()   -> ()
+          | Error e ->
+            Log.err (fun l ->
+                l "error while flushing tar channel: %a" C.pp_write_error e)
       end) in
     let c = C.create flow in
 
@@ -672,7 +702,7 @@ struct
         Lwt.return_unit in
 
     let rec tar pwd dir =
-      let mod_time = Int64.of_float @@ Host.Clock.time () in
+      let mod_time = Int64.of_float @@ Unix.gettimeofday () in
       Vfs.Dir.ls dir
       >>?= fun inodes ->
       Lwt_list.iter_s
@@ -701,7 +731,8 @@ struct
                  else aux (Int64.add offset len) in
                aux 0L
                >>= fun () ->
-               Lwt.return (List.rev !fragments) in
+               Lwt.return (List.rev !fragments)
+             in
              copy ()
              >>= fun fragments ->
              let length =
@@ -716,26 +747,33 @@ struct
              >>= fun () ->
              List.iter (C.write_buffer c) fragments;
              C.write_buffer c (Tar.Header.zero_padding header);
-             C.flush c
+             C.flush c >|= function
+             | Ok ()   -> ()
+             | Error e ->
+               Log.err (fun l ->
+                   l "flushing of tar block failed: %a" C.pp_write_error e);
         ) inodes
     in
     tar "" (filesystem t)
     >>= fun () ->
     C.write_buffer c Tar.Header.zero_block;
     C.write_buffer c Tar.Header.zero_block;
-    C.flush c
+    C.flush c >|= function
+    | Ok ()   -> ()
+    | Error e ->
+      Log.err (fun l ->
+          l "error while flushing the diagnostic: %a" C.pp_write_error e)
 
   module Debug = struct
     let get_nat_table_size t = Udp_nat.get_nat_table_size t.udp_nat
 
     let update_dns
-        ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(host_names = []) ()
+        ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(host_names = []) clock
       =
       let local_address =
         { Dns_forward.Config.Address.ip = local_ip; port = 0 }
       in
-      dns := Dns_forwarder.create ~local_address ~host_names
-          (Dns_policy.config ())
+      dns := dns_forwarder ~local_address ~host_names clock
 
     let update_http ?http:http_config ?https ?exclude () =
       Http_forwarder.create ?http:http_config ?https ?exclude ()
@@ -757,7 +795,7 @@ struct
   (* If no traffic is received for 5 minutes, delete the endpoint and
      the switch port. *)
   let rec delete_unused_endpoints t () =
-    Host.Time.sleep 30.
+    Host.Time.sleep_ns (Duration.of_sec 30)
     >>= fun () ->
     Lwt_mutex.with_lock t.endpoints_m
       (fun () ->
@@ -777,16 +815,16 @@ struct
 
   let connect x l2_switch l2_client_id client_macaddr server_macaddr peer_ip
       local_ip highest_ip extra_dns_ip mtu get_domain_search get_domain_name
-      (global_arp_table:arp_table) use_bridge
+      (global_arp_table:arp_table) use_bridge clock
     =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
     let valid_sources = [ Ipaddr.V4.of_string_exn "0.0.0.0" ] in
 
-    or_failwith "filter" @@ Filteredif.connect ~valid_subnets ~valid_sources x
-    >>= fun (filteredif: Filteredif.t) ->
-    or_failwith "capture" @@ Netif.connect filteredif
-    >>= fun interface ->
+    Filteredif.connect ~valid_subnets ~valid_sources x
+    |> fun (filteredif: Filteredif.t) ->
+    Netif.connect filteredif
+    |> fun interface ->
     Dns_forwarder.set_recorder interface;
 
     let kib = 1024 in
@@ -796,7 +834,7 @@ struct
     (* Capture 64KiB of NTP traffic *)
     Netif.add_match ~t:interface ~name:"ntp.pcap" ~limit:(64 * kib)
       ~snaplen:1500 ~predicate:is_ntp;
-    Switch.connect interface
+    or_failwith "Switch.connect" (Switch.connect interface)
     >>= fun switch ->
 
     (* Serve a static ARP table *)
@@ -804,7 +842,7 @@ struct
       peer_ip, client_macaddr;
       local_ip, server_macaddr;
     ] @ (List.map (fun ip -> ip, server_macaddr) extra_dns_ip) in
-    or_failwith "arp_ethif" @@ Global_arp_ethif.connect switch
+    Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
 
     (* Listen on local IPs *)
@@ -818,11 +856,11 @@ struct
       end
     in
     let dhcp = Dhcp.make ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
-        ~extra_dns_ip ~get_domain_search ~get_domain_name switch in
+        ~extra_dns_ip ~get_domain_search ~get_domain_name clock switch in
 
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
-    let udp_nat = Udp_nat.create () in
+    let udp_nat = Udp_nat.create clock in
     let t = {
       l2_switch;
       l2_client_id;
@@ -839,13 +877,12 @@ struct
       Lwt_mutex.with_lock t.endpoints_m
         (fun () ->
            if IPMap.mem ip t.endpoints
-           then Lwt.return (`Ok (IPMap.find ip t.endpoints))
+           then Lwt.return (Ok (IPMap.find ip t.endpoints))
            else begin
-             let open Infix in
-             Endpoint.create interface switch local_arp_table ip mtu
-             >>= fun endpoint ->
+             Endpoint.create interface switch local_arp_table ip mtu clock
+             >|= fun endpoint ->
              t.endpoints <- IPMap.add ip endpoint t.endpoints;
-             Lwt.return (`Ok endpoint)
+             Ok endpoint
            end
         ) in
 
@@ -860,15 +897,18 @@ struct
         then local_ip
         else src in
       begin
-        find_endpoint src
-        >>= function
-        | `Error (`Msg m) ->
+        find_endpoint src >>= function
+        | Error (`Msg m) ->
           Log.err (fun f ->
               f "Failed to create an endpoint for %a: %s" Ipaddr.V4.pp_hum dst m);
           Lwt.return_unit
-        | `Ok endpoint ->
-          Stack_udp.write ~source_port:src_port ~dest_ip:dst ~dest_port:dst_port
-            endpoint.Endpoint.udp4 payload
+        | Ok endpoint ->
+          Stack_udp.write ~src_port ~dst ~dst_port endpoint.Endpoint.udp4 payload
+          >|= function
+          | Error e ->
+            Log.err (fun f ->
+                f "Failed to write a UDP packet: %a" Stack_udp.pp_error e);
+          | Ok () -> ()
       end
     | { Hostnet_udp.src = src, src_port; dst = dst, dst_port; _ } ->
       Log.err (fun f ->
@@ -888,7 +928,10 @@ struct
                   l2_client_id
                   (Macaddr.to_string eth_src)
                   (Macaddr.to_string eth_dst));
-            Switch.write switch buf
+            (Switch.write switch buf >|= function
+              | Ok ()   -> ()
+              | Error e ->
+                Log.err (fun l -> l "switch write failed: %a" Switch.pp_error e))
           (* write packets from virtual network directly to client *)
           | _ -> Lwt.return_unit );
     end;
@@ -910,7 +953,10 @@ struct
                 f "%d: forwarded to bridge for %s->%s" l2_client_id
                   (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
             (* pass to virtual network *)
-            Vnet.write t.l2_switch t.l2_client_id buf
+            Vnet.write t.l2_switch t.l2_client_id buf >|= function
+            | Ok ()   -> ()
+            | Error e ->
+              Log.err (fun l -> l "Vnet write failed: %a" Mirage_device.pp_error e)
           end else begin
             Lwt.return_unit (* drop if bridge is not used *)
           end
@@ -935,59 +981,72 @@ struct
             if use_bridge then begin
               (* reply with global table if bridge is in use *)
               Lwt_mutex.with_lock global_arp_table.mutex (fun _ ->
-                  or_failwith "arp" @@
                   Global_arp.connect ~table:global_arp_table.table
-                    global_arp_ethif)
+                    global_arp_ethif
+                  |> Lwt.return)
             end else begin
               (* if not, use local table *)
-              or_failwith "arp" @@
               Global_arp.connect ~table:local_arp_table global_arp_ethif
+              |> Lwt.return
             end
           end
           >>= fun arp ->
-          Global_arp.input arp (Cstruct.shift buf Wire_structs.sizeof_ethernet)
+          Global_arp.input arp (Cstruct.shift buf Ethif_wire.sizeof_ethernet)
         | Ok (Ethernet { payload = Ipv4 ({ dst; _ } as ipv4 ); _ }) ->
           (* For any new IP destination, create a stack to proxy for
              the remote system *)
           if List.mem dst local_ips then begin
             begin
-              let open Infix in
-              find_endpoint dst
-              >>= fun endpoint ->
+              let open Lwt_result.Infix in
+              find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
                   f "creating local TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
-              Local.create endpoint udp_nat local_ips
+              Local.create clock endpoint udp_nat local_ips
             end >>= function
-            | `Error (`Msg m) ->
-              Log.err (fun f -> f "Failed to create a TCP/IP stack: %s" m);
+            | Error e ->
+              Log.err (fun f ->
+                  f "Failed to create a TCP/IP stack: %a" Switch.Port.pp_error e);
               Lwt.return_unit
-            | `Ok tcp_stack ->
+            | Ok tcp_stack ->
               (* inject the ethernet frame into the new stack *)
-              Local.input_ipv4 tcp_stack (Ipv4 ipv4)
+              Local.input_ipv4 tcp_stack (Ipv4 ipv4) >|= function
+              | Ok ()   -> ()
+              | Error e ->
+                Log.err (fun f -> f "failed to read TCP/IP input: %a" pp_error e);
           end else begin
             begin
-              let open Infix in
-              find_endpoint dst
-              >>= fun endpoint ->
+              let open Lwt_result.Infix in
+              find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
                   f "create remote TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
               Remote.create endpoint udp_nat
             end >>= function
-            | `Error (`Msg m) ->
-              Log.err (fun f -> f "Failed to create a TCP/IP stack: %s" m);
+            | Error e ->
+              Log.err (fun f ->
+                  f "Failed to create a TCP/IP stack: %a"
+                    Switch.Port.pp_error e);
               Lwt.return_unit
-            | `Ok tcp_stack ->
+            | Ok tcp_stack ->
               (* inject the ethernet frame into the new stack *)
-              Remote.input_ipv4 tcp_stack (Ipv4 ipv4)
+              Remote.input_ipv4 tcp_stack (Ipv4 ipv4) >|= function
+              | Ok ()   -> ()
+              | Error e ->
+                Log.err (fun l ->
+                    l "error while reading remote IPv4 input: %a"
+                      Stack_ipv4.pp_error e)
           end
         | _ ->
           Lwt.return_unit
       )
-    >>= fun () ->
-    Log.info (fun f -> f "TCP/IP ready");
-    Lwt.return t
+    >>= function
+    | Error e ->
+      Log.err (fun f -> f "TCP/IP not ready: %a" Switch.pp_error e);
+      Lwt.fail_with "not ready"
+    | Ok () ->
+      Log.info (fun f -> f "TCP/IP ready");
+      Lwt.return t
 
-  let create ?(host_names = [ Dns.Name.of_string "vpnkit.host" ]) config =
+  let create ?(host_names = [ Dns.Name.of_string "vpnkit.host" ]) clock config =
     let driver = [ "com.docker.driver.amd64-linux" ] in
 
     let max_connections_path = driver @ [ "slirp"; "max-connections" ] in
@@ -1190,17 +1249,13 @@ struct
       in
       Log.info (fun f ->
           f "updating resolvers to %s" (Hostnet_dns.Config.to_string config));
-      !dns >>= fun t ->
-      Dns_forwarder.destroy t
-      >>= fun () ->
+      !dns >>= Dns_forwarder.destroy >|= fun () ->
       Dns_policy.remove ~priority:3;
       Dns_policy.add ~priority:3 ~config;
       let local_address =
         { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 }
       in
-      dns := Dns_forwarder.create ~local_address ~host_names
-          (Dns_policy.config ());
-      Lwt.return_unit
+      dns := dns_forwarder ~local_address ~host_names clock
     in
 
     let rec monitor_dns_settings settings =
@@ -1312,6 +1367,7 @@ struct
       bridge_connections;
       mtu;
       host_names;
+      clock;
     } in
     Lwt.return t
 
@@ -1327,7 +1383,11 @@ struct
           Lwt.return mac (* may raise Not_found if id is unknown to the bridge *)
         end else begin (* new uuid, register in bridge *)
           (* register new client on bridge *)
-          or_failwith "l2_switch" @@ Lwt.return @@ Vnet.register l2_switch
+          let l2_client_id = match Vnet.register l2_switch with
+          | `Ok x    -> Ok x
+          | `Error e -> Error e
+          in
+          or_failwith "l2_switch" @@ Lwt.return l2_client_id
           >>= fun l2_client_id ->
           let client_macaddr = (Vnet.mac l2_switch l2_client_id) in
 
@@ -1411,7 +1471,7 @@ struct
     begin
       (* If bridge is in use, create unique IP and update global ARP *)
       if t.bridge_connections then begin
-        or_failwith_result "vmnet" @@
+        or_failwith "vmnet" @@
         Vmnet.of_fd
           ~client_macaddr_of_uuid:(client_macaddr_of_uuid t t.peer_ip l2_switch)
           ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
@@ -1423,10 +1483,10 @@ struct
         connect x l2_switch l2_client_id client_macaddr t.server_macaddr
           client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu
           t.get_domain_search t.get_domain_name t.global_arp_table
-          t.bridge_connections
+          t.bridge_connections t.clock
       end else begin
         (* When bridge is disabled, just use fixed uuid and peer_ip from t *)
-        or_failwith_result "vmnet" @@
+        or_failwith "vmnet" @@
         Vmnet.of_fd
           ~client_macaddr_of_uuid:(fun _ -> Lwt.return default_client_macaddr)
           ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
@@ -1434,7 +1494,7 @@ struct
         let client_macaddr = Vmnet.get_client_macaddr x in
         connect x l2_switch (-1) client_macaddr t.server_macaddr t.peer_ip
           t.local_ip t.highest_ip t.extra_dns_ip t.mtu t.get_domain_search
-          t.get_domain_name t.global_arp_table t.bridge_connections
+          t.get_domain_name t.global_arp_table t.bridge_connections t.clock
       end
     end
 

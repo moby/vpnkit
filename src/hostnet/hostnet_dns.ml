@@ -148,13 +148,13 @@ let try_builtins local_ip host_names question =
   | _ -> None
 
 module Make
-    (Ip: V1_LWT.IPV4)
-    (Udp:V1_LWT.UDPV4)
-    (Tcp:V1_LWT.TCPV4)
+    (Ip: Mirage_protocols_lwt.IPV4)
+    (Udp:Mirage_protocols_lwt.UDPV4)
+    (Tcp:Mirage_protocols_lwt.TCPV4)
     (Socket: Sig.SOCKETS)
     (D: Sig.DNS)
-    (Time: V1_LWT.TIME)
-    (Clock: V1.CLOCK)
+    (Time: Mirage_time_lwt.S)
+    (Clock: Mirage_clock_lwt.MCLOCK)
     (Recorder: Sig.RECORDER) =
 struct
 
@@ -213,47 +213,43 @@ struct
          packet creation fn *)
       let frame = Io_page.to_cstruct (Io_page.get 1) in
       let smac = "\000\000\000\000\000\000" in
-      Wire_structs.set_ethernet_src smac 0 frame;
-      Wire_structs.set_ethernet_ethertype frame 0x0800;
-      let buf = Cstruct.shift frame Wire_structs.sizeof_ethernet in
-      Wire_structs.Ipv4_wire.set_ipv4_hlen_version buf ((4 lsl 4) + (5));
-      Wire_structs.Ipv4_wire.set_ipv4_tos buf 0;
-      Wire_structs.Ipv4_wire.set_ipv4_ttl buf 38;
-      let proto = Wire_structs.Ipv4_wire.protocol_to_int `UDP in
-      Wire_structs.Ipv4_wire.set_ipv4_proto buf proto;
-      Wire_structs.Ipv4_wire.set_ipv4_src buf (Ipaddr.V4.to_int32 source_ip);
-      Wire_structs.Ipv4_wire.set_ipv4_dst buf (Ipaddr.V4.to_int32 dest_ip);
+      Ethif_wire.set_ethernet_src smac 0 frame;
+      Ethif_wire.set_ethernet_ethertype frame 0x0800;
+      let buf = Cstruct.shift frame Ethif_wire.sizeof_ethernet in
+      Ipv4_wire.set_ipv4_hlen_version buf ((4 lsl 4) + (5));
+      Ipv4_wire.set_ipv4_tos buf 0;
+      Ipv4_wire.set_ipv4_ttl buf 38;
+      let proto = Ipv4_packet.Marshal.protocol_to_int `UDP in
+      Ipv4_wire.set_ipv4_proto buf proto;
+      Ipv4_wire.set_ipv4_src buf (Ipaddr.V4.to_int32 source_ip);
+      Ipv4_wire.set_ipv4_dst buf (Ipaddr.V4.to_int32 dest_ip);
       let header_len =
-        Wire_structs.sizeof_ethernet + Wire_structs.Ipv4_wire.sizeof_ipv4
+        Ethif_wire.sizeof_ethernet + Ipv4_wire.sizeof_ipv4
       in
 
-      let frame =
-        Cstruct.set_len frame (header_len + Wire_structs.sizeof_udp)
-      in
+      let frame = Cstruct.set_len frame (header_len + Udp_wire.sizeof_udp) in
       let udp_buf = Cstruct.shift frame header_len in
-      Wire_structs.set_udp_source_port udp_buf source_port;
-      Wire_structs.set_udp_dest_port udp_buf dest_port;
-      Wire_structs.set_udp_length udp_buf
-        (Wire_structs.sizeof_udp + Cstruct.lenv bufs);
-      Wire_structs.set_udp_checksum udp_buf 0;
+      Udp_wire.set_udp_source_port udp_buf source_port;
+      Udp_wire.set_udp_dest_port udp_buf dest_port;
+      Udp_wire.set_udp_length udp_buf (Udp_wire.sizeof_udp + Cstruct.lenv bufs);
+      Udp_wire.set_udp_checksum udp_buf 0;
       let csum = Ip.checksum frame (udp_buf :: bufs) in
-      Wire_structs.set_udp_checksum udp_buf csum;
+      Udp_wire.set_udp_checksum udp_buf csum;
       (* Ip.writev *)
       let bufs = frame :: bufs in
-      let tlen = Cstruct.lenv bufs - Wire_structs.sizeof_ethernet in
+      let tlen = Cstruct.lenv bufs - Ethif_wire.sizeof_ethernet in
       let dmac = String.make 6 '\000' in
       (* Ip.adjust_output_header *)
-      Wire_structs.set_ethernet_dst dmac 0 frame;
+      Ethif_wire.set_ethernet_dst dmac 0 frame;
       let buf =
-        Cstruct.sub frame Wire_structs.sizeof_ethernet
-          Wire_structs.Ipv4_wire.sizeof_ipv4
+        Cstruct.sub frame Ethif_wire.sizeof_ethernet Ipv4_wire.sizeof_ipv4
       in
       (* Set the mutable values in the ipv4 header *)
-      Wire_structs.Ipv4_wire.set_ipv4_len buf tlen;
-      Wire_structs.Ipv4_wire.set_ipv4_id buf (Random.int 65535); (* TODO *)
-      Wire_structs.Ipv4_wire.set_ipv4_csum buf 0;
+      Ipv4_wire.set_ipv4_len buf tlen;
+      Ipv4_wire.set_ipv4_id buf (Random.int 65535); (* TODO *)
+      Ipv4_wire.set_ipv4_csum buf 0;
       let checksum = Tcpip_checksum.ones_complement buf in
-      Wire_structs.Ipv4_wire.set_ipv4_csum buf checksum;
+      Ipv4_wire.set_ipv4_csum buf checksum;
       Recorder.record recorder bufs
     | None ->
       () (* nowhere to log packet *)
@@ -264,7 +260,7 @@ struct
         f "DNS names %s will map to local IP %s"
           (String.concat ", " @@ List.map Dns.Name.to_string host_names)
           (Ipaddr.to_string local_ip));
-    function
+    fun clock -> function
     | `Upstream config ->
       let open Dns_forward.Config.Address in
       let nr_servers =
@@ -280,10 +276,11 @@ struct
           Lwt.return_unit
         | _ ->
           (* We don't know how to marshal IPv6 yet *)
-          Lwt.return_unit in
-      Dns_udp_resolver.create ~message_cb config
+          Lwt.return_unit
+      in
+      Dns_udp_resolver.create ~message_cb config clock
       >>= fun dns_udp_resolver ->
-      Dns_tcp_resolver.create ~message_cb config
+      Dns_tcp_resolver.create ~message_cb config clock
       >>= fun dns_tcp_resolver ->
       Lwt.return { local_ip; host_names;
                    resolver = Upstream { dns_tcp_resolver; dns_udp_resolver } }
@@ -291,18 +288,13 @@ struct
       Log.info (fun f -> f "Will use the host's DNS resolver");
       Lwt.return { local_ip; host_names; resolver = Host }
 
-  let answer t is_tcp buffer =
+  let answer t is_tcp buf =
     let open Dns.Packet in
-    let len = Cstruct.len buffer in
-    let buf = Dns.Buf.of_cstruct buffer in
-    match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
+    let len = Cstruct.len buf in
+    match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
     | None ->
       Lwt.return (Error (`Msg "failed to parse DNS packet"))
     | Some ({ questions = [ question ]; _ } as request) ->
-      let marshal pkt =
-        let buf = Dns.Buf.create 1024 in
-        let buf = Dns.Packet.marshal buf pkt in
-        Cstruct.of_bigarray buf in
       let reply answers =
         let id = request.id in
         let detail =
@@ -323,9 +315,9 @@ struct
           | None ->
             match is_tcp, t.resolver with
             | true, Upstream { dns_tcp_resolver; _ } ->
-              Dns_tcp_resolver.answer buffer dns_tcp_resolver
+              Dns_tcp_resolver.answer buf dns_tcp_resolver
             | false, Upstream { dns_udp_resolver; _ } ->
-              Dns_udp_resolver.answer buffer dns_udp_resolver
+              Dns_udp_resolver.answer buf dns_udp_resolver
             | _, Host ->
               D.resolve question
               >>= function
@@ -351,8 +343,7 @@ struct
 
   let describe buf =
     let len = Cstruct.len buf in
-    let buf = Dns.Buf.of_cstruct buf in
-    match Dns.Protocol.Server.parse (Dns.Buf.sub buf 0 len) with
+    match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
     | None -> Printf.sprintf "Unparsable DNS packet length %d" len
     | Some request -> Dns.Packet.to_string request
 
@@ -361,9 +352,9 @@ struct
     >>= function
     | Error (`Msg m) ->
       Log.warn (fun f -> f "%s lookup failed: %s" (describe buf) m);
-      Lwt.return_unit
+      Lwt.return (Ok ())
     | Ok buffer ->
-      Udp.write ~source_port:53 ~dest_ip:src ~dest_port:src_port udp buffer
+      Udp.write ~src_port:53 ~dst:src ~dst_port:src_port udp buffer
 
   let handle_tcp ~t =
     (* FIXME: need to record the upstream request *)

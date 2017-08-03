@@ -64,7 +64,7 @@ module type S = sig
   val bool: t -> default:bool -> path -> bool values Lwt.t
 end
 
-module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
+module Make(Time: Mirage_time_lwt.S)(FLOW: Mirage_flow_lwt.S) = struct
 
   module Client = Protocol_9p.Client.Make(Log)(FLOW)
 
@@ -132,13 +132,13 @@ module Make(Time: V1_LWT.TIME)(FLOW: V1_LWT.FLOW) = struct
              Client.connect flow ?username ()
            ) >>= function
            | Error (`Msg x) ->
-             Time.sleep 0.1
+             Time.sleep_ns (Duration.of_ms 100)
              >>= fun () ->
              loop ~x (n - 1)
            | Ok conn ->
              Lwt.return conn
         ) (fun e ->
-            Time.sleep 0.1
+            Time.sleep_ns (Duration.of_ms 100)
             >>= fun () ->
             loop ~x:(Printexc.to_string e) (n - 1)
           ) in
