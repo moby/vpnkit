@@ -98,7 +98,6 @@ module Make
        val connect: unit -> t Lwt.t
      end)
     (Random: Mirage_random.C)
-    (Host: Sig.HOST)
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) =
 struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)

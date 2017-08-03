@@ -464,8 +464,7 @@ module Make(C: Sig.CONN) = struct
        let callback buf =
          Lwt.catch (fun () -> t.callback buf)
            (function
-           | Host_uwt.Sockets.Too_many_connections
-           | Host_lwt_unix.Sockets.Too_many_connections ->
+           | Host.Sockets.Too_many_connections ->
              (* No need to log this again *)
              Lwt.return_unit
            | e ->

@@ -11,8 +11,6 @@ let (>>*=) m f = m >>= function
   | Ok x -> f x
   | Error (`Msg m) -> failwith m
 
-module Make(Host: Sig.HOST) = struct
-
   let run ?(timeout=Duration.of_sec 60) t =
     let timeout =
       Host.Time.sleep_ns timeout >>= fun () ->
@@ -306,4 +304,3 @@ module Make(Host: Sig.HOST) = struct
       `Quick,
       test_10_connections ];
   ]
-end

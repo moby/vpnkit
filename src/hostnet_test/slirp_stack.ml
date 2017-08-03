@@ -62,12 +62,11 @@ module Dns_policy = struct
 
 end
 
-module Make(Host: Sig.HOST) = struct
   module VMNET = Vmnet.Make(Host.Sockets.Stream.Tcp)
   module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
   module Vnet = Basic_backend.Make
   module Slirp_stack =
-    Slirp.Make(Config)(VMNET)(Dns_policy)(Mclock)(Stdlibrandom)(Host)(Vnet)
+    Slirp.Make(Config)(VMNET)(Dns_policy)(Mclock)(Stdlibrandom)(Vnet)
 
   module Client = struct
     module Netif = VMNET
@@ -206,4 +205,3 @@ module Make(Host: Sig.HOST) = struct
             (* Server will close when it gets EOF *)
             VMNET.disconnect client'
           )
-end

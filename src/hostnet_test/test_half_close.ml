@@ -9,10 +9,6 @@ let failf fmt = Fmt.kstrf failwith fmt
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make(Host: Sig.HOST) = struct
-
-  module Slirp_stack = Slirp_stack.Make(Host)
-
   module Server = struct
     type t = {
       server: Host.Sockets.Stream.Tcp.server;
@@ -182,5 +178,3 @@ module Make(Host: Sig.HOST) = struct
       test_host_half_close
     ];
   ]
-
-end

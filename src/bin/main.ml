@@ -46,18 +46,16 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   in
   { Hvsock.vmid; serviceid }
 
-module Main(Host: Sig.HOST) = struct
-
   module Vnet = Basic_backend.Make
-  module Connect_unix = Connect.Make_unix(Host)
-  module Connect_hvsock = Connect.Make_hvsock(Host)
+  module Connect_unix = Connect.Unix
+  module Connect_hvsock = Connect.Hvsock
   module Bind = Bind.Make(Host.Sockets)
   module Dns_policy = Hostnet_dns.Policy(Host.Files)
   module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
   module Forward_unix = Forward.Make(Mclock)(Connect_unix)(Bind)
   module Forward_hvsock = Forward.Make(Mclock)(Connect_hvsock)(Bind)
   module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Fn)
-  module Hosts = Hosts.Make(Host.Files)
+  module HostsFile = Hosts.Make(Host.Files)
 
   let file_descr_of_int (x: int) : Unix.file_descr =
     if Sys.os_type <> "Unix"
@@ -256,7 +254,7 @@ module Main(Host: Sig.HOST) = struct
         ~config:(`Upstream { servers; search = [];
                              assume_offline_after_drops = None }) );
 
-    let etc_hosts_watch = match Hosts.watch ~path:hosts () with
+    let etc_hosts_watch = match HostsFile.watch ~path:hosts () with
     | Ok watch       -> Some watch
     | Error (`Msg m) ->
       Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
@@ -330,7 +328,7 @@ module Main(Host: Sig.HOST) = struct
     | Some "hyperv-connect" ->
       let module Slirp_stack =
         Slirp.Make(Config)(Vmnet.Make(HV))(Dns_policy)
-          (Mclock)(Stdlibrandom)(Host)(Vnet)
+          (Mclock)(Stdlibrandom)(Vnet)
       in
       let sockaddr =
         hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid
@@ -352,7 +350,7 @@ module Main(Host: Sig.HOST) = struct
     | _ ->
       let module Slirp_stack =
         Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
-          (Mclock)(Stdlibrandom)(Host)(Vnet)
+          (Mclock)(Stdlibrandom)(Vnet)
       in
       unix_listen socket_url >>= fun server ->
       ( match config with
@@ -370,7 +368,7 @@ module Main(Host: Sig.HOST) = struct
       let wait_forever, _ = Lwt.task () in
       wait_forever >|= fun () ->
       match etc_hosts_watch with
-      | Some watch -> Hosts.unwatch watch
+      | Some watch -> HostsFile.unwatch watch
       | None       -> ()
 
   let main
@@ -382,18 +380,6 @@ module Main(Host: Sig.HOST) = struct
       (main_t socket_url port_control_url introspection_url diagnostics_url
          max_connections vsock_path db_path db_branch dns hosts host_names
          listen_backlog debug)
-end
-
-let main
-    socket port_control introspection_url diagnostics_url max_connections
-    vsock_path db_path db_branch dns hosts host_names select listen_backlog
-    debug
-  =
-  let module Use_lwt_unix = Main(Host_lwt_unix) in
-  let module Use_uwt = Main(Host_uwt) in
-  (if select then Use_lwt_unix.main else Use_uwt.main)
-    socket port_control introspection_url diagnostics_url max_connections
-    vsock_path db_path db_branch dns hosts host_names listen_backlog debug
 
 open Cmdliner
 
@@ -510,10 +496,6 @@ let host_names =
   in
   Arg.(value & opt string "vpnkit.host" doc)
 
-let select =
-  let doc = "Use a select event loop rather than the default libuv-based one" in
-  Arg.(value & flag & info [ "select" ] ~doc)
-
 let listen_backlog =
   let doc = "Specify a maximum listen(2) backlog. If no override is specified \
              then we will use SOMAXCONN." in
@@ -533,7 +515,7 @@ let command =
   Term.(pure main
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
-        $ host_names $ select $ listen_backlog $ debug),
+        $ host_names $ listen_backlog $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =

@@ -71,10 +71,6 @@ module Exclude = struct
   ]
 end
 
-module Make(Host: Sig.HOST) = struct
-
-  module Slirp_stack = Slirp_stack.Make(Host)
-
   module Server = struct
     type t = {
       server: Host.Sockets.Stream.Tcp.server;
@@ -330,5 +326,3 @@ module Make(Host: Sig.HOST) = struct
     "HTTP: CONNECT",
     [ "check that HTTP CONNECT works for HTTPS", `Quick, test_http_connect ];
   ]
-
-end

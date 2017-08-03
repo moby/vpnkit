@@ -1,4 +1,5 @@
 open Lwt.Infix
+open Slirp_stack
 
 let src =
   let src = Logs.Src.create "test" ~doc:"Test the slirp stack" in
@@ -7,17 +8,12 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make(Host: Sig.HOST) = struct
-
   let run ?(timeout=Duration.of_sec 60) t =
     let timeout =
       Host.Time.sleep_ns timeout >>= fun () ->
       Lwt.fail_with "timeout"
     in
     Host.Main.run @@ Lwt.pick [ timeout; t ]
-
-  module Slirp_stack = Slirp_stack.Make(Host)
-  open Slirp_stack
 
   module EchoServer = struct
     (* Receive UDP packets and copy them back to all senders. Roughly simulates
@@ -382,4 +378,3 @@ module Make(Host: Sig.HOST) = struct
     "NAT: punch", [ "", `Quick, test_nat_punch ];
     "NAT: source ports", [ "", `Quick, test_source_ports ];
   ]
-end

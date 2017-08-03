@@ -1,4 +1,5 @@
 open Lwt.Infix
+open Slirp_stack
 
 let src =
   let src = Logs.Src.create "test" ~doc:"Test the slirp stack" in
@@ -9,12 +10,6 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 let pp_ips = Fmt.(list ~sep:(unit ", ") Ipaddr.pp_hum)
 let pp_ip4s = Fmt.(list ~sep:(unit ", ") Ipaddr.V4.pp_hum)
-
-module Make(Host: Sig.HOST) = struct
-
-  module Dns_policy = Slirp_stack.Dns_policy
-  module Slirp_stack = Slirp_stack.Make(Host)
-  open Slirp_stack
 
   let run_test ?(timeout=Duration.of_sec 60) t =
     let timeout =
@@ -386,20 +381,13 @@ module Make(Host: Sig.HOST) = struct
   *)
   ]
 
-  module F = Forwarding.Make(Host)
-  module N = Test_nat.Make(Host)
-  module H = Test_http.Make(Host)
-  module T = Test_half_close.Make(Host)
-
   let tests =
-    Hosts_test.tests @ F.tests @ test_dhcp
+    Hosts_test.tests @ Forwarding.tests @ test_dhcp
     @ (test_dns true) @ (test_dns false)
-    @ test_tcp @ N.tests @ H.tests @ Test_http.Exclude.tests
-    @ T.tests
+    @ test_tcp @ Test_nat.tests @ Test_http.tests @ Test_http.Exclude.tests
+    @ Test_half_close.tests
 
   let scalability = [
     "1026conns",
     [ "Test many connections", `Quick, test_many_connections (1024 + 2) ];
   ]
-
-end
