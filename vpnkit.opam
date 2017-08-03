@@ -64,6 +64,7 @@ depends: [
   "mirage-console-unix"
   "mirage-clock-unix"
   "cohttp-lwt" {>= "0.99.0"}
+  "mirage-dns"
   "protocol-9p-unix" {>= "0.11.2"}
   "mirage-vnetif" {>= "0.4.0"}
   "uuidm"
