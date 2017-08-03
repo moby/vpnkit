@@ -231,10 +231,10 @@ module Main(Host: Sig.HOST) = struct
     (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore
     with Invalid_argument _ -> ());
     Log.info (fun f ->
-        f "vpnkit version %s with hostnet version %s %s uwt version %s hvsock \
-           version %s %s"
-          Depends.version Depends.hostnet_version Depends.hostnet_pinned
-          Depends.uwt_version Depends.hvsock_version Depends.hvsock_pinned
+        f "vpnkit version %s with uwt version %s hvsock version %s %s"
+          Depends.version
+          Depends.uwt_version
+          Depends.hvsock_version Depends.hvsock_pinned
       );
     Log.info (fun f -> f "System SOMAXCONN is %d" !Utils.somaxconn);
     Utils.somaxconn :=
