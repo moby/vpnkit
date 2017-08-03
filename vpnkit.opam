@@ -37,7 +37,7 @@ depends: [
   "uwt" { >= "0.0.4" }
   "tcpip" { = "999" }
   "pcap-format"
-  "dns" { = "999" }
+  "dns" { = "0.999" }
   "dnssd" { >= "0.2" }
   "dns-forward"
   "datakit-server"
@@ -64,6 +64,7 @@ depends: [
   "alcotest" {test}
   "mirage-vnetif" { = "0.2.0" }
   "mirage-conduit" { = "2.2.0" }
+  "mirage-dns" { = "2.5.0" }
   "uuidm"
   "ezjsonm"
 ]
