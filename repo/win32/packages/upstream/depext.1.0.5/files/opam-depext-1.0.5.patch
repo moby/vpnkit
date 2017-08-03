@@ -1,0 +1,398 @@
+--- ./depext.ml
++++ ./depext.ml
+@@ -18,6 +18,22 @@
+   ignore (Unix.close_process_in ic);
+   lines
+ 
++let open_process_out argv =
++  let (in_read, in_write) = Unix.pipe () in
++  Unix.set_close_on_exec in_read;
++  let ch = Unix.in_channel_of_descr in_read in
++  set_binary_mode_in ch false;
++  let pid = Unix.create_process argv.(0) argv Unix.stdin in_write Unix.stderr in
++  Unix.close in_write;
++  (pid, ch)
++
++let lines_of_argv argv =
++  let pid,ch = open_process_out argv in
++  let lines = lines_of_channel ch in
++  close_in ch;
++  ignore (Unix.waitpid [] pid);
++  lines
++
+ let lines_of_file f =
+   let ic = open_in f in
+   let lines = lines_of_channel ic in
+@@ -45,12 +61,21 @@
+   in
+   aux 0
+ 
++let is_win = Sys.os_type = "Win32"
++
+ let has_command c =
+-  let cmd = Printf.sprintf "command -v %s >/dev/null" c in
++  let cmd =
++    if is_win then
++      Printf.sprintf "dash.exe -ec 'command -v %s' >NUL" c
++    else
++      Printf.sprintf "command -v %s >/dev/null" c
++  in
+   try Sys.command cmd = 0 with Sys_error _ -> false
+ 
++let dev_null = if is_win then "NUL" else "/dev/null"
++
+ let run_command ?(no_stderr=false) c =
+-  let c = if no_stderr then c @ ["2>/dev/null"] else c in
++  let c = if no_stderr then c @ ["2>" ^ dev_null] else c in
+   let c = String.concat " " c in
+   if !debug then Printf.eprintf "+ %s\n%!" c;
+   Unix.system c
+@@ -65,6 +90,24 @@
+       with End_of_file -> false)
+     fmt
+ 
++let execvp =
++  if is_win = false then
++    Unix.execvp
++  else
++    fun cmd args ->
++      let pid =
++        Unix.create_process
++          cmd
++          args
++          Unix.stdin
++          Unix.stdout
++          Unix.stderr
++      in
++      match snd (Unix.waitpid [] pid) with
++      | Unix.WEXITED n -> exit n
++      | Unix.WSIGNALED _ -> exit 2 (* like OCaml's uncaught exceptions *)
++      | Unix.WSTOPPED _ -> exit 1
++
+ (* system detection *)
+ 
+ let arch () =
+@@ -127,6 +170,11 @@
+      with Not_found | Failure _ -> None)
+   | `OpenBSD -> Some `OpenBSD
+   | `FreeBSD -> Some `FreeBSD
++  | `Win32 ->
++    if has_command "cygwin-install" then
++      Some `Cygwinports
++    else
++      None
+   | _ -> None
+ 
+ (* generate OPAM depexts flags *)
+@@ -166,6 +214,7 @@
+   | Some `Gentoo -> ["gentoo"]
+   | Some `OpenBSD -> ["openbsd"]
+   | Some `FreeBSD -> ["freebsd"]
++  | Some `Cygwinports -> ["cygwinports"]
+   | Some (`Other s) -> [String.lowercase s]
+   | None -> []
+ 
+@@ -181,20 +230,28 @@
+ )
+ 
+ let depexts flags opam_packages =
+-  let c =
+-    if String.sub (Lazy.force opam_version) 0 4 = "1.1." then
+-      (* backwards-compatible command *)
+-      Printf.sprintf "opam install --external=%s %s"
+-        (String.concat "," flags)
+-        (String.concat "," opam_packages)
++  let s =
++    if is_win then
++      let a = "--external=" ^ (String.concat "," flags) in
++      let b = "--required-by=" ^ (String.concat "," opam_packages) in
++      let argv = [| "opam"; "list" ; "--safe" ; "--recursive" ; a ; b |] in
++      lines_of_argv argv
+     else
+-    (* this is lighter, more general and doesn't require a lock. But only on
+-       newer opams *)
+-    Printf.sprintf "opam list --safe --recursive --external=%s --required-by=%s"
+-      (String.concat "," flags)
+-      (String.concat "," opam_packages)
++      let c =
++        if String.sub (Lazy.force opam_version) 0 4 = "1.1." then
++          (* backwards-compatible command *)
++          Printf.sprintf "opam install --external=%s %s"
++            (String.concat "," flags)
++            (String.concat "," opam_packages)
++        else
++          (* this is lighter, more general and doesn't require a lock. But only on
++             newer opams *)
++          Printf.sprintf "opam list --safe --recursive --external=%s --required-by=%s"
++            (String.concat "," flags)
++            (String.concat "," opam_packages)
++      in
++      lines_of_command c
+   in
+-  let s = lines_of_command c in
+   let lines = List.filter (fun s -> String.length s > 0 && s.[0] <> '#') s in
+   List.flatten (List.map (string_split ' ') lines)
+ 
+@@ -222,6 +279,24 @@
+     ["emerge"::packages]
+   | Some `Alpine ->
+     ["apk"::"add"::packages]
++  | Some `Cygwinports ->
++    let rec iter accu_whole accu_cur len = function
++    | [] ->
++      if accu_cur = [] then
++        List.rev accu_whole
++      else
++        List.rev (add_a accu_whole accu_cur)
++    | hd::tl ->
++      let hd_len = String.length (Filename.quote hd) + 2 in
++      if len + hd_len > 7_000 then
++        iter (add_a accu_whole accu_cur) [hd] hd_len tl
++      else
++        iter accu_whole (hd::accu_cur) (len + hd_len) tl
++    and add_a accu_whole accu_cur =
++      let hda = "cygwin-install.exe"::"install"::(List.rev accu_cur) in
++      hda::accu_whole
++    in
++    iter [] [] 0 packages
+   | Some `OpenSUSE ->
+     ["zypper"::"install"::yes ["--non-interactive"] packages]
+   | Some (`Other d) ->
+@@ -314,12 +389,13 @@
+          | [pkg;_;_;"installed"] -> (try StringMap.find pkg virtual_map @ acc with Not_found -> acc)
+          | _ -> acc)
+       installed lines
+-  | Some (`Centos | `Fedora | `Mageia | `Archlinux| `Gentoo | `Alpine | `RHEL | `OracleLinux) ->
++  | Some (`Centos | `Fedora | `Mageia | `Archlinux| `Gentoo | `Alpine | `RHEL | `OracleLinux | `Cygwinports ) ->
+     let query_command_prefix = match distribution with
+       | Some (`Centos | `Fedora | `Mageia | `RHEL | `OracleLinux) -> ["rpm"; "-qi"]
+       | Some `Archlinux -> ["pacman"; "-Q"]
+       | Some `Gentoo -> ["equery"; "list"]
+       | Some `Alpine -> ["apk"; "info"; "-e"]
++      | Some `Cygwinports -> [ "cygwin-install.exe"; "status" ]
+       | _ -> assert(false)
+     in
+     List.filter
+@@ -466,7 +542,7 @@
+   if install_arg && opam_packages <> [] then begin
+     (if not short then Printf.printf "# Now letting OPAM install the packages\n%!");
+     (if !debug then Printf.eprintf "+ %s\n%!" (String.concat " " opam_cmdline));
+-    Unix.execvp "opam" (Array.of_list opam_cmdline)
++    execvp "opam" (Array.of_list ("opam"::"install"::opam_packages))
+   end
+ 
+ open Cmdliner
+--- ./OCamlMakefile
++++ ./OCamlMakefile
+@@ -112,11 +112,12 @@
+ 
+ ####################  variables depending on your OCaml-installation
+ 
+-SYSTEM := $(shell ocamlc -config 2>/dev/null | grep system | sed 's/system: //')
++SYSTEM := $(shell ocamlc -config | awk '/^system:/ {print $$2}')
+     # This may be
+     # - mingw
+     # - mingw64
+     # - win32
++    # - win64
+     # - cygwin
+     # - some other string means Unix
+     # - empty means ocamlc does not support -config
+@@ -124,7 +125,7 @@
+ ifeq ($(SYSTEM),$(filter $(SYSTEM),mingw mingw64))
+   MINGW=1
+ endif
+-ifeq ($(SYSTEM),win32)
++ifeq ($(SYSTEM),$(filter $(SYSTEM),win32 win64))
+   MSVC=1
+ endif
+ 
+@@ -133,18 +134,8 @@
+   WIN32 := 1
+   # The default value 'cc' makes 'ocamlc -cc "cc"' raises the error 'The
+   # NTVDM CPU has encountered an illegal instruction'.
+-  ifndef CC
+-    MNO_CYGWIN := $(shell gcc -Wextra -v --help 2>/dev/null | grep -q '\-mno-cygwin'; echo $$?)
+-    CC := gcc
+-  else
+-    MNO_CYGWIN := $(shell $$CC -Wextra -v --help 2>/dev/null | grep -q '\-mno-cygwin'; echo $$?)
+-  endif
+-  # We are compiling with cygwin tools:
+-  ifeq ($(MNO_CYGWIN),0)
+-	CFLAGS_WIN32 := -mno-cygwin
+-  endif
+-  # The OCaml C header files use this flag:
+-  CFLAGS += -D__MINGW32__
++  CC:= $(shell ocamlc -config | awk '/^bytecomp_c_compiler/ {for(i=2;i<=NF;i++) printf "%s " ,$$i}')
++  AR:= $(shell ocamlc -config | awk '/^bytecomp_c_compiler/ {print $$2}' | sed 's|gcc|ar|g')
+ endif
+ ifdef MSVC
+   export MSVC
+@@ -172,6 +163,9 @@
+ ifdef WIN32
+   EXT_CXX := cpp
+   EXE     := .exe
++  EXT_DLL := dll
++else
++  EXT_DLL := so
+ endif
+ 
+ ifndef EXT_OBJ
+@@ -387,7 +381,7 @@
+ 
+ ifndef OCAMLLIBPATH
+   OCAMLLIBPATH := \
+-    $(shell $(OCAMLC) 2>/dev/null -where || echo /usr/local/lib/ocaml)
++    $(shell ocamlc -where 2>/dev/null || echo /usr/local/lib/ocaml | tr -d '\r')
+ endif
+ export OCAMLLIBPATH
+ 
+@@ -522,9 +516,9 @@
+ 
+ NONEXECS     := $(INTF) $(IMPL_CMO) $(IMPL_CMX) $(IMPL_ASM) $(IMPL_S) \
+ 		$(OBJ_FILES) $(PRE_TARGETS) $(BCRESULT).cma $(NCRESULT).cmxa \
+-		$(NCRESULT).$(EXT_LIB) $(BCRESULT).cmi $(BCRESULT).cmti $(BCRESULT).cmo \
+-		$(NCRESULT).cmi $(NCRESULT).cmti $(NCRESULT).cmx $(NCRESULT).$(EXT_OBJ) \
+-		$(RES_CLIB) $(IMPL_CMO:.cmo=.cmt) $(IMPL_CMO:.cmo=.cmti) \
++		$(NCRESULT).$(EXT_LIB) $(BCRESULT).cmi $(BCRESULT).cmo \
++		$(NCRESULT).cmi $(NCRESULT).cmx $(NCRESULT).$(EXT_OBJ) \
++		$(RES_CLIB) $(IMPL_CMO:.cmo=.annot) \
+ 		$(LIB_PACK_NAME).cmi $(LIB_PACK_NAME).cmo $(LIB_PACK_NAME).cmx \
+ 		$(LIB_PACK_NAME).$(EXT_OBJ)
+ 
+@@ -993,20 +987,12 @@
+ 				$(OCAMLMKLIB_FLAGS)
+ endif
+ else
+-ifdef MSVC
+-$(DLLSONAME):		$(OBJ_LINK)
+-			link /NOLOGO /DLL /OUT:$@ $(OBJ_LINK) \
+-			 $(wildcard $(foreach dir,$(LIBDIRS),$(CLIBS:%=$(dir)/%.lib))) \
+-			 '$(OCAMLLIBPATH)/ocamlrun.lib'
+-
+-else
+ $(DLLSONAME):		$(OBJ_LINK)
+ 			$(OCAMLMKLIB) $(INCFLAGS) $(CLIBFLAGS) \
+ 				-o $(CLIB_BASE) $(OBJ_LINK) $(CLIBS:%=-l%) $(CFRAMEWORKS:%=-framework %) \
+ 				$(OCAMLMKLIB_FLAGS)
+ endif
+ endif
+-endif
+ 
+ ifndef LIB_PACK_NAME
+ $(RESULT).cma:		$(REAL_IMPL_INTF) $(MAKEDLL) $(EXTRADEPS) $(RESULTDEPS)
+@@ -1052,7 +1038,7 @@
+   endif
+ endif
+ 
+-%.cmi:	%.mli
++%.cmi:	%.mli $(EXTRADEPS)
+ 			$(QUIET)pp=`sed -n -e '/^#/d' -e 's/(\*pp \([^*]*\) \*)/\1/p;q' $<`; \
+ 			if [ -z "$$pp" ]; then \
+ 			  $(ECHO) $(REAL_OCAMLFIND) $(INTF_OCAMLC) $(OCAML_FIND_PACKAGES) \
+@@ -1072,7 +1058,7 @@
+ 
+ %.cmi: %$(IMPL_SUF);
+ 
+-%$(IMPL_SUF) %.$(EXT_OBJ):	%.ml
++%$(IMPL_SUF) %.$(EXT_OBJ):	%.ml $(EXTRADEPS)
+ 			$(QUIET)pp=`sed -n -e '/^#/d' -e 's/(\*pp \([^*]*\) \*)/\1/p;q' $<`; \
+ 			if [ -z "$$pp" ]; then \
+ 			  $(ECHO) $(REAL_OCAMLFIND) $(REAL_OCAMLC) $(OCAML_FIND_PACKAGES) \
+@@ -1129,7 +1115,7 @@
+ 			$(QUIET)if [ $(NOIDLHEADER) ]; then touch $*.h; fi
+ 
+ %.$(EXT_OBJ):	%.c
+-			$(OCAMLC) -c -cc "$(CC)" -ccopt "$(CFLAGS) \
++			$(OCAMLC) -c -ccopt "$(CFLAGS) \
+ 				$(CPPFLAGS) $(CPPFLAGS_WIN32) \
+ 				$(CFLAGS_WIN32) $(CINCFLAGS) $(CFLAG_O)$@ " $<
+ 
+@@ -1231,24 +1217,36 @@
+ ###########################################################################
+ # (UN)INSTALL RULES FOR LIBRARIES
+ 
++# some black magic to cope with hard coded file extensions ...
++ifdef MINGW
++LIBINSTALL_FILES_REAL= $(patsubst %.so,%.dll,$(LIBINSTALL_FILES))
++else
++ifdef MSVC
++LIBINSTALL_FILES_REAL= $(patsubst %.so,%.dll,$(patsubst %.o,%.obj,$(patsubst %.a,%.lib,$(LIBINSTALL_FILES))))
++else
++LIBINSTALL_FILES_REAL= $(LIBINSTALL_FILES)
++endif
++endif
++
++
+ .PHONY: libinstall
+ libinstall:	all
+ 	$(QUIET)printf "\nInstalling library with ocamlfind\n"
+-	$(OCAMLFIND) install $(OCAMLFIND_INSTFLAGS) $(RESULT) META $(LIBINSTALL_FILES)
++	$(OCAMLFIND) install $(OCAMLFIND_INSTFLAGS) $(RESULT) META $(LIBINSTALL_FILES_REAL)
+ 	$(QUIET)printf "\nInstallation successful.\n"
+ 
+ .PHONY: libinstall-byte-code
+ libinstall-byte-code:	all
+ 	$(QUIET)printf "\nInstalling byte-code library with ocamlfind\n"
+ 	$(OCAMLFIND) install $(OCAMLFIND_INSTFLAGS) $(RESULT) META \
+-	  $(filter-out $(RESULT).$(EXT_LIB) $(RESULT).cmxa, $(LIBINSTALL_FILES))
++	  $(filter-out $(RESULT).$(EXT_LIB) $(RESULT).cmxa, $(LIBINSTALL_FILES_REAL))
+ 	$(QUIET)printf "\nInstallation successful.\n"
+ 
+ .PHONY: libinstall-native-code
+ libinstall-native-code:	all
+ 	$(QUIET)printf "\nInstalling native-code library with ocamlfind\n"
+ 	$(OCAMLFIND) install $(OCAMLFIND_INSTFLAGS) $(RESULT) META \
+-	  $(filter-out $(DLLSONAME) $(RESULT).cma, $(LIBINSTALL_FILES))
++	  $(filter-out $(DLLSONAME) $(RESULT).cma, $(LIBINSTALL_FILES_REAL))
+ 	$(QUIET)printf "\nInstallation successful.\n"
+ 
+ .PHONY: libuninstall
+@@ -1261,7 +1259,7 @@
+ rawinstall:	all
+ 	$(QUIET)printf "\nInstalling library to: $(OCAML_LIB_INSTALL)\n"
+ 	-install -d $(OCAML_LIB_INSTALL)
+-	for i in $(LIBINSTALL_FILES); do \
++	for i in $(LIBINSTALL_FILES_REAL); do \
+ 	  if [ -f $$i ]; then \
+ 	    install -c -m 0644 $$i $(OCAML_LIB_INSTALL); \
+ 	  fi; \
+@@ -1271,7 +1269,7 @@
+ .PHONY: rawuninstall
+ rawuninstall:
+ 	$(QUIET)printf "\nUninstalling library from: $(OCAML_LIB_INSTALL)\n"
+-	cd $(OCAML_LIB_INSTALL) && rm $(notdir $(LIBINSTALL_FILES))
++	cd $(OCAML_LIB_INSTALL) && rm $(notdir $(LIBINSTALL_FILES_REAL))
+ 	$(QUIET)printf "\nUninstallation successful.\n"
+ 
+ ###########################################################################
+--- ./shell/build.ml
++++ ./shell/build.ml
+@@ -1,3 +1,11 @@
++let is_win = Sys.os_type = "Win32"
++
++let () =
++  if is_win then (
++    set_binary_mode_out stdout true;
++    set_binary_mode_out stderr true;
++  )
++
+ module OCaml_version : sig
+    type t
+    val v : ?patch:int -> ?extra:string -> int -> int -> t
+@@ -71,11 +79,13 @@
+      List.iter (fun v -> Printf.eprintf "%s compared to %s: %d\n%!" (to_string t) (to_string v) (compare t v)) vers_t
+ end
+ 
++let exe = if is_win then ".exe" else ""
++
+ let build_bytecode () =
+-  print_endline "ocamlc -I src_ext/lib unix.cma cmdliner.cma -o opam-depext depext.ml"
++  Printf.printf "ocamlc -I src_ext/lib unix.cma cmdliner.cma -o opam-depext%s depext.ml\n" exe
+ 
+ let build_native () =
+-  print_endline "ocamlopt -I src_ext unix.cmxa cmdliner.cmxa -o opam-depext depext.ml"
++  Printf.printf "ocamlopt -I src_ext unix.cmxa cmdliner.cmxa -o opam-depext%s depext.ml\n" exe
+ 
+ let usage () =
+   Printf.eprintf "Usage: ocaml build.ml [byte|native]\n\nDefaults to 'native' build.\n%!";

@@ -1,0 +1,3 @@
+Virtual package relying on the "time" command
+
+This package can only install if the "time" command is installed on the system.  It does not enforce having the GNU utility: it may find a BSD time command (BSD, OSX) or a Busybox command (Alpine) that have different options. The only common functionality is "time <command>".

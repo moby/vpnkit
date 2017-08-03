@@ -1,0 +1,18 @@
+#!/bin/sh
+
+OS_SYSTEM="$(ocamlc -config | awk -F '[\t\r ]+' '/^system:/ {print $2}')"
+
+case "$OS_SYSTEM" in
+    win*)
+        if which gcc >/dev/null 2>&1 ; then
+            cpp="gcc -undef -traditional -x c -E"
+        elif which x86_64-w64-mingw32-gcc >/dev/null 2>&1 ; then
+            cpp="x86_64-w64-mingw32-gcc -undef -traditional -x c -E"
+        elif which i686-w64-mingw32-gcc >/dev/null 2>&1 ; then
+            cpp="i686-w64-mingw32-gcc -undef -traditional -x c -E"
+        else
+            cpp="cpp -undef -traditional -x c -E"
+        fi
+        sed -i 's|${PA_CPP}|'"$cpp"'|g' src/jbuild
+    ;;
+esac

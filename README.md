@@ -19,6 +19,10 @@ Building on Unix
 
 First install `wget`, `opam` using your package manager of choice.
 
+VPNKit will currently not compile with ocaml 4.05. If you have ocaml 4.05 you can install 
+an earlier version with `opam switch [version]` and follow the instructions. Version 4.04.2
+should work fine.
+
 Build all the dependencies and the program itself with:
 
 ```

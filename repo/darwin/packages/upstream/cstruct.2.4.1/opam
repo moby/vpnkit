@@ -42,12 +42,13 @@ remove:  [
 ]
 depends: [
   "ocamlfind" {build}
-  "ounit"     {test}
+  "ounit" {test}
   "ocplib-endian"
   "sexplib"
   "base-bytes"
   "ocaml-migrate-parsetree"
   "ppx_tools_versioned"
+  "conf-time"
 ]
 depopts: [
   "async"
@@ -55,7 +56,3 @@ depopts: [
   "base-unix"
 ]
 available: [ocaml-version >= "4.02.3"]
-depexts: [
-  [ ["debian"] ["time"] ]
-  [ ["ubuntu"] ["time"] ]
-]
