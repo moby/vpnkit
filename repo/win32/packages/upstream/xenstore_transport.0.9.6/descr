@@ -1,6 +1,0 @@
-Low-level libraries for connecting to a xenstore service on a xen host.
-
-These libraries contain the IO functions for communicating with a
-xenstore service on a xen host. One subpackage deals with regular Unix
-threads and another deals with Lwt co-operative threads.
-

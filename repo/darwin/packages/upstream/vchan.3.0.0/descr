@@ -1,4 +1,0 @@
-Xen Vchan implementation
-Vchan is a high performance inter-domain communications protocol using
-shared memory. This implementation runs in both userspace and
-kernelspace using Mirage.

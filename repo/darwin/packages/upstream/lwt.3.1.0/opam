@@ -24,7 +24,7 @@ build: [
 build-test: [ [ "jbuilder" "runtest" "-p" name ] ]
 
 depends: [
-  "cppo" {build}
+  "cppo" {build & >= "1.1.0"}
   "jbuilder" {build & >= "1.0+beta10"}
   # We are only using ocamlfind during configuration of the Unix binding.
   "ocamlfind" {build & >= "1.5.0"}
