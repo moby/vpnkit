@@ -63,6 +63,7 @@ depends: [
   "ounit" {test}
   "alcotest" {test}
   "mirage-vnetif" { = "0.2.0" }
+  "mirage-conduit" { = "2.2.0" }
   "uuidm"
   "ezjsonm"
 ]
