@@ -13,7 +13,7 @@ let (/) = Filename.concat
 let home = try Sys.getenv "HOME" with Not_found -> "/Users/root"
 let vsock_port = 62373l
 
-module Make_unix(Host: Sig.HOST) = struct
+module Unix = struct
 
   let vsock_path =
     ref (home / "Library/Containers/com.docker.docker/Data/@connect")
@@ -41,7 +41,7 @@ module Make_unix(Host: Sig.HOST) = struct
         Fmt.kstrf Lwt.fail_with "%a" pp_write_error e
 end
 
-module Make_hvsock(Host: Sig.HOST) = struct
+module Hvsock = struct
   (* Avoid using `detach` because we don't want to exhaust the
      thread pool since this will block the main TCP/IP stack. *)
   module F =

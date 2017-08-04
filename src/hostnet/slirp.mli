@@ -42,7 +42,6 @@ module Make
        val connect: unit -> t Lwt.t
      end)
     (Random: Mirage_random.C)
-    (Host: Sig.HOST)
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) :
 sig
 

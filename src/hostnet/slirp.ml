@@ -98,12 +98,11 @@ module Make
        val connect: unit -> t Lwt.t
      end)
     (Random: Mirage_random.C)
-    (Host: Sig.HOST)
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) =
 struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
 
-module Filteredif = Filter.Make(Vmnet)
+  module Filteredif = Filter.Make(Vmnet)
   module Netif = Capture.Make(Filteredif)
   module Recorder = (Netif: Sig.RECORDER with type t = Netif.t)
   module Switch = Mux.Make(Netif)

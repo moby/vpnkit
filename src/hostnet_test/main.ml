@@ -5,8 +5,6 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Tests = Suite.Make(Host_uwt)
-
 let ppf, flush =
   let b = Buffer.create 255 in
   let flush () = let s = Buffer.contents b in Buffer.clear b; s in
@@ -20,7 +18,7 @@ let reporter =
       msgf @@ fun ?header:_ ?tags:_ fmt ->
       let t = Unix.gettimeofday () -. start in
       Format.kfprintf k ppf ("%.5f [%a] @[" ^^ fmt ^^ "@]@.") t Logs.pp_level level in
-   { Logs.report }
+    { Logs.report }
 
 (* Run it *)
 let () =
@@ -38,4 +36,4 @@ let () =
            Printf.fprintf stderr "Starting test case %s\n%!" case;
            fn ()
          ) cases
-    ) (Tests.tests @ Tests.scalability)
+    ) (Suite.tests @ Suite.scalability)

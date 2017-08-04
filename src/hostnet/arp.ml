@@ -143,7 +143,7 @@ module Make (Ethif: Mirage_protocols_lwt.ETHIF) = struct
               f "error while reading ARP packet: %a" Ethif.pp_error e);
       end else Lwt.return_unit
     |2 -> (* Reply *)
-       (* the requested address *)
+      (* the requested address *)
       let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
       Log.debug (fun f -> f "ARP ignoring reply %s" (Ipaddr.V4.to_string spa));
       Lwt.return_unit
@@ -156,8 +156,8 @@ module Make (Ethif: Mirage_protocols_lwt.ETHIF) = struct
   let connect ~table ethif =
     let table =
       List.fold_left (fun acc (ip, mac) ->
-        Table.add ip mac acc
-      ) Table.empty table
+          Table.add ip mac acc
+        ) Table.empty table
     in
     { table; ethif }
 

@@ -409,30 +409,30 @@ module Sockets = struct
       let connect ?(read_buffer_size = default_read_buffer_size) (ip, port) =
         let description = Fmt.strf "tcp:%a:%d" Ipaddr.pp_hum ip port in
         let label = match ip with
-          | Ipaddr.V4 _ -> "TCPv4"
-          | Ipaddr.V6 _ -> "TCPv6" in
+        | Ipaddr.V4 _ -> "TCPv4"
+        | Ipaddr.V6 _ -> "TCPv6" in
         register_connection_noexn description
         >>= function
         | None ->
           errorf "Socket.%s.connect %s: hit connection limit" label description
         | Some idx ->
-        let fd =
-          try match ip with
-          | Ipaddr.V4 _ -> Uwt.Tcp.init_ipv4_exn ()
-          | Ipaddr.V6 _ -> Uwt.Tcp.init_ipv6_exn ()
-          with e -> deregister_connection idx; raise e in
-        Lwt.catch (fun () ->
-            let sockaddr = make_sockaddr (ip, port) in
-            Uwt.Tcp.connect fd ~addr:sockaddr >>= fun () ->
-            of_fd ~idx ~label ~read_buffer_size ~description fd
-            |> Lwt_result.return
-          ) (fun e ->
-            deregister_connection idx;
-            log_exception_continue "Tcp.connect Uwt.Tcp.close_wait"
-              (fun () -> Uwt.Tcp.close_wait fd)
-            >>= fun () ->
-            errorf "Socket.%s.connect %s: caught %a" label description Fmt.exn e
-          )
+          let fd =
+            try match ip with
+            | Ipaddr.V4 _ -> Uwt.Tcp.init_ipv4_exn ()
+            | Ipaddr.V6 _ -> Uwt.Tcp.init_ipv6_exn ()
+            with e -> deregister_connection idx; raise e in
+          Lwt.catch (fun () ->
+              let sockaddr = make_sockaddr (ip, port) in
+              Uwt.Tcp.connect fd ~addr:sockaddr >>= fun () ->
+              of_fd ~idx ~label ~read_buffer_size ~description fd
+              |> Lwt_result.return
+            ) (fun e ->
+              deregister_connection idx;
+              log_exception_continue "Tcp.connect Uwt.Tcp.close_wait"
+                (fun () -> Uwt.Tcp.close_wait fd)
+              >>= fun () ->
+              errorf "Socket.%s.connect %s: caught %a" label description Fmt.exn e
+            )
 
       let shutdown_read _ =
         Lwt.return ()
