@@ -139,6 +139,7 @@ let config_without_bridge =
     get_domain_search = (fun () -> []);
     get_domain_name = (fun () -> "local");
     client_uuids;
+    vnet_switch = Vnet.create ();
     bridge_connections = false;
     global_arp_table;
     mtu = 1500;
@@ -159,12 +160,12 @@ let set_slirp_stack c =
   slirp_stack := Some c;
   Lwt_condition.signal slirp_stack_c ()
 
-let start_stack vnet_switch config () =
+let start_stack config () =
   Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
   >|= fun server ->
   let _, port = Host.Sockets.Stream.Tcp.getsockname server in
   Host.Sockets.Stream.Tcp.listen server (fun flow ->
-      Slirp_stack.connect config flow vnet_switch >>= fun stack ->
+      Slirp_stack.connect config flow  >>= fun stack ->
       set_slirp_stack stack;
       Log.info (fun f -> f "stack connected");
       Slirp_stack.after_disconnect stack >|= fun () ->
@@ -174,7 +175,7 @@ let start_stack vnet_switch config () =
 
 let connection =
   config_without_bridge >>= fun config ->
-  start_stack (Vnet.create ()) config ()
+  start_stack config ()
 
 let with_stack f =
   connection >>= fun port ->

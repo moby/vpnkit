@@ -17,7 +17,7 @@ type uuid_table = {
 (** A slirp TCP/IP stack ready to accept connections *)
 
 
-type 'clock config = {
+type ('clock, 'vnet_switch) config = {
   server_macaddr: Macaddr.t;
   peer_ip: Ipaddr.V4.t;
   local_ip: Ipaddr.V4.t;
@@ -27,6 +27,7 @@ type 'clock config = {
   get_domain_name: unit -> string;
   global_arp_table: arp_table;
   client_uuids: uuid_table;
+  vnet_switch: 'vnet_switch;
   bridge_connections: bool;
   mtu: int;
   host_names: Dns.Name.t list;
@@ -45,13 +46,13 @@ module Make
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) :
 sig
 
-  val create: ?host_names:Dns.Name.t list -> Clock.t -> Config.t ->
-    Clock.t config Lwt.t
+  val create: ?host_names:Dns.Name.t list -> Clock.t -> Vnet.t -> Config.t ->
+    (Clock.t, Vnet.t) config Lwt.t
   (** Initialise a TCP/IP stack, taking configuration from the Config.t *)
 
   type t
 
-  val connect: Clock.t config -> Vmnet.fd -> Vnet.t -> t Lwt.t
+  val connect: (Clock.t, Vnet.t) config -> Vmnet.fd -> t Lwt.t
   (** Read and write ethernet frames on the given fd, connected to the
       specified Vnetif backend *)
 
