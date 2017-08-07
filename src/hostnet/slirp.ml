@@ -1370,7 +1370,7 @@ struct
     } in
     Lwt.return t
 
-  let client_macaddr_of_uuid t (uuid:Uuidm.t) =
+  let client_connect_by_uuid t (uuid:Uuidm.t) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
         if (Hashtbl.mem t.client_uuids.table uuid) then begin
           (* uuid already used, get config *)
@@ -1472,7 +1472,7 @@ struct
       if t.bridge_connections then begin
         or_failwith "vmnet" @@
         Vmnet.of_fd
-          ~client_macaddr_of_uuid:(client_macaddr_of_uuid t)
+          ~client_macaddr_of_uuid:(client_connect_by_uuid t)
           ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
         >>= fun x ->
         let client_macaddr = Vmnet.get_client_macaddr x in
