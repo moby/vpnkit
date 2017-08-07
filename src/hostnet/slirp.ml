@@ -1370,7 +1370,7 @@ struct
     } in
     Lwt.return t
 
-  let client_macaddr_of_uuid t first_ip (uuid:Uuidm.t) =
+  let client_macaddr_of_uuid t (uuid:Uuidm.t) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
         if (Hashtbl.mem t.client_uuids.table uuid) then begin
           (* uuid already used, get config *)
@@ -1410,7 +1410,7 @@ struct
                   f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
               let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
               let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
-              let lowest_ip_int32 = Ipaddr.V4.to_int32 first_ip in
+              let lowest_ip_int32 = Ipaddr.V4.to_int32 t.peer_ip in
               if (preferred_ip_int32 > highest_ip_int32)
               || (preferred_ip_int32 <  lowest_ip_int32)
               then begin
@@ -1419,7 +1419,7 @@ struct
               if not (List.mem preferred_ip used_ips) then begin
                 Some preferred_ip
               end else begin
-                Fmt.kstrf failwith "Preferred IP address %s not available"
+                Fmt.kstrf failwith "Preferred IP address %s already used."
                   (Ipaddr.V4.to_string preferred_ip)
               end
             end else begin
@@ -1444,7 +1444,7 @@ struct
           in
 
           let client_ip = match preferred_ip with
-          | None    -> next_unique_ip first_ip
+          | None    -> next_unique_ip t.peer_ip
           | Some ip -> ip
           in
 
@@ -1472,7 +1472,7 @@ struct
       if t.bridge_connections then begin
         or_failwith "vmnet" @@
         Vmnet.of_fd
-          ~client_macaddr_of_uuid:(client_macaddr_of_uuid t t.peer_ip)
+          ~client_macaddr_of_uuid:(client_macaddr_of_uuid t)
           ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
         >>= fun x ->
         let client_macaddr = Vmnet.get_client_macaddr x in
