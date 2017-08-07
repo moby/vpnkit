@@ -159,12 +159,12 @@ let set_slirp_stack c =
   slirp_stack := Some c;
   Lwt_condition.signal slirp_stack_c ()
 
-let start_stack l2_switch config () =
+let start_stack vnet_switch config () =
   Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
   >|= fun server ->
   let _, port = Host.Sockets.Stream.Tcp.getsockname server in
   Host.Sockets.Stream.Tcp.listen server (fun flow ->
-      Slirp_stack.connect config flow l2_switch >>= fun stack ->
+      Slirp_stack.connect config flow vnet_switch >>= fun stack ->
       set_slirp_stack stack;
       Log.info (fun f -> f "stack connected");
       Slirp_stack.after_disconnect stack >|= fun () ->

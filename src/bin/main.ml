@@ -322,7 +322,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     let uri = Uri.of_string socket_url in
 
-    let l2_switch = Vnet.create () in
+    let vnet_switch = Vnet.create () in
 
     match Uri.scheme uri with
     | Some "hyperv-connect" ->
@@ -340,7 +340,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       ) >>= fun stack_config ->
       hvsock_connect_forever socket_url sockaddr (fun fd ->
           let conn = HV.connect fd in
-          Slirp_stack.connect stack_config conn l2_switch >>= fun stack ->
+          Slirp_stack.connect stack_config conn vnet_switch >>= fun stack ->
           Log.info (fun f -> f "stack connected");
           start_introspection introspection_url (Slirp_stack.filesystem stack);
           start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
@@ -358,7 +358,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       | None -> Lwt.return hardcoded_configuration
       ) >>= fun stack_config ->
       Host.Sockets.Stream.Unix.listen server (fun conn ->
-          Slirp_stack.connect stack_config conn l2_switch >>= fun stack ->
+          Slirp_stack.connect stack_config conn vnet_switch >>= fun stack ->
           Log.info (fun f -> f "stack connected");
           start_introspection introspection_url (Slirp_stack.filesystem stack);
           start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;

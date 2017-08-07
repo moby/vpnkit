@@ -412,8 +412,8 @@ struct
   end
 
   type t = {
-    l2_switch: Vnet.t;
-    l2_client_id: Vnet.id;
+    vnet_switch: Vnet.t;
+    vnet_client_id: Vnet.id;
     after_disconnect: unit Lwt.t;
     interface: Netif.t;
     switch: Switch.t;
@@ -812,7 +812,7 @@ struct
     >>= fun () ->
     delete_unused_endpoints t ()
 
-  let connect x l2_switch l2_client_id client_macaddr server_macaddr peer_ip
+  let connect x vnet_switch vnet_client_id client_macaddr server_macaddr peer_ip
       local_ip highest_ip extra_dns_ip mtu get_domain_search get_domain_name
       (global_arp_table:arp_table) use_bridge clock
     =
@@ -861,8 +861,8 @@ struct
     let endpoints_m = Lwt_mutex.create () in
     let udp_nat = Udp_nat.create clock in
     let t = {
-      l2_switch;
-      l2_client_id;
+      vnet_switch;
+      vnet_client_id;
       after_disconnect = Vmnet.after_disconnect x;
       interface;
       switch;
@@ -919,12 +919,12 @@ struct
 
     (* If using bridge, add listener *)
     if use_bridge then begin
-      Vnet.set_listen_fn t.l2_switch t.l2_client_id (fun buf ->
+      Vnet.set_listen_fn t.vnet_switch t.vnet_client_id (fun buf ->
           match parse [ buf ] with
           | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) ->
             Log.debug (fun f ->
                 f "%d: received from bridge %s->%s, sent to switch.write"
-                  l2_client_id
+                  vnet_client_id
                   (Macaddr.to_string eth_src)
                   (Macaddr.to_string eth_dst));
             (Switch.write switch buf >|= function
@@ -949,10 +949,10 @@ struct
           (* not to server, client or broadcast.. *)
           if use_bridge then begin
             Log.debug (fun f ->
-                f "%d: forwarded to bridge for %s->%s" l2_client_id
+                f "%d: forwarded to bridge for %s->%s" vnet_client_id
                   (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
             (* pass to virtual network *)
-            Vnet.write t.l2_switch t.l2_client_id buf >|= function
+            Vnet.write t.vnet_switch t.vnet_client_id buf >|= function
             | Ok ()   -> ()
             | Error e ->
               Log.err (fun l -> l "Vnet write failed: %a" Mirage_device.pp_error e)
@@ -966,13 +966,13 @@ struct
                          payload = Ipv4 { payload = Udp { dst = 68; _ }; _ };
                          _ }) ->
           Log.debug (fun f ->
-              f "%d: dhcp %s->%s" l2_client_id
+              f "%d: dhcp %s->%s" vnet_client_id
                 (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
           Dhcp.callback dhcp buf
         | Ok (Ethernet { dst = eth_dst ; src = eth_src ;
                          payload = Arp { op = `Request }; _ }) ->
           Log.debug (fun f ->
-              f "%d: arp %s->%s" l2_client_id
+              f "%d: arp %s->%s" vnet_client_id
                 (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
           (* Arp.input expects only the ARP packet, with no ethernet
              header prefix *)
@@ -1370,25 +1370,25 @@ struct
     } in
     Lwt.return t
 
-  let client_macaddr_of_uuid t first_ip l2_switch (uuid:Uuidm.t) =
+  let client_macaddr_of_uuid t first_ip vnet_switch (uuid:Uuidm.t) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
         if (Hashtbl.mem t.client_uuids.table uuid) then begin
           (* uuid already used, get config *)
-          let (ip, l2_client_id) = (Hashtbl.find t.client_uuids.table uuid) in
-          let mac = (Vnet.mac l2_switch l2_client_id) in
+          let (ip, vnet_client_id) = (Hashtbl.find t.client_uuids.table uuid) in
+          let mac = (Vnet.mac vnet_switch vnet_client_id) in
           Log.info (fun f->
               f "Reconnecting MAC %s with IP %s"
                 (Macaddr.to_string mac) (Ipaddr.V4.to_string ip));
           Lwt.return mac (* may raise Not_found if id is unknown to the bridge *)
         end else begin (* new uuid, register in bridge *)
           (* register new client on bridge *)
-          let l2_client_id = match Vnet.register l2_switch with
+          let vnet_client_id = match Vnet.register vnet_switch with
           | `Ok x    -> Ok x
           | `Error e -> Error e
           in
-          or_failwith "l2_switch" @@ Lwt.return l2_client_id
-          >>= fun l2_client_id ->
-          let client_macaddr = (Vnet.mac l2_switch l2_client_id) in
+          or_failwith "vnet_switch" @@ Lwt.return vnet_client_id
+          >>= fun vnet_client_id ->
+          let client_macaddr = (Vnet.mac vnet_switch vnet_client_id) in
 
           let used_ips =
             Hashtbl.fold (fun _ v l ->
@@ -1455,7 +1455,7 @@ struct
               Lwt.return_unit)  >>= fun () ->
 
           (* add to client table and return mac *)
-          Hashtbl.replace t.client_uuids.table uuid (client_ip, l2_client_id);
+          Hashtbl.replace t.client_uuids.table uuid (client_ip, vnet_client_id);
           Lwt.return client_macaddr
         end
       )
@@ -1465,21 +1465,21 @@ struct
         Lwt.return (Hashtbl.find t.client_uuids.table uuid)
       )
 
-  let connect t client l2_switch =
+  let connect t client vnet_switch =
     Log.debug (fun f -> f "accepted vmnet connection");
     begin
       (* If bridge is in use, create unique IP and update global ARP *)
       if t.bridge_connections then begin
         or_failwith "vmnet" @@
         Vmnet.of_fd
-          ~client_macaddr_of_uuid:(client_macaddr_of_uuid t t.peer_ip l2_switch)
+          ~client_macaddr_of_uuid:(client_macaddr_of_uuid t t.peer_ip vnet_switch)
           ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
         >>= fun x ->
         let client_macaddr = Vmnet.get_client_macaddr x in
         let client_uuid = Vmnet.get_client_uuid x in
         get_client_ip_id t client_uuid
-        >>= fun (client_ip, l2_client_id) ->
-        connect x l2_switch l2_client_id client_macaddr t.server_macaddr
+        >>= fun (client_ip, vnet_client_id) ->
+        connect x vnet_switch vnet_client_id client_macaddr t.server_macaddr
           client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu
           t.get_domain_search t.get_domain_name t.global_arp_table
           t.bridge_connections t.clock
@@ -1491,7 +1491,7 @@ struct
           ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
         >>= fun x ->
         let client_macaddr = Vmnet.get_client_macaddr x in
-        connect x l2_switch (-1) client_macaddr t.server_macaddr t.peer_ip
+        connect x vnet_switch (-1) client_macaddr t.server_macaddr t.peer_ip
           t.local_ip t.highest_ip t.extra_dns_ip t.mtu t.get_domain_search
           t.get_domain_name t.global_arp_table t.bridge_connections t.clock
       end
