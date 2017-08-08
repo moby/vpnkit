@@ -262,6 +262,8 @@ struct
       clock:                    Clock.t;
       mutable pending:          Tcp.Id.Set.t;
       mutable last_active_time: float;
+      (* Tasks that will be signalled if the endpoint is destroyed *)
+      mutable on_destroy:       unit Lwt.u Tcp.Id.Map.t;
     }
     (** A generic TCP/IP endpoint *)
 
@@ -284,11 +286,16 @@ struct
 
       let pending = Tcp.Id.Set.empty in
       let last_active_time = Unix.gettimeofday () in
+      let on_destroy = Tcp.Id.Map.empty in
       let tcp_stack =
         { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; pending;
-          last_active_time; clock }
+          last_active_time; clock; on_destroy }
       in
       Lwt.return tcp_stack
+
+    let destroy t =
+      Tcp.Id.Map.iter (fun _ u -> Lwt.wakeup_later u ()) t.on_destroy;
+      t.on_destroy <- Tcp.Id.Map.empty
 
     let intercept_tcp_syn t ~id ~syn on_syn_callback (buf: Cstruct.t) =
       if syn then begin
@@ -300,9 +307,14 @@ struct
           Lwt.return_unit
         end else begin
           t.pending <- Tcp.Id.Set.add id t.pending;
+          (* Add a task to the "on_destroy" list which will be signalled if
+             the Endpoint is disconnected from the switch and we should close
+             connections. *)
+          let close, close_request = Lwt.task () in
+          t.on_destroy <- Tcp.Id.Map.add id close_request t.on_destroy;
           Lwt.finalize
             (fun () ->
-               on_syn_callback ()
+               on_syn_callback close
                >>= fun listeners ->
                let src = Stack_tcp_wire.dst id in
                let dst = Stack_tcp_wire.src id in
@@ -324,7 +336,7 @@ struct
       Mirage_flow_lwt.Proxy(Clock)(Stack_tcp)(Host.Sockets.Stream.Tcp)
 
     let input_tcp t ~id ~syn (ip, port) (buf: Cstruct.t) =
-      intercept_tcp_syn t ~id ~syn (fun () ->
+      intercept_tcp_syn t ~id ~syn (fun close ->
           Host.Sockets.Stream.Tcp.connect (ip, port)
           >>= function
           | Error (`Msg m) ->
@@ -346,9 +358,21 @@ struct
                   Lwt.return_unit
                 | Some socket ->
                   Lwt.finalize (fun () ->
-                      Proxy.proxy t.clock flow socket
+                    Lwt.pick [
+                      Lwt.map
+                        (function Error e -> Error (`Proxy e) | Ok x -> Ok x)
+                        (Proxy.proxy t.clock flow socket);
+                      Lwt.map
+                        (fun () -> Error `Close)
+                        close
+                    ]
                       >>= function
-                      | Error e ->
+                      | Error (`Close) ->
+                        Log.info (fun f ->
+                          f "%s proxy closed due to switch port disconnection"
+                            (Tcp.Flow.to_string tcp));
+                        Lwt.return_unit
+                      | Error (`Proxy e) ->
                         Log.debug (fun f ->
                             f "%s proxy failed with %a"
                               (Tcp.Flow.to_string tcp) Proxy.pp_error e);
@@ -359,6 +383,7 @@ struct
                       Log.debug (fun f ->
                           f "closing flow %s" (string_of_id tcp.Tcp.Flow.id));
                       tcp.Tcp.Flow.socket <- None;
+                      t.on_destroy <- Tcp.Id.Map.remove id t.on_destroy;
                       Tcp.Flow.remove tcp.Tcp.Flow.id;
                       Host.Sockets.Stream.Tcp.close socket
                     )
@@ -484,9 +509,9 @@ struct
       let id =
         Stack_tcp_wire.v ~src_port:53 ~dst:src ~src:dst ~dst_port:src_port
       in
-      Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun () ->
+      Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun close ->
           !dns >>= fun t ->
-          Dns_forwarder.handle_tcp ~t
+          Dns_forwarder.handle_tcp ~t ~close
         ) raw
       >|= ok
 
@@ -808,10 +833,11 @@ struct
           let now = Unix.gettimeofday () in
           let old_ips = IPMap.fold (fun ip endpoint acc ->
               let age = now -. endpoint.Endpoint.last_active_time in
-              if age > (float_of_int port_max_idle_time) then ip :: acc else acc
+              if age > (float_of_int port_max_idle_time) then (ip, endpoint) :: acc else acc
             ) t.endpoints [] in
-          List.iter (fun ip ->
+          List.iter (fun (ip, endpoint) ->
               Switch.remove t.switch ip;
+              Endpoint.destroy endpoint;
               t.endpoints <- IPMap.remove ip t.endpoints
             ) old_ips;
           Lwt.return_unit

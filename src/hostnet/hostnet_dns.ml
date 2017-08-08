@@ -356,7 +356,7 @@ struct
     | Ok buffer ->
       Udp.write ~src_port:53 ~dst:src ~dst_port:src_port udp buffer
 
-  let handle_tcp ~t =
+  let handle_tcp ~t ~close =
     (* FIXME: need to record the upstream request *)
     let listeners _ =
       Log.debug (fun f -> f "DNS TCP handshake complete");
@@ -384,7 +384,10 @@ struct
             Lwt.async queries;
             loop ()
         in
-        loop ()
+        Lwt.pick [
+          loop ();
+          close
+        ]
       in
       Some f
     in
