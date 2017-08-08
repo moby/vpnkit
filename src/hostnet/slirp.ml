@@ -15,7 +15,6 @@ let default_highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
 
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
-let default_client_macaddr = Macaddr.of_string_exn "C0:FF:EE:C0:FF:EE"
 let default_dns_extra = []
 let default_uuid_preferred_ip_prefix = Bytes.make 12 '\000'
 
