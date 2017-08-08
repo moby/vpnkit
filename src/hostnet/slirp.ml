@@ -84,7 +84,6 @@ type ('a, 'b) config = {
   global_arp_table: arp_table;
   client_uuids: uuid_table;
   vnet_switch: 'b;
-  bridge_connections: bool;
   mtu: int;
   host_names: Dns.Name.t list;
   clock: 'a;
@@ -814,7 +813,7 @@ struct
 
   let connect x vnet_switch vnet_client_id client_macaddr server_macaddr peer_ip
       local_ip highest_ip extra_dns_ip mtu get_domain_search get_domain_name
-      (global_arp_table:arp_table) use_bridge clock
+      (global_arp_table:arp_table) clock
     =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
@@ -847,13 +846,7 @@ struct
     (* Listen on local IPs *)
     let local_ips = local_ip :: extra_dns_ip in
 
-    let highest_peer_ip =
-      if use_bridge then begin
-        Some highest_ip
-      end else begin
-        None (* just set smallest available prefix *)
-      end
-    in
+    let highest_peer_ip = Some highest_ip in
     let dhcp = Dhcp.make ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
         ~extra_dns_ip ~get_domain_search ~get_domain_name clock switch in
 
@@ -917,22 +910,20 @@ struct
     Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
 
     (* If using bridge, add listener *)
-    if use_bridge then begin
-      Vnet.set_listen_fn vnet_switch t.vnet_client_id (fun buf ->
-          match parse [ buf ] with
-          | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) ->
-            Log.debug (fun f ->
-                f "%d: received from bridge %s->%s, sent to switch.write"
-                  vnet_client_id
-                  (Macaddr.to_string eth_src)
-                  (Macaddr.to_string eth_dst));
-            (Switch.write switch buf >|= function
-              | Ok ()   -> ()
-              | Error e ->
-                Log.err (fun l -> l "switch write failed: %a" Switch.pp_error e))
-          (* write packets from virtual network directly to client *)
-          | _ -> Lwt.return_unit );
-    end;
+    Vnet.set_listen_fn vnet_switch t.vnet_client_id (fun buf ->
+        match parse [ buf ] with
+        | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) ->
+          Log.debug (fun f ->
+              f "%d: received from bridge %s->%s, sent to switch.write"
+                vnet_client_id
+                (Macaddr.to_string eth_src)
+                (Macaddr.to_string eth_dst));
+          (Switch.write switch buf >|= function
+            | Ok ()   -> ()
+            | Error e ->
+              Log.err (fun l -> l "switch write failed: %a" Switch.pp_error e))
+        (* write packets from virtual network directly to client *)
+        | _ -> Lwt.return_unit );
 
     (* Add a listener which looks for new flows *)
     Log.info (fun f ->
@@ -946,17 +937,15 @@ struct
                   Macaddr.compare eth_dst server_macaddr = 0 ||
                   Macaddr.compare eth_dst Macaddr.broadcast = 0)) ->
           (* not to server, client or broadcast.. *)
-          if use_bridge then begin
-            Log.debug (fun f ->
-                f "%d: forwarded to bridge for %s->%s" vnet_client_id
-                  (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
-            (* pass to virtual network *)
+          Log.debug (fun f ->
+              f "%d: forwarded to bridge for %s->%s" vnet_client_id
+                (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
+          (* pass to virtual network *)
+          begin
             Vnet.write vnet_switch t.vnet_client_id buf >|= function
             | Ok ()   -> ()
             | Error e ->
               Log.err (fun l -> l "Vnet write failed: %a" Mirage_device.pp_error e)
-          end else begin
-            Lwt.return_unit (* drop if bridge is not used *)
           end
         | Ok (Ethernet { dst = eth_dst ; src = eth_src ;
                          payload = Ipv4 { payload = Udp { dst = 67; _ }; _ };
@@ -976,17 +965,11 @@ struct
           (* Arp.input expects only the ARP packet, with no ethernet
              header prefix *)
           begin
-            if use_bridge then begin
-              (* reply with global table if bridge is in use *)
-              Lwt_mutex.with_lock global_arp_table.mutex (fun _ ->
-                  Global_arp.connect ~table:global_arp_table.table
-                    global_arp_ethif
-                  |> Lwt.return)
-            end else begin
-              (* if not, use local table *)
-              Global_arp.connect ~table:local_arp_table global_arp_ethif
-              |> Lwt.return
-            end
+            (* reply with global table if bridge is in use *)
+            Lwt_mutex.with_lock global_arp_table.mutex (fun _ ->
+                Global_arp.connect ~table:global_arp_table.table
+                  global_arp_ethif
+                |> Lwt.return)
           end
           >>= fun arp ->
           Global_arp.input arp (Cstruct.shift buf Ethif_wire.sizeof_ethernet)
@@ -1294,13 +1277,6 @@ struct
     Lwt.async (fun () -> restart_on_change "slirp/mtu" string_of_int mtus);
     let mtu = Active_config.hd mtus in
 
-    let bridge_connections_path = driver @ [ "slirp"; "bridge-connections" ] in
-    Config.int config ~default:1 bridge_connections_path
-    >>= fun bridge_conn ->
-    Lwt.async (fun () ->
-        restart_on_change "slirp/bridge-connections" string_of_int bridge_conn);
-    let bridge_connections = ((Active_config.hd bridge_conn) != 0) in
-
     let http_intercept_path = driver @ [ "slirp"; "http-intercept" ] in
     Config.string_option config http_intercept_path
     >>= fun string_http_intercept_settings ->
@@ -1339,9 +1315,9 @@ struct
 
     Log.info (fun f ->
         f "Creating slirp server peer_ip:%s local_ip:%s domain_search:%s \
-           mtu:%d bridge:%B"
+           mtu:%d"
           (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
-          (String.concat " " !domain_search) mtu bridge_connections
+          (String.concat " " !domain_search) mtu
       );
 
     let global_arp_table : arp_table = {
@@ -1363,7 +1339,6 @@ struct
       global_arp_table;
       client_uuids;
       vnet_switch;
-      bridge_connections;
       mtu;
       host_names;
       clock;
@@ -1468,33 +1443,19 @@ struct
   let connect t client =
     Log.debug (fun f -> f "accepted vmnet connection");
     begin
-      (* If bridge is in use, create unique IP and update global ARP *)
-      if t.bridge_connections then begin
-        or_failwith "vmnet" @@
-        Vmnet.of_fd
-          ~client_macaddr_of_uuid:(client_connect_by_uuid t)
-          ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
-        >>= fun x ->
-        let client_macaddr = Vmnet.get_client_macaddr x in
-        let client_uuid = Vmnet.get_client_uuid x in
-        get_client_ip_id t client_uuid
-        >>= fun (client_ip, vnet_client_id) ->
-        connect x t.vnet_switch vnet_client_id client_macaddr t.server_macaddr
-          client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu
-          t.get_domain_search t.get_domain_name t.global_arp_table
-          t.bridge_connections t.clock
-      end else begin
-        (* When bridge is disabled, just use fixed uuid and peer_ip from t *)
-        or_failwith "vmnet" @@
-        Vmnet.of_fd
-          ~client_macaddr_of_uuid:(fun _ -> Lwt.return default_client_macaddr)
-          ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
-        >>= fun x ->
-        let client_macaddr = Vmnet.get_client_macaddr x in
-        connect x t.vnet_switch (-1) client_macaddr t.server_macaddr t.peer_ip
-          t.local_ip t.highest_ip t.extra_dns_ip t.mtu t.get_domain_search
-          t.get_domain_name t.global_arp_table t.bridge_connections t.clock
-      end
+      or_failwith "vmnet" @@
+      Vmnet.of_fd
+        ~client_macaddr_of_uuid:(client_connect_by_uuid t)
+        ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
+      >>= fun x ->
+      let client_macaddr = Vmnet.get_client_macaddr x in
+      let client_uuid = Vmnet.get_client_uuid x in
+      get_client_ip_id t client_uuid
+      >>= fun (client_ip, vnet_client_id) ->
+      connect x t.vnet_switch vnet_client_id client_macaddr t.server_macaddr
+        client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu
+        t.get_domain_search t.get_domain_name t.global_arp_table
+        t.clock
     end
 
 end

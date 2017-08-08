@@ -302,7 +302,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         global_arp_table;
         client_uuids;
         vnet_switch;
-        bridge_connections = true;
         mtu = 1500;
         host_names;
         clock }

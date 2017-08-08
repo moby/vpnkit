@@ -140,7 +140,6 @@ let config_without_bridge =
     get_domain_name = (fun () -> "local");
     client_uuids;
     vnet_switch = Vnet.create ();
-    bridge_connections = false;
     global_arp_table;
     mtu = 1500;
     host_names = [];

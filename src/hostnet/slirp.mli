@@ -28,7 +28,6 @@ type ('clock, 'vnet_switch) config = {
   global_arp_table: arp_table;
   client_uuids: uuid_table;
   vnet_switch: 'vnet_switch;
-  bridge_connections: bool;
   mtu: int;
   host_names: Dns.Name.t list;
   clock: 'clock;
