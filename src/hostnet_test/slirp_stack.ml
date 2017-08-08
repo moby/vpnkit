@@ -128,7 +128,7 @@ let client_uuids : Slirp.uuid_table =
     table = Hashtbl.create 50;
   }
 
-let config_without_bridge =
+let config =
   Mclock.connect () >|= fun clock ->
   {
     Slirp.peer_ip;
@@ -139,7 +139,7 @@ let config_without_bridge =
     get_domain_search = (fun () -> []);
     get_domain_name = (fun () -> "local");
     client_uuids;
-    bridge_connections = false;
+    vnet_switch = Vnet.create ();
     global_arp_table;
     mtu = 1500;
     host_names = [];
@@ -159,12 +159,12 @@ let set_slirp_stack c =
   slirp_stack := Some c;
   Lwt_condition.signal slirp_stack_c ()
 
-let start_stack l2_switch config () =
+let start_stack config () =
   Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
   >|= fun server ->
   let _, port = Host.Sockets.Stream.Tcp.getsockname server in
   Host.Sockets.Stream.Tcp.listen server (fun flow ->
-      Slirp_stack.connect config flow l2_switch >>= fun stack ->
+      Slirp_stack.connect config flow  >>= fun stack ->
       set_slirp_stack stack;
       Log.info (fun f -> f "stack connected");
       Slirp_stack.after_disconnect stack >|= fun () ->
@@ -173,8 +173,8 @@ let start_stack l2_switch config () =
   port
 
 let connection =
-  config_without_bridge >>= fun config ->
-  start_stack (Vnet.create ()) config ()
+  config >>= fun config ->
+  start_stack config ()
 
 let with_stack f =
   connection >>= fun port ->
@@ -183,13 +183,13 @@ let with_stack f =
   | Error (`Msg x) -> failwith x
   | Ok flow ->
     Log.info (fun f -> f "Made a loopback connection");
-    let client_macaddr = Slirp.default_client_macaddr in
+    let server_macaddr = Slirp.default_server_macaddr in
     let uuid =
       match Uuidm.of_string "d1d9cd61-d0dc-4715-9bb3-4c11da7ad7a5" with
       | Some x -> x
       | None -> failwith "unable to parse test uuid"
     in
-    VMNET.client_of_fd ~uuid ~server_macaddr:client_macaddr flow
+    VMNET.client_of_fd ~uuid ~server_macaddr:server_macaddr flow
     >>= function
     | Error (`Msg x ) ->
       (* Server will close when it gets EOF *)

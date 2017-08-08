@@ -340,8 +340,8 @@ module Make(C: Sig.CONN) = struct
     client_negotiate ~uuid ~fd:channel
     >>= fun vif ->
     let t =
-      make ~client_macaddr:vif.Vif.client_macaddr
-        ~server_macaddr:server_macaddr ~mtu:vif.Vif.mtu ~client_uuid:uuid
+      make ~client_macaddr:server_macaddr
+        ~server_macaddr:vif.Vif.client_macaddr ~mtu:vif.Vif.mtu ~client_uuid:uuid
         ~log_prefix:client_log_prefix
         channel in
     Lwt_result.return t

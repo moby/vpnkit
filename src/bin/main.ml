@@ -276,6 +276,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     in
 
     Mclock.connect () >>= fun clock ->
+    let vnet_switch = Vnet.create () in
 
     let hardcoded_configuration =
       let server_macaddr = Slirp.default_server_macaddr in
@@ -300,7 +301,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         get_domain_name = (fun () -> "localdomain");
         global_arp_table;
         client_uuids;
-        bridge_connections = true;
+        vnet_switch;
         mtu = 1500;
         host_names;
         clock }
@@ -322,7 +323,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     let uri = Uri.of_string socket_url in
 
-    let l2_switch = Vnet.create () in
 
     match Uri.scheme uri with
     | Some "hyperv-connect" ->
@@ -335,12 +335,12 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           (Uri.of_string socket_url)
       in
       ( match config with
-      | Some config -> Slirp_stack.create ~host_names clock config
+      | Some config -> Slirp_stack.create ~host_names clock vnet_switch config
       | None -> Lwt.return hardcoded_configuration
       ) >>= fun stack_config ->
       hvsock_connect_forever socket_url sockaddr (fun fd ->
           let conn = HV.connect fd in
-          Slirp_stack.connect stack_config conn l2_switch >>= fun stack ->
+          Slirp_stack.connect stack_config conn >>= fun stack ->
           Log.info (fun f -> f "stack connected");
           start_introspection introspection_url (Slirp_stack.filesystem stack);
           start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
@@ -354,11 +354,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       in
       unix_listen socket_url >>= fun server ->
       ( match config with
-      | Some config -> Slirp_stack.create ~host_names clock config
+      | Some config -> Slirp_stack.create ~host_names clock vnet_switch config
       | None -> Lwt.return hardcoded_configuration
       ) >>= fun stack_config ->
       Host.Sockets.Stream.Unix.listen server (fun conn ->
-          Slirp_stack.connect stack_config conn l2_switch >>= fun stack ->
+          Slirp_stack.connect stack_config conn >>= fun stack ->
           Log.info (fun f -> f "stack connected");
           start_introspection introspection_url (Slirp_stack.filesystem stack);
           start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
