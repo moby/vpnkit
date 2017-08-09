@@ -75,7 +75,27 @@ module Client = struct
 
   module Dhcp_client_mirage1 = Dhcp_client_mirage.Make(Host.Time)(Netif)
   module Ipv41 = Dhcp_ipv4.Make(Dhcp_client_mirage1)(Ethif1)(Arpv41)
-  module Icmpv41 = Icmpv4.Make(Ipv41)
+  module Icmpv41 = struct
+    include Icmpv4.Make(Ipv41)
+    let packets = Queue.create ()
+    let input _ ~src ~dst buf =
+      match Icmpv4_packet.Unmarshal.of_cstruct buf with
+      | Error msg ->
+        Log.err (fun f -> f "Error unmarshalling ICMP message: %s" msg);
+        Lwt.return_unit
+      | Ok (reply, _) ->
+        let open Icmpv4_packet in
+        begin match reply.subheader with
+          | Next_hop_mtu _ | Pointer _ | Address _ | Unused ->
+            Log.err (fun f -> f "received an ICMP message which wasn't an echo-request or reply");
+            Lwt.return_unit
+          | Id_and_seq (id, _) ->
+            Log.info (fun f ->
+              f "ICMP src:%a dst:%a id:%d" Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum dst id);
+              Queue.push (src, dst, id) packets;
+              Lwt.return_unit
+        end
+  end
   module Udp1 = Udp.Make(Ipv41)(Stdlibrandom)
   module Tcp1 = Tcp.Flow.Make(Ipv41)(Host.Time)(Mclock)(Stdlibrandom)
   include Tcpip_stack_direct.Make(Host.Time)

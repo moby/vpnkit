@@ -385,7 +385,7 @@ let tests =
   Hosts_test.tests @ Forwarding.tests @ test_dhcp
   @ (test_dns true) @ (test_dns false)
   @ test_tcp @ Test_nat.tests @ Test_http.tests @ Test_http.Exclude.tests
-  @ Test_half_close.tests
+  @ Test_half_close.tests @ Test_ping.tests
 
 let scalability = [
   "1026conns",
