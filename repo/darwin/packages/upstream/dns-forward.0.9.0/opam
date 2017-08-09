@@ -15,6 +15,7 @@ build-test: ["jbuilder" "runtest" "-p" name]
 
 depends: [
   "jbuilder"        {build & >= "1.0+beta10"}
+  "ppx_sexp_conv"   {build}
   "cstruct"         {>= "3.0.0"}
   "logs"            {>= "0.5.0"}
   "lwt"             {>= "2.7.0"}
