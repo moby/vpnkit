@@ -135,7 +135,8 @@ struct
     Hostnet_http.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)
 
   module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Clock)(Host.Time)
-
+  module Icmp_nat = Hostnet_icmp.Make(Host.Sockets)(Clock)(Host.Time)
+  
   let dns_forwarder ~local_address ~host_names clock =
     Dns_forwarder.create ~local_address ~host_names clock (Dns_policy.config ())
 
@@ -164,6 +165,10 @@ struct
     | Ethernet { payload = Ipv4 { payload = Udp { src = 123; _ }; _ }; _ }
     | Ethernet { payload = Ipv4 { payload = Udp { dst = 123; _ }; _ }; _ } ->
       true
+    | _ -> false
+
+  let is_icmp = let open Frame in function
+    | Ethernet { payload = Ipv4 { payload = Icmp _; _ }; _ } -> true
     | _ -> false
 
   let string_of_id id =
@@ -418,6 +423,7 @@ struct
     mutable endpoints: Endpoint.t IPMap.t;
     endpoints_m: Lwt_mutex.t;
     udp_nat: Udp_nat.t;
+    icmp_nat: Icmp_nat.t;
   }
 
   let after_disconnect t = t.after_disconnect
@@ -568,6 +574,7 @@ struct
     type t = {
       endpoint:        Endpoint.t;
       udp_nat:         Udp_nat.t;
+      icmp_nat:        Icmp_nat.t;
     }
     (** Represents a remote system by proxying data to and from sockets *)
 
@@ -575,14 +582,12 @@ struct
     let input_ipv4 t ipv4 = match ipv4 with
 
     (* Respond to ICMP *)
-    | Ipv4 { raw; payload = Icmp _; _ } ->
-      let none ~src:_ ~dst:_ _ = Lwt.return_unit in
-      let default ~proto ~src ~dst buf = match proto with
-      | 1 (* ICMP *) ->
-        Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
-      | _ -> Lwt.return_unit
-      in
-      Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
+    | Ipv4 { src; dst; payload = Icmp { ty; code; seq; id; payload = Payload p; _ }; _ } ->
+      let datagram = {
+        Hostnet_icmp.src = src; dst = dst;
+        ty; code; seq; id; payload = p
+      } in
+      Icmp_nat.input ~t:t.icmp_nat ~datagram ()
       >|= ok
 
     (* Transparent HTTP intercept? *)
@@ -630,8 +635,8 @@ struct
 
     | _ -> Lwt_result.return ()
 
-    let create endpoint udp_nat =
-      let tcp_stack = { endpoint; udp_nat } in
+    let create endpoint udp_nat icmp_nat =
+      let tcp_stack = { endpoint; udp_nat; icmp_nat } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -831,6 +836,9 @@ struct
     (* Capture 64KiB of NTP traffic *)
     Netif.add_match ~t:interface ~name:"ntp.pcap" ~limit:(64 * kib)
       ~snaplen:1500 ~predicate:is_ntp;
+    (* Capture 8KiB of ICMP traffic *)
+    Netif.add_match ~t:interface ~name:"icmp.pcap" ~limit:(8 * kib)
+      ~snaplen:1500 ~predicate:is_icmp;
     or_failwith "Switch.connect" (Switch.connect interface)
     >>= fun switch ->
 
@@ -852,6 +860,7 @@ struct
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
     let udp_nat = Udp_nat.create clock in
+    let icmp_nat = Icmp_nat.create clock in
     let t = {
       vnet_client_id;
       after_disconnect = Vmnet.after_disconnect x;
@@ -860,6 +869,7 @@ struct
       endpoints;
       endpoints_m;
       udp_nat;
+      icmp_nat;
     } in
     Lwt.async @@ delete_unused_endpoints t;
 
@@ -907,6 +917,26 @@ struct
       Lwt.return_unit in
 
     Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
+
+    (* Send an ICMP datagram *)
+    let send_reply ~src ~dst ~payload =
+      find_endpoint src >>= function
+      | Error (`Msg m) ->
+          Log.err (fun f ->
+              f "Failed to create an endpoint for %a: %s" Ipaddr.V4.pp_hum dst m);
+          Lwt.return_unit
+      | Ok endpoint ->
+        let ipv4 = endpoint.Endpoint.ipv4 in
+        let buf, n = Stack_ipv4.allocate_frame ~dst ~proto:`ICMP ipv4 in
+        let ip_header = Cstruct.sub buf 0 n in
+        Stack_ipv4.write ipv4 ip_header payload
+        >|= function
+        | Error e ->
+          Log.err (fun f ->
+              f "Failed to write an IPv4 packet: %a" Stack_ipv4.pp_error e);
+        | Ok () -> () in
+
+    Icmp_nat.set_send_reply ~t:icmp_nat ~send_reply;
 
     (* If using bridge, add listener *)
     Vnet.set_listen_fn vnet_switch t.vnet_client_id (fun buf ->
@@ -999,7 +1029,7 @@ struct
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
                   f "create remote TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
-              Remote.create endpoint udp_nat
+              Remote.create endpoint udp_nat icmp_nat
             end >>= function
             | Error e ->
               Log.err (fun f ->
