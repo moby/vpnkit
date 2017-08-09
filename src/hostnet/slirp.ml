@@ -16,7 +16,6 @@ let default_highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 let default_dns_extra = []
-let default_uuid_preferred_ip_prefix = Bytes.make 12 '\000'
 
 (* When forwarding TCP, the connection is proxied so the MTU/MSS is
    link-local.  When forwarding UDP, the datagram on the internal link
@@ -1411,7 +1410,7 @@ struct
     } in
     Lwt.return t
 
-  let client_connect_by_uuid t (uuid:Uuidm.t) =
+  let connect_client_by_uuid_ip t (uuid:Uuidm.t) (preferred_ip:Ipaddr.V4.t option) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
         if (Hashtbl.mem t.client_uuids.table uuid) then begin
           (* uuid already used, get config *)
@@ -1420,7 +1419,14 @@ struct
           Log.info (fun f->
               f "Reconnecting MAC %s with IP %s"
                 (Macaddr.to_string mac) (Ipaddr.V4.to_string ip));
-          Lwt.return mac (* may raise Not_found if id is unknown to the bridge *)
+          (match preferred_ip with
+          | None -> ()
+          | Some preferred_ip ->
+            let old_ip,_ = Hashtbl.find t.client_uuids.table uuid in
+            if (Ipaddr.V4.compare old_ip preferred_ip) != 0 then
+                  failwith "Preferred IP differs from IP assigned to this UUID.");
+          (* may raise Not_found if id is unknown to the bridge *)
+          Lwt.return mac
         end else begin (* new uuid, register in bridge *)
           (* register new client on bridge *)
           let vnet_client_id = match Vnet.register t.vnet_switch with
@@ -1439,33 +1445,25 @@ struct
 
           (* check if a specific IP is requested *)
           let preferred_ip =
-            let uuid_bytes = Uuidm.to_bytes uuid in
-            let uuid_prefix =
-              Bytes.sub uuid_bytes 0 (Bytes.length default_uuid_preferred_ip_prefix)
-            in
-            if (Bytes.compare uuid_prefix default_uuid_preferred_ip_prefix) = 0
-            then begin
-              let uuid_suffix = Bytes.sub uuid_bytes 12 4 in
-              let preferred_ip = Ipaddr.V4.of_bytes_exn uuid_suffix in
-              Log.info (fun f ->
-                  f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
-              let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
-              let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
-              let lowest_ip_int32 = Ipaddr.V4.to_int32 t.peer_ip in
-              if (preferred_ip_int32 > highest_ip_int32)
-              || (preferred_ip_int32 <  lowest_ip_int32)
-              then begin
-                failwith "Preferred IP address out of range."
-              end;
-              if not (List.mem preferred_ip used_ips) then begin
-                Some preferred_ip
-              end else begin
-                Fmt.kstrf failwith "Preferred IP address %s already used."
-                  (Ipaddr.V4.to_string preferred_ip)
-              end
-            end else begin
-              None
-            end
+            match preferred_ip with
+            | None -> None
+            | Some preferred_ip ->
+                Log.info (fun f ->
+                    f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
+                let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
+                let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
+                let lowest_ip_int32 = Ipaddr.V4.to_int32 t.peer_ip in
+                if (preferred_ip_int32 > highest_ip_int32)
+                || (preferred_ip_int32 <  lowest_ip_int32)
+                then begin
+                  failwith "Preferred IP address out of range."
+                end;
+                if not (List.mem preferred_ip used_ips) then begin
+                  Some preferred_ip
+                end else begin
+                  Fmt.kstrf failwith "Preferred IP address %s already used."
+                    (Ipaddr.V4.to_string preferred_ip)
+                end
           in
 
           (* look for a new unique IP *)
@@ -1511,7 +1509,7 @@ struct
     begin
       or_failwith "vmnet" @@
       Vmnet.of_fd
-        ~client_macaddr_of_uuid:(client_connect_by_uuid t)
+        ~connect_client_fn:(connect_client_by_uuid_ip t)
         ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
       >>= fun x ->
       let client_macaddr = Vmnet.get_client_macaddr x in
