@@ -86,6 +86,11 @@ module Client = struct
     | `Error _ -> Fmt.kstrf failwith "Failed to connect %s device" name
     | `Ok x    -> Lwt.return x
 
+  type stack = {
+    t: t;
+    icmpv4: Icmpv41.t;
+  }
+
   let connect (interface: VMNET.t) =
     Ethif1.connect interface >>= fun ethif ->
     Mclock.connect () >>= fun clock ->
@@ -100,8 +105,8 @@ module Client = struct
       interface;
     } in
     connect cfg ethif arp ipv4 icmpv4 udp4 tcp4
-    >>= fun stack ->
-    Lwt.return stack
+    >>= fun t ->
+    Lwt.return { t; icmpv4 }
 end
 
 module DNS = Dns_resolver_mirage.Make(Host.Time)(Client)

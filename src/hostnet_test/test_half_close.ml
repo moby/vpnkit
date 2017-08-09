@@ -84,7 +84,7 @@ let test_mirage_half_close () =
         let open Slirp_stack in
         let ip = Ipaddr.V4.localhost in
         let port = server.Server.port in
-        Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, port)
+        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
         >|= flow ip port >>= fun flow ->
         Log.info (fun f -> f "Connected to %a:%d" Ipaddr.V4.pp_hum ip port);
         let oc = Outgoing.C.create flow in
@@ -140,7 +140,7 @@ let test_host_half_close () =
         let open Slirp_stack in
         let ip = Ipaddr.V4.localhost in
         let port = server.Server.port in
-        Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, port)
+        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
         >|= flow ip port >>= fun flow ->
         Log.info (fun f -> f "Connected to %a:%d" Ipaddr.V4.pp_hum ip port);
         let oc = Outgoing.C.create flow in

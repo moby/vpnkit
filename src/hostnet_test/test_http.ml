@@ -141,7 +141,7 @@ let intercept request =
           >>= function
           | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
           | Ok () ->
-            send_http_request stack (Ipaddr.V4.of_string_exn "127.0.0.1")
+            send_http_request stack.t (Ipaddr.V4.of_string_exn "127.0.0.1")
               request
             >>= fun () ->
             Lwt.pick [
@@ -289,7 +289,7 @@ let test_http_connect () =
             | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
             | Ok () ->
               let open Slirp_stack in
-              Client.TCPV4.create_connection (Client.tcpv4 stack)
+              Client.TCPV4.create_connection (Client.tcpv4 stack.t)
                 (test_dst_ip, 443)
               >>= function
               | Error _ ->

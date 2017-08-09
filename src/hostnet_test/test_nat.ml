@@ -110,9 +110,9 @@ let test_udp () =
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
-          let udpv4 = Client.udpv4 stack in
+          let udpv4 = Client.udpv4 stack.t in
           let virtual_port = 1024 in
-          let server = UdpServer.make stack virtual_port in
+          let server = UdpServer.make stack.t virtual_port in
           let rec loop remaining =
             if remaining = 0 then
               failwith "Timed-out before UDP response arrived";
@@ -144,11 +144,11 @@ let test_udp_2 () =
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
-          let udpv4 = Client.udpv4 stack in
+          let udpv4 = Client.udpv4 stack.t in
 
           (* Listen on one virtual source port and count received packets *)
           let virtual_port1 = 1024 in
-          let server1 = UdpServer.make stack virtual_port1 in
+          let server1 = UdpServer.make stack.t virtual_port1 in
 
           let rec loop remaining =
             if remaining = 0 then
@@ -173,7 +173,7 @@ let test_udp_2 () =
           (* Send '2' *)
           Cstruct.set_uint8 buffer 0 2;
           let virtual_port2 = 1025 in
-          let server2 = UdpServer.make stack virtual_port2 in
+          let server2 = UdpServer.make stack.t virtual_port2 in
           let rec loop remaining =
             if remaining = 0 then
               failwith "Timed-out before UDP response arrived";
@@ -208,11 +208,11 @@ let test_nat_punch () =
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
-          let udpv4 = Client.udpv4 stack in
+          let udpv4 = Client.udpv4 stack.t in
 
           (* Listen on one virtual source port and count received packets *)
           let virtual_port1 = 1024 in
-          let server1 = UdpServer.make stack virtual_port1 in
+          let server1 = UdpServer.make stack.t virtual_port1 in
 
           let rec loop remaining =
             if remaining = 0 then
@@ -269,9 +269,9 @@ let test_shared_nat_rule () =
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
-          let udpv4 = Client.udpv4 stack in
+          let udpv4 = Client.udpv4 stack.t in
           let virtual_port = 1024 in
-          let server = UdpServer.make stack virtual_port in
+          let server = UdpServer.make stack.t virtual_port in
           let init_table_size =
             Slirp_stack.Debug.get_nat_table_size slirp_server
           in
@@ -335,10 +335,10 @@ let test_source_ports () =
            (fun { EchoServer.local_port = local_port2; _ } ->
               with_stack (fun _ stack ->
                   let buffer = Cstruct.create 1024 in
-                  let udpv4 = Client.udpv4 stack in
+                  let udpv4 = Client.udpv4 stack.t in
                   (* This is the port we shall send from *)
                   let virtual_port = 1024 in
-                  let server = UdpServer.make stack virtual_port in
+                  let server = UdpServer.make stack.t virtual_port in
                   let rec loop remaining =
                     Printf.fprintf stderr "remaining=%d\n%!" remaining;
                     if remaining = 0 then

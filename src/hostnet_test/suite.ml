@@ -22,7 +22,7 @@ let run ?timeout t = run_test ?timeout (with_stack t)
 
 let test_dhcp_query () =
   let t _ stack =
-    let ips = Client.IPV4.get_ip (Client.ipv4 stack) in
+    let ips = Client.IPV4.get_ip (Client.ipv4 stack.Client.t) in
     Log.info (fun f -> f "Got an IP: %a" pp_ip4s ips);
     Lwt.return ()
   in
@@ -38,7 +38,7 @@ let set_dns_policy ?host_names use_host =
 let test_dns_query server use_host () =
   let t _ stack =
     set_dns_policy use_host >>= fun () ->
-    let resolver = DNS.create stack in
+    let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver "www.google.com" >|= function
     | (_ :: _) as ips ->
       Log.info (fun f -> f "www.google.com has IPs: %a" pp_ips ips);
@@ -53,7 +53,7 @@ let test_builtin_dns_query server use_host () =
   let t _ stack =
     set_dns_policy ~host_names:[ Dns.Name.of_string name ] use_host
     >>= fun () ->
-    let resolver = DNS.create stack in
+    let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver name >>= function
     | (_ :: _) as ips ->
       Log.info (fun f -> f "%s has IPs: %a" name pp_ips ips);
@@ -68,7 +68,7 @@ let test_etc_hosts_query server use_host () =
   let test_name = "vpnkit.is.cool.yes.really" in
   let t _ stack =
     set_dns_policy use_host >>= fun () ->
-    let resolver = DNS.create stack in
+    let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver test_name >>= function
     | (_ :: _) as ips ->
       Log.err (fun f ->
@@ -93,14 +93,14 @@ let test_etc_hosts_query server use_host () =
 let test_max_connections () =
   let t _ stack =
     Lwt.finalize (fun () ->
-        let resolver = DNS.create stack in
+        let resolver = DNS.create stack.Client.t in
         DNS.gethostbyname ~server:primary_dns_ip resolver "www.google.com"
         >>= function
         | Ipaddr.V4 ip :: _ ->
           Log.info (fun f -> f "Setting max connections to 0");
           Host.Sockets.set_max_connections (Some 0);
           begin
-            Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
+            Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
             >|= function
             | Ok _ ->
               Log.err (fun f ->
@@ -115,7 +115,7 @@ let test_max_connections () =
           Host.Sockets.set_max_connections None;
           (* Check that connections work again *)
           begin
-            Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
+            Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
             >|= function
             | Ok _ ->
               Log.debug (fun f -> f "Connected to www.google.com");
@@ -139,11 +139,11 @@ let test_max_connections () =
 
 let test_http_fetch () =
   let t _ stack =
-    let resolver = DNS.create stack in
+    let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname resolver "www.google.com" >>= function
     | Ipaddr.V4 ip :: _ ->
       begin
-        Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, 80)
+        Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
         >>= function
         | Error _ ->
           Log.err (fun f -> f "Failed to connect to www.google.com:80");
@@ -250,7 +250,7 @@ let test_many_connections n () =
       if Host.Sockets.get_num_connections () >= n
       then Lwt.return acc
       else
-        Client.TCPV4.create_connection (Client.tcpv4 stack)
+        Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t)
           (Ipaddr.V4.localhost, local_port)
         >>= function
         | Ok c ->
@@ -275,7 +275,7 @@ let test_stream_data connections length () =
   let t local_port _ stack =
     Lwt_list.iter_p (fun () ->
         let rec connect () =
-          Client.TCPV4.create_connection (Client.tcpv4 stack)
+          Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t)
             (Ipaddr.V4.localhost, local_port)
           >>= function
           | Error `Refused ->
