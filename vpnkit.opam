@@ -46,7 +46,7 @@ depends: [
   "hashcons" {>= "1.0.1"}
   "pcap-format" {>= "0.4.0"}
   "cmdliner"
-  "charrua-core" {>= "0.3"}
+  "charrua-core" {>= "0.9"}
   "charrua-client-mirage" {test}
   "named-pipe" {>= "0.4.0"}
   "hvsock" {>= "0.13.0"}
