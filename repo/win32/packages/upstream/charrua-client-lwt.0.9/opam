@@ -1,0 +1,36 @@
+opam-version: "1.2"
+name:         "charrua-client-lwt"
+maintainer:   ["Mindy Preston"]
+authors   :   ["Mindy Preston"]
+homepage:     "https://github.com/mirage/charrua-core"
+bug-reports:  "https://github.com/mirage/charrua-core/issues"
+dev-repo:     "https://github.com/mirage/charrua-core.git"
+tags:         [ "org:mirage"]
+doc:          "https://docs.mirage.io"
+
+build: [
+  ["jbuilder" "subst" "-n" name] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+
+build-test: ["jbuilder" "runtest" "-p" name "-j" jobs]
+
+depends: [
+  "jbuilder" {>="1.0+beta9"}
+  "ounit" {test}
+  "alcotest"     {test}
+  "charrua-core" {>= "0.9"}
+  "charrua-client" {>= "0.9"}
+  "cstruct" {>="3.0.2"}
+  "ipaddr"
+  "rresult"
+  "mirage-random" {>= "1.0.0"}
+  "duration"
+  "mirage-time-lwt"
+  "logs"
+  "tcpip" {>= "3.2.0"}
+  "fmt"
+  "lwt"
+  "mirage-types-lwt" {>="3.0.0"}
+]
+available: [ocaml-version >= "4.03.0"]
