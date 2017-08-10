@@ -194,7 +194,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let main_t
       socket_url port_control_url introspection_url diagnostics_url
       max_connections vsock_path db_path db_branch dns hosts host_names
-      listen_backlog debug
+      listen_backlog port_max_idle_time debug
     =
     (* Write to stdout if expicitly requested [debug = true] or if the
        environment variable DEBUG is set *)
@@ -304,7 +304,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         vnet_switch;
         mtu = 1500;
         host_names;
-        clock }
+        clock;
+        port_max_idle_time }
     in
 
     let config = match db_path with
@@ -374,12 +375,12 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let main
       socket_url port_control_url introspection_url diagnostics_url
       max_connections vsock_path db_path db_branch dns hosts host_names
-      listen_backlog debug
+      listen_backlog port_max_idle_time debug
     =
     Host.Main.run
       (main_t socket_url port_control_url introspection_url diagnostics_url
          max_connections vsock_path db_path db_branch dns hosts host_names
-         listen_backlog debug)
+         listen_backlog port_max_idle_time debug)
 
 open Cmdliner
 
@@ -501,6 +502,10 @@ let listen_backlog =
              then we will use SOMAXCONN." in
   Arg.(value & opt (some int) None & info [ "listen-backlog" ] ~doc)
 
+let port_max_idle_time =
+  let doc = "Idle time to wait before timing out and disconnecting switch ports." in
+  Arg.(value & opt int 30 & info [ "port-max-idle-time" ] ~doc)
+
 let debug =
   let doc = "Verbose debug logging to stdout" in
   Arg.(value & flag & info [ "debug" ] ~doc)
@@ -515,7 +520,7 @@ let command =
   Term.(pure main
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
-        $ host_names $ listen_backlog $ debug),
+        $ host_names $ listen_backlog $ port_max_idle_time $ debug),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
 
 let () =

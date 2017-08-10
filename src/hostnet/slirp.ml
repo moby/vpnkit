@@ -86,6 +86,7 @@ type ('a, 'b) config = {
   mtu: int;
   host_names: Dns.Name.t list;
   clock: 'a;
+  port_max_idle_time: int;
 }
 
 module Make
@@ -794,30 +795,34 @@ struct
         Lwt.return (Ok ())
   end
 
-  (* If no traffic is received for 5 minutes, delete the endpoint and
+  (* If no traffic is received for `port_max_idle_time`, delete the endpoint and
      the switch port. *)
-  let rec delete_unused_endpoints t () =
-    Host.Time.sleep_ns (Duration.of_sec 30)
-    >>= fun () ->
-    Lwt_mutex.with_lock t.endpoints_m
-      (fun () ->
-         let now = Unix.gettimeofday () in
-         let old_ips = IPMap.fold (fun ip endpoint acc ->
-             let age = now -. endpoint.Endpoint.last_active_time in
-             if age > 300.0 then ip :: acc else acc
-           ) t.endpoints [] in
-         List.iter (fun ip ->
-             Switch.remove t.switch ip;
-             t.endpoints <- IPMap.remove ip t.endpoints
-           ) old_ips;
-         Lwt.return_unit
-      )
-    >>= fun () ->
-    delete_unused_endpoints t ()
+  let rec delete_unused_endpoints t ~port_max_idle_time () =
+    if port_max_idle_time <= 0
+    then Lwt.return_unit (* never delete a port *)
+    else begin
+      Host.Time.sleep_ns (Duration.of_sec 30)
+      >>= fun () ->
+      Lwt_mutex.with_lock t.endpoints_m
+        (fun () ->
+          let now = Unix.gettimeofday () in
+          let old_ips = IPMap.fold (fun ip endpoint acc ->
+              let age = now -. endpoint.Endpoint.last_active_time in
+              if age > (float_of_int port_max_idle_time) then ip :: acc else acc
+            ) t.endpoints [] in
+          List.iter (fun ip ->
+              Switch.remove t.switch ip;
+              t.endpoints <- IPMap.remove ip t.endpoints
+            ) old_ips;
+          Lwt.return_unit
+        )
+      >>= fun () ->
+      delete_unused_endpoints t ~port_max_idle_time ()
+    end
 
   let connect x vnet_switch vnet_client_id client_macaddr server_macaddr peer_ip
       local_ip highest_ip extra_dns_ip mtu get_domain_search get_domain_name
-      (global_arp_table:arp_table) clock
+      (global_arp_table:arp_table) clock port_max_idle_time
     =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
@@ -871,7 +876,7 @@ struct
       udp_nat;
       icmp_nat;
     } in
-    Lwt.async @@ delete_unused_endpoints t;
+    Lwt.async @@ delete_unused_endpoints ~port_max_idle_time t;
 
     let find_endpoint ip =
       Lwt_mutex.with_lock t.endpoints_m
@@ -1342,11 +1347,16 @@ struct
         log_exception_continue "monitor http interception settings" (fun () ->
             monitor_http_intercept_settings http_intercept_settings));
 
+    let port_max_idle_time_path = driver @ [ "slirp"; "port-max-idle-time" ] in
+    Config.int config ~default:300 port_max_idle_time_path
+    >>= fun port_max_idle_times ->
+    let port_max_idle_time = Active_config.hd port_max_idle_times in
+
     Log.info (fun f ->
         f "Creating slirp server peer_ip:%s local_ip:%s domain_search:%s \
-           mtu:%d"
+           mtu:%d port_max_idle_time:%d"
           (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
-          (String.concat " " !domain_search) mtu
+          (String.concat " " !domain_search) mtu port_max_idle_time
       );
 
     let global_arp_table : arp_table = {
@@ -1371,6 +1381,7 @@ struct
       mtu;
       host_names;
       clock;
+      port_max_idle_time;
     } in
     Lwt.return t
 
@@ -1484,7 +1495,7 @@ struct
       connect x t.vnet_switch vnet_client_id client_macaddr t.server_macaddr
         client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu
         t.get_domain_search t.get_domain_name t.global_arp_table
-        t.clock
+        t.clock t.port_max_idle_time
     end
 
 end

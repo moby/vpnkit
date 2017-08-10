@@ -169,6 +169,7 @@ let config =
     mtu = 1500;
     host_names = [];
     clock;
+    port_max_idle_time = 300;
   }
 
 (* This is a hacky way to get a hancle to the server side of the stack. *)
