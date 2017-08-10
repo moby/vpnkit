@@ -1,7 +1,8 @@
 type t =
   | Ethernet: { src: Macaddr.t; dst: Macaddr.t; payload: t } -> t
   | Arp:      { op: [ `Request | `Reply | `Unknown ] } -> t
-  | Icmp:     { raw: Cstruct.t; payload: t } -> t
+  | Icmp:     { ty: int; code: int; seq: int; id: int;
+                raw: Cstruct.t; payload: t } -> t
   | Ipv4:     { src: Ipaddr.V4.t; dst: Ipaddr.V4.t; dnf: bool; ihl: int;
                 raw: Cstruct.t; payload: t } -> t
   | Udp:      { src: int; dst: int; len: int; payload: t } -> t
@@ -59,13 +60,13 @@ let parse bufs =
         | 1 ->
           need_space_for inner 8 "ICMP message"
           >>= fun () ->
-          let _ty     = Cstructs.get_uint8     inner 0 in
-          let _code   = Cstructs.get_uint8     inner 1 in
+          let ty     = Cstructs.get_uint8     inner 0 in
+          let code   = Cstructs.get_uint8     inner 1 in
           let _csum   = Cstructs.BE.get_uint16 inner 2 in
-          let _id     = Cstructs.BE.get_uint16 inner 4 in
-          let _seq    = Cstructs.BE.get_uint16 inner 6 in
+          let id     = Cstructs.BE.get_uint16 inner 4 in
+          let seq    = Cstructs.BE.get_uint16 inner 6 in
           let payload = Cstructs.shift         inner 8 |> Cstructs.to_cstruct in
-          Ok (Icmp { raw; payload = Payload payload })
+          Ok (Icmp { raw; ty; code; id; seq; payload = Payload payload })
         | 6 ->
           need_space_for inner 14 "TCP header"
           >>= fun () ->
