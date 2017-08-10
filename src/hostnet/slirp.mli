@@ -31,6 +31,7 @@ type ('clock, 'vnet_switch) config = {
   mtu: int;
   host_names: Dns.Name.t list;
   clock: 'clock;
+  port_max_idle_time: int;
 }
 
 module Make
