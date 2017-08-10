@@ -798,23 +798,27 @@ struct
   (* If no traffic is received for `port_max_idle_time`, delete the endpoint and
      the switch port. *)
   let rec delete_unused_endpoints t ~port_max_idle_time () =
-    Host.Time.sleep_ns (Duration.of_sec 30)
-    >>= fun () ->
-    Lwt_mutex.with_lock t.endpoints_m
-      (fun () ->
-         let now = Unix.gettimeofday () in
-         let old_ips = IPMap.fold (fun ip endpoint acc ->
-             let age = now -. endpoint.Endpoint.last_active_time in
-             if age > (float_of_int port_max_idle_time) then ip :: acc else acc
-           ) t.endpoints [] in
-         List.iter (fun ip ->
-             Switch.remove t.switch ip;
-             t.endpoints <- IPMap.remove ip t.endpoints
-           ) old_ips;
-         Lwt.return_unit
-      )
-    >>= fun () ->
-    delete_unused_endpoints t ~port_max_idle_time ()
+    if port_max_idle_time <= 0
+    then Lwt.return_unit (* never delete a port *)
+    else begin
+      Host.Time.sleep_ns (Duration.of_sec 30)
+      >>= fun () ->
+      Lwt_mutex.with_lock t.endpoints_m
+        (fun () ->
+          let now = Unix.gettimeofday () in
+          let old_ips = IPMap.fold (fun ip endpoint acc ->
+              let age = now -. endpoint.Endpoint.last_active_time in
+              if age > (float_of_int port_max_idle_time) then ip :: acc else acc
+            ) t.endpoints [] in
+          List.iter (fun ip ->
+              Switch.remove t.switch ip;
+              t.endpoints <- IPMap.remove ip t.endpoints
+            ) old_ips;
+          Lwt.return_unit
+        )
+      >>= fun () ->
+      delete_unused_endpoints t ~port_max_idle_time ()
+    end
 
   let connect x vnet_switch vnet_client_id client_macaddr server_macaddr peer_ip
       local_ip highest_ip extra_dns_ip mtu get_domain_search get_domain_name
