@@ -228,16 +228,18 @@ module Make(Time: Mirage_time_lwt.S)(FLOW: Mirage_flow_lwt.S) = struct
       | Some x -> Lwt.return x
       ) vs
 
+  open Astring
+
   let int t ~default path =
     string t ~default:(string_of_int default) path
     >>= fun strings ->
-    let parse s = Lwt.return (try int_of_string s with _ -> default) in
+    let parse s = Lwt.return (try int_of_string @@ String.trim ~drop:Char.Ascii.is_white s with _ -> default) in
     changes @@ map parse strings
 
   let bool t ~default path =
     string t ~default:(string_of_bool default) path
     >>= fun strings ->
-    let parse s = Lwt.return (try bool_of_string s with _ -> default) in
+    let parse s = Lwt.return (try bool_of_string @@ String.trim ~drop:Char.Ascii.is_white s with _ -> default) in
     changes @@ map parse strings
 
 end
