@@ -40,7 +40,7 @@ sig
     t:t -> udp:Udp.t -> src:Ipaddr.V4.t -> dst:Ipaddr.V4.t -> src_port:int ->
     Cstruct.t -> (unit, Udp.error) result Lwt.t
 
-  val handle_tcp: t:t -> (int -> (Tcp.flow -> unit Lwt.t) option) Lwt.t
+  val handle_tcp: t:t -> close:(unit Lwt.t) -> (int -> (Tcp.flow -> unit Lwt.t) option) Lwt.t
 
   val destroy: t -> unit Lwt.t
 end
