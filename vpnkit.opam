@@ -18,16 +18,12 @@ dev-repo:     "https://github.com/moby/vpnkit.git"
 doc:          "https://moby.github.io/vpnkit/"
 
 build: [
-  [make]
+  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
 ]
-build-test: [
-  [make "test"]
-]
-install: [make "install" "BINDIR=%{bin}%"]
-remove: [make "uninstall" "BINDIR=%{bin}%"]
 
 depends: [
-  "jbuilder"   {build}
+  "jbuilder" {build & >="1.0+beta10"}
   "alcotest"   {test}
   "result"
   "tar" {>= "0.8.0"}
