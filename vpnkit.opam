@@ -27,7 +27,6 @@ install: [make "install" "BINDIR=%{bin}%"]
 remove: [make "uninstall" "BINDIR=%{bin}%"]
 
 depends: [
-  "ocamlfind"  {build}
   "jbuilder"   {build}
   "alcotest"   {test}
   "result"
