@@ -12,10 +12,10 @@ authors: [
   "Thomas Gazagnaire <thomas@gazagnaire.com>"
   "Thomas Leonard <thomas.leonard@docker.com>"
 ]
-homepage:     "https://github.com/docker/vpnkit"
-bug-reports:  "https://github.com/docker/vpnkit/issues"
-dev-repo:     "https://github.com/docker/vpnkit.git"
-doc:          "https://docker.github.io/vpnkit/"
+homepage:     "https://github.com/moby/vpnkit"
+bug-reports:  "https://github.com/moby/vpnkit/issues"
+dev-repo:     "https://github.com/moby/vpnkit.git"
+doc:          "https://moby.github.io/vpnkit/"
 
 build: [
   [make]
@@ -27,7 +27,6 @@ install: [make "install" "BINDIR=%{bin}%"]
 remove: [make "uninstall" "BINDIR=%{bin}%"]
 
 depends: [
-  "ocamlfind"  {build}
   "jbuilder"   {build}
   "alcotest"   {test}
   "result"
