@@ -8,3 +8,8 @@
      mirage-clock-unix mirage-random
    ))
    (preprocess  no_preprocessing)))
+
+(install
+ ((section bin)
+  (package vpnkit)
+  (files ((main.exe as vpnkit)))))

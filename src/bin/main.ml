@@ -229,11 +229,9 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore
     with Invalid_argument _ -> ());
     Log.info (fun f ->
-        f "vpnkit version %s with uwt version %s hvsock version %s %s"
-          Depends.version
-          Depends.uwt_version
-          Depends.hvsock_version Depends.hvsock_pinned
-      );
+        f "vpnkit version %%VERSION%% from %%VCS_COMMIT_ID%%"
+    );
+
     Log.info (fun f -> f "System SOMAXCONN is %d" !Utils.somaxconn);
     Utils.somaxconn :=
       (match listen_backlog with None -> !Utils.somaxconn | Some x -> x);
@@ -521,7 +519,7 @@ let command =
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
         $ host_names $ listen_backlog $ port_max_idle_time $ debug),
-  Term.info (Filename.basename Sys.argv.(0)) ~version:Depends.version ~doc ~man
+  Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
   Printexc.record_backtrace true;

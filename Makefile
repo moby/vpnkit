@@ -25,13 +25,6 @@ uninstall:
 
 artefacts: $(ARTEFACTS)
 
-src/bin/depends.ml: src/bin/depends.ml.in
-	$(OPAMFLAGS) opam config subst src/bin/depends.ml || true
-	cp src/bin/depends.ml src/bin/depends.tmp
-	sed -e 's/££VERSION££/$(shell git rev-parse HEAD)/g' src/bin/depends.tmp > src/bin/depends.ml
-	cp src/bin/depends.ml src/bin/depends.tmp
-	sed -e 's/££HVSOCK_PINNED££/$(shell opam info hvsock -f pinned)/g' src/bin/depends.tmp > src/bin/depends.ml
-
 vpnkit.tgz: vpnkit.exe
 	mkdir -p _build/root/Contents/MacOS
 	cp vpnkit.exe _build/root/Contents/MacOS/vpnkit
@@ -42,7 +35,7 @@ vpnkit.tgz: vpnkit.exe
 	tar -C _build/root -cvzf vpnkit.tgz Contents
 
 .PHONY: vpnkit.exe
-vpnkit.exe: src/bin/depends.ml
+vpnkit.exe:
 	jbuilder build --dev src/bin/main.exe
 	cp _build/default/src/bin/main.exe vpnkit.exe
 
@@ -68,7 +61,6 @@ clean:
 	rm -rf _build
 	rm -f vpnkit.exe
 	rm -f vpnkit.tgz
-	rm -f src/bin/depends.ml
 
 REPO=../../mirage/opam-repository
 PACKAGES=$(REPO)/packages
