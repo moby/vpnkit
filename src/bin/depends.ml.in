@@ -1,4 +1,0 @@
-let version = "££VERSION££"
-let uwt_version = "%{uwt:version}%"
-let hvsock_version = "%{hvsock:version}%"
-let hvsock_pinned = "££HVSOCK_PINNED££"
