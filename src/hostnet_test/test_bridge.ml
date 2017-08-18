@@ -8,6 +8,8 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+exception Test_failure of string
+
 (* Open multiple connections and verify that the connection succeeds and MAC and IP changes *)
 let test_connect n () =
     Host.Main.run begin
@@ -83,6 +85,34 @@ let test_connect_preferred_ipv4 preferred_ip () =
         (* Verify that we got the same IP and MAC when reconnecting with the same UUID *)
         assert(Ipaddr.V4.compare ip reconnect_ip == 0);
         assert(Macaddr.compare mac reconnect_mac == 0);
+        (* Try to reconnect with the same UUID, but request a different IP (this should fail) *)
+        let different_ip = Ipaddr.V4.of_int32 (Int32.succ (Ipaddr.V4.to_int32 preferred_ip)) in
+        Lwt.catch (fun () ->
+            with_stack ~uuid ~preferred_ip:different_ip (fun _ client_stack ->
+                let ips = Client.IPV4.get_ip (Client.ipv4 client_stack.t) in
+                let ip = List.hd ips in
+                let mac = (VMNET.mac client_stack.netif) in
+                Lwt.return (ip, mac)
+            ) >>= fun (reconnect_ip, reconnect_mac) -> 
+            Log.err (fun f -> f "Failure: Request for different IP got IP %s and MAC %s" (Ipaddr.V4.to_string reconnect_ip) (Macaddr.to_string reconnect_mac));
+            raise (Test_failure "Request for different IP for same UUID succeeded"))
+            (fun e -> match e with
+             | Failure _ -> Lwt.return () (* test was successful, an exception was triggered *)
+             | e -> raise e) >>= fun () ->
+        (* Try to reconnect with a different UUID, but request a used IP (this should fail) *)
+        Lwt.catch (fun () ->
+            let uuid = (Uuidm.v `V4) in
+            with_stack ~uuid ~preferred_ip (fun _ client_stack ->
+                let ips = Client.IPV4.get_ip (Client.ipv4 client_stack.t) in
+                let ip = List.hd ips in
+                let mac = (VMNET.mac client_stack.netif) in
+                Lwt.return (ip, mac)
+            ) >>= fun (reconnect_ip, reconnect_mac) -> 
+            Log.err (fun f -> f "Failure: Request for same IP with different UUID got IP %s and MAC %s" (Ipaddr.V4.to_string reconnect_ip) (Macaddr.to_string reconnect_mac));
+            raise (Test_failure "Request for same IP with different UUID succeeded"))
+            (fun e -> match e with
+             | Failure _ -> Lwt.return () (* test was successful, an exception was triggered *)
+             | e -> raise e) >>= fun () ->
         Lwt.return ()
    end
 
