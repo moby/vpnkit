@@ -68,3 +68,4 @@ module Command : sig
   val marshal: t -> Cstruct.t -> Cstruct.t
   val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) result
 end
+

@@ -152,6 +152,46 @@ module Vif = struct
 
 end
 
+module Response = struct
+  type t =
+    | Vif of Vif.t (* 10 bytes *)
+    | Disconnect of string (* disconnect reason *)
+
+  let sizeof = 1000 (* leave room for error message *)
+
+  let marshal t rest = match t with
+  | Vif vif ->
+    Cstruct.set_uint8 rest 0 1;
+    let rest = Cstruct.shift rest 1 in
+    Vif.marshal vif rest
+  | Disconnect reason ->
+    Cstruct.set_uint8 rest 0 2;
+    let rest = Cstruct.shift rest 1 in
+    Cstruct.LE.set_uint16 rest 0 (String.length reason);
+    let rest = Cstruct.shift rest 2 in
+    Cstruct.blit_from_string reason 0 rest 0 (String.length reason);
+    Cstruct.shift rest (String.length reason)
+
+  let unmarshal rest =
+    match Cstruct.get_uint8 rest 0 with
+    | 1 -> (* vif.t *)
+      let rest = Cstruct.shift rest 1 in
+      let vif = Vif.unmarshal rest in
+      (match vif with
+      | Ok (vif, rest) -> Ok (Vif vif, rest)
+      | Error msg -> Error (msg))
+    | 2 -> (* disconnect *)
+      let rest = Cstruct.shift rest 1 in
+      let str_len = Cstruct.LE.get_uint16 rest 0 in
+      let rest = Cstruct.shift rest 2 in
+      let reason_str = Cstruct.(to_string (sub rest 0 str_len)) in
+      let rest = Cstruct.shift rest str_len in
+      Ok (Disconnect reason_str, rest)
+    | n -> Error (`Msg (Printf.sprintf "Unknown response: %d" n))
+
+end
+
+
 module Packet = struct
   let sizeof = 2
 
@@ -248,12 +288,17 @@ module Make(C: Sig.CONN) = struct
         Log.info (fun f ->
             f "%s.negotiate: received %s" server_log_prefix (Command.to_string command));
         match command with
-        | Command.Bind_ipv4 _ -> failf "%s.negotiate: unsupported command Bind_ipv4" server_log_prefix
+        | Command.Bind_ipv4 _ -> 
+          let buf = Cstruct.create Response.sizeof in
+          let (_: Cstruct.t) = Response.marshal (Disconnect "Unsupported command Bind_ipv4") buf in
+          Channel.write_buffer fd buf;
+          with_flush (Channel.flush fd) @@ fun () ->
+          failf "%s.negotiate: unsupported command Bind_ipv4" server_log_prefix
         | Command.Ethernet uuid ->
           connect_client_fn uuid None >>= fun client_macaddr ->
           let vif = Vif.create client_macaddr mtu () in
-          let buf = Cstruct.create Vif.sizeof in
-          let (_: Cstruct.t) = Vif.marshal vif buf in
+          let buf = Cstruct.create Response.sizeof in
+          let (_: Cstruct.t) = Response.marshal (Vif vif) buf in
           Log.info (fun f -> f "%s.negotiate: sending %s" server_log_prefix (Vif.to_string vif));
           Channel.write_buffer fd buf;
           with_flush (Channel.flush fd) @@ fun () ->
@@ -261,8 +306,8 @@ module Make(C: Sig.CONN) = struct
         | Command.Preferred_ipv4 (uuid, ip) ->
           connect_client_fn uuid (Some ip) >>= fun client_macaddr ->
           let vif = Vif.create client_macaddr mtu () in
-          let buf = Cstruct.create Vif.sizeof in
-          let (_: Cstruct.t) = Vif.marshal vif buf in
+          let buf = Cstruct.create Response.sizeof in
+          let (_: Cstruct.t) = Response.marshal (Vif vif) buf in
           Log.info (fun f -> f "%s.negotiate: sending %s" server_log_prefix (Vif.to_string vif));
           Channel.write_buffer fd buf;
           with_flush (Channel.flush fd) @@ fun () ->
@@ -294,12 +339,18 @@ module Make(C: Sig.CONN) = struct
         in
         Channel.write_buffer fd buf;
         with_flush (Channel.flush fd) @@ fun () ->
-        with_read (Channel.read_exactly ~len:Vif.sizeof fd) @@ fun bufs ->
+        with_read (Channel.read_exactly ~len:Response.sizeof fd) @@ fun bufs ->
         let buf = Cstruct.concat bufs in
         let open Lwt_result.Infix in
-        Lwt.return (Vif.unmarshal buf) >>= fun (vif, _) ->
-        Log.debug (fun f -> f "%s.negotiate: vif %s" client_log_prefix (Vif.to_string vif));
-        Lwt_result.return (vif)
+        Lwt.return (Response.unmarshal buf) >>= fun (response, _) ->
+        (match response with
+        | Vif vif -> 
+          Log.debug (fun f -> f "%s.negotiate: vif %s" client_log_prefix (Vif.to_string vif));
+          Lwt_result.return (vif)
+        | Disconnect reason ->
+          let msg = "Server disconnected with reason: " ^ reason in
+          Log.err (fun f -> f "%s.negotiate: %s" client_log_prefix msg);
+          Lwt_result.fail (`Msg msg))
     | x -> 
         Log.err (fun f -> f "%s: Server requires protocol version %s, we have %s" client_log_prefix (Int32.to_string x) (Int32.to_string Init.default.version));
         Lwt_result.fail (`Msg "Server does not support our version of the protocol")
