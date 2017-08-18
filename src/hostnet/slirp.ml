@@ -1419,83 +1419,87 @@ struct
           Log.info (fun f->
               f "Reconnecting MAC %s with IP %s"
                 (Macaddr.to_string mac) (Ipaddr.V4.to_string ip));
-          (match preferred_ip with
-          | None -> ()
+          match preferred_ip with
+          | None -> Lwt_result.return mac
           | Some preferred_ip ->
             let old_ip,_ = Hashtbl.find t.client_uuids.table uuid in
             if (Ipaddr.V4.compare old_ip preferred_ip) != 0 then
-                  failwith "Preferred IP differs from IP assigned to this UUID.");
-          (* may raise Not_found if id is unknown to the bridge *)
-          Lwt.return mac
+              Lwt_result.fail (`Msg "UUID already assigned to a different IP than the IP requested by the client")
+            else
+              Lwt_result.return mac
         end else begin (* new uuid, register in bridge *)
           (* register new client on bridge *)
-          let vnet_client_id = match Vnet.register t.vnet_switch with
-          | `Ok x    -> Ok x
-          | `Error e -> Error e
-          in
-          or_failwith "vnet_switch" @@ Lwt.return vnet_client_id
-          >>= fun vnet_client_id ->
-          let client_macaddr = (Vnet.mac t.vnet_switch vnet_client_id) in
+          Lwt.catch (fun () -> 
+            let vnet_client_id = match Vnet.register t.vnet_switch with
+            | `Ok x    -> Ok x
+            | `Error e -> Error e
+            in
+            or_failwith "vnet_switch" @@ Lwt.return vnet_client_id
+            >>= fun vnet_client_id ->
+            let client_macaddr = (Vnet.mac t.vnet_switch vnet_client_id) in
 
-          let used_ips =
-            Hashtbl.fold (fun _ v l ->
-                let ip, _ = v in
-                l @ [ip]) t.client_uuids.table []
-          in
+            let used_ips =
+              Hashtbl.fold (fun _ v l ->
+                  let ip, _ = v in
+                  l @ [ip]) t.client_uuids.table []
+            in
 
-          (* check if a specific IP is requested *)
-          let preferred_ip =
-            match preferred_ip with
-            | None -> None
-            | Some preferred_ip ->
-                Log.info (fun f ->
-                    f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
-                let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
-                let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
-                let lowest_ip_int32 = Ipaddr.V4.to_int32 t.peer_ip in
-                if (preferred_ip_int32 > highest_ip_int32)
-                || (preferred_ip_int32 <  lowest_ip_int32)
-                then begin
-                  failwith "Preferred IP address out of range."
-                end;
-                if not (List.mem preferred_ip used_ips) then begin
-                  Some preferred_ip
-                end else begin
-                  Fmt.kstrf failwith "Preferred IP address %s already used."
-                    (Ipaddr.V4.to_string preferred_ip)
-                end
-          in
+            (* check if a specific IP is requested *)
+            let preferred_ip =
+              match preferred_ip with
+              | None -> None
+              | Some preferred_ip ->
+                  Log.info (fun f ->
+                      f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
+                  let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
+                  let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
+                  let lowest_ip_int32 = Ipaddr.V4.to_int32 t.peer_ip in
+                  if (preferred_ip_int32 > highest_ip_int32)
+                  || (preferred_ip_int32 <  lowest_ip_int32)
+                  then begin
+                    failwith "Preferred IP address out of range."
+                  end;
+                  if not (List.mem preferred_ip used_ips) then begin
+                    Some preferred_ip
+                  end else begin
+                    Fmt.kstrf failwith "Preferred IP address %s already used."
+                      (Ipaddr.V4.to_string preferred_ip)
+                  end
+            in
 
-          (* look for a new unique IP *)
-          let rec next_unique_ip next_ip =
-            if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 t.highest_ip)
-            then begin
-              failwith "No IP addresses available."
-            end;
-            if not (List.mem next_ip used_ips) then begin
-              next_ip
-            end else begin
-              let next_ip =
-                Ipaddr.V4.of_int32 (Int32.succ (Ipaddr.V4.to_int32 next_ip))
-              in
-              next_unique_ip next_ip
-            end
-          in
+            (* look for a new unique IP *)
+            let rec next_unique_ip next_ip =
+              if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 t.highest_ip)
+              then begin
+                failwith "No IP addresses available."
+              end;
+              if not (List.mem next_ip used_ips) then begin
+                next_ip
+              end else begin
+                let next_ip =
+                  Ipaddr.V4.of_int32 (Int32.succ (Ipaddr.V4.to_int32 next_ip))
+                in
+                next_unique_ip next_ip
+              end
+            in
 
-          let client_ip = match preferred_ip with
-          | None    -> next_unique_ip t.peer_ip
-          | Some ip -> ip
-          in
+            let client_ip = match preferred_ip with
+            | None    -> next_unique_ip t.peer_ip
+            | Some ip -> ip
+            in
 
-          (* Add IP to global ARP table *)
-          Lwt_mutex.with_lock t.global_arp_table.mutex (fun () ->
-              t.global_arp_table.table <- (client_ip, client_macaddr)
-                                          :: t.global_arp_table.table;
-              Lwt.return_unit)  >>= fun () ->
+            (* Add IP to global ARP table *)
+            Lwt_mutex.with_lock t.global_arp_table.mutex (fun () ->
+                t.global_arp_table.table <- (client_ip, client_macaddr)
+                                            :: t.global_arp_table.table;
+                Lwt.return_unit)  >>= fun () ->
 
-          (* add to client table and return mac *)
-          Hashtbl.replace t.client_uuids.table uuid (client_ip, vnet_client_id);
-          Lwt.return client_macaddr
+            (* add to client table and return mac *)
+            Hashtbl.replace t.client_uuids.table uuid (client_ip, vnet_client_id);
+            Lwt_result.return client_macaddr) (fun e -> 
+                match e with
+                | Failure msg -> Lwt_result.fail (`Msg msg)
+                | e -> raise e) (* re-raise other exceptions *)
         end
       )
 

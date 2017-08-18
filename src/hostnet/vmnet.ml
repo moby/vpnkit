@@ -273,6 +273,25 @@ module Make(C: Sig.CONN) = struct
   let client_log_prefix = "Vmnet.Client"
 
   let server_negotiate ~fd ~connect_client_fn ~mtu =
+    let assign_uuid_ip uuid ip =
+      connect_client_fn uuid ip >>= fun mac ->
+      match mac with
+      | Error (`Msg msg) ->
+          let buf = Cstruct.create Response.sizeof in
+          let (_: Cstruct.t) = Response.marshal (Disconnect msg) buf in
+          Log.err (fun f -> f "%s.negotiate: disconnecting client, reason: %s" server_log_prefix msg);
+          Channel.write_buffer fd buf;
+          with_flush (Channel.flush fd) @@ fun () ->
+          failf "%s.negotiate: disconnecting client, reason: %s " server_log_prefix msg
+      | Ok client_macaddr -> 
+          let vif = Vif.create client_macaddr mtu () in
+          let buf = Cstruct.create Response.sizeof in
+          let (_: Cstruct.t) = Response.marshal (Vif vif) buf in
+          Log.info (fun f -> f "%s.negotiate: sending %s" server_log_prefix (Vif.to_string vif));
+          Channel.write_buffer fd buf;
+          with_flush (Channel.flush fd) @@ fun () ->
+          Lwt_result.return (uuid, client_macaddr)
+    in
     with_read (Channel.read_exactly ~len:Init.sizeof fd) @@ fun bufs ->
     let buf = Cstruct.concat bufs in
     let init, _ = Init.unmarshal buf in
@@ -294,24 +313,8 @@ module Make(C: Sig.CONN) = struct
           Channel.write_buffer fd buf;
           with_flush (Channel.flush fd) @@ fun () ->
           failf "%s.negotiate: unsupported command Bind_ipv4" server_log_prefix
-        | Command.Ethernet uuid ->
-          connect_client_fn uuid None >>= fun client_macaddr ->
-          let vif = Vif.create client_macaddr mtu () in
-          let buf = Cstruct.create Response.sizeof in
-          let (_: Cstruct.t) = Response.marshal (Vif vif) buf in
-          Log.info (fun f -> f "%s.negotiate: sending %s" server_log_prefix (Vif.to_string vif));
-          Channel.write_buffer fd buf;
-          with_flush (Channel.flush fd) @@ fun () ->
-          Lwt_result.return (uuid, client_macaddr)
-        | Command.Preferred_ipv4 (uuid, ip) ->
-          connect_client_fn uuid (Some ip) >>= fun client_macaddr ->
-          let vif = Vif.create client_macaddr mtu () in
-          let buf = Cstruct.create Response.sizeof in
-          let (_: Cstruct.t) = Response.marshal (Vif vif) buf in
-          Log.info (fun f -> f "%s.negotiate: sending %s" server_log_prefix (Vif.to_string vif));
-          Channel.write_buffer fd buf;
-          with_flush (Channel.flush fd) @@ fun () ->
-          Lwt_result.return (uuid, client_macaddr)
+        | Command.Ethernet uuid -> assign_uuid_ip uuid None
+        | Command.Preferred_ipv4 (uuid, ip) -> assign_uuid_ip uuid (Some ip)
       end
     | x -> 
       let (_: Cstruct.t) = Init.marshal Init.default buf in (* write our version before disconnecting *)

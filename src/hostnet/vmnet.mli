@@ -13,7 +13,7 @@ module Make(C: Sig.CONN): sig
   val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
 
   val of_fd:
-    connect_client_fn:(Uuidm.t -> Ipaddr.V4.t option -> Macaddr.t Lwt.t) ->
+    connect_client_fn:(Uuidm.t -> Ipaddr.V4.t option -> (Macaddr.t, [`Msg of string]) result Lwt.t) ->
     server_macaddr:Macaddr.t -> mtu:int -> C.flow ->
     (t, [`Msg of string]) result Lwt.t
   (** [of_fd ~connect_client_fn ~server_macaddr ~mtu fd]
