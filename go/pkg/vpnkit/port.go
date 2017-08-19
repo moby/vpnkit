@@ -172,4 +172,29 @@ func (p *Port) Unexpose(ctx context.Context) error {
 	return nil
 }
 
+// Proto returns the protocol: either "tcp" or "udp"
+func (p *Port) Proto() string {
+	return p.proto
+}
+
+// OutIP returns the public IP
+func (p *Port) OutIP() net.IP {
+	return p.outIP
+}
+
+// OutPort returns the public port number
+func (p *Port) OutPort() int16 {
+	return p.outPort
+}
+
+// InIP returns the private IP
+func (p *Port) InIP() net.IP {
+	return p.inIP
+}
+
+// InPort returns the private port number
+func (p *Port) InPort() int16 {
+	return p.inPort
+}
+
 var enoent = p9p.MessageRerror{Ename: "file not found"}
