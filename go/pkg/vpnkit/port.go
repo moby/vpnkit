@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 
 	p9p "github.com/docker/go-p9p"
 	datakit "github.com/moby/datakit/api/go-datakit"
 )
 
-// Port represents a UDP or TCP exposed port
+// Port describes a UDP or TCP port forward
 type Port struct {
 	client  *datakit.Client
 	proto   string
@@ -23,14 +24,65 @@ type Port struct {
 	handle  *datakit.File
 }
 
+// NewPort constructs an instance of Port
 func NewPort(connection *Connection, proto string, outIP net.IP, outPort int16, inIP net.IP, inPort int16) *Port {
 	return &Port{connection.client, proto, outIP, outPort, inIP, inPort, nil}
+}
+
+// ListExposed returns a list of currently exposed ports
+func ListExposed(connection *Connection) ([]*Port, error) {
+	ctx := context.TODO()
+	dirs, err := connection.client.List(ctx, []string{})
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*Port, 0)
+
+	for _, name := range dirs {
+		port, err := parse(name)
+		if err != nil {
+			// there are some special files like "." and "README" to ignore
+			continue
+		}
+		port.client = connection.client
+		results = append(results, port)
+	}
+
+	return results, nil
+}
+
+// String returns a human-readable string
+func (p *Port) String() string {
+	return fmt.Sprintf("%s forward from %s:%d to %s:%d", p.proto, p.outIP.String(), p.outPort, p.inIP.String(), p.inPort)
 }
 
 // spec returns a string of the form proto:outIP:outPort:proto:inIP:inPort as
 // understood by vpnkit
 func (p *Port) spec() string {
 	return fmt.Sprintf("%s:%s:%d:%s:%s:%d", p.proto, p.outIP.String(), p.outPort, p.proto, p.inIP.String(), p.inPort)
+}
+
+func parse(name string) (*Port, error) {
+	bits := strings.Split(name, ":")
+	if len(bits) != 6 {
+		return nil, errors.New("Failed to parse port spec: " + name)
+	}
+	outProto := bits[0]
+	outIP := net.ParseIP(bits[1])
+	outPort, err := strconv.ParseInt(bits[2], 10, 16)
+	if err != nil {
+		return nil, err
+	}
+	inProto := bits[3]
+	inIP := net.ParseIP(bits[4])
+	inPort, err := strconv.ParseInt(bits[5], 10, 16)
+	if err != nil {
+		return nil, err
+	}
+	if outProto != inProto {
+		return nil, errors.New("Failed to parse port: external proto is " + outProto + " but internal proto is " + inProto)
+	}
+	return &Port{nil, outProto, outIP, int16(outPort), inIP, int16(inPort), nil}, nil
 }
 
 // Expose asks vpnkit to expose the port
@@ -107,10 +159,15 @@ func (p *Port) Expose(ctx context.Context) error {
 // Unexpose asks vpnkit to hide the port again
 func (p *Port) Unexpose(ctx context.Context) error {
 	if p.handle == nil {
-		return errors.New("Port is not exposed")
+		ctl, err := p.client.Open(ctx, p9p.OREAD, p.spec(), "ctl")
+		if err != nil {
+			return errors.New("Port is not exposed")
+		}
+		p.handle = ctl
 	}
 	ctl := p.handle
 	p.handle = nil
+	// Any clunk frees the port
 	ctl.Close(ctx)
 	return nil
 }
