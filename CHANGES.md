@@ -1,3 +1,12 @@
+### unreleased
+
+* socket protocol updated to v22:
+    - support error messages returned to client for Ethernet and Preferred_ipv4
+      slirp commands
+    - allow client to request an IPv4 address without encoding it in the UUID
+    - v1 no longer supported, clients have to be updated. Version 22 is used to
+      match the current version number in Docker for Desktop.
+
 ### v0.1.1 (2017-08-17)
 
 * simplify the build by watermarking with `jbuilder subst`
