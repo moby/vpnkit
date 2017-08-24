@@ -25,7 +25,7 @@ module Init = struct
 
   let default = {
     magic = "VMN3T";
-    version = 2l;
+    version = 22l;
     commit = "0123456789012345678901234567890123456789";
   }
 
@@ -67,7 +67,7 @@ module Command = struct
     Cstruct.blit_from_string uuid_str 0 rest 0 (String.length uuid_str);
     Cstruct.shift rest (String.length uuid_str)
   | Preferred_ipv4 (uuid, ip) ->
-    Cstruct.set_uint8 rest 0 2;
+    Cstruct.set_uint8 rest 0 8;
     let rest = Cstruct.shift rest 1 in
     let uuid_str = Uuidm.to_string uuid in
     Cstruct.blit_from_string uuid_str 0 rest 0 (String.length uuid_str);
@@ -98,13 +98,13 @@ module Command = struct
           Uuidm.of_string uuid_str
     in
     match Cstruct.get_uint8 rest 0 with
-    | 1 ->
+    | 1 -> (* ethernet *)
       let uuid_str = Cstruct.(to_string (sub rest 1 36)) in
       let rest = Cstruct.shift rest 37 in
       (match process_uuid uuid_str with
        | Some uuid -> Ok (Ethernet uuid, rest)
        | None -> Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str)))
-    | 2 ->
+    | 8 -> (* preferred_ipv4 *)
       let uuid_str = Cstruct.(to_string (sub rest 1 36)) in
       let rest = Cstruct.shift rest 37 in
       let ip = Ipaddr.V4.of_int32 (Cstruct.LE.get_uint32 rest 0) in
@@ -157,7 +157,7 @@ module Response = struct
     | Vif of Vif.t (* 10 bytes *)
     | Disconnect of string (* disconnect reason *)
 
-  let sizeof = 1000 (* leave room for error message *)
+  let sizeof = 1+1+256 (* leave room for error message and length *)
 
   let marshal t rest = match t with
   | Vif vif ->
@@ -167,14 +167,14 @@ module Response = struct
   | Disconnect reason ->
     Cstruct.set_uint8 rest 0 2;
     let rest = Cstruct.shift rest 1 in
-    Cstruct.LE.set_uint16 rest 0 (String.length reason);
-    let rest = Cstruct.shift rest 2 in
+    Cstruct.set_uint8 rest 0 (String.length reason);
+    let rest = Cstruct.shift rest 1 in
     Cstruct.blit_from_string reason 0 rest 0 (String.length reason);
     Cstruct.shift rest (String.length reason)
 
   let unmarshal rest =
     match Cstruct.get_uint8 rest 0 with
-    | 1 -> (* vif.t *)
+    | 1 -> (* vif *)
       let rest = Cstruct.shift rest 1 in
       let vif = Vif.unmarshal rest in
       (match vif with
@@ -182,8 +182,8 @@ module Response = struct
       | Error msg -> Error (msg))
     | 2 -> (* disconnect *)
       let rest = Cstruct.shift rest 1 in
-      let str_len = Cstruct.LE.get_uint16 rest 0 in
-      let rest = Cstruct.shift rest 2 in
+      let str_len = Cstruct.get_uint8 rest 0 in
+      let rest = Cstruct.shift rest 1 in
       let reason_str = Cstruct.(to_string (sub rest 0 str_len)) in
       let rest = Cstruct.shift rest str_len in
       Ok (Disconnect reason_str, rest)
@@ -297,7 +297,7 @@ module Make(C: Sig.CONN) = struct
     let init, _ = Init.unmarshal buf in
     Log.info (fun f -> f "%s.negotiate: received %s" server_log_prefix (Init.to_string init));
     match init.version with
-    | 2l -> begin
+    | 22l -> begin
         let (_: Cstruct.t) = Init.marshal Init.default buf in
         Channel.write_buffer fd buf;
         with_flush (Channel.flush fd) @@ fun () ->
@@ -334,7 +334,7 @@ module Make(C: Sig.CONN) = struct
     let init, _ = Init.unmarshal buf in
     Log.info (fun f -> f "%s.negotiate: received %s" client_log_prefix (Init.to_string init));
     match init.version with
-    | 2l -> 
+    | 22l -> 
         let buf = Cstruct.create Command.sizeof in
         let (_: Cstruct.t) = match preferred_ip with
           | None -> Command.marshal (Command.Ethernet uuid) buf
