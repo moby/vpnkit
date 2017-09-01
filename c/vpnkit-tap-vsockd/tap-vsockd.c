@@ -146,6 +146,11 @@ int negotiate(int fd, struct vif_info *vif)
 	if (read_init_message(fd, &you) == -1)
 		goto err;
 
+	if (me->version != you.version) {
+		syslog(LOG_CRIT, "Server did not accept our protocol version (client: %d, server: %d)", me->version, you.version);
+		goto err;
+	}
+
 	txt = print_init_message(&you);
 	if (!txt)
 		goto err;
@@ -161,7 +166,7 @@ int negotiate(int fd, struct vif_info *vif)
 	if (write_ethernet_args(fd, &args) == -1)
 		goto err;
 
-	if (read_vif_info(fd, vif) == -1)
+	if (read_vif_response(fd, vif) == -1)
 		goto err;
 
 	return 0;

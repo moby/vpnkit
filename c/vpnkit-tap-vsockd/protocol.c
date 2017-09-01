@@ -177,37 +177,27 @@ int write_init_message(int fd, struct init_message *ci)
 	return 0;
 }
 
-int read_vif_info(int fd, struct vif_info *vif)
+int read_vif_response(int fd, struct vif_info *vif)
 {
-	uint8_t buffer[10];
+	struct msg_response msg;
 
-	if (really_read(fd, &buffer[0], sizeof(buffer)) == -1) {
-		syslog(LOG_CRIT, "Failed to read vif info from client");
+	if (really_read(fd, (uint8_t*)&msg, sizeof(msg)) == -1) {
+		syslog(LOG_CRIT, "Client failed to read server response");
 		return -1;
 	}
 
-	vif->mtu = (size_t)(buffer[0] | (buffer[1] << 8));
-	vif->max_packet_size = (size_t)(buffer[2] | (buffer[3] << 8));
-	memcpy(vif->mac, &buffer[4], 6);
-	return 0;
-}
-
-
-int write_vif_info(int fd, struct vif_info *vif)
-{
-	uint8_t buffer[10];
-
-	buffer[0] = (uint8_t) ((vif->mtu >> 0) & 0xff);
-	buffer[1] = (uint8_t) ((vif->mtu >> 8) & 0xff);
-	buffer[2] = (uint8_t) ((vif->max_packet_size >> 0) & 0xff);
-	buffer[3] = (uint8_t) ((vif->max_packet_size >> 8) & 0xff);
-	memcpy(&buffer[0] + 4, &(vif->mac)[0], 6);
-
-	if (really_write(fd, &buffer[0], sizeof(buffer)) == -1) {
-		syslog(LOG_CRIT, "Failed to write vif into to client");
-		return -1;
+	switch (msg.response_type) {
+		case rt_vif:
+			memcpy((uint8_t*)vif, (uint8_t*)&msg.vif, sizeof(*vif));
+			return 0;
+		case rt_disconnect:
+			syslog(LOG_CRIT, "Server disconnected: %*s", msg.disconnect.len, msg.disconnect.msg);
+			return -1;
+		default:
+			syslog(LOG_CRIT, "Unknown response type from server");
+			return -1;
 	}
-	return 0;
+
 }
 
 int write_command(int fd, enum command *c)
@@ -223,7 +213,11 @@ int write_command(int fd, enum command *c)
 
 int write_ethernet_args(int fd, struct ethernet_args *args)
 {
-	if (really_write(fd, (uint8_t *)&args->uuid_string[0], 36) == -1) {
+    uint8_t buffer[40];
+    memset(&buffer[0], 0, sizeof(buffer));
+    memcpy(&buffer[0], (uint8_t *)&args->uuid_string[0], 36);
+
+	if (really_write(fd, (uint8_t *)&buffer, sizeof(buffer)) == -1) {
 		syslog(LOG_CRIT, "Failed to write ethernet args to client");
 		return -1;
 	}
