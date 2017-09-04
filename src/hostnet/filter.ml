@@ -120,7 +120,7 @@ module Make(Input: Sig.VMNET) = struct
   let get_stats_counters t = t.stats
   let reset_stats_counters t = Mirage_net.Stats.reset t.stats
 
-  let of_fd ~client_macaddr_of_uuid:_ ~server_macaddr:_ ~mtu:_ =
+  let of_fd ~connect_client_fn:_ ~server_macaddr:_ ~mtu:_ =
     failwith "Filter.of_fd unimplemented"
 
   let get_client_uuid _ =

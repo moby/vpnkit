@@ -109,6 +109,7 @@ module Client = struct
   type stack = {
     t: t;
     icmpv4: Icmpv41.t;
+    netif: VMNET.t;
   }
 
   let connect (interface: VMNET.t) =
@@ -126,7 +127,7 @@ module Client = struct
     } in
     connect cfg ethif arp ipv4 icmpv4 udp4 tcp4
     >>= fun t ->
-    Lwt.return { t; icmpv4 }
+    Lwt.return { t; icmpv4 ; netif=interface }
 end
 
 module DNS = Dns_resolver_mirage.Make(Host.Time)(Client)
@@ -141,6 +142,7 @@ let extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
 let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
 let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
 let highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
+let preferred_ip1 = Ipaddr.V4.of_string_exn "192.168.65.250"
 let server_macaddr = Slirp.default_server_macaddr
 
 let global_arp_table : Slirp.arp_table =
@@ -202,7 +204,7 @@ let connection =
   config >>= fun config ->
   start_stack config ()
 
-let with_stack f =
+let with_stack ?uuid ?preferred_ip f =
   connection >>= fun port ->
   Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 Ipaddr.V4.localhost, port)
   >>= function
@@ -211,11 +213,12 @@ let with_stack f =
     Log.info (fun f -> f "Made a loopback connection");
     let server_macaddr = Slirp.default_server_macaddr in
     let uuid =
-      match Uuidm.of_string "d1d9cd61-d0dc-4715-9bb3-4c11da7ad7a5" with
-      | Some x -> x
-      | None -> failwith "unable to parse test uuid"
+      match uuid, Uuidm.of_string "d1d9cd61-d0dc-4715-9bb3-4c11da7ad7a5" with
+      | Some x, Some _ -> x
+      | None, Some x -> x
+      | _, None -> failwith "unable to parse test uuid"
     in
-    VMNET.client_of_fd ~uuid ~server_macaddr:server_macaddr flow
+    VMNET.client_of_fd ~uuid ?preferred_ip:preferred_ip ~server_macaddr:server_macaddr flow
     >>= function
     | Error (`Msg x ) ->
       (* Server will close when it gets EOF *)

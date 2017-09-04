@@ -13,18 +13,19 @@ module Make(C: Sig.CONN): sig
   val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
 
   val of_fd:
-    client_macaddr_of_uuid:(Uuidm.t -> Macaddr.t Lwt.t) ->
+    connect_client_fn:(Uuidm.t -> Ipaddr.V4.t option -> (Macaddr.t, [`Msg of string]) result Lwt.t) ->
     server_macaddr:Macaddr.t -> mtu:int -> C.flow ->
     (t, [`Msg of string]) result Lwt.t
-  (** [of_fd ~client_macaddr_of_uuid ~server_macaddr ~mtu fd]
+  (** [of_fd ~connect_client_fn ~server_macaddr ~mtu fd]
       negotiates with the client over [fd]. The server uses
-      [client_macaddr_of_uuid] to create a source address for the
+      [connect_client_fn] to create a source address for the
       client's ethernet frames based on a uuid supplied by the
-      client. The server uses [server_macaddr] as the source address
-      of all its ethernet frames and sets the MTU to [mtu]. *)
+      client and an optional preferred IP address. The server uses
+      [server_macaddr] as the source address of all its ethernet frames and
+      sets the MTU to [mtu]. *)
 
-  val client_of_fd: uuid:Uuidm.t -> server_macaddr:Macaddr.t -> C.flow ->
-    (t, [`Msg of string]) result Lwt.t
+  val client_of_fd: uuid:Uuidm.t -> ?preferred_ip:Ipaddr.V4.t ->
+      server_macaddr:Macaddr.t -> C.flow -> (t, [`Msg of string]) result Lwt.t
 
   val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
   (** [start_capture t ?size_limit filename] closes any existing pcap
@@ -58,6 +59,7 @@ module Command : sig
 
   type t =
     | Ethernet of Uuidm.t (* 36 bytes *)
+    | Preferred_ipv4 of Uuidm.t (* 36 bytes *) * Ipaddr.V4.t
     | Bind_ipv4 of Ipaddr.V4.t * int * bool
 
   val to_string: t -> string
@@ -66,3 +68,4 @@ module Command : sig
   val marshal: t -> Cstruct.t -> Cstruct.t
   val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) result
 end
+

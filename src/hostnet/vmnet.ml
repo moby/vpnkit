@@ -25,7 +25,7 @@ module Init = struct
 
   let default = {
     magic = "VMN3T";
-    version = 1l;
+    version = 22l;
     commit = "0123456789012345678901234567890123456789";
   }
 
@@ -47,14 +47,17 @@ module Command = struct
 
   type t =
     | Ethernet of Uuidm.t (* 36 bytes *)
+    | Preferred_ipv4 of Uuidm.t (* 36 bytes *) * Ipaddr.V4.t
     | Bind_ipv4 of Ipaddr.V4.t * int * bool
 
   let to_string = function
   | Ethernet x -> Fmt.strf "Ethernet %a" Uuidm.pp x
+  | Preferred_ipv4 (uuid, ip) ->
+    Fmt.strf "Preferred_ipv4 %a %a" Uuidm.pp uuid Ipaddr.V4.pp_hum ip
   | Bind_ipv4 (ip, port, tcp) ->
     Fmt.strf "Bind_ipv4 %a %d %b" Ipaddr.V4.pp_hum ip port tcp
 
-  let sizeof = 1 + 36
+  let sizeof = 1 + 36 + 4
 
   let marshal t rest = match t with
   | Ethernet uuid ->
@@ -63,6 +66,14 @@ module Command = struct
     let uuid_str = Uuidm.to_string uuid in
     Cstruct.blit_from_string uuid_str 0 rest 0 (String.length uuid_str);
     Cstruct.shift rest (String.length uuid_str)
+  | Preferred_ipv4 (uuid, ip) ->
+    Cstruct.set_uint8 rest 0 8;
+    let rest = Cstruct.shift rest 1 in
+    let uuid_str = Uuidm.to_string uuid in
+    Cstruct.blit_from_string uuid_str 0 rest 0 (String.length uuid_str);
+    let rest = Cstruct.shift rest (String.length uuid_str) in
+    Cstruct.LE.set_uint32 rest 0 (Ipaddr.V4.to_int32 ip);
+    Cstruct.shift rest 4
   | Bind_ipv4 (ip, port, stream) ->
     Cstruct.set_uint8 rest 0 6;
     let rest = Cstruct.shift rest 1 in
@@ -74,10 +85,7 @@ module Command = struct
     Cstruct.shift rest 1
 
   let unmarshal rest =
-    match Cstruct.get_uint8 rest 0 with
-    | 1 ->
-      let uuid_str = Cstruct.(to_string (sub rest 1 36)) in
-      let rest = Cstruct.shift rest 37 in
+    let process_uuid uuid_str =
       if (Bytes.compare (Bytes.make 36 '\000') uuid_str) = 0 then
         begin
           let random_uuid = (Uuidm.v `V4) in
@@ -85,15 +93,25 @@ module Command = struct
               f "Generated UUID on behalf of client: %a" Uuidm.pp random_uuid);
           (* generate random uuid on behalf of client if client sent
              array of \0 *)
-          Ok (Ethernet random_uuid, rest)
-        end else  begin
-        let result = match (Uuidm.of_string uuid_str) with
-        (* parse uuid from client *)
-        | Some uuid -> Ok (Ethernet uuid, rest)
-        | None      -> Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str))
-        in
-        result
-      end
+          Some random_uuid
+        end else
+          Uuidm.of_string uuid_str
+    in
+    match Cstruct.get_uint8 rest 0 with
+    | 1 -> (* ethernet *)
+      let uuid_str = Cstruct.(to_string (sub rest 1 36)) in
+      let rest = Cstruct.shift rest 37 in
+      (match process_uuid uuid_str with
+       | Some uuid -> Ok (Ethernet uuid, rest)
+       | None -> Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str)))
+    | 8 -> (* preferred_ipv4 *)
+      let uuid_str = Cstruct.(to_string (sub rest 1 36)) in
+      let rest = Cstruct.shift rest 37 in
+      let ip = Ipaddr.V4.of_int32 (Cstruct.LE.get_uint32 rest 0) in
+      let rest = Cstruct.shift rest 4 in
+      (match process_uuid uuid_str with
+      | Some uuid -> Ok (Preferred_ipv4 (uuid, ip), rest)
+      | None -> Error (`Msg (Printf.sprintf "Invalid UUID: %s" uuid_str)))
     | n -> Error (`Msg (Printf.sprintf "Unknown command: %d" n))
 
 end
@@ -133,6 +151,46 @@ module Vif = struct
       Error (`Msg (Printf.sprintf "Failed to parse MAC: [%s]" mac))
 
 end
+
+module Response = struct
+  type t =
+    | Vif of Vif.t (* 10 bytes *)
+    | Disconnect of string (* disconnect reason *)
+
+  let sizeof = 1+1+256 (* leave room for error message and length *)
+
+  let marshal t rest = match t with
+  | Vif vif ->
+    Cstruct.set_uint8 rest 0 1;
+    let rest = Cstruct.shift rest 1 in
+    Vif.marshal vif rest
+  | Disconnect reason ->
+    Cstruct.set_uint8 rest 0 2;
+    let rest = Cstruct.shift rest 1 in
+    Cstruct.set_uint8 rest 0 (String.length reason);
+    let rest = Cstruct.shift rest 1 in
+    Cstruct.blit_from_string reason 0 rest 0 (String.length reason);
+    Cstruct.shift rest (String.length reason)
+
+  let unmarshal rest =
+    match Cstruct.get_uint8 rest 0 with
+    | 1 -> (* vif *)
+      let rest = Cstruct.shift rest 1 in
+      let vif = Vif.unmarshal rest in
+      (match vif with
+      | Ok (vif, rest) -> Ok (Vif vif, rest)
+      | Error msg -> Error (msg))
+    | 2 -> (* disconnect *)
+      let rest = Cstruct.shift rest 1 in
+      let str_len = Cstruct.get_uint8 rest 0 in
+      let rest = Cstruct.shift rest 1 in
+      let reason_str = Cstruct.(to_string (sub rest 0 str_len)) in
+      let rest = Cstruct.shift rest str_len in
+      Ok (Disconnect reason_str, rest)
+    | n -> Error (`Msg (Printf.sprintf "Unknown response: %d" n))
+
+end
+
 
 module Packet = struct
   let sizeof = 2
@@ -214,32 +272,59 @@ module Make(C: Sig.CONN) = struct
   let server_log_prefix = "Vmnet.Server"
   let client_log_prefix = "Vmnet.Client"
 
-  let server_negotiate ~fd ~client_macaddr_of_uuid ~mtu =
+  let server_negotiate ~fd ~connect_client_fn ~mtu =
+    let assign_uuid_ip uuid ip =
+      connect_client_fn uuid ip >>= fun mac ->
+      match mac with
+      | Error (`Msg msg) ->
+          let buf = Cstruct.create Response.sizeof in
+          let (_: Cstruct.t) = Response.marshal (Disconnect msg) buf in
+          Log.err (fun f -> f "%s.negotiate: disconnecting client, reason: %s" server_log_prefix msg);
+          Channel.write_buffer fd buf;
+          with_flush (Channel.flush fd) @@ fun () ->
+          failf "%s.negotiate: disconnecting client, reason: %s " server_log_prefix msg
+      | Ok client_macaddr -> 
+          let vif = Vif.create client_macaddr mtu () in
+          let buf = Cstruct.create Response.sizeof in
+          let (_: Cstruct.t) = Response.marshal (Vif vif) buf in
+          Log.info (fun f -> f "%s.negotiate: sending %s" server_log_prefix (Vif.to_string vif));
+          Channel.write_buffer fd buf;
+          with_flush (Channel.flush fd) @@ fun () ->
+          Lwt_result.return (uuid, client_macaddr)
+    in
     with_read (Channel.read_exactly ~len:Init.sizeof fd) @@ fun bufs ->
     let buf = Cstruct.concat bufs in
     let init, _ = Init.unmarshal buf in
     Log.info (fun f -> f "%s.negotiate: received %s" server_log_prefix (Init.to_string init));
-    let (_: Cstruct.t) = Init.marshal Init.default buf in
-    Channel.write_buffer fd buf;
-    with_flush (Channel.flush fd) @@ fun () ->
-    with_read (Channel.read_exactly ~len:Command.sizeof fd) @@ fun bufs ->
-    let buf = Cstruct.concat bufs in
-    with_msg (Command.unmarshal buf) @@ fun (command, _) ->
-    Log.info (fun f ->
-        f "%s.negotiate: received %s" server_log_prefix (Command.to_string command));
-    match command with
-    | Command.Bind_ipv4 _ -> failf "%s.negotiate: unsupported command Bind_ipv4" server_log_prefix
-    | Command.Ethernet uuid ->
-      client_macaddr_of_uuid uuid >>= fun client_macaddr ->
-      let vif = Vif.create client_macaddr mtu () in
-      let buf = Cstruct.create Vif.sizeof in
-      let (_: Cstruct.t) = Vif.marshal vif buf in
-      Log.info (fun f -> f "%s.negotiate: sending %s" server_log_prefix (Vif.to_string vif));
+    match init.version with
+    | 22l -> begin
+        let (_: Cstruct.t) = Init.marshal Init.default buf in
+        Channel.write_buffer fd buf;
+        with_flush (Channel.flush fd) @@ fun () ->
+        with_read (Channel.read_exactly ~len:Command.sizeof fd) @@ fun bufs ->
+        let buf = Cstruct.concat bufs in
+        with_msg (Command.unmarshal buf) @@ fun (command, _) ->
+        Log.info (fun f ->
+            f "%s.negotiate: received %s" server_log_prefix (Command.to_string command));
+        match command with
+        | Command.Bind_ipv4 _ -> 
+          let buf = Cstruct.create Response.sizeof in
+          let (_: Cstruct.t) = Response.marshal (Disconnect "Unsupported command Bind_ipv4") buf in
+          Channel.write_buffer fd buf;
+          with_flush (Channel.flush fd) @@ fun () ->
+          failf "%s.negotiate: unsupported command Bind_ipv4" server_log_prefix
+        | Command.Ethernet uuid -> assign_uuid_ip uuid None
+        | Command.Preferred_ipv4 (uuid, ip) -> assign_uuid_ip uuid (Some ip)
+      end
+    | x -> 
+      let (_: Cstruct.t) = Init.marshal Init.default buf in (* write our version before disconnecting *)
       Channel.write_buffer fd buf;
       with_flush (Channel.flush fd) @@ fun () ->
-      Lwt_result.return (uuid, client_macaddr)
+      Log.err (fun f -> f "%s: Client requested protocol version %s, server only supports version %s" server_log_prefix (Int32.to_string x) (Int32.to_string Init.default.version));
+      Lwt_result.fail (`Msg "Client requested unsupported protocol version")
 
-  let client_negotiate ~uuid ~fd =
+
+  let client_negotiate ~uuid ?preferred_ip ~fd =
     let buf = Cstruct.create Init.sizeof in
     let (_: Cstruct.t) = Init.marshal Init.default buf in
     Channel.write_buffer fd buf;
@@ -248,16 +333,30 @@ module Make(C: Sig.CONN) = struct
     let buf = Cstruct.concat bufs in
     let init, _ = Init.unmarshal buf in
     Log.info (fun f -> f "%s.negotiate: received %s" client_log_prefix (Init.to_string init));
-    let buf = Cstruct.create Command.sizeof in
-    let (_: Cstruct.t) = Command.marshal (Command.Ethernet uuid) buf in
-    Channel.write_buffer fd buf;
-    with_flush (Channel.flush fd) @@ fun () ->
-    with_read (Channel.read_exactly ~len:Vif.sizeof fd) @@ fun bufs ->
-    let buf = Cstruct.concat bufs in
-    let open Lwt_result.Infix in
-    Lwt.return (Vif.unmarshal buf) >>= fun (vif, _) ->
-    Log.debug (fun f -> f "%s.negotiate: vif %s" client_log_prefix (Vif.to_string vif));
-    Lwt_result.return (vif)
+    match init.version with
+    | 22l -> 
+        let buf = Cstruct.create Command.sizeof in
+        let (_: Cstruct.t) = match preferred_ip with
+          | None -> Command.marshal (Command.Ethernet uuid) buf
+          | Some ip -> Command.marshal (Command.Preferred_ipv4 (uuid, ip)) buf
+        in
+        Channel.write_buffer fd buf;
+        with_flush (Channel.flush fd) @@ fun () ->
+        with_read (Channel.read_exactly ~len:Response.sizeof fd) @@ fun bufs ->
+        let buf = Cstruct.concat bufs in
+        let open Lwt_result.Infix in
+        Lwt.return (Response.unmarshal buf) >>= fun (response, _) ->
+        (match response with
+        | Vif vif -> 
+          Log.debug (fun f -> f "%s.negotiate: vif %s" client_log_prefix (Vif.to_string vif));
+          Lwt_result.return (vif)
+        | Disconnect reason ->
+          let msg = "Server disconnected with reason: " ^ reason in
+          Log.err (fun f -> f "%s.negotiate: %s" client_log_prefix msg);
+          Lwt_result.fail (`Msg msg))
+    | x -> 
+        Log.err (fun f -> f "%s: Server requires protocol version %s, we have %s" client_log_prefix (Int32.to_string x) (Int32.to_string Init.default.version));
+        Lwt_result.fail (`Msg "Server does not support our version of the protocol")
 
   (* Use blocking I/O here so we can avoid Using Lwt_unix or Uwt. Ideally we
      would use a FLOW handle referencing a file/stream. *)
@@ -325,19 +424,19 @@ module Make(C: Sig.CONN) = struct
 
   type fd = C.flow
 
-  let of_fd ~client_macaddr_of_uuid ~server_macaddr ~mtu flow =
+  let of_fd ~connect_client_fn ~server_macaddr ~mtu flow =
     let open Lwt_result.Infix in
     let channel = Channel.create flow in
-    server_negotiate ~fd:channel ~client_macaddr_of_uuid ~mtu
+    server_negotiate ~fd:channel ~connect_client_fn ~mtu
     >>= fun (client_uuid, client_macaddr) ->
     let t = make ~client_macaddr ~server_macaddr ~mtu ~client_uuid
         ~log_prefix:server_log_prefix channel in
     Lwt_result.return t
 
-  let client_of_fd ~uuid ~server_macaddr flow =
+  let client_of_fd ~uuid ?preferred_ip ~server_macaddr flow =
     let open Lwt_result.Infix in
     let channel = Channel.create flow in
-    client_negotiate ~uuid ~fd:channel
+    client_negotiate ~uuid ?preferred_ip ~fd:channel
     >>= fun vif ->
     let t =
       make ~client_macaddr:server_macaddr

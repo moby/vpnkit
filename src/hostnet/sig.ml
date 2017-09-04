@@ -209,7 +209,7 @@ module type VMNET = sig
   type fd
 
   val of_fd:
-    client_macaddr_of_uuid:(Uuidm.t -> Macaddr.t Lwt.t) ->
+    connect_client_fn:(Uuidm.t -> Ipaddr.V4.t option -> (Macaddr.t, [`Msg of string]) result Lwt.t) ->
     server_macaddr:Macaddr.t ->
     mtu:int ->
     fd -> (t, [`Msg of string]) result Lwt.t
