@@ -326,7 +326,7 @@ struct
             let listeners port =
               Log.debug (fun f ->
                   f "%a:%d handshake complete" Ipaddr.pp_hum ip port);
-              let f flow =
+              let process flow =
                 match tcp.Tcp.Flow.socket with
                 | None ->
                   Log.err (fun f ->
@@ -365,7 +365,12 @@ struct
                       Host.Sockets.Stream.Tcp.close socket
                     )
               in
-              Some f
+              let keepalive = Some {
+                Mirage_protocols.Keepalive.after = Duration.of_sec 1;
+                interval = Duration.of_sec 1;
+                probes = 10
+              } in
+              Some { Stack_tcp.process; keepalive }
             in
             Lwt.return listeners
         ) buf

@@ -110,7 +110,7 @@ let error_html title body =
 module Make
     (Ip: Mirage_protocols_lwt.IPV4)
     (Udp: Mirage_protocols_lwt.UDPV4)
-    (Tcp:Mirage_flow_lwt.SHUTDOWNABLE)
+    (Tcp: Mirage_protocols_lwt.TCPV4)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
 = struct
@@ -245,7 +245,7 @@ module Make
             | Error `Closed -> false
             | Error e       -> warn Incoming.C.pp_write_error e; false
         ) >>= fun continue ->
-        if continue then loop () else Tcp.shutdown_write flow
+        if continue then loop () else Tcp.close flow
       in
       loop () in
 
@@ -272,6 +272,12 @@ module Make
       a_t flow ~incoming ~outgoing;
       b_t remote ~incoming ~outgoing
     ]
+
+  let keepalive = Some {
+    Mirage_protocols.Keepalive.after = Duration.of_sec 1;
+    interval = Duration.of_sec 1;
+    probes = 10
+  }
 
   let rec proxy_body_request ~reader ~writer =
     let open Cohttp.Transfer in
@@ -393,7 +399,7 @@ module Make
   let tunnel_https_over_connect ~dst proxy =
     let listeners _port =
       Log.debug (fun f -> f "HTTPS TCP handshake complete");
-      let f flow =
+      let process flow =
         Lwt.finalize
           (fun () ->
             address_of_proxy proxy
@@ -451,7 +457,7 @@ module Make
                       proxy_bytes ~incoming ~outgoing ~flow ~remote
                   ) (fun () -> Socket.Stream.Tcp.close remote)
           ) (fun () -> Tcp.close flow)
-      in Some f
+      in Some { Tcp.process; keepalive }
     in
     Lwt.return listeners
 
@@ -623,7 +629,7 @@ module Make
   let explicit_proxy ~localhost_names ~localhost_ips proxy exclude () =
     let listeners _port =
       Log.debug (fun f -> f "HTTP TCP handshake complete");
-      let f flow =
+      let process flow =
         Lwt.finalize (fun () ->
             let incoming = Incoming.C.create flow in
             let rec loop () =
@@ -646,14 +652,14 @@ module Make
               loop ()
           ) (fun () -> Tcp.close flow)
       in
-      Some f
+      Some { Tcp.process; keepalive }
     in
     Lwt.return listeners
 
   let transparent_http ~dst proxy exclude =
     let listeners _port =
       Log.debug (fun f -> f "HTTP TCP handshake complete");
-      let f flow =
+      let process flow =
         Lwt.finalize (fun () ->
           let incoming = Incoming.C.create flow in
           let rec loop () =
@@ -684,8 +690,7 @@ module Make
                 Lwt.return_unit in
             loop ()
           ) (fun () -> Tcp.close flow)
-      in
-      Some f
+      in Some { Tcp.process; keepalive }
     in
     Lwt.return listeners
 

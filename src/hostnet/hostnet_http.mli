@@ -13,7 +13,7 @@ end
 module Make
     (Ip: Mirage_protocols_lwt.IPV4)
     (Udp: Mirage_protocols_lwt.UDPV4)
-    (Tcp: Mirage_flow_lwt.SHUTDOWNABLE)
+    (Tcp: Mirage_protocols_lwt.TCPV4)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS) :
 sig
@@ -36,7 +36,7 @@ sig
   (** [to_json t] encodes [t] into json *)
 
   val transparent_proxy_handler: dst:(Ipaddr.V4.t * int) -> t:t ->
-    (int -> (Tcp.flow -> unit Lwt.t) option) Lwt.t option
+    (int -> Tcp.listener option) Lwt.t option
   (** Intercept outgoing HTTP flows and redirect to the upstream proxy
       if one is defined. *)
 
@@ -44,7 +44,7 @@ sig
     localhost_names:Dns.Name.t list ->
     localhost_ips:Ipaddr.t list ->
     dst:(Ipaddr.V4.t * int) -> t:t ->
-    (int -> (Tcp.flow -> unit Lwt.t) option) Lwt.t option
+    (int -> Tcp.listener option) Lwt.t option
   (** Intercept outgoing HTTP proxy flows and if an upstream proxy is
       defined, redirect to it, otherwise implement the proxy function
       ourselves. *)
