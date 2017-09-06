@@ -424,6 +424,12 @@ module Sockets = struct
           Lwt.catch (fun () ->
               let sockaddr = make_sockaddr (ip, port) in
               Uwt.Tcp.connect fd ~addr:sockaddr >>= fun () ->
+              let error = Uwt.Tcp.enable_keepalive fd 1 in
+              if Uwt.Int_result.is_error error then begin
+                Log.warn (fun f ->
+                f "Uwt.Tcp.enable_keepalive failed with: %s"
+                  (Uwt.strerror @@ Uwt.Int_result.to_error error))
+              end;
               of_fd ~idx ~label ~read_buffer_size ~description fd
               |> Lwt_result.return
             ) (fun e ->
@@ -663,6 +669,12 @@ module Sockets = struct
                         f "Uwt.Tcp.accept_raw failed with: %s"
                           (Uwt.strerror @@ Uwt.Int_result.to_error t))
                   end else begin
+                    let error = Uwt.Tcp.enable_keepalive client 1 in
+                    if Uwt.Int_result.is_error error then begin
+                      Log.warn (fun f ->
+                      f "Uwt.Tcp.enable_keepalive failed with: %s"
+                        (Uwt.strerror @@ Uwt.Int_result.to_error error))
+                    end;
                     let label, description =
                       match Uwt.Tcp.getpeername client with
                       | Uwt.Ok sockaddr ->
