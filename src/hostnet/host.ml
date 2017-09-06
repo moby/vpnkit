@@ -430,6 +430,12 @@ module Sockets = struct
                 f "Uwt.Tcp.enable_keepalive failed with: %s"
                   (Uwt.strerror @@ Uwt.Int_result.to_error error))
               end;
+              let error = Uwt.Tcp.nodelay fd true in
+              if Uwt.Int_result.is_error error then begin
+                Log.warn (fun f ->
+                f "Uwt.Tcp.nodelay failed with: %s"
+                  (Uwt.strerror @@ Uwt.Int_result.to_error error))
+              end;
               of_fd ~idx ~label ~read_buffer_size ~description fd
               |> Lwt_result.return
             ) (fun e ->
@@ -673,6 +679,12 @@ module Sockets = struct
                     if Uwt.Int_result.is_error error then begin
                       Log.warn (fun f ->
                       f "Uwt.Tcp.enable_keepalive failed with: %s"
+                        (Uwt.strerror @@ Uwt.Int_result.to_error error))
+                    end;
+                    let error = Uwt.Tcp.nodelay client true in
+                    if Uwt.Int_result.is_error error then begin
+                      Log.warn (fun f ->
+                      f "Uwt.Tcp.nodelay failed with: %s"
                         (Uwt.strerror @@ Uwt.Int_result.to_error error))
                     end;
                     let label, description =
