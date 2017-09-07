@@ -44,7 +44,7 @@ module Common = struct
   let ip_port_of_sockaddr sockaddr =
     try match sockaddr with
     | Unix.ADDR_INET(ip, port) ->
-      Some (Ipaddr.of_string @@ Unix.string_of_inet_addr ip, port)
+      Some (Ipaddr.of_string_exn @@ Unix.string_of_inet_addr ip, port)
     | _ -> None
     with _ -> None
 end
@@ -177,18 +177,49 @@ module Sockets = struct
             >>= fun recv ->
             if recv.Uwt.Udp.is_partial then begin
               Log.err (fun f ->
-                  f "Socket.%s.recvfrom: dropping partial response (buffer \
+                  f "Socket.%s.read: dropping partial response (buffer \
                      was %d bytes)" t.label (Cstruct.len buf));
               read t
-            end else
-              Lwt.return (Ok (`Data (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len)))
+            end else begin
+              let data = `Data (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len) in
+              (* Since we're emulating a point-to-point connection, drop any incoming
+                 UDP which has the wrong source IP and port. *)
+              match recv.Uwt.Udp.sockaddr with
+              | Some sockaddr ->
+                begin match ip_port_of_sockaddr sockaddr with
+                | None ->
+                  Log.warn (fun f ->
+                    f "Socket.%s.read: packet has invalid source address so \
+                       dropping since we're connected to %s" t.label
+                      (string_of_address t.address)
+                  );
+                  read t
+                | Some address when address <> t.address ->
+                  Log.warn (fun f ->
+                    f "Socket.%s.read: dropping response from %s since \
+                       we're connected to %s" t.label
+                      (string_of_address address)
+                      (string_of_address t.address)
+                  );
+                  read t
+                | Some _ ->
+                  Lwt.return (Ok data)
+                end
+              | None ->
+                Log.warn (fun f ->
+                  f "Socket.%s.read: packet has no source address so \
+                     dropping since we're connected to %s" t.label
+                    (string_of_address t.address)
+                );
+                read t
+            end
           ) (function
           | Unix.Unix_error(e, _, _) when Uwt.of_unix_error e = Uwt.ECANCELED ->
             (* happens on normal timeout *)
             Lwt.return (Ok `Eof)
           | e ->
             Log.err (fun f ->
-                f "Socket.%s.recvfrom: %s caught %s returning Eof"
+                f "Socket.%s.read: %s caught %s returning Eof"
                   t.label
                   (string_of_flow t)
                   (Printexc.to_string e)
@@ -271,7 +302,7 @@ module Sockets = struct
           let label, description = match Uwt.Udp.getsockname fd with
           | Uwt.Ok sockaddr ->
             begin match ip_port_of_sockaddr sockaddr with
-            | Some (Some ip, port) ->
+            | Some (ip, port) ->
               Fmt.strf "udp:%a:%d" Ipaddr.pp_hum ip port,
               begin match ip with
               | Ipaddr.V4 _ -> "UDPv4"
@@ -324,16 +355,16 @@ module Sockets = struct
           Log.err (fun f ->
               f "Socket.%s.recvfrom: dropping response from unknown sockaddr"
                 server.label);
-          Fmt.kstrf Lwt.fail_with "Socket.%s.recvfrom unknown sender"
-            server.label
-        | Some address ->
-          match address with
-          | Unix.ADDR_INET(ip, port) ->
-            let address =
-              Ipaddr.of_string_exn @@ Unix.string_of_inet_addr ip, port
-            in
-            Lwt.return (recv.Uwt.Udp.recv_len, address)
-          | _ -> assert false
+          recvfrom server buf
+        | Some sockaddr ->
+          begin match ip_port_of_sockaddr sockaddr with
+          | Some address -> Lwt.return (recv.Uwt.Udp.recv_len, address)
+          | None ->
+            Log.err (fun f ->
+              f "Socket.%s.recvfrom: dropping response from invalid sockaddr"
+                server.label);
+            recvfrom server buf
+          end
 
       let listen t flow_cb =
         let rec loop () =
@@ -691,7 +722,7 @@ module Sockets = struct
                       match Uwt.Tcp.getpeername client with
                       | Uwt.Ok sockaddr ->
                         begin match ip_port_of_sockaddr sockaddr with
-                        | Some (Some ip, port) ->
+                        | Some (ip, port) ->
                           Fmt.strf "tcp:%s:%d" (Ipaddr.to_string ip) port,
                           begin match ip with
                           | Ipaddr.V4 _ -> "TCPv4"
