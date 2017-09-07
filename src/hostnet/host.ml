@@ -177,7 +177,7 @@ module Sockets = struct
             >>= fun recv ->
             if recv.Uwt.Udp.is_partial then begin
               Log.err (fun f ->
-                  f "Socket.%s.recvfrom: dropping partial response (buffer \
+                  f "Socket.%s.read: dropping partial response (buffer \
                      was %d bytes)" t.label (Cstruct.len buf));
               read t
             end else
@@ -188,7 +188,7 @@ module Sockets = struct
             Lwt.return (Ok `Eof)
           | e ->
             Log.err (fun f ->
-                f "Socket.%s.recvfrom: %s caught %s returning Eof"
+                f "Socket.%s.read: %s caught %s returning Eof"
                   t.label
                   (string_of_flow t)
                   (Printexc.to_string e)
