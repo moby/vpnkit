@@ -324,16 +324,16 @@ module Sockets = struct
           Log.err (fun f ->
               f "Socket.%s.recvfrom: dropping response from unknown sockaddr"
                 server.label);
-          Fmt.kstrf Lwt.fail_with "Socket.%s.recvfrom unknown sender"
-            server.label
-        | Some address ->
-          match address with
-          | Unix.ADDR_INET(ip, port) ->
-            let address =
-              Ipaddr.of_string_exn @@ Unix.string_of_inet_addr ip, port
-            in
-            Lwt.return (recv.Uwt.Udp.recv_len, address)
-          | _ -> assert false
+          recvfrom server buf
+        | Some sockaddr ->
+          begin match ip_port_of_sockaddr sockaddr with
+          | Some address -> Lwt.return (recv.Uwt.Udp.recv_len, address)
+          | None ->
+            Log.err (fun f ->
+              f "Socket.%s.recvfrom: dropping response from invalid sockaddr"
+                server.label);
+            recvfrom server buf
+          end
 
       let listen t flow_cb =
         let rec loop () =
