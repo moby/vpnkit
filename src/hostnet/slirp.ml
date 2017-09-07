@@ -126,6 +126,8 @@ struct
          what you say. *)
       Lwt.return ()
     let shutdown_write = close
+    (* Disable Nagle's algorithm *)
+    let write = write_nodelay
   end
 
   module Dns_forwarder =
