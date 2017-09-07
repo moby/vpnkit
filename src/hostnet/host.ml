@@ -44,7 +44,7 @@ module Common = struct
   let ip_port_of_sockaddr sockaddr =
     try match sockaddr with
     | Unix.ADDR_INET(ip, port) ->
-      Some (Ipaddr.of_string @@ Unix.string_of_inet_addr ip, port)
+      Some (Ipaddr.of_string_exn @@ Unix.string_of_inet_addr ip, port)
     | _ -> None
     with _ -> None
 end
@@ -271,7 +271,7 @@ module Sockets = struct
           let label, description = match Uwt.Udp.getsockname fd with
           | Uwt.Ok sockaddr ->
             begin match ip_port_of_sockaddr sockaddr with
-            | Some (Some ip, port) ->
+            | Some (ip, port) ->
               Fmt.strf "udp:%a:%d" Ipaddr.pp_hum ip port,
               begin match ip with
               | Ipaddr.V4 _ -> "UDPv4"
@@ -667,7 +667,7 @@ module Sockets = struct
                       match Uwt.Tcp.getpeername client with
                       | Uwt.Ok sockaddr ->
                         begin match ip_port_of_sockaddr sockaddr with
-                        | Some (Some ip, port) ->
+                        | Some (ip, port) ->
                           Fmt.strf "tcp:%s:%d" (Ipaddr.to_string ip) port,
                           begin match ip with
                           | Ipaddr.V4 _ -> "TCPv4"
