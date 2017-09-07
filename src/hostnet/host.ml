@@ -180,8 +180,39 @@ module Sockets = struct
                   f "Socket.%s.read: dropping partial response (buffer \
                      was %d bytes)" t.label (Cstruct.len buf));
               read t
-            end else
-              Lwt.return (Ok (`Data (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len)))
+            end else begin
+              let data = `Data (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len) in
+              (* Since we're emulating a point-to-point connection, drop any incoming
+                 UDP which has the wrong source IP and port. *)
+              match recv.Uwt.Udp.sockaddr with
+              | Some sockaddr ->
+                begin match ip_port_of_sockaddr sockaddr with
+                | None ->
+                  Log.warn (fun f ->
+                    f "Socket.%s.read: packet has invalid source address so \
+                       dropping since we're connected to %s" t.label
+                      (string_of_address t.address)
+                  );
+                  read t
+                | Some address when address <> t.address ->
+                  Log.warn (fun f ->
+                    f "Socket.%s.read: dropping response from %s since \
+                       we're connected to %s" t.label
+                      (string_of_address address)
+                      (string_of_address t.address)
+                  );
+                  read t
+                | Some _ ->
+                  Lwt.return (Ok data)
+                end
+              | None ->
+                Log.warn (fun f ->
+                  f "Socket.%s.read: packet has no source address so \
+                     dropping since we're connected to %s" t.label
+                    (string_of_address t.address)
+                );
+                read t
+            end
           ) (function
           | Unix.Unix_error(e, _, _) when Uwt.of_unix_error e = Uwt.ECANCELED ->
             (* happens on normal timeout *)
