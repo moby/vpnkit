@@ -18,7 +18,7 @@ let run_test ?(timeout=Duration.of_sec 60) t =
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
 
-let run ?timeout t = run_test ?timeout (with_stack t)
+let run ?timeout ~pcap t = run_test ?timeout (with_stack ~pcap t)
 
 let test_dhcp_query () =
   let t _ stack =
@@ -26,7 +26,7 @@ let test_dhcp_query () =
     Log.info (fun f -> f "Got an IP: %a" pp_ip4s ips);
     Lwt.return ()
   in
-  run t
+  run ~pcap:"test_dhcp_query.pcap" t
 
 let set_dns_policy ?host_names use_host =
   Mclock.connect () >|= fun clock ->
@@ -46,7 +46,7 @@ let test_dns_query server use_host () =
       Log.err (fun f -> f "Failed to lookup www.google.com");
       failwith "Failed to lookup www.google.com"
   in
-  run t
+  run ~pcap:"test_dns_query.pcap" t
 
 let test_builtin_dns_query server use_host () =
   let name = "experimental.host.name.localhost" in
@@ -62,7 +62,7 @@ let test_builtin_dns_query server use_host () =
       Log.err (fun f -> f "Failed to lookup %s" name);
       failwith ("Failed to lookup " ^ name)
   in
-  run t
+  run ~pcap:"test_builtin_dns_query.pcap" t
 
 let test_etc_hosts_query server use_host () =
   let test_name = "vpnkit.is.cool.yes.really" in
@@ -88,7 +88,7 @@ let test_etc_hosts_query server use_host () =
         Hosts.etc_hosts := [];
         failwith "failed to lookup name from /etc/hosts"
   in
-  run t
+  run ~pcap:"test_etc_hosts_query.pcap" t
 
 let test_max_connections () =
   let t _ stack =
@@ -135,7 +135,7 @@ let test_max_connections () =
         Lwt.return_unit
       )
   in
-  run ~timeout:(Duration.of_sec 240) t
+  run ~timeout:(Duration.of_sec 240) ~pcap:"test_max_connections.pcap" t
 
 let test_http_fetch () =
   let t _ stack =
@@ -186,7 +186,7 @@ let test_http_fetch () =
           f "Failed to look up an IPv4 address for www.google.com");
       failwith "http_fetch dns"
   in
-  run t
+  run ~pcap:"test_http_fetch.pcap" t
 
 module DevNullServer = struct
   (* Accept local TCP connections, throw away all incoming data and then return
@@ -232,8 +232,8 @@ end
 
 let rec count = function 0 -> [] | n -> () :: (count (n - 1))
 
-let run' ?timeout t =
-  run ?timeout (fun x b ->
+let run' ?timeout ~pcap t =
+  run ?timeout ~pcap (fun x b ->
       DevNullServer.with_server (fun { DevNullServer.local_port; _ } ->
           t local_port x b)
     )
@@ -269,7 +269,7 @@ let test_many_connections n () =
           (List.length flows) (Host.Sockets.get_num_connections ()));
     (* How many connections is this? *)
   in
-  run' ~timeout:(Duration.of_sec 240) t
+  run' ~timeout:(Duration.of_sec 240) ~pcap:"test_many_connections.pcap" t
 
 let test_stream_data connections length () =
   let t local_port _ stack =
@@ -340,7 +340,7 @@ let test_stream_data connections length () =
               "Response was %Ld while expected %d" response length;
       ) (count connections)
   in
-  run' t
+  run' ~pcap:"test_stream_data.pcap" t
 
 let test_dhcp = [
   "DHCP: simple query",

@@ -18,7 +18,7 @@ let test_connect n () =
             | 0, _, _ -> Lwt.return_unit
             | x, used_ips, used_macs -> 
                 let uuid = (Uuidm.v `V4) in
-                with_stack ~uuid (fun _ client_stack ->
+                with_stack ~uuid ~pcap:"test_connect.pcap" (fun _ client_stack ->
                     (* Same IP should not appear twice *)
                     let ips = Client.IPV4.get_ip (Client.ipv4 client_stack.t) in
                     assert(List.length ips == 1);
@@ -42,14 +42,14 @@ let test_reconnect () =
     Host.Main.run begin
         let uuid = (Uuidm.v `V4) in
         Log.info (fun f -> f "Using UUID %s" (Uuidm.to_string uuid));
-        with_stack ~uuid (fun _ client_stack ->
+        with_stack ~uuid ~pcap:"test_reconnect.pcap" (fun _ client_stack ->
             let ips = Client.IPV4.get_ip (Client.ipv4 client_stack.t) in
             let ip = List.hd ips in
             let mac = (VMNET.mac client_stack.netif) in
             Lwt.return (ip, mac)
         ) >>= fun (ip, mac) -> 
         Log.info (fun f -> f "First connection got IP %s and MAC %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac));
-        with_stack ~uuid (fun _ client_stack ->
+        with_stack ~uuid ~pcap:"test_reconnect.2.pcap" (fun _ client_stack ->
             let ips = Client.IPV4.get_ip (Client.ipv4 client_stack.t) in
             let ip = List.hd ips in
             let mac = (VMNET.mac client_stack.netif) in
@@ -66,7 +66,7 @@ let test_connect_preferred_ipv4 preferred_ip () =
     Host.Main.run begin
         let uuid = (Uuidm.v `V4) in
         Log.info (fun f -> f "Using UUID %s, requesting IP %s" (Uuidm.to_string uuid) (Ipaddr.V4.to_string preferred_ip));
-        with_stack ~uuid ~preferred_ip (fun _ client_stack ->
+        with_stack ~uuid ~preferred_ip ~pcap:"test_connect_preferred_ipv4.pcap" (fun _ client_stack ->
             let ips = Client.IPV4.get_ip (Client.ipv4 client_stack.t) in
             let ip = List.hd ips in
             let mac = (VMNET.mac client_stack.netif) in
@@ -75,7 +75,7 @@ let test_connect_preferred_ipv4 preferred_ip () =
         (* Verify that we got the IP we requested *)
         assert(Ipaddr.V4.compare ip preferred_ip == 0);
         Log.info (fun f -> f "First connection got IP %s and MAC %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac));
-        with_stack ~uuid ~preferred_ip (fun _ client_stack ->
+        with_stack ~uuid ~preferred_ip ~pcap:"test_connect_preferred_ipv4.2.pcap" (fun _ client_stack ->
             let ips = Client.IPV4.get_ip (Client.ipv4 client_stack.t) in
             let ip = List.hd ips in
             let mac = (VMNET.mac client_stack.netif) in
@@ -88,7 +88,7 @@ let test_connect_preferred_ipv4 preferred_ip () =
         (* Try to reconnect with the same UUID, but request a different IP (this should fail) *)
         let different_ip = Ipaddr.V4.of_int32 (Int32.succ (Ipaddr.V4.to_int32 preferred_ip)) in
         Lwt.catch (fun () ->
-            with_stack ~uuid ~preferred_ip:different_ip (fun _ client_stack ->
+            with_stack ~uuid ~preferred_ip:different_ip ~pcap:"test_connect_preferred_ipv4.3.pcap" (fun _ client_stack ->
                 let ips = Client.IPV4.get_ip (Client.ipv4 client_stack.t) in
                 let ip = List.hd ips in
                 let mac = (VMNET.mac client_stack.netif) in
@@ -102,7 +102,7 @@ let test_connect_preferred_ipv4 preferred_ip () =
         (* Try to reconnect with a different UUID, but request a used IP (this should fail) *)
         Lwt.catch (fun () ->
             let uuid = (Uuidm.v `V4) in
-            with_stack ~uuid ~preferred_ip (fun _ client_stack ->
+            with_stack ~uuid ~preferred_ip ~pcap:"test_connect_preferred_ipv4.4.pcap" (fun _ client_stack ->
                 let ips = Client.IPV4.get_ip (Client.ipv4 client_stack.t) in
                 let ip = List.hd ips in
                 let mac = (VMNET.mac client_stack.netif) in

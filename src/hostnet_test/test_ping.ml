@@ -27,7 +27,7 @@ let test_ping () =
   let id = 0x1234 in
   Queue.clear Slirp_stack.Client.Icmpv41.packets;
   Host.Main.run begin
-    Slirp_stack.with_stack (fun _ stack ->
+    Slirp_stack.with_stack ~pcap:"test_ping.pcap" (fun _ stack ->
       let rec loop seq =
         if Queue.length Slirp_stack.Client.Icmpv41.packets > 0
         then Lwt.return_unit
@@ -49,7 +49,7 @@ let test_ping () =
 let test_two_pings () =
   Queue.clear Slirp_stack.Client.Icmpv41.packets;
   Host.Main.run begin
-    Slirp_stack.with_stack (fun _ stack ->
+    Slirp_stack.with_stack ~pcap:"test_two_pings.pcap" (fun _ stack ->
       let rec loop seq =
         let id_1 = 0x1234 in
         let id_2 = 0x4321 in

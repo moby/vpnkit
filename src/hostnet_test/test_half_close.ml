@@ -60,7 +60,7 @@ let flow ip port = function
 let test_mirage_half_close () =
   Host.Main.run begin
     let forwarded, forwarded_u = Lwt.task () in
-    Slirp_stack.with_stack (fun _ stack -> with_server (fun flow ->
+    Slirp_stack.with_stack ~pcap:"test_mirage_half_close.pcap" (fun _ stack -> with_server (fun flow ->
         (* Read the request until EOF *)
         let ic = Incoming.C.create flow in
         Incoming.C.read_line ic >|= data >>= fun bufs ->
@@ -116,7 +116,7 @@ let test_mirage_half_close () =
 let test_host_half_close () =
   Host.Main.run begin
     let forwarded, forwarded_u = Lwt.task () in
-    Slirp_stack.with_stack (fun _ stack -> with_server (fun flow ->
+    Slirp_stack.with_stack ~pcap:"test_host_half_close.pcap" (fun _ stack -> with_server (fun flow ->
         (* Write a request *)
         let ic = Incoming.C.create flow in
         Incoming.C.write_line ic request;
