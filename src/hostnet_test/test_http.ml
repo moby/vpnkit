@@ -116,9 +116,9 @@ let send_http_request stack ip request =
     Log.err (fun f -> f "Failed to connect to %s:80" (Ipaddr.V4.to_string ip));
     failwith "http_fetch"
 
-let intercept request =
+let intercept ~pcap request =
   let forwarded, forwarded_u = Lwt.task () in
-  Slirp_stack.with_stack (fun _ stack ->
+  Slirp_stack.with_stack ~pcap (fun _ stack ->
       with_server (fun flow ->
           let ic = Incoming.C.create flow in
           Incoming.Request.read ic >>= function
@@ -162,7 +162,7 @@ let test_interception () =
       Cohttp.Request.make
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept request >>= fun result ->
+    intercept ~pcap:"test_interception.pcap" request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -185,7 +185,7 @@ let test_uri_absolute () =
       Cohttp.Request.make
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept request >>= fun result ->
+    intercept ~pcap:"test_uri_absolute.pcap" request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -208,7 +208,7 @@ let test_x_header_preserved () =
       Cohttp.Request.make ~headers
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept request >>= fun result ->
+    intercept ~pcap:"test_x_header_preserved.pcap" request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -232,7 +232,7 @@ let test_user_agent_preserved () =
       Cohttp.Request.make ~headers
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept request >>= fun result ->
+    intercept ~pcap:"test_user_agent_preserved.pcap" request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -249,7 +249,7 @@ let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
 let test_http_connect () =
   let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
   Host.Main.run begin
-    Slirp_stack.with_stack (fun _ stack ->
+    Slirp_stack.with_stack ~pcap:"test_http_connect.pcap" (fun _ stack ->
         with_server (fun flow ->
             let ic = Incoming.C.create flow in
             Incoming.Request.read ic >>= function

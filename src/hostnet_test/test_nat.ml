@@ -106,7 +106,7 @@ let err_udp e = Fmt.kstrf failwith "%a" Client.UDPV4.pp_error e
    a response *)
 let test_udp () =
   let t = EchoServer.with_server (fun { EchoServer.local_port; _ } ->
-      with_stack (fun _ stack ->
+      with_stack ~pcap:"test_udp.pcap"  (fun _ stack ->
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
@@ -140,7 +140,7 @@ let test_udp () =
    another source port, expect responses to *both* source ports. *)
 let test_udp_2 () =
   let t = EchoServer.with_server (fun { EchoServer.local_port; _ } ->
-      with_stack  (fun _ stack ->
+      with_stack ~pcap:"test_udp_2.pcap"  (fun _ stack ->
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
@@ -204,7 +204,7 @@ let test_udp_2 () =
    can traverse the NAT *)
 let test_nat_punch () =
   let t = EchoServer.with_server (fun echoserver ->
-      with_stack (fun _ stack ->
+      with_stack ~pcap:"test_nat_punch.pcap" (fun _ stack ->
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
@@ -265,7 +265,7 @@ let test_nat_punch () =
    we have only a single NAT rule *)
 let test_shared_nat_rule () =
   let t = EchoServer.with_server (fun { EchoServer.local_port; _ } ->
-      with_stack (fun slirp_server stack ->
+      with_stack ~pcap:"test_shared_nat_rule.pcap" (fun slirp_server stack ->
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
@@ -333,7 +333,7 @@ let test_source_ports () =
       (fun { EchoServer.local_port = local_port1; _ } ->
          EchoServer.with_server
            (fun { EchoServer.local_port = local_port2; _ } ->
-              with_stack (fun _ stack ->
+              with_stack ~pcap:"test_source_ports.pcap" (fun _ stack ->
                   let buffer = Cstruct.create 1024 in
                   let udpv4 = Client.udpv4 stack.t in
                   (* This is the port we shall send from *)
