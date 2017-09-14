@@ -1,0 +1,14 @@
+#!/bin/bash
+
+echo hooks/post_push: attempting to compute the tree SHA of the current directory
+pwd
+CURDIR=$(pwd)
+# The git ls-tree HEAD ../<foo> fails on Docker Cloud's hook environment.
+# It works fine from the parent directory.
+cd ..
+
+HASH=$(git ls-tree HEAD -- $(basename ${CURDIR}) | awk '{print $3}')
+
+echo Tagging "${IMAGE_NAME}" with "${DOCKER_REPO}:${HASH}"
+docker tag "${IMAGE_NAME}" "${DOCKER_REPO}:${HASH}"
+docker push "${DOCKER_REPO}:${HASH}"
