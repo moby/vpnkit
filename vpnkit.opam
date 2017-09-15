@@ -43,8 +43,7 @@ depends: [
   "cmdliner"
   "charrua-core" {>= "0.9"}
   "charrua-client-mirage" {test}
-  "named-pipe" {>= "0.4.0"}
-  "hvsock" {>= "0.13.0"}
+  "hvsock" {>= "1.0.1"}
   "asl"
   "win-eventlog"
   "fd-send-recv" {>= "1.0.3"}
@@ -53,14 +52,11 @@ depends: [
   "astring"
   "mirage-flow-lwt" {>= "1.4.0"}
   "mirage-time-lwt" {>= "1.1.0"}
-  "mirage-time-unix"
   "mirage-protocols" {>= "1.1.0"}
   "mirage-channel" {>= "3.0.1"}
-  "mirage-console-unix"
-  "mirage-clock-unix"
   "cohttp-lwt" {>= "0.99.0"}
   "mirage-dns"
-  "protocol-9p-unix" {>= "0.11.2"}
+  "protocol-9p" {>= "0.11.3"}
   "mirage-vnetif" {>= "0.4.0"}
   "uuidm"
   "ezjsonm"
