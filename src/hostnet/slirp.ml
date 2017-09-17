@@ -450,7 +450,7 @@ struct
     mutable endpoints: Endpoint.t IPMap.t;
     endpoints_m: Lwt_mutex.t;
     udp_nat: Udp_nat.t;
-    icmp_nat: Icmp_nat.t;
+    icmp_nat: Icmp_nat.t option;
   }
 
   let after_disconnect t = t.after_disconnect
@@ -601,7 +601,7 @@ struct
     type t = {
       endpoint:        Endpoint.t;
       udp_nat:         Udp_nat.t;
-      icmp_nat:        Icmp_nat.t;
+      icmp_nat:        Icmp_nat.t option;
     }
     (** Represents a remote system by proxying data to and from sockets *)
 
@@ -614,8 +614,12 @@ struct
         Hostnet_icmp.src = src; dst = dst;
         ty; code; seq; id; payload = p
       } in
-      Icmp_nat.input ~t:t.icmp_nat ~datagram ()
-      >|= ok
+      ( match t.icmp_nat with
+        | Some icmp_nat ->
+          Icmp_nat.input ~t:icmp_nat ~datagram ()
+          >|= ok
+        | None ->
+          Lwt.return (Ok ()) )
 
     (* Transparent HTTP intercept? *)
     | Ipv4 { src = dest_ip ; dst = local_ip;
@@ -892,7 +896,14 @@ struct
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
     let udp_nat = Udp_nat.create clock in
-    let icmp_nat = Icmp_nat.create clock in
+    let icmp_nat = match Icmp_nat.create clock with
+      | icmp_nat -> Some icmp_nat
+      | exception Unix.Unix_error (Unix.EPERM, _, _) ->
+        Log.err (fun f -> f "Permission denied setting up user-space ICMP socket: ping will not work");
+        None
+      | exception e ->
+        Log.err (fun f -> f "Unexpected exception %s setting up user-space ICMP socket: ping will not work" (Printexc.to_string e));
+        None in
     let t = {
       vnet_client_id;
       after_disconnect = Vmnet.after_disconnect x;
@@ -967,8 +978,9 @@ struct
           Log.err (fun f ->
               f "Failed to write an IPv4 packet: %a" Stack_ipv4.pp_error e);
         | Ok () -> () in
-
-    Icmp_nat.set_send_reply ~t:icmp_nat ~send_reply;
+    ( match icmp_nat with
+      | Some icmp_nat -> Icmp_nat.set_send_reply ~t:icmp_nat ~send_reply
+      | None -> () );
 
     (* If using bridge, add listener *)
     Vnet.set_listen_fn vnet_switch t.vnet_client_id (fun buf ->
