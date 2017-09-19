@@ -106,14 +106,23 @@ func (v *Vmnet) negotiate() error {
 }
 
 // Ethernet requests the creation of a network connection with a given
-// uuid
+// uuid and optional IP
 type Ethernet struct {
 	uuid uuid.UUID
+	ip   net.IP
+}
+
+// NewEthernet creates an Ethernet frame
+func NewEthernet(uuid uuid.UUID, ip net.IP) *Ethernet {
+	return &Ethernet{uuid, ip}
 }
 
 // Write marshals an Ethernet message
 func (m *Ethernet) Write(c net.Conn) error {
 	ty := uint8(1)
+	if m.ip != nil {
+		ty = uint8(8)
+	}
 	if err := binary.Write(c, binary.LittleEndian, ty); err != nil {
 		return err
 	}
@@ -124,8 +133,12 @@ func (m *Ethernet) Write(c net.Conn) error {
 	if err := binary.Write(c, binary.LittleEndian, u); err != nil {
 		return err
 	}
-	padding := uint32(0)
-	if err := binary.Write(c, binary.LittleEndian, padding); err != nil {
+	ip := uint32(0)
+	if m.ip != nil {
+		ip = binary.BigEndian.Uint32(m.ip.To4())
+	}
+	// The protocol uses little endian, not network endian
+	if err := binary.Write(c, binary.LittleEndian, ip); err != nil {
 		return err
 	}
 	return nil
@@ -163,9 +176,9 @@ func (v *Vmnet) readVif() (*Vif, error) {
 	return &Vif{MTU, MaxPacketSize, ClientMAC, IP, conn}, nil
 }
 
-// ConnectVif returns a connected network interface with the given uuid
+// ConnectVif returns a connected network interface with the given uuid.
 func (v *Vmnet) ConnectVif(uuid uuid.UUID) (*Vif, error) {
-	e := Ethernet{uuid}
+	e := NewEthernet(uuid, nil)
 	if err := e.Write(v.conn); err != nil {
 		return nil, err
 	}
@@ -180,6 +193,38 @@ func (v *Vmnet) ConnectVif(uuid uuid.UUID) (*Vif, error) {
 			return nil, err
 		}
 		IP, err := vif.dhcp()
+		if err != nil {
+			return nil, err
+		}
+		vif.IP = IP
+		return vif, err
+	default:
+		var len uint8
+		if err := binary.Read(v.conn, binary.LittleEndian, &len); err != nil {
+			return nil, err
+		}
+		message := make([]byte, len)
+		if err := binary.Read(v.conn, binary.LittleEndian, &message); err != nil {
+			return nil, err
+		}
+		return nil, errors.New(string(message))
+	}
+}
+
+// ConnectVifIP returns a connected network interface with the given uuid
+// and IP. If the IP is already in use then return an error.
+func (v *Vmnet) ConnectVifIP(uuid uuid.UUID, IP net.IP) (*Vif, error) {
+	e := NewEthernet(uuid, IP)
+	if err := e.Write(v.conn); err != nil {
+		return nil, err
+	}
+	var responseType uint8
+	if err := binary.Read(v.conn, binary.LittleEndian, &responseType); err != nil {
+		return nil, err
+	}
+	switch responseType {
+	case 1:
+		vif, err := v.readVif()
 		if err != nil {
 			return nil, err
 		}
