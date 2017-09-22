@@ -4,7 +4,8 @@ RUN apk add --no-cache go musl-dev build-base linux-headers
 COPY . /build
 RUN make -C /build sbin/vpnkit-9pmount-vsock
 
-FROM scratch
+# Can't use scratch as we need /bin/mount
+FROM alpine:3.6
 ENTRYPOINT []
 CMD []
 WORKDIR /
