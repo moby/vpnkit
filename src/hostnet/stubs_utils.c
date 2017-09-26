@@ -3,6 +3,7 @@
 #include <caml/custom.h>
 #include <caml/callback.h>
 #include <caml/alloc.h>
+#include <caml/unixsupport.h>
 
 #include <stdio.h>
 
@@ -10,6 +11,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <Wincrypt.h>
 #else
 #include <sys/socket.h>
 #endif
@@ -17,4 +19,34 @@
 CAMLprim value stub_get_SOMAXCONN(value unit){
   fprintf(stderr, "SOMAXCONN = %d\n", SOMAXCONN);
   return (Val_int (SOMAXCONN));
+}
+
+
+#define Val_none Val_int(0)
+
+CAMLprim value stub_CryptGenRandom(value len){
+  CAMLparam1(len);
+  CAMLlocal3(ret, some, str);
+  ret = Val_none;
+#ifdef WIN32
+  HCRYPTPROV hCryptProv;
+  if (!CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_FULL, 0)) {
+    win32_maperr(GetLastError());
+    unix_error(errno, "CryptAcquireContext", Nothing);
+  }
+  /* Allocate an OCaml string of the required length and zero it so we
+     never return garbage and think it's random */
+  int c_len = Int_val(len);
+  str = caml_alloc_string(c_len);
+  ZeroMemory(String_val(str), c_len);
+
+  if (!CryptGenRandom(hCryptProv, c_len, (BYTE*)(String_val(str)))) {
+    win32_maperr(GetLastError());
+    unix_error(errno, "CryptAcquireContext", Nothing);
+  }
+  some = caml_alloc(1, 0);
+  Store_field(some, 0, str);
+  ret = some;
+#endif
+  CAMLreturn(ret);
 }
