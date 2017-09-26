@@ -164,14 +164,14 @@ struct
      client to handle the truncated bit and retransmissions. *)
 
   module Dns_tcp_client =
-    Dns_forward.Rpc.Client.Make(Socket.Stream.Tcp)
+    Dns_forward.Rpc.Client.Persistent.Make(Socket.Stream.Tcp)
       (Dns_forward.Framing.Tcp(Socket.Stream.Tcp))(Time)
 
   module Dns_tcp_resolver =
     Dns_forward.Resolver.Make(Dns_tcp_client)(Time)(Clock)
 
   module Dns_udp_client =
-    Dns_forward.Rpc.Client.Make(Socket.Datagram.Udp)
+    Dns_forward.Rpc.Client.Nonpersistent.Make(Socket.Datagram.Udp)
       (Dns_forward.Framing.Udp(Socket.Datagram.Udp))(Time)
 
   module Dns_udp_resolver =
