@@ -3,10 +3,10 @@ external get_SOMAXCONN: unit -> int = "stub_get_SOMAXCONN"
 
 let somaxconn = ref (get_SOMAXCONN ())
 
-external stub_CryptGenRandom: int -> bytes option = "stub_CryptGenRandom"
+external stub_RtlGenRandom: int -> bytes option = "stub_RtlGenRandom"
 
-let cryptGenRandom len =
-  match stub_CryptGenRandom len with
+let rtlGenRandom len =
+  match stub_RtlGenRandom len with
   | None -> None
   | Some buf ->
     let cs = Cstruct.create (String.length buf) in
@@ -19,7 +19,7 @@ open Uncommon
 let random_init () =
   let g = !Rng.generator in
   let bytes = 1024 in
-  match cryptGenRandom bytes with
+  match rtlGenRandom bytes with
   | Some entropy ->
     Rng.reseed ~g entropy
   | None ->
