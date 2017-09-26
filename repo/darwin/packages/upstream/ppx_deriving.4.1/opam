@@ -23,6 +23,7 @@ depends: [
   "ocamlbuild" {build}
   "ocamlfind"  {build & >= "1.6.0"}
   "cppo"       {build}
+  "cppo_ocamlbuild" {build}
   "ppx_tools"  {>= "4.02.3"}
   "result"
   "ounit"      {test}

@@ -1,0 +1,27 @@
+--- ./Makefile
++++ ./Makefile
+@@ -1,15 +1,22 @@
++OS_TYPE:=$(shell ocamlfind ocamlc -config | awk '/^os_type:/ {print $$2}' | tr -d '\15')
++ifeq ($(OS_TYPE),$(filter $(OS_TYPE),Win32 Cygwin))
++EXT_EXE=.exe
++else
++EXT_EXE=
++endif
++
+ 
+ build:
+ 	ocamlbuild -use-ocamlfind all.otarget
+ 
+ install:
+-	cp qtest.native $(BIN)/qtest
++	cp qtest.native $(BIN)/qtest$(EXT_EXE)
+ 
+ clean:
+ 	ocamlbuild -clean
+ 
+ uninstall:
+-	rm $(BIN)/qtest
++	rm $(BIN)/qtest$(EXT_EXE)
+ 
+ doc: build
+ 	@echo see readme
