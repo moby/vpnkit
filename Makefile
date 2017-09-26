@@ -6,7 +6,8 @@ BINDIR?=$(shell pwd)
 BINARIES := vpnkit.exe
 ARTEFACTS :=
 ifeq ($(OS),Windows_NT)
-	ARTEFACTS += vpnkit.exe
+	ARTEFACTS += vpnkit.exe libgmp-10.dll
+	BINARIES += libgmp-10.dll
 else
 	ARTEFACTS += vpnkit.tgz
 endif
@@ -38,6 +39,10 @@ vpnkit.tgz: vpnkit.exe
 vpnkit.exe:
 	jbuilder build --dev src/bin/main.exe
 	cp _build/default/src/bin/main.exe vpnkit.exe
+
+.PHONY: libgmp-10.dll
+libgmp-10.dll:
+	cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libgmp-10.dll .
 
 .PHONY: test
 test:
