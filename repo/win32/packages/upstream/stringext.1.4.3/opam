@@ -7,16 +7,20 @@ license:      "MIT"
 dev-repo:     "https://github.com/rgrinberg/stringext.git"
 
 build: [
-  ["jbuilder" "subst" "-n" name] {pinned}
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["ocaml" "setup.ml" "-configure"]
+  ["ocaml" "setup.ml" "-build"]
 ]
-build-test: [["jbuilder" "runtest" "-p" name "-j" jobs]]
+
+build-doc: ["ocaml" "setup.ml" "-doc"]
+
+install: ["ocaml" "setup.ml" "-install"]
+
+remove: ["ocamlfind" "remove" "stringext"]
 
 depends: [
-  "jbuilder" {build & >= "1.0+beta10"}
-  "ounit" {test}
-  "qtest" {test & >="2.2"}
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
   "base-bytes"
 ]
 
-available: [ocaml-version >= "4.02.3"]
+available: [ocaml-version >= "4.00.0"]
