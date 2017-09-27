@@ -27,12 +27,12 @@ uninstall:
 artefacts: $(ARTEFACTS)
 
 vpnkit.tgz: vpnkit.exe
-	mkdir -p _build/root/Contents/MacOS
-	cp vpnkit.exe _build/root/Contents/MacOS/vpnkit
+	mkdir -p _build/root/Contents/Resources/bin
+	cp vpnkit.exe _build/root/Contents/Resources/bin/vpnkit
 	dylibbundler -od -b \
-		-x _build/root/Contents/MacOS/vpnkit \
+		-x _build/root/Contents/Resources/bin/vpnkit \
 		-d _build/root/Contents/Resources/lib \
-		-p @executable_path/../Resources/lib
+		-p @executable_path/../lib
 	tar -C _build/root -cvzf vpnkit.tgz Contents
 
 .PHONY: vpnkit.exe
