@@ -3,7 +3,7 @@ external get_SOMAXCONN: unit -> int = "stub_get_SOMAXCONN"
 
 let somaxconn = ref (get_SOMAXCONN ())
 
-external stub_RtlGenRandom: int -> bytes option = "stub_RtlGenRandom"
+(* external stub_RtlGenRandom: int -> bytes option = "stub_RtlGenRandom"
 
 let rtlGenRandom len =
   match stub_RtlGenRandom len with
@@ -12,6 +12,8 @@ let rtlGenRandom len =
     let cs = Cstruct.create (String.length buf) in
     Cstruct.blit_from_bytes buf 0 cs 0 (String.length buf);
     Some cs
+*)
+let rtlGenRandom len = Some (Cstruct.create len) (* Obviously not random! *)
 
 open Nocrypto
 open Uncommon

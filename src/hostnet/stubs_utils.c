@@ -21,7 +21,7 @@ CAMLprim value stub_get_SOMAXCONN(value unit){
   return (Val_int (SOMAXCONN));
 }
 
-
+#if 0
 #define Val_none Val_int(0)
 
 CAMLprim value stub_RtlGenRandom(value len){
@@ -46,3 +46,4 @@ CAMLprim value stub_RtlGenRandom(value len){
 #endif
   CAMLreturn(ret);
 }
+#endif
