@@ -18,9 +18,11 @@ build: [
   ["%{prefix}%/bin/ocaml" "configure.ml" "-prefix" "%{prefix}%"]
   ["%{prefix}%/bin/ocaml" "build.ml"]
 ]
+
 install: [
   ["%{prefix}%/bin/ocaml" "build.ml" "-install"]
 ]
+
 remove: [
   ["rm" "-rf" "%{bin}%/osh"]
   ["rm" "-rf" "%{bin}%/omake"]
@@ -31,5 +33,5 @@ depends: [
  "ocamlfind"
  "cygwinpath" { build }
 ]
-available: [ ocaml-version >= "4.02.3" ]
+available: [ ocaml-version >= "4.02.3" & ocaml-version < "4.06.0"]
 patches: "omake-0.10.2.patch" {os = "win32"}

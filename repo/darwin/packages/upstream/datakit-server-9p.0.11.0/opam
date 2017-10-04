@@ -11,7 +11,7 @@ doc:          "https://docker.github.io/datakit/"
 build: ["jbuilder" "build" "-p" name "-j" jobs]
 
 depends: [
-  "jbuilder" {build}
+  "jbuilder" {build & < "1.0+beta12"}
   "datakit-server"  {>= "0.11.0"}
   "mirage-flow-lwt"
   "protocol-9p" {>= "0.11.0"}

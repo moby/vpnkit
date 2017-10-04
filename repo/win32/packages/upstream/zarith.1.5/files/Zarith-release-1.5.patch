@@ -1,0 +1,236 @@
+--- ./configure
++++ ./configure
+@@ -2,11 +2,11 @@
+ 
+ # configuration script
+ 
+-# This file is part of the Zarith library 
++# This file is part of the Zarith library
+ # http://forge.ocamlcore.org/projects/zarith .
+ # It is distributed under LGPL 2 licensing, with static linking exception.
+ # See the LICENSE file included in the distribution.
+-#   
++#
+ # Copyright (c) 2010-2011 Antoine Miné, Abstraction project.
+ # Abstraction is part of the LIENS (Laboratoire d'Informatique de l'ENS),
+ # a joint laboratory by:
+@@ -22,7 +22,24 @@
+ gmp='auto'
+ perf='no'
+ 
+-ar='ar'
++#ar='ar'
++ar_help=$(ocamlc -config | tr -d '\015' | awk '/^system/ {print $$2}')
++case "$ar_help" in
++    *mingw64*)
++        if which x86_64-w64-mingw32-ar >/dev/null 2>&1 ; then
++            ar=x86_64-w64-mingw32-ar
++        fi
++        ;;
++    *mingw*)
++        if which i686-w64-mingw32-ar >/dev/null 2>&1 ; then
++            ar=i686-w64-mingw32-ar
++        fi
++        ;;
++    *)
++        ar='ar'
++        ;;
++esac
++
+ ocaml='ocaml'
+ ocamlc='ocamlc'
+ ocamlopt='ocamlopt'
+@@ -75,7 +92,7 @@
+ # parse arguments
+ while : ; do
+     case "$1" in
+-        "") 
++        "")
+             break;;
+         -installdir|--installdir)
+             installdir="$2"
+@@ -186,7 +203,7 @@
+     if test ! -x tmp.out; then r=0; fi
+     rm -f tmp.out
+     if test $r -eq 0; then echo "not found"; else echo "found"; fi
+-    return $r    
++    return $r
+ }
+ 
+ 
+@@ -204,13 +221,32 @@
+   searchbinreq "$CC"
+   cc="$CC"
+   ccopt="$CFLAGS"
+-elif ! searchbin 'gcc'; then
++else
++    cc=
++    case "$system_help" in
++        *mingw64*)
++            if which x86_64-w64-mingw32-gcc >/dev/null 2>&1 ; then
++                cc=x86_64-w64-mingw32-gcc
++                ccopt="-O3 -Wall -Wextra $CFLAGS"
++            fi
++            ;;
++        *mingw*)
++            if which i686-w64-mingw32-gcc >/dev/null 2>&1 ; then
++                cc=i686-w64-mingw32-gcc
++                ccopt="-O3 -Wall -Wextra $CFLAGS"
++            fi
++            ;;
++    esac
++    if [ -z "$cc" ]; then
++        if ! searchbin 'gcc'; then
+   cc='gcc'
+   ccopt="-O3 -Wall -Wextra $CFLAGS"
+-else
++        else
+   searchbinreq 'cc'
+   cc='cc'
+   ccopt="-O3 -Wall -Wextra $CFLAGS"
++        fi
++    fi
+ fi
+ 
+ # optional native-code generation
+@@ -234,7 +270,7 @@
+ 
+ # directories
+ 
+-if test "$ocamllibdir" = "auto"; then ocamllibdir=`ocamlc -where`; fi
++if test "$ocamllibdir" = "auto"; then ocamllibdir=`ocamlc -where | tr -d '\r'`; fi
+ 
+ # fails on Cygwin:
+ # if test ! -f "$ocamllibdir/caml/mlvalues.h"
+@@ -258,10 +294,10 @@
+ # installation method
+ 
+ searchbin ocamlfind
+-if test $? -eq 1 -a $ocamlfind != "no"; then 
++if test $? -eq 1 -a $ocamlfind != "no"; then
+     instmeth='findlib'
+     if test "$installdir" = "auto"
+-    then installdir=`ocamlfind printconf destdir`; fi
++    then installdir=`ocamlfind printconf destdir | tr -d '\r'`; fi
+ else
+     searchbin install
+     if test $? -eq 1; then instmeth='install'
+@@ -280,7 +316,7 @@
+ 
+ # auto-detect host
+ 
+-if test "x$host" = 'xauto'; then 
++if test "x$host" = 'xauto'; then
+     searchbin uname
+     if test $? -eq 0; then host='none'
+     else host=`. ./config.guess`
+@@ -298,7 +334,7 @@
+     i486-*linux-gnu|i686-*linux-gnu|i486-kfreebsd-gnu)
+         ccdef="-DZ_ELF -DZ_DOT_LABEL_PREFIX $ccdef"
+         arch='i686';;
+-    i686-*cygwin)
++    i686-*cygwin|x86_64-*cygwin)
+         if test "x$wordsize" = "x64"; then
+             ccdef="-DZ_COFF $ccdef"
+             arch='x86_64_mingw64'
+@@ -306,7 +342,7 @@
+             ccdef="-DZ_UNDERSCORE_PREFIX -DZ_COFF $ccdef"
+             arch='i686'
+         fi
+-	;;
++        ;;
+     i386-*darwin* | x86_64-*darwin*)
+         ccdef="-DZ_UNDERSCORE_PREFIX -DZ_MACOS $ccdef"
+         if test "x$wordsize" = "x64"; then
+@@ -326,7 +362,7 @@
+         ;;
+     none)
+         ;;
+-    *) 
++    *)
+         echo "unknown host $host";;
+ esac
+ 
+@@ -341,7 +377,7 @@
+     checkinc gmp.h
+     if test $? -eq 1; then
+         checklib gmp
+-        if test $? -eq 1; then 
++        if test $? -eq 1; then
+             gmp='OK'
+             cclib="$cclib -lgmp"
+             ccdef="-DHAS_GMP $ccdef"
+@@ -352,7 +388,7 @@
+     checkinc mpir.h
+     if test $? -eq 1; then
+         checklib mpir
+-        if test $? -eq 1; then 
++        if test $? -eq 1; then
+             gmp='OK'
+             cclib="$cclib -lmpir"
+             ccdef="-DHAS_MPIR $ccdef"
+@@ -386,6 +422,20 @@
+         ;;
+ esac
+ 
++exec_suffix=''
++so_suffix='.so'
++systype=`uname -s`
++case "$systype" in
++    CYGWIN*)
++        exec_suffix='.exe'
++        so_suffix='.dll'
++        ;;
++    MINGW*)
++        exec_suffix='.exe'
++        so_suffix='.dll'
++        ;;
++esac
++
+ # dump Makefile
+ 
+ cat > Makefile <<EOF
+@@ -398,6 +448,8 @@
+ OCAMLMKLIB=$ocamlmklib
+ OCAMLDOC=$ocamldoc
+ OCAMLFLAGS=$mlflags
++EXEC_SUFFIX=$exec_suffix
++DLL_SUFFIX=$so_suffix
+ OCAMLOPTFLAGS=$mloptflags
+ OCAMLINC=$mlinc
+ CFLAGS=$ccinc $ccdef $ccopt
+@@ -437,4 +489,3 @@
+ now type "make" to build
+ then type "make install" or "sudo make install" to install
+ EOF
+-
+--- ./project.mak
++++ ./project.mak
+@@ -10,7 +10,7 @@
+ # ENS (École normale supérieure, Paris, France),
+ # INRIA Rocquencourt (Institut national de recherche en informatique, France).
+ 
+-ifeq "$(shell $(OCAMLC) -config |grep ccomp_type)" "ccomp_type: msvc"
++ifeq "$(shell $(OCAMLC) -config | tr -d '\015' | grep ccomp_type)" "ccomp_type: msvc"
+ OBJSUFFIX    := obj
+ LIBSUFFIX    := lib
+ DLLSUFFIX    := dll
+@@ -18,7 +18,9 @@
+ else
+ OBJSUFFIX    := o
+ LIBSUFFIX    := a
+-ifeq "$(shell $(OCAMLC) -config |grep system)" "system: mingw"
++WSYSTEM=$(shell $(OCAMLC) -config | tr -d '\015' | awk '/^system/ {print $$2}')
++
++ifeq ($(WSYSTEM),$(filter $(WSYSTEM),mingw mingw64))
+ DLLSUFFIX    := dll
+ EXE          := .exe
+ else
+@@ -27,7 +29,6 @@
+ endif
+ endif
+ 
+-
+ # project files
+ ###############
+ 

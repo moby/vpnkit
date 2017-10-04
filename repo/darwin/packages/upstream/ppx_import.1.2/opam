@@ -24,6 +24,7 @@ depends: [
   "ppx_tools" {>= "0.99.1"}
   "ocamlfind" {build}
   "cppo" {build}
+  "cppo_ocamlbuild" {build}
   "ounit" {test}
   "ppx_deriving" {test & >= "2.0"}
 ]

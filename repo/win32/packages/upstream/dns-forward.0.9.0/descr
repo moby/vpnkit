@@ -1,8 +1,0 @@
-Library and tools for creating forwarding DNS servers
-
-Features:
-
-- UDP and TCP DNS forwarding
-- support for sending queries to specific servers based on domain
-- dynamic configuration updates
-- extra records (e.g. from /etc/hosts)
