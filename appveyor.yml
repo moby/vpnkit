@@ -18,5 +18,6 @@ build_script:
 
 artifacts:
   - path: "vpnkit.exe"
+  - path: "libgmp-10.dll"
   - path: "OSS-LICENSES"
   - path: "COMMIT"

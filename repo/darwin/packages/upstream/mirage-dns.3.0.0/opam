@@ -13,7 +13,7 @@ build: [
 ]
 
 depends: [
-  "jbuilder" {>="1.0+beta9"}
+  "jbuilder" {build & >="1.0+beta9"}
   "dns-lwt"
   "duration"
   "mirage-stack-lwt"
