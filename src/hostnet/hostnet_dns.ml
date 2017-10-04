@@ -200,10 +200,18 @@ struct
 
   let destroy = function
   | { resolver = Upstream { dns_tcp_resolver; dns_udp_resolver; _ }; _ } ->
+    (* We need a source of randomness in this case *)
+    let _ =
+      match Utils.rtlGenRandom 1 with
+      | None ->
+        Log.warn (fun f -> f "No secure random number generator available")
+      | Some _ ->
+        Log.info (fun f -> f "Secure random number generator is available") in
     Dns_tcp_resolver.destroy dns_tcp_resolver
     >>= fun () ->
     Dns_udp_resolver.destroy dns_udp_resolver
   | { resolver = Host; _ } ->
+    Log.info (fun f -> f "We do not need secure random numbers in Host mode");
     Lwt.return_unit
 
   let record_udp ~source_ip ~source_port ~dest_ip ~dest_port bufs =
@@ -254,6 +262,15 @@ struct
     | None ->
       () (* nowhere to log packet *)
 
+  (* Generate a cryptograpically sure random number *)
+  let gen_transaction_id bound =
+    if bound <> 0x10000 then failwith "gen_transaction_id";
+    match Utils.rtlGenRandom 2 with
+    | Some bytes ->
+      (int_of_char bytes.[0] lsl 8) lor (int_of_char bytes.[1])
+    | None ->
+      Random.int bound
+
   let create ~local_address ~host_names =
     let local_ip = local_address.Dns_forward.Config.Address.ip in
     Log.info (fun f ->
@@ -278,9 +295,9 @@ struct
           (* We don't know how to marshal IPv6 yet *)
           Lwt.return_unit
       in
-      Dns_udp_resolver.create ~message_cb config clock
+      Dns_udp_resolver.create ~gen_transaction_id ~message_cb config clock
       >>= fun dns_udp_resolver ->
-      Dns_tcp_resolver.create ~message_cb config clock
+      Dns_tcp_resolver.create ~gen_transaction_id ~message_cb config clock
       >>= fun dns_tcp_resolver ->
       Lwt.return { local_ip; host_names;
                    resolver = Upstream { dns_tcp_resolver; dns_udp_resolver } }

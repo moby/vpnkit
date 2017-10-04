@@ -29,7 +29,6 @@ let () =
                   (Printexc.get_backtrace ())
               )
     );
-  Utils.random_init ();
 
   List.iter
     (fun (test, cases) ->

@@ -523,7 +523,6 @@ let command =
 
 let () =
   Printexc.record_backtrace true;
-  Utils.random_init();
 
   match Term.eval command with
   | `Error _ -> exit 1
