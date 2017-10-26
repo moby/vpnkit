@@ -391,10 +391,14 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections vsock_path db_path db_branch dns hosts host_names
       listen_backlog port_max_idle_time debug
     =
+    match socket_url with
+      | None ->
+        Printf.fprintf stderr "Please provide an --ethernet argument\n"
+      | Some socket_url ->
     Host.Main.run
       (main_t socket_url port_control_url introspection_url diagnostics_url
          max_connections vsock_path db_path db_branch dns hosts host_names
-         listen_backlog port_max_idle_time debug)
+         listen_backlog port_max_idle_time debug);
 
 open Cmdliner
 
@@ -409,7 +413,7 @@ let socket =
        incoming connections."
       [ "ethernet" ]
   in
-  Arg.(value & opt string "" doc)
+  Arg.(value & opt (some string) None doc)
 
 let port_control_path =
   let doc =
@@ -540,6 +544,4 @@ let command =
 let () =
   Printexc.record_backtrace true;
 
-  match Term.eval command with
-  | `Error _ -> exit 1
-  | _ -> exit 0
+  Term.exit @@ Term.eval command
