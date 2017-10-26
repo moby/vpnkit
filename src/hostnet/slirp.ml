@@ -9,13 +9,8 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module IPMap = Map.Make(Ipaddr.V4)
 
-let default_peer = "192.168.65.2"
-let default_host = "192.168.65.1"
-let default_highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
-
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
-let default_dns_extra = []
 
 (* When forwarding TCP, the connection is proxied so the MTU/MSS is
    link-local.  When forwarding UDP, the datagram on the internal link
@@ -24,11 +19,6 @@ let default_dns_extra = []
    bit. *)
 let safe_outgoing_mtu = 1452 (* packets above this size with DNF set
                                 will get ICMP errors *)
-
-(* The default MTU is limited by the maximum message size on a Hyper-V
-   socket. On currently available windows versions, we need to stay
-   below 8192 bytes *)
-let default_mtu = 1500 (* used for the virtual ethernet link *)
 
 let log_exception_continue description f =
   Lwt.catch
@@ -44,14 +34,6 @@ let or_failwith name m =
   m >>= function
   | Error _ -> failf "Failed to connect %s device" name
   | Ok x  -> Lwt.return x
-
-let restart_on_change name to_string values =
-  Active_config.tl values
-  >>= fun values ->
-  let v = Active_config.hd values in
-  Log.info (fun f ->
-      f "%s changed to %s in the database: restarting" name (to_string v));
-  exit 1
 
 type pcap = (string * int64 option) option
 
@@ -144,7 +126,7 @@ struct
 
   (* Global variable containing the global DNS configuration *)
   let dns =
-    let ip = Ipaddr.V4 (Ipaddr.V4.of_string_exn default_host) in
+    let ip = Ipaddr.V4 Configuration.default_docker in
     let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
     ref (
       Clock.connect () >>= fun clock ->
@@ -1100,204 +1082,25 @@ struct
       Log.info (fun f -> f "TCP/IP ready");
       Lwt.return t
 
-  let create ?(host_names = [ Dns.Name.of_string "vpnkit.host" ]) clock vnet_switch config =
-    let driver = [ "com.docker.driver.amd64-linux" ] in
-
-    let max_connections_path = driver @ [ "slirp"; "max-connections" ] in
-    Config.string_option config max_connections_path
-    >>= fun string_max_connections ->
-    let parse_max = function
-    | None -> Lwt.return None
-    | Some x -> Lwt.return (
-        try Some (int_of_string @@ String.trim x)
-        with _ ->
-          Log.err (fun f ->
-              f "Failed to parse slirp/max-connections value: '%s'" x);
-          None
-      ) in
-    Active_config.map parse_max string_max_connections
-    >>= fun max_connections ->
-    let rec monitor_max_connections_settings settings =
-      begin match Active_config.hd settings with
-      | None ->
-        Log.info (fun f -> f "remove connection limit");
-        Host.Sockets.set_max_connections None
-      | Some limit ->
-        Log.info (fun f -> f "updating connection limit to %d" limit);
-        Host.Sockets.set_max_connections (Some limit)
-      end;
+  let on_change settings f =
+    let rec loop settings =
+      f (Active_config.hd settings)
+      >>= fun () ->
       Active_config.tl settings
       >>= fun settings ->
-      monitor_max_connections_settings settings
-    in
+      loop settings in
     Lwt.async (fun () ->
-        log_exception_continue "monitor max connections settings" (fun () ->
-            monitor_max_connections_settings max_connections));
+      log_exception_continue "monitor database settings" (fun () ->
+          loop settings
+      )
+    )
 
-    (* TODO Don't hardcode this *)
-    let server_macaddr = default_server_macaddr in
+  let create ?(host_names = [ Dns.Name.of_string "vpnkit.host" ]) clock vnet_switch config =
+    let c = ref Configuration.default in
 
-    (* Watch for DNS server overrides *)
-    let domain_search = ref [] in
-    let get_domain_search () = !domain_search in
-    let dns_path = driver @ [ "slirp"; "dns" ] in
-    Config.string_option config dns_path
-    >>= fun string_dns_settings ->
-    Active_config.map
-      (function
-      | Some txt ->
-        let open Dns_forward in
-        begin match Config.of_string txt with
-        | Ok config ->
-          domain_search := config.Config.search;
-          Lwt.return (Some config)
-        | Error (`Msg m) ->
-          Log.err (fun f ->
-              f "failed to parse %s: %s" (String.concat "/" dns_path) m);
-          Lwt.return None
-        end
-      | None ->
-        Lwt.return None
-      ) string_dns_settings
-    >>= fun dns_settings ->
-    let resolver_path = driver @ [ "slirp"; "resolver" ] in
-    Config.string_option config resolver_path
-    >>= fun string_resolver_settings ->
-    Active_config.map
-      (function
-      | Some "host" -> Lwt.return `Host
-      | _ -> Lwt.return `Upstream
-      ) string_resolver_settings
-    >>= fun resolver_settings ->
-
-    let domain_name = ref "localdomain" in
-    let get_domain_name () = !domain_name in
-    let domain_name_path = driver @ [ "slirp"; "domain" ] in
-    Config.string config ~default:(!domain_name) domain_name_path
-    >>= fun domain_name_settings ->
-    Lwt.async
-      (fun () ->
-         Active_config.iter
-           (fun x ->
-              domain_name := x;
-              Lwt.return_unit
-           ) domain_name_settings
-      );
-
-    let bind_path = driver @ [ "allowed-bind-address" ] in
-    Config.string_option config bind_path
-    >>= fun string_allowed_bind_address ->
-    let parse_bind_address = function
-    | None -> Lwt.return None
-    | Some x ->
-      let strings = List.map String.trim @@ Stringext.split x ~on:',' in
-      let ip_opts = List.map
-          (fun x ->
-             try
-               if x = ""
-               then None
-               else Some (Ipaddr.of_string_exn x)
-             with _ ->
-               Log.err (fun f ->
-                   f "Failed to parse IP address in allowed-bind-address: %s" x);
-               None
-          ) strings in
-      let ips =
-        List.fold_left (fun acc x -> match x with
-          | None   -> acc
-          | Some x -> x :: acc
-          ) [] ip_opts
-      in
-      Lwt.return (Some ips)
-    in
-    Active_config.map parse_bind_address string_allowed_bind_address
-    >>= fun allowed_bind_address ->
-
-    let rec monitor_allowed_bind_settings allowed_bind_address =
-      Forward.set_allowed_addresses (Active_config.hd allowed_bind_address);
-      Active_config.tl allowed_bind_address
-      >>= fun allowed_bind_address ->
-      monitor_allowed_bind_settings allowed_bind_address in
-    Lwt.async (fun () ->
-        log_exception_continue "monitor_allowed_bind_settings" (fun () ->
-            monitor_allowed_bind_settings allowed_bind_address));
-
-    let peer_ips_path = driver @ [ "slirp"; "docker" ] in
-    let parse_ipv4 default x = match Ipaddr.V4.of_string @@ String.trim x with
-    | None ->
-      Log.err (fun f ->
-          f "Failed to parse IPv4 address '%s', using default of %a"
-            x Ipaddr.V4.pp_hum default);
-      Lwt.return default
-    | Some x -> Lwt.return x in
-    let parse_ipv4_list default x =
-      let all =
-        List.map Ipaddr.V4.of_string @@
-        List.filter (fun x -> x <> "") @@
-        List.map String.trim @@
-        Astring.String.cuts ~sep:"," x
-      in
-      let any_none, some = List.fold_left (fun (any_none, some) x -> match x with
-        | None -> true, some
-        | Some x -> any_none, x :: some
-        ) (false, []) all in
-      if any_none then begin
-        Log.err (fun f ->
-            f "Failed to parse IPv4 address list '%s', using default of %s" x
-              (String.concat "," (List.map Ipaddr.V4.to_string default)));
-        Lwt.return default
-      end else Lwt.return some
-    in
-
-    Config.string config ~default:default_peer peer_ips_path
-    >>= fun string_peer_ips ->
-    Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer))
-      string_peer_ips
-    >>= fun peer_ips ->
-    Lwt.async (fun () ->
-        restart_on_change "slirp/docker" Ipaddr.V4.to_string peer_ips);
-
-    let host_ips_path = driver @ [ "slirp"; "host" ] in
-    Config.string config ~default:default_host host_ips_path
-    >>= fun string_host_ips ->
-    Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_host))
-      string_host_ips
-    >>= fun host_ips ->
-    Lwt.async (fun () ->
-        restart_on_change "slirp/host" Ipaddr.V4.to_string host_ips);
-
-    let highest_ips_path = driver @ [ "slirp"; "highest-ip" ] in
-    Config.string config ~default:"" highest_ips_path
-    >>= fun string_highest_ips ->
-    Active_config.map (parse_ipv4 default_highest_ip) string_highest_ips
-    >>= fun highest_ips ->
-    Lwt.async (fun () ->
-        restart_on_change "slirp/highest-ips" Ipaddr.V4.to_string highest_ips);
-
-    let extra_dns_ips_path = driver @ [ "slirp"; "extra_dns" ] in
-    Config.string config ~default:(String.concat "," default_dns_extra)
-      extra_dns_ips_path
-    >>= fun string_extra_dns_ips ->
-    Active_config.map
-      (parse_ipv4_list (List.map Ipaddr.V4.of_string_exn default_dns_extra))
-      string_extra_dns_ips
-    >>= fun extra_dns_ips ->
-    Lwt.async (fun () ->
-        restart_on_change "slirp/extra_dns" (fun x ->
-            String.concat "," (List.map Ipaddr.V4.to_string x)) extra_dns_ips);
-
-    let peer_ip = Active_config.hd peer_ips in
-    let local_ip = Active_config.hd host_ips in
-    let highest_ip = Active_config.hd highest_ips in
-    let extra_dns_ip = Active_config.hd extra_dns_ips in
-
-    let upstream_servers =
-      ref Dns_forward.Config.({servers = Server.Set.empty; search = [];
-                               assume_offline_after_drops = None })
-    in
-    let resolver = ref `Upstream in
-    let update_dns () =
-      let config = match !resolver, !upstream_servers with
+    let get_domain_search () = (!c).dns.Dns_forward.Config.search in
+    let update_dns c =
+      let config = match c.Configuration.resolver, c.Configuration.dns with
       | `Upstream, servers -> `Upstream servers
       | `Host, _ -> `Host
       in
@@ -1306,97 +1109,137 @@ struct
       !dns >>= Dns_forwarder.destroy >|= fun () ->
       Dns_policy.remove ~priority:3;
       Dns_policy.add ~priority:3 ~config;
+      let local_ip = c.Configuration.docker in
       let local_address =
         { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 }
       in
-      dns := dns_forwarder ~local_address ~host_names clock
-    in
-
-    let rec monitor_dns_settings settings =
-      begin match Active_config.hd settings with
+      dns := dns_forwarder ~local_address ~host_names clock in
+    let update_http c = match c.Configuration.http_intercept with
       | None ->
-        upstream_servers :=
-          Dns_forward.Config.({ servers = Server.Set.empty;
-                                search = [];
-                                assume_offline_after_drops = None });
-      | Some (servers: Dns_forward.Config.t) ->
-        upstream_servers := servers;
-      end;
-      update_dns ()
-      >>= fun () ->
-      Active_config.tl settings
-      >>= fun settings ->
-      monitor_dns_settings settings
-    in
-    Lwt.async (fun () ->
-        log_exception_continue "monitor upstream server DNS settings" (fun () ->
-            monitor_dns_settings dns_settings));
-
-    let rec monitor_resolver_settings settings =
-      resolver := Active_config.hd settings;
-      update_dns ()
-      >>= fun () ->
-      Active_config.tl settings
-      >>= fun settings ->
-      monitor_resolver_settings settings
-    in
-    Lwt.async (fun () ->
-        log_exception_continue "monitor upstream DNS resolver settings" (fun () ->
-            monitor_resolver_settings resolver_settings));
-
-    let mtu_path = driver @ [ "slirp"; "mtu" ] in
-    Config.int config ~default:default_mtu mtu_path
-    >>= fun mtus ->
-    Lwt.async (fun () -> restart_on_change "slirp/mtu" string_of_int mtus);
-    let mtu = Active_config.hd mtus in
-
-    let http_intercept_path = driver @ [ "slirp"; "http-intercept" ] in
-    Config.string_option config http_intercept_path
-    >>= fun string_http_intercept_settings ->
-    let parse_http_intercept = function
-    | None -> Lwt.return None
-    | Some txt ->
-      match Ezjsonm.from_string txt with
-      | exception _ ->
-        Log.err (fun f -> f "Failed to parse http-intercept json: %s" txt);
-        Lwt.return None
-      | j ->
-        Http_forwarder.of_json j
+        Log.info (fun f -> f "Disabling transparent HTTP redirection");
+        http := None;
+        Lwt.return_unit
+      | Some x ->
+        Http_forwarder.of_json x
         >>= function
         | Error (`Msg m) ->
           Log.err (fun f -> f "Failed to decode http-intercept json: %s" m);
-          Lwt.return None
+          Lwt.return_unit
         | Ok t ->
-          Lwt.return (Some t)
-    in
-    Active_config.map parse_http_intercept string_http_intercept_settings
+          http := Some t;
+          Lwt.return_unit in
+
+    let update f =
+      let c' = f (!c) in
+      c := c';      
+      Host.Sockets.set_max_connections c'.Configuration.max_connections;
+      update_http c'
+      >>= fun () ->
+      update_dns c'
+      in
+
+    let driver = [ "com.docker.driver.amd64-linux" ] in
+    let max_connections_path = driver @ [ "slirp"; "max-connections" ] in
+    Config.string_option config max_connections_path
+    >>= fun string_max_connections ->
+    Active_config.map Configuration.Parse.int string_max_connections
+    >>= fun max_connections ->
+    on_change max_connections (fun max_connections -> update (fun c -> { c with max_connections }));
+    let peer_ips_path = driver @ [ "slirp"; "docker" ] in
+    Config.string config ~default:"" peer_ips_path
+    >>= fun string_peer_ips ->
+    Active_config.map (Configuration.Parse.ipv4 Configuration.default_peer)
+      string_peer_ips
+    >>= fun peer_ips ->
+    on_change peer_ips (fun peer -> update (fun c -> { c with peer }));
+    let host_ips_path = driver @ [ "slirp"; "host" ] in
+    Config.string config ~default:"" host_ips_path
+    >>= fun string_host_ips ->
+    Active_config.map (Configuration.Parse.ipv4 Configuration.default_docker)
+      string_host_ips
+    >>= fun host_ips ->
+    on_change host_ips (fun docker -> update (fun c -> { c with docker }));
+    let highest_ips_path = driver @ [ "slirp"; "highest-ip" ] in
+    Config.string config ~default:"" highest_ips_path
+    >>= fun string_highest_ips ->
+    Active_config.map (Configuration.Parse.ipv4 Configuration.default_highest_ip) string_highest_ips
+    >>= fun highest_ips ->
+    on_change highest_ips (fun highest_ip -> update (fun c -> { c with highest_ip }));
+    let extra_dns_ips_path = driver @ [ "slirp"; "extra_dns" ] in
+    Config.string config ~default:""
+      extra_dns_ips_path
+    >>= fun string_extra_dns_ips ->
+    Active_config.map
+      (Configuration.Parse.ipv4_list (List.map Ipaddr.V4.of_string_exn Configuration.default_extra_dns))
+      string_extra_dns_ips
+    >>= fun extra_dns_ips ->
+    on_change extra_dns_ips (fun extra_dns -> update (fun c -> { c with extra_dns }));
+    let domain_name_path = driver @ [ "slirp"; "domain" ] in
+    Config.string config ~default:((!c).domain) domain_name_path
+    >>= fun domain_name_settings ->
+    on_change domain_name_settings (fun domain -> update (fun c -> { c with domain }));
+    let resolver_path = driver @ [ "slirp"; "resolver" ] in
+    Config.string_option config resolver_path
+    >>= fun string_resolver_settings ->
+    Active_config.map Configuration.Parse.resolver string_resolver_settings
+    >>= fun resolver_settings ->
+    on_change resolver_settings (fun resolver -> update (fun c -> { c with resolver }));
+    let bind_path = driver @ [ "allowed-bind-address" ] in
+    Config.string ~default:"" config bind_path
+    >>= fun string_allowed_bind_address ->
+    Active_config.map (Configuration.Parse.ipv4_list []) string_allowed_bind_address
+    >>= fun allowed_bind_address ->
+    on_change allowed_bind_address (fun allowed_bind_addresses -> update (fun c -> { c with allowed_bind_addresses }));
+    let mtu_path = driver @ [ "slirp"; "mtu" ] in
+    Config.int config ~default:Configuration.default_mtu mtu_path
+    >>= fun mtus ->
+    on_change mtus (fun mtu -> update (fun c -> { c with mtu }));
+    let dns_path = driver @ [ "slirp"; "dns" ] in
+    Config.string_option config dns_path
+    >>= fun string_dns_settings ->
+    Active_config.map
+      (function
+        | None -> Lwt.return Configuration.no_dns_servers
+        | Some x ->
+          begin match Configuration.Parse.dns x with
+          | None -> Lwt.return Configuration.no_dns_servers
+          | Some x -> Lwt.return x
+          end
+      ) string_dns_settings
+    >>= fun dns_settings ->
+    on_change dns_settings (fun dns -> update (fun c -> { c with dns }));
+    let http_intercept_path = driver @ [ "slirp"; "http-intercept" ] in
+    Config.string_option config http_intercept_path
+    >>= fun string_http_intercept_settings ->
+    Active_config.map
+      (function
+        | None -> Lwt.return None
+        | Some txt ->
+          match Ezjsonm.from_string txt with
+          | exception _ ->
+            Log.err (fun f -> f "Failed to parse http-intercept json: %s" txt);
+            Lwt.return None
+          | j ->
+            Lwt.return (Some j)
+      ) string_http_intercept_settings
     >>= fun http_intercept_settings ->
-    let rec monitor_http_intercept_settings settings =
-      http := Active_config.hd settings;
-      ( match !http with
-      | None -> Log.info (fun f -> f "Disabling transparent HTTP redirection")
-      | Some x -> Log.info (fun f ->
-          f "Enabling transparent HTTP redirection to %s"
-            (Http_forwarder.to_string x)) );
-      Active_config.tl settings
-      >>= fun settings ->
-      monitor_http_intercept_settings settings
-    in
-    Lwt.async (fun () ->
-        log_exception_continue "monitor http interception settings" (fun () ->
-            monitor_http_intercept_settings http_intercept_settings));
-
+    on_change http_intercept_settings (fun http_intercept -> update (fun c -> { c with http_intercept }));
     let port_max_idle_time_path = driver @ [ "slirp"; "port-max-idle-time" ] in
-    Config.int config ~default:300 port_max_idle_time_path
+    Config.int config ~default:Configuration.default_port_max_idle_time port_max_idle_time_path
     >>= fun port_max_idle_times ->
-    let port_max_idle_time = Active_config.hd port_max_idle_times in
+    on_change port_max_idle_times (fun port_max_idle_time -> update (fun c -> { c with port_max_idle_time }));
 
-    Log.info (fun f ->
-        f "Creating slirp server peer_ip:%s local_ip:%s domain_search:%s \
-           mtu:%d port_max_idle_time:%d"
-          (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
-          (String.concat " " !domain_search) mtu port_max_idle_time
-      );
+    (* TODO Don't hardcode this *)
+    let server_macaddr = default_server_macaddr in
+    let peer_ip = (!c).docker in
+    let local_ip = (!c).peer in
+    let highest_ip = (!c).highest_ip in
+    let extra_dns_ip = (!c).extra_dns in
+    let mtu = (!c).mtu in
+    let port_max_idle_time = (!c).port_max_idle_time in
+    let get_domain_name () = (!c).domain in
+
+    Log.info (fun f -> f "Configuration %s" (Configuration.to_string (!c)));
 
     let global_arp_table : arp_table = {
       mutex = Lwt_mutex.create();

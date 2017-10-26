@@ -53,7 +53,12 @@ module Sockets = struct
 
   let max_connections = ref None
 
-  let set_max_connections x = max_connections := x
+  let set_max_connections x =
+    begin match x with
+      | None -> Log.info (fun f -> f "removed connection limit")
+      | Some limit -> Log.info (fun f -> f "updated connection limit to %d" limit)
+    end;
+    max_connections := x
 
   let next_connection_idx =
     let idx = ref 0 in
