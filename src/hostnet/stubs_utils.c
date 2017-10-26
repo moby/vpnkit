@@ -17,7 +17,6 @@
 #endif
 
 CAMLprim value stub_get_SOMAXCONN(value unit){
-  fprintf(stderr, "SOMAXCONN = %d\n", SOMAXCONN);
   return (Val_int (SOMAXCONN));
 }
 
