@@ -29,6 +29,7 @@ let () =
                   (Printexc.get_backtrace ())
               )
     );
+
   List.iter
     (fun (test, cases) ->
        Printf.fprintf stderr "\n**** Starting test %s\n%!" test;

@@ -1,0 +1,19 @@
+opam-version: "1.2"
+maintainer: "David Kaloper Meršinjak <david@numm.org>"
+authors: ["David Kaloper Meršinjak <david@numm.org>"]
+homepage: "https://github.com/pqwy/cpuid"
+doc: "https://pqwy.github.io/cpuid/doc"
+license: "ISC"
+dev-repo: "https://github.com/pqwy/cpuid.git"
+bug-reports: "https://github.com/pqwy/cpuid/issues"
+tags: []
+available: [ ocaml-version >= "4.01.0" ]
+build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "false" ]
+depends: [
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "topkg" {build}
+  "ocb-stubblr" {build}
+  "result" ]
+depopts: []
+conflicts: [ "ocb-stubblr" {<"0.1.0"} ]

@@ -1,0 +1,21 @@
+opam-version: "1.2"
+maintainer: "dave@recoil.org"
+authors: [
+  "David Scott"
+  "David Sheets"
+  "Euan Harris"
+  "Vincent Bernardoff"
+]
+homepage:     "https://github.com/xapi-project/ocaml-fd-send-recv"
+bug-reports:  "https://github.com/xapi-project/ocaml-fd-send-recv/issues"
+dev-repo:     "https://github.com/xapi-project/ocaml-fd-send-recv.git"
+doc:          "https://github.com/xapi-project/ocaml-fd-send-recv/blob/master/lib/fd_send_recv.mli"
+tags: [
+  "org:mirage"
+  "org:xapi-project"
+]
+build: [["jbuilder" "build" "-p" name "-j" jobs]]
+build-test: [["jbuilder" "runtest" "-p" name "-j" jobs]]
+depends: [
+  "jbuilder" {build & >= "1.0+beta10"}
+]

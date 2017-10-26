@@ -17,7 +17,7 @@ build: [
 ]
 
 depends: [
-  "jbuilder" {>="1.0+beta9"}
+  "jbuilder" {build & >="1.0+beta9"}
   "mirage-profile" {>="0.8.0"}
   "lwt" {>="3.0.0"}
   "dns" {>="1.0.0"}

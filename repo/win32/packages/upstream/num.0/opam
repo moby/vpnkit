@@ -14,3 +14,4 @@ dev-repo: "https://github.com/ocaml/ocaml.git"
 bug-reports: "http://caml.inria.fr/mantis/"
 
 depends: [ "base-num" ]
+available: [ ocaml-version < "4.06.0" ]

@@ -19,7 +19,7 @@ build: [
 
 depends: [
   "base-bytes"
-  "jbuilder"         {>= "1.0+beta9"}
+  "jbuilder"         {build & >= "1.0+beta9"}
   "cstruct"          {>= "3.0.2"}
   "ppx_cstruct"      {build}
   "re"
