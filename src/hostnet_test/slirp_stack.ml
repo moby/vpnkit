@@ -139,15 +139,11 @@ let extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
     "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
   ]
 
-let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
-let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
-let highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
 let preferred_ip1 = Ipaddr.V4.of_string_exn "192.168.65.250"
-let server_macaddr = Slirp.default_server_macaddr
 
 let global_arp_table : Slirp.arp_table =
   { Slirp.mutex = Lwt_mutex.create ();
-    table = [(local_ip, Slirp.default_server_macaddr)]
+    table = [(Configuration.default_docker, Configuration.default_server_macaddr)]
   }
 
 let client_uuids : Slirp.uuid_table =
@@ -156,22 +152,19 @@ let client_uuids : Slirp.uuid_table =
   }
 
 let config =
+  let configuration = {
+    Configuration.default with
+    extra_dns = extra_dns_ip;
+    domain = "local";
+  } in
   Mclock.connect () >|= fun clock ->
   {
-    Slirp.peer_ip;
-    local_ip;
-    highest_ip;
-    extra_dns_ip;
-    server_macaddr;
-    get_domain_search = (fun () -> []);
-    get_domain_name = (fun () -> "local");
+    Slirp.configuration;
     client_uuids;
     vnet_switch = Vnet.create ();
     global_arp_table;
-    mtu = 1500;
     host_names = [];
     clock;
-    port_max_idle_time = 300;
   }
 
 (* This is a hacky way to get a hancle to the server side of the stack. *)
@@ -214,7 +207,7 @@ let with_stack ?uuid ?preferred_ip ~pcap f =
   | Error (`Msg x) -> failwith x
   | Ok flow ->
     Log.info (fun f -> f "Made a loopback connection");
-    let server_macaddr = Slirp.default_server_macaddr in
+    let server_macaddr = Configuration.default_server_macaddr in
     let uuid =
       match uuid, Uuidm.of_string "d1d9cd61-d0dc-4715-9bb3-4c11da7ad7a5" with
       | Some x, Some _ -> x

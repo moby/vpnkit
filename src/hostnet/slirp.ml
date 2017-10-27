@@ -51,20 +51,12 @@ type uuid_table = {
 }
 
 type ('a, 'b) config = {
-  server_macaddr: Macaddr.t;
-  peer_ip: Ipaddr.V4.t;
-  local_ip: Ipaddr.V4.t;
-  highest_ip: Ipaddr.V4.t;
-  extra_dns_ip: Ipaddr.V4.t list;
-  get_domain_search: unit -> string list;
-  get_domain_name: unit -> string;
+  configuration: Configuration.t;
   global_arp_table: arp_table;
   client_uuids: uuid_table;
   vnet_switch: 'b;
-  mtu: int;
   host_names: Dns.Name.t list;
   clock: 'a;
-  port_max_idle_time: int;
 }
 
 module Make
@@ -830,9 +822,8 @@ struct
       delete_unused_endpoints t ~port_max_idle_time ()
     end
 
-  let connect x vnet_switch vnet_client_id client_macaddr server_macaddr peer_ip
-      local_ip highest_ip extra_dns_ip mtu get_domain_search get_domain_name
-      (global_arp_table:arp_table) clock port_max_idle_time
+  let connect x vnet_switch vnet_client_id client_macaddr
+      c (global_arp_table:arp_table) clock
     =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
@@ -859,18 +850,16 @@ struct
 
     (* Serve a static ARP table *)
     let local_arp_table = [
-      peer_ip, client_macaddr;
-      local_ip, server_macaddr;
-    ] @ (List.map (fun ip -> ip, server_macaddr) extra_dns_ip) in
+      c.Configuration.peer, client_macaddr;
+      c.Configuration.docker, c.Configuration.server_macaddr;
+    ] @ (List.map (fun ip -> ip, c.Configuration.server_macaddr) c.Configuration.extra_dns) in
     Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
 
     (* Listen on local IPs *)
-    let local_ips = local_ip :: extra_dns_ip in
+    let local_ips = c.Configuration.docker :: c.Configuration.extra_dns in
 
-    let highest_peer_ip = Some highest_ip in
-    let dhcp = Dhcp.make ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
-        ~extra_dns_ip ~get_domain_search ~get_domain_name clock switch in
+    let dhcp = Dhcp.make ~configuration:c clock switch in
 
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
@@ -893,7 +882,7 @@ struct
       udp_nat;
       icmp_nat;
     } in
-    Lwt.async @@ delete_unused_endpoints ~port_max_idle_time t;
+    Lwt.async @@ delete_unused_endpoints ~port_max_idle_time:c.Configuration.port_max_idle_time t;
 
     let find_endpoint ip =
       Lwt_mutex.with_lock t.endpoints_m
@@ -901,7 +890,7 @@ struct
            if IPMap.mem ip t.endpoints
            then Lwt.return (Ok (IPMap.find ip t.endpoints))
            else begin
-             Endpoint.create interface switch local_arp_table ip mtu clock
+             Endpoint.create interface switch local_arp_table ip c.Configuration.mtu clock
              >|= fun endpoint ->
              t.endpoints <- IPMap.add ip endpoint t.endpoints;
              Ok endpoint
@@ -916,7 +905,7 @@ struct
          virtual IP. This is the inverse of the rewrite above[1] *)
       let src =
         if Ipaddr.V4.compare src Ipaddr.V4.localhost = 0
-        then local_ip
+        then c.Configuration.docker
         else src in
       begin
         find_endpoint src >>= function
@@ -980,13 +969,13 @@ struct
     (* Add a listener which looks for new flows *)
     Log.info (fun f ->
         f "Client mac: %s server mac: %s"
-          (Macaddr.to_string client_macaddr) (Macaddr.to_string server_macaddr));
+          (Macaddr.to_string client_macaddr) (Macaddr.to_string c.Configuration.server_macaddr));
     Switch.listen switch (fun buf ->
         let open Frame in
         match parse [ buf ] with
         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
             (not (Macaddr.compare eth_dst client_macaddr = 0 ||
-                  Macaddr.compare eth_dst server_macaddr = 0 ||
+                  Macaddr.compare eth_dst c.Configuration.server_macaddr = 0 ||
                   Macaddr.compare eth_dst Macaddr.broadcast = 0)) ->
           (* not to server, client or broadcast.. *)
           Log.debug (fun f ->
@@ -1095,7 +1084,6 @@ struct
   let create ?(host_names = [ Dns.Name.of_string "vpnkit.host" ]) clock vnet_switch config =
     let c = ref Configuration.default in
 
-    let get_domain_search () = (!c).dns.Dns_forward.Config.search in
     let update_dns c =
       let config = match c.Configuration.resolver, c.Configuration.dns with
       | `Upstream, servers -> `Upstream servers
@@ -1226,40 +1214,23 @@ struct
     >>= fun port_max_idle_times ->
     on_change port_max_idle_times (fun port_max_idle_time -> update (fun c -> { c with port_max_idle_time }));
 
-    let server_macaddr = (!c).server_macaddr in
-    let peer_ip = (!c).docker in
-    let local_ip = (!c).peer in
-    let highest_ip = (!c).highest_ip in
-    let extra_dns_ip = (!c).extra_dns in
-    let mtu = (!c).mtu in
-    let port_max_idle_time = (!c).port_max_idle_time in
-    let get_domain_name () = (!c).domain in
-
     Log.info (fun f -> f "Configuration %s" (Configuration.to_string (!c)));
 
     let global_arp_table : arp_table = {
       mutex = Lwt_mutex.create();
-      table = [(local_ip, server_macaddr)];
+      table = [((!c).Configuration.docker, (!c).Configuration.server_macaddr)];
     } in
     let client_uuids : uuid_table = {
       mutex = Lwt_mutex.create();
       table = Hashtbl.create 50;
     } in
     let t = {
-      server_macaddr;
-      peer_ip;
-      local_ip;
-      highest_ip;
-      extra_dns_ip;
-      get_domain_search;
-      get_domain_name;
+      configuration = !c;
       global_arp_table;
       client_uuids;
       vnet_switch;
-      mtu;
       host_names;
       clock;
-      port_max_idle_time;
     } in
     Lwt.return t
 
@@ -1305,8 +1276,8 @@ struct
                   Log.info (fun f ->
                       f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
                   let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
-                  let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
-                  let lowest_ip_int32 = Ipaddr.V4.to_int32 t.peer_ip in
+                  let highest_ip_int32 = Ipaddr.V4.to_int32 t.configuration.Configuration.highest_ip in
+                  let lowest_ip_int32 = Ipaddr.V4.to_int32 t.configuration.Configuration.peer in
                   if (preferred_ip_int32 > highest_ip_int32)
                   || (preferred_ip_int32 <  lowest_ip_int32)
                   then begin
@@ -1322,7 +1293,7 @@ struct
 
             (* look for a new unique IP *)
             let rec next_unique_ip next_ip =
-              if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 t.highest_ip)
+              if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 t.configuration.Configuration.highest_ip)
               then begin
                 failwith "No IP addresses available."
               end;
@@ -1337,7 +1308,7 @@ struct
             in
 
             let client_ip = match preferred_ip with
-            | None    -> next_unique_ip t.peer_ip
+            | None    -> next_unique_ip t.configuration.Configuration.peer
             | Some ip -> ip
             in
 
@@ -1367,16 +1338,16 @@ struct
       or_failwith "vmnet" @@
       Vmnet.of_fd
         ~connect_client_fn:(connect_client_by_uuid_ip t)
-        ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
+        ~server_macaddr:t.configuration.Configuration.server_macaddr
+        ~mtu:t.configuration.Configuration.mtu client
       >>= fun x ->
       let client_macaddr = Vmnet.get_client_macaddr x in
       let client_uuid = Vmnet.get_client_uuid x in
       get_client_ip_id t client_uuid
       >>= fun (client_ip, vnet_client_id) ->
-      connect x t.vnet_switch vnet_client_id client_macaddr t.server_macaddr
-        client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu
-        t.get_domain_search t.get_domain_name t.global_arp_table
-        t.clock t.port_max_idle_time
+      connect x t.vnet_switch vnet_client_id
+        client_macaddr { t.configuration with peer = client_ip }
+        t.global_arp_table t.clock
     end
 
 end

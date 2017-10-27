@@ -13,6 +13,7 @@ type t = {
   domain: string;
   allowed_bind_addresses: Ipaddr.V4.t list;
   docker: Ipaddr.V4.t;
+  (* TODO: remove this from the record since it is not constant across all clients *)
   peer: Ipaddr.V4.t;
   highest_ip: Ipaddr.V4.t;
   extra_dns: Ipaddr.V4.t list;

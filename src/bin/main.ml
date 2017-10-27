@@ -293,33 +293,25 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let vnet_switch = Vnet.create () in
 
     let hardcoded_configuration =
-      let server_macaddr = Configuration.default_server_macaddr in
-      let peer_ip = Configuration.default_peer in
-      let local_ip = Configuration.default_docker in
-      let highest_ip = Configuration.default_highest_ip in
+      let configuration =
+        { Configuration.default with
+          port_max_idle_time } in
       let client_uuids : Slirp.uuid_table = {
         Slirp.mutex = Lwt_mutex.create ();
         table = Hashtbl.create 50;
       } in
       let global_arp_table : Slirp.arp_table = {
         Slirp.mutex = Lwt_mutex.create ();
-        table = [(local_ip, server_macaddr)];
+        table = [(configuration.Configuration.docker, configuration.Configuration.server_macaddr)];
       } in
       {
-        Slirp.server_macaddr;
-        peer_ip;
-        local_ip;
-        highest_ip;
-        extra_dns_ip = [];
-        get_domain_search = (fun () -> []);
-        get_domain_name = (fun () -> "localdomain");
+        Slirp.configuration;
         global_arp_table;
         client_uuids;
         vnet_switch;
-        mtu = 1500;
         host_names;
-        clock;
-        port_max_idle_time }
+        clock
+      }
     in
 
     let config = match db_path with

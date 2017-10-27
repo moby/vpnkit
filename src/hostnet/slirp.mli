@@ -18,20 +18,12 @@ type uuid_table = {
 
 
 type ('clock, 'vnet_switch) config = {
-  server_macaddr: Macaddr.t;
-  peer_ip: Ipaddr.V4.t;
-  local_ip: Ipaddr.V4.t;
-  highest_ip: Ipaddr.V4.t;
-  extra_dns_ip: Ipaddr.V4.t list;
-  get_domain_search: unit -> string list;
-  get_domain_name: unit -> string;
+  configuration: Configuration.t;
   global_arp_table: arp_table;
   client_uuids: uuid_table;
   vnet_switch: 'vnet_switch;
-  mtu: int;
   host_names: Dns.Name.t list;
   clock: 'clock;
-  port_max_idle_time: int;
 }
 
 module Make

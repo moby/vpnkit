@@ -32,8 +32,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
     List.fold_left (fun acc x -> if compare acc x > 0 then acc else x) hd tl
 
   (* given some MACs and IPs, construct a usable DHCP configuration *)
-  let make ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip ~extra_dns_ip
-      ~get_domain_search ~get_domain_name clock netif =
+  let make ~configuration:c clock netif =
     let open Dhcp_server.Config in
     (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
        intend only to serve IPs to one downstream host.
@@ -41,15 +40,14 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
        resolved in the future *)
     let low_ip, high_ip =
       let open Ipaddr.V4 in
-      let all_static_ips = local_ip :: peer_ip :: extra_dns_ip in
+      let all_static_ips = c.Configuration.docker :: c.Configuration.peer :: c.Configuration.extra_dns in
       let highest = maximum_ip all_static_ips in
       let i32 = to_int32 highest in
       of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
-    (* if highest_peer_ip is set, make the prefix mask include it *)
-    let ip_list = (match highest_peer_ip with
-      | None -> [ local_ip; low_ip; high_ip ]
-      | Some max_ip -> [ local_ip; low_ip; high_ip; max_ip ]) in
-    let prefix = smallest_prefix peer_ip ip_list 32 in
+    let ip_list = [ c.Configuration.docker; low_ip; high_ip; c.Configuration.highest_ip ] in
+    let prefix = smallest_prefix c.Configuration.peer ip_list 32 in
+    let domain_search = c.dns.Dns_forward.Config.search in
+
     let get_dhcp_configuration () : Dhcp_server.Config.t =
       (* The domain search is encoded using the scheme used for DNS names *)
       let domain_search =
@@ -57,13 +55,13 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
         let buffer = Cstruct.create 1024 in
         let _, n, _ = List.fold_left (fun (map, n, buffer) name ->
             Name.marshal map n buffer (Name.of_string name)
-          ) (Name.Map.empty, 0, buffer) (get_domain_search ()) in
+          ) (Name.Map.empty, 0, buffer) domain_search in
         Cstruct.(to_string (sub buffer 0 n)) in
-      let domain_name = get_domain_name () in
+      let domain_name = c.Configuration.domain in
       let options = [
-        Dhcp_wire.Routers [ local_ip ];
-        Dhcp_wire.Dns_servers (local_ip :: extra_dns_ip);
-        Dhcp_wire.Ntp_servers [ local_ip ];
+        Dhcp_wire.Routers [ c.Configuration.docker ];
+        Dhcp_wire.Dns_servers (c.Configuration.docker :: c.Configuration.extra_dns);
+        Dhcp_wire.Ntp_servers [ c.Configuration.docker ];
         Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
         Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix);
       ] in
@@ -81,13 +79,13 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
         default_lease_time = Int32.of_int (60 * 60 * 2);
         (* 24 hours, from charrua defaults *)
         max_lease_time = Int32.of_int (60 * 60 * 24) ;
-        ip_addr = local_ip;
-        mac_addr = server_macaddr;
+        ip_addr = c.Configuration.docker;
+        mac_addr = c.Configuration.server_macaddr;
         network = prefix;
         (* FIXME: this needs https://github.com/haesbaert/charrua-core/pull/31 *)
-        range = Some (peer_ip, peer_ip); (* allow one dynamic client *)
+        range = Some (c.Configuration.peer, c.Configuration.peer); (* allow one dynamic client *)
       } in
-    { clock; netif; server_macaddr; get_dhcp_configuration }
+    { clock; netif; server_macaddr = c.Configuration.server_macaddr; get_dhcp_configuration }
 
   let of_interest mac dest =
     Macaddr.compare dest mac = 0 || not (Macaddr.is_unicast dest)
