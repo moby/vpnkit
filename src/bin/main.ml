@@ -293,10 +293,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let vnet_switch = Vnet.create () in
 
     let hardcoded_configuration =
-      let server_macaddr = Slirp.default_server_macaddr in
-      let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2" in
-      let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1" in
-      let highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254" in
+      let server_macaddr = Configuration.default_server_macaddr in
+      let peer_ip = Configuration.default_peer in
+      let local_ip = Configuration.default_docker in
+      let highest_ip = Configuration.default_highest_ip in
       let client_uuids : Slirp.uuid_table = {
         Slirp.mutex = Lwt_mutex.create ();
         table = Hashtbl.create 50;

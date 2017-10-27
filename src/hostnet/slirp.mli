@@ -84,5 +84,3 @@ sig
 end
 
 val print_pcap: pcap -> string
-
-val default_server_macaddr: Macaddr.t

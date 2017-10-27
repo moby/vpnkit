@@ -9,9 +9,6 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module IPMap = Map.Make(Ipaddr.V4)
 
-(* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
-let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
-
 (* When forwarding TCP, the connection is proxied so the MTU/MSS is
    link-local.  When forwarding UDP, the datagram on the internal link
    is the same size as the corresponding datagram on the external
@@ -1229,8 +1226,7 @@ struct
     >>= fun port_max_idle_times ->
     on_change port_max_idle_times (fun port_max_idle_time -> update (fun c -> { c with port_max_idle_time }));
 
-    (* TODO Don't hardcode this *)
-    let server_macaddr = default_server_macaddr in
+    let server_macaddr = (!c).server_macaddr in
     let peer_ip = (!c).docker in
     let local_ip = (!c).peer in
     let highest_ip = (!c).highest_ip in

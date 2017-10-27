@@ -6,6 +6,7 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 type t = {
+  server_macaddr: Macaddr.t;
   max_connections: int option;
   dns: Dns_forward.Config.t;
   resolver: [ `Host | `Upstream ];
@@ -21,7 +22,8 @@ type t = {
 }
 
 let to_string t =
-  Printf.sprintf "max_connection = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; docker = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; port_max_idle_time = %s"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; docker = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; port_max_idle_time = %s"
+    (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
     (Dns_forward.Config.to_string t.dns)
     (match t.resolver with `Host -> "Host" | `Upstream -> "Upstream")
@@ -47,8 +49,11 @@ let default_extra_dns = []
    below 8192 bytes *)
 let default_mtu = 1500 (* used for the virtual ethernet link *)
 let default_port_max_idle_time = 300
+(* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
+let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 
 let default = {
+  server_macaddr = default_server_macaddr;
   max_connections = None;
   dns = no_dns_servers;
   resolver = `Host;
