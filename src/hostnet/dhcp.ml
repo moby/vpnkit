@@ -40,11 +40,11 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
        resolved in the future *)
     let low_ip, high_ip =
       let open Ipaddr.V4 in
-      let all_static_ips = c.Configuration.docker :: c.Configuration.peer :: c.Configuration.extra_dns in
+      let all_static_ips = c.Configuration.gateway_ip :: c.Configuration.peer :: c.Configuration.extra_dns in
       let highest = maximum_ip all_static_ips in
       let i32 = to_int32 highest in
       of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
-    let ip_list = [ c.Configuration.docker; low_ip; high_ip; c.Configuration.highest_ip ] in
+    let ip_list = [ c.Configuration.gateway_ip; low_ip; high_ip; c.Configuration.highest_ip ] in
     let prefix = smallest_prefix c.Configuration.peer ip_list 32 in
     let domain_search = c.dns.Dns_forward.Config.search in
 
@@ -59,9 +59,9 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
         Cstruct.(to_string (sub buffer 0 n)) in
       let domain_name = c.Configuration.domain in
       let options = [
-        Dhcp_wire.Routers [ c.Configuration.docker ];
-        Dhcp_wire.Dns_servers (c.Configuration.docker :: c.Configuration.extra_dns);
-        Dhcp_wire.Ntp_servers [ c.Configuration.docker ];
+        Dhcp_wire.Routers [ c.Configuration.gateway_ip ];
+        Dhcp_wire.Dns_servers (c.Configuration.gateway_ip :: c.Configuration.extra_dns);
+        Dhcp_wire.Ntp_servers [ c.Configuration.gateway_ip ];
         Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
         Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix);
       ] in
@@ -79,7 +79,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
         default_lease_time = Int32.of_int (60 * 60 * 2);
         (* 24 hours, from charrua defaults *)
         max_lease_time = Int32.of_int (60 * 60 * 24) ;
-        ip_addr = c.Configuration.docker;
+        ip_addr = c.Configuration.gateway_ip;
         mac_addr = c.Configuration.server_macaddr;
         network = prefix;
         (* FIXME: this needs https://github.com/haesbaert/charrua-core/pull/31 *)

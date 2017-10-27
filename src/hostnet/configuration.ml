@@ -12,7 +12,7 @@ type t = {
   resolver: [ `Host | `Upstream ];
   domain: string;
   allowed_bind_addresses: Ipaddr.V4.t list;
-  docker: Ipaddr.V4.t;
+  gateway_ip: Ipaddr.V4.t;
   (* TODO: remove this from the record since it is not constant across all clients *)
   peer: Ipaddr.V4.t;
   highest_ip: Ipaddr.V4.t;
@@ -24,14 +24,14 @@ type t = {
 }
 
 let to_string t =
-  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; docker = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; port_max_idle_time = %s; host_names = %s"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; port_max_idle_time = %s; host_names = %s"
     (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
     (Dns_forward.Config.to_string t.dns)
     (match t.resolver with `Host -> "Host" | `Upstream -> "Upstream")
     t.domain
     (String.concat ", " (List.map Ipaddr.V4.to_string t.allowed_bind_addresses))
-    (Ipaddr.V4.to_string t.docker)
+    (Ipaddr.V4.to_string t.gateway_ip)
     (Ipaddr.V4.to_string t.peer)
     (Ipaddr.V4.to_string t.highest_ip)
     (String.concat ", " (List.map Ipaddr.V4.to_string t.extra_dns))
@@ -44,7 +44,7 @@ let no_dns_servers =
   Dns_forward.Config.({ servers = Server.Set.empty; search = []; assume_offline_after_drops = None })
 
 let default_peer = Ipaddr.V4.of_string_exn "192.168.65.2"
-let default_docker = Ipaddr.V4.of_string_exn "192.168.65.1" (* was host *)
+let default_gateway_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
 let default_highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
 let default_extra_dns = []
 (* The default MTU is limited by the maximum message size on a Hyper-V
@@ -65,7 +65,7 @@ let default = {
   resolver = default_resolver;
   domain = default_domain;
   allowed_bind_addresses = [];
-  docker = default_docker;
+  gateway_ip = default_gateway_ip;
   peer = default_peer;
   highest_ip = default_highest_ip;
   extra_dns = default_extra_dns;

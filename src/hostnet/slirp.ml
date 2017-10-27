@@ -114,7 +114,7 @@ struct
 
   (* Global variable containing the global DNS configuration *)
   let dns =
-    let ip = Ipaddr.V4 Configuration.default_docker in
+    let ip = Ipaddr.V4 Configuration.default_gateway_ip in
     let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
     ref (
       Clock.connect () >>= fun clock ->
@@ -850,13 +850,13 @@ struct
     (* Serve a static ARP table *)
     let local_arp_table = [
       c.Configuration.peer, client_macaddr;
-      c.Configuration.docker, c.Configuration.server_macaddr;
+      c.Configuration.gateway_ip, c.Configuration.server_macaddr;
     ] @ (List.map (fun ip -> ip, c.Configuration.server_macaddr) c.Configuration.extra_dns) in
     Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
 
     (* Listen on local IPs *)
-    let local_ips = c.Configuration.docker :: c.Configuration.extra_dns in
+    let local_ips = c.Configuration.gateway_ip :: c.Configuration.extra_dns in
 
     let dhcp = Dhcp.make ~configuration:c clock switch in
 
@@ -904,7 +904,7 @@ struct
          virtual IP. This is the inverse of the rewrite above[1] *)
       let src =
         if Ipaddr.V4.compare src Ipaddr.V4.localhost = 0
-        then c.Configuration.docker
+        then c.Configuration.gateway_ip
         else src in
       begin
         find_endpoint src >>= function
@@ -1090,7 +1090,7 @@ struct
     !dns >>= Dns_forwarder.destroy >|= fun () ->
     Dns_policy.remove ~priority:3;
     Dns_policy.add ~priority:3 ~config;
-    let local_ip = c.Configuration.docker in
+    let local_ip = c.Configuration.gateway_ip in
     let local_address =
       { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 }
     in
@@ -1115,7 +1115,7 @@ struct
     Log.info (fun f -> f "Configuration %s" (Configuration.to_string c));
     let global_arp_table : arp_table = {
       mutex = Lwt_mutex.create();
-      table = [c.Configuration.docker, c.Configuration.server_macaddr];
+      table = [c.Configuration.gateway_ip, c.Configuration.server_macaddr];
     } in
     let client_uuids : uuid_table = {
       mutex = Lwt_mutex.create();
@@ -1165,10 +1165,10 @@ struct
     let host_ips_path = driver @ [ "slirp"; "host" ] in
     Config.string config ~default:"" host_ips_path
     >>= fun string_host_ips ->
-    Active_config.map (Configuration.Parse.ipv4 Configuration.default_docker)
+    Active_config.map (Configuration.Parse.ipv4 Configuration.default_gateway_ip)
       string_host_ips
-    >>= fun host_ips ->
-    on_change host_ips (fun docker -> update (fun c -> { c with docker }));
+    >>= fun gateway_ips ->
+    on_change gateway_ips (fun gateway_ip -> update (fun c -> { c with gateway_ip }));
     let highest_ips_path = driver @ [ "slirp"; "highest-ip" ] in
     Config.string config ~default:"" highest_ips_path
     >>= fun string_highest_ips ->
