@@ -4,8 +4,6 @@ type pcap = (string * int64 option) option
     file will grow without bound; otherwise the file will be closed when it is
     bigger than the given limit. *)
 
-type ('clock, 'vnet_switch) config
-
 module Make
     (Config: Active_config.S)
     (Vmnet: Sig.VMNET)
@@ -18,32 +16,34 @@ module Make
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) :
 sig
 
-  val create_static: Clock.t -> Vnet.t -> Configuration.t ->
-  (Clock.t, Vnet.t) config Lwt.t
+  type stack
+  (** A TCP/IP stack which may talk to multiple ethernet clients *)
+
+  val create_static: Clock.t -> Vnet.t -> Configuration.t -> stack Lwt.t
   (** Initialise a TCP/IP stack, with a static configuration *)
 
-  val create_from_active_config: Clock.t -> Vnet.t -> Configuration.t -> Config.t ->
-    (Clock.t, Vnet.t) config Lwt.t
+  val create_from_active_config: Clock.t -> Vnet.t -> Configuration.t -> Config.t -> stack Lwt.t
   (** Initialise a TCP/IP stack, allowing the dynamic Config.t to override
       the static Configuration.t *)
 
-  type t
+  type connection
+  (** An ethernet connection to a stack *)
 
-  val connect: (Clock.t, Vnet.t) config -> Vmnet.fd -> t Lwt.t
+  val connect: stack -> Vmnet.fd -> connection Lwt.t
   (** Read and write ethernet frames on the given fd, connected to the
       specified Vnetif backend *)
 
-  val after_disconnect: t -> unit Lwt.t
+  val after_disconnect: connection -> unit Lwt.t
   (** Waits until the stack has been disconnected *)
 
-  val filesystem: t -> Vfs.Dir.t
+  val filesystem: connection -> Vfs.Dir.t
   (** A virtual filesystem which exposes internal state for debugging *)
 
-  val diagnostics: t -> Host.Sockets.Stream.Unix.flow -> unit Lwt.t
+  val diagnostics: connection -> Host.Sockets.Stream.Unix.flow -> unit Lwt.t
   (** Output diagnostics in .tar format over a local Unix socket or named pipe *)
 
   module Debug: sig
-    val get_nat_table_size: t -> int
+    val get_nat_table_size: connection -> int
     (** Return the number of active NAT table entries *)
 
     val update_dns: ?local_ip:Ipaddr.t -> ?host_names:Dns.Name.t list ->

@@ -50,14 +50,6 @@ type uuid_table = {
   table: (Uuidm.t, Ipaddr.V4.t * int) Hashtbl.t;
 }
 
-type ('a, 'b) config = {
-  configuration: Configuration.t;
-  global_arp_table: arp_table;
-  client_uuids: uuid_table;
-  vnet_switch: 'b;
-  clock: 'a;
-}
-
 module Make
     (Config: Active_config.S)
     (Vmnet: Sig.VMNET)
@@ -70,6 +62,14 @@ module Make
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) =
 struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
+
+  type stack = {
+    configuration: Configuration.t;
+    global_arp_table: arp_table;
+    client_uuids: uuid_table;
+    vnet_switch: Vnet.t;
+    clock: Clock.t;
+  }
 
   module Filteredif = Filter.Make(Vmnet)
   module Netif = Capture.Make(Filteredif)
@@ -412,7 +412,7 @@ struct
       Stack_ipv4.writev t.ipv4 ethernet_ip_hdr [ reply ];
   end
 
-  type t = {
+  type connection = {
     vnet_client_id: Vnet.id;
     after_disconnect: unit Lwt.t;
     interface: Netif.t;
