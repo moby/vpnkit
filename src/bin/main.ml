@@ -344,7 +344,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       socket_url port_control_url introspection_url diagnostics_url
       max_connections vsock_path db_path db_branch dns hosts host_names
       listen_backlog port_max_idle_time debug
-      server_macaddr domain allowed_bind_addresses docker
+      server_macaddr domain allowed_bind_addresses docker highest_ip
     =
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
     let dns, resolver = match dns with
@@ -360,6 +360,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let server_macaddr = Macaddr.of_string_exn server_macaddr in
     let allowed_bind_addresses = Configuration.Parse.ipv4_list [] allowed_bind_addresses in
     let docker = Ipaddr.V4.of_string_exn docker in
+    let highest_ip = Ipaddr.V4.of_string_exn highest_ip in
     let configuration = {
       Configuration.default with
       max_connections;
@@ -371,6 +372,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       domain;
       allowed_bind_addresses;
       docker;
+      highest_ip;
     } in
     match socket_url with
       | None ->
@@ -535,6 +537,14 @@ let docker =
   in
   Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_docker) doc)
 
+let highest_ip =
+  let doc =
+    Arg.info ~doc:
+      "Highest IP address to hand out by DHCP"
+      [ "highest-dhcp-ip" ]
+  in
+  Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_highest_ip) doc)
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -546,7 +556,8 @@ let command =
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
         $ host_names $ listen_backlog $ port_max_idle_time $ debug
-        $ server_macaddr $ domain $ allowed_bind_addresses $ docker ),
+        $ server_macaddr $ domain $ allowed_bind_addresses $ docker
+        $ highest_ip ),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
