@@ -17,14 +17,7 @@ type uuid_table = {
 (** A slirp TCP/IP stack ready to accept connections *)
 
 
-type ('clock, 'vnet_switch) config = {
-  configuration: Configuration.t;
-  global_arp_table: arp_table;
-  client_uuids: uuid_table;
-  vnet_switch: 'vnet_switch;
-  host_names: Dns.Name.t list;
-  clock: 'clock;
-}
+type ('clock, 'vnet_switch) config
 
 module Make
     (Config: Active_config.S)
@@ -38,9 +31,14 @@ module Make
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) :
 sig
 
-  val create: ?host_names:Dns.Name.t list -> Clock.t -> Vnet.t -> Config.t ->
+  val create_static: Clock.t -> Vnet.t -> Configuration.t ->
+  (Clock.t, Vnet.t) config Lwt.t
+  (** Initialise a TCP/IP stack, with a static configuration *)
+
+  val create_from_active_config: Clock.t -> Vnet.t -> Configuration.t -> Config.t ->
     (Clock.t, Vnet.t) config Lwt.t
-  (** Initialise a TCP/IP stack, taking configuration from the Config.t *)
+  (** Initialise a TCP/IP stack, allowing the dynamic Config.t to override
+      the static Configuration.t *)
 
   type t
 

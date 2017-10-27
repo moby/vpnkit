@@ -292,27 +292,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     Mclock.connect () >>= fun clock ->
     let vnet_switch = Vnet.create () in
 
-    let hardcoded_configuration =
-      let configuration =
-        { Configuration.default with
-          port_max_idle_time } in
-      let client_uuids : Slirp.uuid_table = {
-        Slirp.mutex = Lwt_mutex.create ();
-        table = Hashtbl.create 50;
-      } in
-      let global_arp_table : Slirp.arp_table = {
-        Slirp.mutex = Lwt_mutex.create ();
-        table = [(configuration.Configuration.docker, configuration.Configuration.server_macaddr)];
-      } in
-      {
-        Slirp.configuration;
-        global_arp_table;
-        client_uuids;
-        vnet_switch;
-        host_names;
-        clock
-      }
-    in
+    let static_configuration = {
+      Configuration.default with
+        port_max_idle_time;
+        host_names
+    } in
 
     let config = match db_path with
     | Some db_path ->
@@ -342,8 +326,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           (Uri.of_string socket_url)
       in
       ( match config with
-      | Some config -> Slirp_stack.create ~host_names clock vnet_switch config
-      | None -> Lwt.return hardcoded_configuration
+      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch static_configuration config
+      | None -> Slirp_stack.create_static clock vnet_switch static_configuration
       ) >>= fun stack_config ->
       hvsock_connect_forever socket_url sockaddr (fun fd ->
           let conn = HV.connect fd in
@@ -361,8 +345,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       in
       unix_listen socket_url >>= fun server ->
       ( match config with
-      | Some config -> Slirp_stack.create ~host_names clock vnet_switch config
-      | None -> Lwt.return hardcoded_configuration
+      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch static_configuration config
+      | None -> Slirp_stack.create_static clock vnet_switch static_configuration
       ) >>= fun stack_config ->
       Host.Sockets.Stream.Unix.listen server (fun conn ->
           Slirp_stack.connect stack_config conn >>= fun stack ->

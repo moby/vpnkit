@@ -55,7 +55,6 @@ type ('a, 'b) config = {
   global_arp_table: arp_table;
   client_uuids: uuid_table;
   vnet_switch: 'b;
-  host_names: Dns.Name.t list;
   clock: 'a;
 }
 
@@ -1081,46 +1080,72 @@ struct
       )
     )
 
-  let create ?(host_names = [ Dns.Name.of_string "vpnkit.host" ]) clock vnet_switch config =
-    let c = ref Configuration.default in
+  let update_dns c clock =
+    let config = match c.Configuration.resolver, c.Configuration.dns with
+    | `Upstream, servers -> `Upstream servers
+    | `Host, _ -> `Host
+    in
+    Log.info (fun f ->
+        f "updating resolvers to %s" (Hostnet_dns.Config.to_string config));
+    !dns >>= Dns_forwarder.destroy >|= fun () ->
+    Dns_policy.remove ~priority:3;
+    Dns_policy.add ~priority:3 ~config;
+    let local_ip = c.Configuration.docker in
+    let local_address =
+      { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 }
+    in
+    dns := dns_forwarder ~local_address ~host_names:c.Configuration.host_names clock
 
-    let update_dns c =
-      let config = match c.Configuration.resolver, c.Configuration.dns with
-      | `Upstream, servers -> `Upstream servers
-      | `Host, _ -> `Host
-      in
-      Log.info (fun f ->
-          f "updating resolvers to %s" (Hostnet_dns.Config.to_string config));
-      !dns >>= Dns_forwarder.destroy >|= fun () ->
-      Dns_policy.remove ~priority:3;
-      Dns_policy.add ~priority:3 ~config;
-      let local_ip = c.Configuration.docker in
-      let local_address =
-        { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 }
-      in
-      dns := dns_forwarder ~local_address ~host_names clock in
-    let update_http c = match c.Configuration.http_intercept with
-      | None ->
-        Log.info (fun f -> f "Disabling transparent HTTP redirection");
-        http := None;
+  let update_http c = match c.Configuration.http_intercept with
+    | None ->
+      Log.info (fun f -> f "Disabling transparent HTTP redirection");
+      http := None;
+      Lwt.return_unit
+    | Some x ->
+      Http_forwarder.of_json x
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to decode http-intercept json: %s" m);
         Lwt.return_unit
-      | Some x ->
-        Http_forwarder.of_json x
-        >>= function
-        | Error (`Msg m) ->
-          Log.err (fun f -> f "Failed to decode http-intercept json: %s" m);
-          Lwt.return_unit
-        | Ok t ->
-          http := Some t;
-          Lwt.return_unit in
+      | Ok t ->
+        http := Some t;
+        Lwt.return_unit
 
+  let create_common clock vnet_switch c =
+    Log.info (fun f -> f "Configuration %s" (Configuration.to_string c));
+    let global_arp_table : arp_table = {
+      mutex = Lwt_mutex.create();
+      table = [c.Configuration.docker, c.Configuration.server_macaddr];
+    } in
+    let client_uuids : uuid_table = {
+      mutex = Lwt_mutex.create();
+      table = Hashtbl.create 50;
+    } in
+    let t = {
+      configuration = c;
+      global_arp_table;
+      client_uuids;
+      vnet_switch;
+      clock;
+    } in
+    Lwt.return t
+
+  let create_static clock vnet_switch c =
+    update_http c
+    >>= fun () ->
+    update_dns c clock
+    >>= fun () ->
+    create_common clock vnet_switch c
+
+  let create_from_active_config clock vnet_switch static_configuration config =
+    let c = ref static_configuration in
     let update f =
       let c' = f (!c) in
       c := c';      
       Host.Sockets.set_max_connections c'.Configuration.max_connections;
       update_http c'
       >>= fun () ->
-      update_dns c'
+      update_dns c' clock
       in
 
     let driver = [ "com.docker.driver.amd64-linux" ] in
@@ -1214,25 +1239,7 @@ struct
     >>= fun port_max_idle_times ->
     on_change port_max_idle_times (fun port_max_idle_time -> update (fun c -> { c with port_max_idle_time }));
 
-    Log.info (fun f -> f "Configuration %s" (Configuration.to_string (!c)));
-
-    let global_arp_table : arp_table = {
-      mutex = Lwt_mutex.create();
-      table = [((!c).Configuration.docker, (!c).Configuration.server_macaddr)];
-    } in
-    let client_uuids : uuid_table = {
-      mutex = Lwt_mutex.create();
-      table = Hashtbl.create 50;
-    } in
-    let t = {
-      configuration = !c;
-      global_arp_table;
-      client_uuids;
-      vnet_switch;
-      host_names;
-      clock;
-    } in
-    Lwt.return t
+    create_common clock vnet_switch (!c)
 
   let connect_client_by_uuid_ip t (uuid:Uuidm.t) (preferred_ip:Ipaddr.V4.t option) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->

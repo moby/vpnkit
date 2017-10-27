@@ -20,10 +20,11 @@ type t = {
   mtu: int;
   http_intercept: Ezjsonm.value option;
   port_max_idle_time: int;
+  host_names: Dns.Name.t list;
 }
 
 let to_string t =
-  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; docker = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; port_max_idle_time = %s"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; docker = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; port_max_idle_time = %s; host_names = %s"
     (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
     (Dns_forward.Config.to_string t.dns)
@@ -37,6 +38,7 @@ let to_string t =
     t.mtu
     (match t.http_intercept with None -> "None" | Some x -> Ezjsonm.(to_string @@ wrap x))
     (string_of_int t.port_max_idle_time)
+    (String.concat ", " (List.map Dns.Name.to_string t.host_names))
 
 let no_dns_servers =
   Dns_forward.Config.({ servers = Server.Set.empty; search = []; assume_offline_after_drops = None })
@@ -52,6 +54,7 @@ let default_mtu = 1500 (* used for the virtual ethernet link *)
 let default_port_max_idle_time = 300
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
+let default_host_names = [ Dns.Name.of_string "vpnkit.host" ]
 
 let default = {
   server_macaddr = default_server_macaddr;
@@ -67,6 +70,7 @@ let default = {
   mtu = default_mtu;
   http_intercept = None;
   port_max_idle_time = default_port_max_idle_time;
+  host_names = default_host_names;
 }
 
 module Parse = struct

@@ -157,15 +157,9 @@ let config =
     extra_dns = extra_dns_ip;
     domain = "local";
   } in
-  Mclock.connect () >|= fun clock ->
-  {
-    Slirp.configuration;
-    client_uuids;
-    vnet_switch = Vnet.create ();
-    global_arp_table;
-    host_names = [];
-    clock;
-  }
+  Mclock.connect () >>= fun clock ->
+  let vnet = Vnet.create () in
+  Slirp_stack.create_static clock vnet configuration
 
 (* This is a hacky way to get a hancle to the server side of the stack. *)
 let slirp_stack = ref None
