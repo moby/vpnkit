@@ -345,6 +345,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections vsock_path db_path db_branch dns hosts host_names
       listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses docker highest_ip
+      mtu
     =
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
     let dns, resolver = match dns with
@@ -373,6 +374,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       allowed_bind_addresses;
       docker;
       highest_ip;
+      mtu;
     } in
     match socket_url with
       | None ->
@@ -545,6 +547,14 @@ let highest_ip =
   in
   Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_highest_ip) doc)
 
+let mtu =
+  let doc =
+    Arg.info ~doc:
+      "Maximum Transfer Unit of the ethernet links"
+      [ "mtu" ]
+  in
+  Arg.(value & opt int Configuration.default_mtu doc)
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -557,7 +567,7 @@ let command =
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
         $ host_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ docker
-        $ highest_ip ),
+        $ highest_ip $ mtu ),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
