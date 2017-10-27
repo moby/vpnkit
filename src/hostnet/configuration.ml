@@ -55,12 +55,13 @@ let default_port_max_idle_time = 300
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 let default_host_names = [ Dns.Name.of_string "vpnkit.host" ]
+let default_resolver = `Host
 
 let default = {
   server_macaddr = default_server_macaddr;
   max_connections = None;
   dns = no_dns_servers;
-  resolver = `Host;
+  resolver = default_resolver;
   domain = "localdomain";
   allowed_bind_addresses = [];
   docker = default_docker;

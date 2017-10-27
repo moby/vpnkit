@@ -208,9 +208,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
             Server.after_disconnect server)
 
   let main_t
+      configuration
       socket_url port_control_url introspection_url diagnostics_url
-      max_connections vsock_path db_path db_branch dns hosts host_names
-      listen_backlog port_max_idle_time debug
+      vsock_path db_path db_branch hosts
+      listen_backlog debug
     =
     (* Write to stdout if expicitly requested [debug = true] or if the
        environment variable DEBUG is set *)
@@ -255,19 +256,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     Printexc.record_backtrace true;
 
-    ( match dns with
-    | None    -> ()
-    | Some ip ->
-      let open Dns_forward.Config in
-      let servers = Server.Set.of_list [
-          { Server.address = { Address.ip = Ipaddr.of_string_exn ip; port = 53 };
-            zones = Domain.Set.empty; timeout_ms = Some 2000; order = 0;
-          }
-        ] in
-      Dns_policy.add ~priority:1
-        ~config:(`Upstream { servers; search = [];
-                             assume_offline_after_drops = None }) );
-
     let etc_hosts_watch = match HostsFile.watch ~path:hosts () with
     | Ok watch       -> Some watch
     | Error (`Msg m) ->
@@ -282,21 +270,12 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     Lwt.async (fun () ->
         log_exception_continue "start_port_server" (fun () ->
-            start_port_forwarding port_control_url max_connections vsock_path
+            start_port_forwarding port_control_url configuration.Configuration.max_connections vsock_path
           )
       );
-    let host_names =
-      List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names
-    in
 
     Mclock.connect () >>= fun clock ->
     let vnet_switch = Vnet.create () in
-
-    let static_configuration = {
-      Configuration.default with
-        port_max_idle_time;
-        host_names
-    } in
 
     let config = match db_path with
     | Some db_path ->
@@ -314,7 +293,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     let uri = Uri.of_string socket_url in
 
-
     match Uri.scheme uri with
     | Some "hyperv-connect" ->
       let module Slirp_stack =
@@ -326,8 +304,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           (Uri.of_string socket_url)
       in
       ( match config with
-      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch static_configuration config
-      | None -> Slirp_stack.create_static clock vnet_switch static_configuration
+      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
+      | None -> Slirp_stack.create_static clock vnet_switch configuration
       ) >>= fun stack_config ->
       hvsock_connect_forever socket_url sockaddr (fun fd ->
           let conn = HV.connect fd in
@@ -345,8 +323,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       in
       unix_listen socket_url >>= fun server ->
       ( match config with
-      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch static_configuration config
-      | None -> Slirp_stack.create_static clock vnet_switch static_configuration
+      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
+      | None -> Slirp_stack.create_static clock vnet_switch configuration
       ) >>= fun stack_config ->
       Host.Sockets.Stream.Unix.listen server (fun conn ->
           Slirp_stack.connect stack_config conn >>= fun stack ->
@@ -367,14 +345,33 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections vsock_path db_path db_branch dns hosts host_names
       listen_backlog port_max_idle_time debug
     =
+    let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
+    let dns, resolver = match dns with
+    | None -> Configuration.no_dns_servers, Configuration.default_resolver
+    | Some ip ->
+      let open Dns_forward.Config in
+      let servers = Server.Set.of_list [
+          { Server.address = { Address.ip = Ipaddr.of_string_exn ip; port = 53 };
+            zones = Domain.Set.empty; timeout_ms = Some 2000; order = 0;
+          }
+        ] in
+      { servers; search = []; assume_offline_after_drops = None }, `Upstream in
+    let configuration = {
+      Configuration.default with
+      max_connections;
+      port_max_idle_time;
+      host_names;
+      dns;
+      resolver;
+    } in
     match socket_url with
       | None ->
         Printf.fprintf stderr "Please provide an --ethernet argument\n"
       | Some socket_url ->
     Host.Main.run
-      (main_t socket_url port_control_url introspection_url diagnostics_url
-         max_connections vsock_path db_path db_branch dns hosts host_names
-         listen_backlog port_max_idle_time debug);
+      (main_t configuration socket_url port_control_url introspection_url diagnostics_url
+         vsock_path db_path db_branch hosts
+         listen_backlog debug);
 
 open Cmdliner
 
