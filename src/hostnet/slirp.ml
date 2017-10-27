@@ -1180,7 +1180,7 @@ struct
       extra_dns_ips_path
     >>= fun string_extra_dns_ips ->
     Active_config.map
-      (Configuration.Parse.ipv4_list (List.map Ipaddr.V4.of_string_exn Configuration.default_extra_dns))
+      (fun x -> Lwt.return @@ Configuration.Parse.ipv4_list (List.map Ipaddr.V4.of_string_exn Configuration.default_extra_dns) x)
       string_extra_dns_ips
     >>= fun extra_dns_ips ->
     on_change extra_dns_ips (fun extra_dns -> update (fun c -> { c with extra_dns }));
@@ -1197,7 +1197,7 @@ struct
     let bind_path = driver @ [ "allowed-bind-address" ] in
     Config.string ~default:"" config bind_path
     >>= fun string_allowed_bind_address ->
-    Active_config.map (Configuration.Parse.ipv4_list []) string_allowed_bind_address
+    Active_config.map (fun x -> Lwt.return @@ Configuration.Parse.ipv4_list [] x) string_allowed_bind_address
     >>= fun allowed_bind_address ->
     on_change allowed_bind_address (fun allowed_bind_addresses -> update (fun c -> { c with allowed_bind_addresses }));
     let mtu_path = driver @ [ "slirp"; "mtu" ] in

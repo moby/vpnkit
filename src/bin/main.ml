@@ -344,7 +344,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       socket_url port_control_url introspection_url diagnostics_url
       max_connections vsock_path db_path db_branch dns hosts host_names
       listen_backlog port_max_idle_time debug
-      server_macaddr domain
+      server_macaddr domain allowed_bind_addresses
     =
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
     let dns, resolver = match dns with
@@ -358,6 +358,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         ] in
       { servers; search = []; assume_offline_after_drops = None }, `Upstream in
     let server_macaddr = Macaddr.of_string_exn server_macaddr in
+    let allowed_bind_addresses = Configuration.Parse.ipv4_list [] allowed_bind_addresses in
     let configuration = {
       Configuration.default with
       max_connections;
@@ -367,6 +368,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       resolver;
       server_macaddr;
       domain;
+      allowed_bind_addresses;
     } in
     match socket_url with
       | None ->
@@ -513,6 +515,16 @@ let domain =
   let doc = "Domain name to include in DHCP offers" in
   Arg.(value & opt string Configuration.default_domain & info [ "domain" ] ~doc)
 
+let allowed_bind_addresses =
+  let doc =
+    Arg.info ~doc:
+      "List of interfaces where container ports may be exposed. For example \
+       to limit port exposure to localhost, use `127.0.0.1`. The default setting \
+       allows ports to be exposed on any interface."
+      [ "allowed-bind-addresses" ]
+  in
+  Arg.(value & opt string "0.0.0.0" doc)
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -524,7 +536,7 @@ let command =
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
         $ host_names $ listen_backlog $ port_max_idle_time $ debug
-        $ server_macaddr $ domain ),
+        $ server_macaddr $ domain $ allowed_bind_addresses ),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =

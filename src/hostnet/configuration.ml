@@ -100,8 +100,8 @@ module Parse = struct
       Log.err (fun f ->
           f "Failed to parse IPv4 address list '%s', using default of %s" x
             (String.concat "," (List.map Ipaddr.V4.to_string default)));
-      Lwt.return default
-    end else Lwt.return some
+      default
+    end else some
 
   let int = function
   | None -> Lwt.return None
