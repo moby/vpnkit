@@ -56,13 +56,14 @@ let default_port_max_idle_time = 300
 let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 let default_host_names = [ Dns.Name.of_string "vpnkit.host" ]
 let default_resolver = `Host
+let default_domain = "localdomain"
 
 let default = {
   server_macaddr = default_server_macaddr;
   max_connections = None;
   dns = no_dns_servers;
   resolver = default_resolver;
-  domain = "localdomain";
+  domain = default_domain;
   allowed_bind_addresses = [];
   docker = default_docker;
   peer = default_peer;

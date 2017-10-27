@@ -344,7 +344,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       socket_url port_control_url introspection_url diagnostics_url
       max_connections vsock_path db_path db_branch dns hosts host_names
       listen_backlog port_max_idle_time debug
-      server_macaddr
+      server_macaddr domain
     =
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
     let dns, resolver = match dns with
@@ -366,6 +366,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       dns;
       resolver;
       server_macaddr;
+      domain;
     } in
     match socket_url with
       | None ->
@@ -508,6 +509,10 @@ let server_macaddr =
   let doc = "Ethernet MAC for the host to use" in
   Arg.(value & opt string (Macaddr.to_string Configuration.default_server_macaddr) & info [ "server-macaddr" ] ~doc)
 
+let domain =
+  let doc = "Domain name to include in DHCP offers" in
+  Arg.(value & opt string Configuration.default_domain & info [ "domain" ] ~doc)
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -519,7 +524,7 @@ let command =
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
         $ host_names $ listen_backlog $ port_max_idle_time $ debug
-        $ server_macaddr ),
+        $ server_macaddr $ domain ),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
