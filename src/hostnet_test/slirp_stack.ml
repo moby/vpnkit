@@ -141,16 +141,6 @@ let extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
 
 let preferred_ip1 = Ipaddr.V4.of_string_exn "192.168.65.250"
 
-let global_arp_table : Slirp.arp_table =
-  { Slirp.mutex = Lwt_mutex.create ();
-    table = [(Configuration.default_docker, Configuration.default_server_macaddr)]
-  }
-
-let client_uuids : Slirp.uuid_table =
-  { Slirp.mutex = Lwt_mutex.create ();
-    table = Hashtbl.create 50;
-  }
-
 let config =
   let configuration = {
     Configuration.default with

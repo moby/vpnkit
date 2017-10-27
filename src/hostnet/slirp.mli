@@ -4,19 +4,6 @@ type pcap = (string * int64 option) option
     file will grow without bound; otherwise the file will be closed when it is
     bigger than the given limit. *)
 
-type arp_table = {
-  mutex: Lwt_mutex.t;
-  mutable table: (Ipaddr.V4.t * Macaddr.t) list;
-}
-
-type uuid_table = {
-  mutex: Lwt_mutex.t;
-  table: (Uuidm.t, Ipaddr.V4.t * int) Hashtbl.t;
-}
-
-(** A slirp TCP/IP stack ready to accept connections *)
-
-
 type ('clock, 'vnet_switch) config
 
 module Make
