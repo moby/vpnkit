@@ -235,33 +235,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       configuration
       socket_url port_control_url introspection_url diagnostics_url
       vsock_path db_path db_branch hosts
-      listen_backlog debug
+      listen_backlog
     =
-    (* Write to stdout if expicitly requested [debug = true] or if the
-       environment variable DEBUG is set *)
-    let env_debug =
-      try ignore @@ Unix.getenv "DEBUG"; true
-      with Not_found -> false
-    in
-    if debug || env_debug then begin
-      Logs.set_reporter (Logs_fmt.reporter ());
-      Log.info (fun f ->
-          f "Logging to stdout (stdout:%b DEBUG:%b)" debug env_debug);
-    end else begin
-      if Sys.os_type = "Win32" then begin
-        let h = Eventlog.register "Docker.exe" in
-        Logs.set_reporter (Log_eventlog.reporter ~eventlog:h ());
-        Log.info (fun f -> f "Logging to the Windows event log")
-      end else begin
-        let facility = Filename.basename Sys.executable_name in
-        let client = Asl.Client.create ~ident:"Docker" ~facility () in
-        Logs.set_reporter (Log_asl.reporter ~client ());
-        let dev_null = Unix.openfile "/dev/null" [ Unix.O_WRONLY ] 0 in
-        Unix.dup2 dev_null Unix.stdout;
-        Unix.dup2 dev_null Unix.stderr;
-        Log.info (fun f -> f "Logging to Apple System Log")
-      end
-    end;
     Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
     (* This will always succeed on Mac but will raise Illegal_argument
        on Windows. Happily on Windows there is no such thing as
@@ -367,8 +342,16 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections vsock_path db_path db_branch dns hosts host_names
       listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip highest_ip
-      mtu
+      mtu log_destination
     =
+    let level =
+      let env_debug =
+        try ignore @@ Unix.getenv "DEBUG"; true
+        with Not_found -> false
+      in
+      if debug || env_debug then Some Logs.Debug else Some Logs.Info in
+    Logging.setup log_destination level;
+
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
     let dns_path, resolver = match dns with
     | None -> None, Configuration.default_resolver
@@ -400,7 +383,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       Host.Main.run
         (main_t configuration socket_url port_control_url introspection_url diagnostics_url
           vsock_path db_path db_branch hosts
-          listen_backlog debug);
+          listen_backlog);
     with e ->
       Log.err (fun f -> f "Host.Main.run caught exception %s: %s" (Printexc.to_string e) (Printexc.get_backtrace ()))
 open Cmdliner
@@ -588,7 +571,7 @@ let command =
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
         $ host_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip
-        $ highest_ip $ mtu ),
+        $ highest_ip $ mtu $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
