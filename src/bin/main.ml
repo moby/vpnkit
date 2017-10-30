@@ -71,15 +71,22 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       prefix' <= x' && (String.sub x 0 prefix' = prefix) in
     if startswith "fd:" path then begin
       let i = String.sub path 3 (String.length path - 3) in
-      (try Lwt.return (int_of_string i) with
-      | _ ->
-        Fmt.kstrf Lwt.fail_with "Failed to parse command-line argument [%s]" path
-      ) >|= fun x ->
-      let fd = file_descr_of_int x in
-      Host.Sockets.Stream.Unix.of_bound_fd fd
+      try
+        let fd = file_descr_of_int @@ int_of_string i in
+        Lwt.return (Ok (Host.Sockets.Stream.Unix.of_bound_fd fd))
+      with _ ->
+        Log.err (fun f -> f "Failed to parse command-line argument [%s] expected fd:<int>" path);
+        Lwt.return (Error (`Msg "Failed to parase command-line argument"))
     end else
-      Host.Sockets.Stream.Unix.bind path
-
+      Lwt.catch
+        (fun () ->
+          Host.Sockets.Stream.Unix.bind path
+          >>= fun s ->
+          Lwt.return (Ok s)
+        ) (fun e ->
+          Log.err (fun f -> f "Failed to call Stream.Unix.bind %s: %s" path (Printexc.to_string e));
+          Lwt.return (Error (`Msg  "Failed to bind to Unix domain socket"))
+        )
   let hvsock_connect_forever url sockaddr callback =
     Log.info (fun f ->
         f "connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
@@ -134,9 +141,14 @@ let hvsock_addr_of_uri ~default_serviceid uri =
              Log.info (fun f ->
                  f "starting introspection server on: %s" introspection_url);
              let module Server = Fs9p.Make(Host.Sockets.Stream.Unix) in
-             unix_listen introspection_url >>= fun s ->
-             Host.Sockets.Stream.Unix.disable_connection_tracking s;
-             Host.Sockets.Stream.Unix.listen s (fun flow ->
+             unix_listen introspection_url
+             >>= function
+             | Error (`Msg m) ->
+               Log.err (fun f -> f "Failed to start introspection server because: %s" m);
+               Lwt.return_unit
+             | Ok s ->
+               Host.Sockets.Stream.Unix.disable_connection_tracking s;
+               Host.Sockets.Stream.Unix.listen s (fun flow ->
                  Server.accept ~root ~msg:introspection_url flow >>= function
                  | Error (`Msg m) ->
                    Log.err (fun f ->
@@ -145,7 +157,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
                  | Ok () ->
                    Lwt.return_unit
                );
-             Lwt.return_unit))
+               Lwt.return_unit))
 
   let start_diagnostics diagnostics_url flow_cb =
     if diagnostics_url = ""
@@ -157,9 +169,15 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           (fun () ->
              Log.info (fun f ->
                  f "starting diagnostics server on: %s" diagnostics_url);
-             unix_listen diagnostics_url >|= fun s ->
-             Host.Sockets.Stream.Unix.disable_connection_tracking s;
-             Host.Sockets.Stream.Unix.listen s flow_cb))
+             unix_listen diagnostics_url
+             >>= function
+             | Error (`Msg m) ->
+               Log.err (fun f -> f "Failed to start diagnostics server because: %s" m);
+               Lwt.return_unit
+             | Ok s ->
+               Host.Sockets.Stream.Unix.disable_connection_tracking s;
+               Host.Sockets.Stream.Unix.listen s flow_cb;
+               Lwt.return_unit))
 
   let start_port_forwarding port_control_url max_connections vsock_path =
     Log.info (fun f ->
@@ -198,14 +216,20 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       let module Server =
         Protocol_9p.Server.Make(Log9P)(Host.Sockets.Stream.Unix)(Ports)
       in
-      unix_listen port_control_url >|= fun port_s ->
-      Host.Sockets.Stream.Unix.listen port_s (fun conn ->
+      unix_listen port_control_url
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to start port forwarding server because: %s" m);
+        Lwt.return_unit
+      | Ok port_s ->
+        Host.Sockets.Stream.Unix.listen port_s (fun conn ->
           Server.connect fs conn () >>= function
           | Error (`Msg m) ->
             Log.err (fun f -> f "failed to establish 9P connection: %s" m);
-            Lwt.return ()
+            Lwt.return_unit
           | Ok server ->
-            Server.after_disconnect server)
+            Server.after_disconnect server);
+        Lwt.return_unit
 
   let main_t
       configuration
@@ -281,6 +305,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     | Some db_path ->
       let reconnect () =
         let open Lwt_result.Infix in
+        Log.info (fun f -> f "Connecting to database on %s" db_path);
         Host.Sockets.Stream.Unix.connect db_path >>= fun x ->
         Lwt_result.return x
       in
@@ -321,7 +346,12 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
           (Mclock)(Stdlibrandom)(Vnet)
       in
-      unix_listen socket_url >>= fun server ->
+      unix_listen socket_url
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to listen on ethernet socket because: %s" m);
+        Lwt.return_unit
+      | Ok server ->
       ( match config with
       | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
       | None -> Slirp_stack.create_static clock vnet_switch configuration
@@ -374,11 +404,13 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       | None ->
         Printf.fprintf stderr "Please provide an --ethernet argument\n"
       | Some socket_url ->
-    Host.Main.run
-      (main_t configuration socket_url port_control_url introspection_url diagnostics_url
-         vsock_path db_path db_branch hosts
-         listen_backlog debug);
-
+    try
+      Host.Main.run
+        (main_t configuration socket_url port_control_url introspection_url diagnostics_url
+          vsock_path db_path db_branch hosts
+          listen_backlog debug);
+    with e ->
+      Log.err (fun f -> f "Host.Main.run caught exception %s: %s" (Printexc.to_string e) (Printexc.get_backtrace ()))
 open Cmdliner
 
 let socket =
