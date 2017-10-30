@@ -9,6 +9,7 @@ type t = {
   server_macaddr: Macaddr.t;
   max_connections: int option;
   dns: Dns_forward.Config.t;
+  dns_path: string option;
   resolver: [ `Host | `Upstream ];
   domain: string;
   allowed_bind_addresses: Ipaddr.V4.t list;
@@ -24,9 +25,10 @@ type t = {
 }
 
 let to_string t =
-  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; port_max_idle_time = %s; host_names = %s"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; port_max_idle_time = %s; host_names = %s"
     (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
+    (match t.dns_path with None -> "None" | Some x -> x)
     (Dns_forward.Config.to_string t.dns)
     (match t.resolver with `Host -> "Host" | `Upstream -> "Upstream")
     t.domain
@@ -62,6 +64,7 @@ let default = {
   server_macaddr = default_server_macaddr;
   max_connections = None;
   dns = no_dns_servers;
+  dns_path = None;
   resolver = default_resolver;
   domain = default_domain;
   allowed_bind_addresses = [];

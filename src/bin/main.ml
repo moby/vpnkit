@@ -348,16 +348,9 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       mtu
     =
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
-    let dns, resolver = match dns with
-    | None -> Configuration.no_dns_servers, Configuration.default_resolver
-    | Some ip ->
-      let open Dns_forward.Config in
-      let servers = Server.Set.of_list [
-          { Server.address = { Address.ip = Ipaddr.of_string_exn ip; port = 53 };
-            zones = Domain.Set.empty; timeout_ms = Some 2000; order = 0;
-          }
-        ] in
-      { servers; search = []; assume_offline_after_drops = None }, `Upstream in
+    let dns_path, resolver = match dns with
+    | None -> None, Configuration.default_resolver
+    | Some file -> Some file, `Upstream in
     let server_macaddr = Macaddr.of_string_exn server_macaddr in
     let allowed_bind_addresses = Configuration.Parse.ipv4_list [] allowed_bind_addresses in
     let gateway_ip = Ipaddr.V4.of_string_exn gateway_ip in
@@ -367,7 +360,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections;
       port_max_idle_time;
       host_names;
-      dns;
+      dns = Configuration.no_dns_servers;
+      dns_path;
       resolver;
       server_macaddr;
       domain;
@@ -481,7 +475,10 @@ let db_branch =
 let dns =
   let doc =
     Arg.info ~doc:
-      "IP address of upstream DNS server" ["dns"]
+      "File containing DNS configuration. The file consists of a series of lines, \
+      each line starting either with a # comment or containing a keyword followed by \
+      arguments. For example 'nameserver 8.8.8.8' or 'timeout 5000'.\
+      " ["dns"]
   in
   Arg.(value & opt (some string) None doc)
 

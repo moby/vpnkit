@@ -1112,6 +1112,46 @@ struct
         Lwt.return_unit
 
   let create_common clock vnet_switch c =
+    (* If a `dns_path` is provided then watch it for updates *)
+    let read_dns_file path =
+      Log.info (fun f -> f "Reading DNS configuration from %s" path);
+      Host.Files.read_file path
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to read DNS configuration file %s: %s. Disabling current configuration." path m);
+        update_dns { c with dns = Configuration.no_dns_servers } clock
+      | Ok contents ->
+        begin match Configuration.Parse.dns contents with
+        | None ->
+          Log.err (fun f -> f "Failed to parse DNS configuration file %s. Disabling current configuration." path);
+          update_dns { c with dns = Configuration.no_dns_servers } clock
+        | Some dns ->
+          Log.info (fun f -> f "Updating DNS configuration to %s" (Dns_forward.Config.to_string dns));
+          update_dns { c with dns } clock
+        end in
+    ( match c.dns_path with
+      | None -> Lwt.return_unit
+      | Some path ->
+        read_dns_file path
+        >>= fun () ->
+        begin match Host.Files.watch_file path
+          (fun () ->
+            Log.info (fun f -> f "DNS configuration file %s has changed" path);
+            Lwt.async (fun () ->
+              log_exception_continue "Parsing DNS configuration"
+                (fun () ->
+                  read_dns_file path
+                )
+            )
+          ) with
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to watch DNS configuration file %s for changes: %s" path m)
+        | Ok _watch ->
+          Log.info (fun f -> f "Watching DNS configuration file %s for changes" path)
+        end;
+        Lwt.return_unit
+    ) >>= fun () ->
+
     Log.info (fun f -> f "Configuration %s" (Configuration.to_string c));
     let global_arp_table : arp_table = {
       mutex = Lwt_mutex.create();
