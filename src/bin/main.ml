@@ -280,17 +280,12 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     Printexc.record_backtrace true;
 
-    let etc_hosts_watch = match HostsFile.watch ~path:hosts () with
-    | Ok watch       -> Some watch
+    let () = match HostsFile.watch ~path:hosts () with
+    | Ok _       -> ()
     | Error (`Msg m) ->
       Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
-      None
+      ()
     in
-
-    Lwt.async_exception_hook := (fun exn ->
-        Log.err (fun f ->
-            f "Lwt.async failure %a: %s" Fmt.exn exn (Printexc.get_backtrace ()))
-      );
 
     Lwt.async (fun () ->
         log_exception_continue "start_port_server" (fun () ->
@@ -365,10 +360,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           Log.info (fun f -> f "stack disconnected")
         );
       let wait_forever, _ = Lwt.task () in
-      wait_forever >|= fun () ->
-      match etc_hosts_watch with
-      | Some watch -> HostsFile.unwatch watch
-      | None       -> ()
+      wait_forever
 
   let main
       socket_url port_control_url introspection_url diagnostics_url
@@ -602,4 +594,8 @@ let command =
 let () =
   Printexc.record_backtrace true;
 
+  Lwt.async_exception_hook := (fun exn ->
+  Log.err (fun f ->
+      f "Lwt.async failure %a: %s" Fmt.exn exn (Printexc.get_backtrace ()))
+  );
   Term.exit @@ Term.eval command
