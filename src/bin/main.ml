@@ -84,7 +84,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           >>= fun s ->
           Lwt.return (Ok s)
         ) (fun e ->
-          Log.err (fun f -> f "Failed to call Stream.Unix.bind %s: %s" path (Printexc.to_string e));
+          Log.err (fun f -> f "Failed to call Stream.Unix.bind \"%s\": %s" path (Printexc.to_string e));
           Lwt.return (Error (`Msg  "Failed to bind to Unix domain socket"))
         )
   let hvsock_connect_forever url sockaddr callback =
@@ -181,7 +181,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let start_port_forwarding port_control_url max_connections vsock_path =
     Log.info (fun f ->
-        f "Starting port forwarding server on port_control_url:%s vsock_path:%s"
+        f "Starting port forwarding server on port_control_url:\"%s\" vsock_path:\"%s\""
           port_control_url vsock_path);
     (* Start the 9P port forwarding server *)
     Connect_unix.vsock_path := vsock_path;

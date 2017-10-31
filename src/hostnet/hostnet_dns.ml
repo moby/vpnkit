@@ -274,9 +274,10 @@ struct
   let create ~local_address ~host_names =
     let local_ip = local_address.Dns_forward.Config.Address.ip in
     Log.info (fun f ->
-        f "DNS names %s will map to local IP %s"
-          (String.concat ", " @@ List.map Dns.Name.to_string host_names)
-          (Ipaddr.to_string local_ip));
+      let prefix = match host_names with
+        | [] -> "No DNS names"
+        | _ -> Printf.sprintf "DNS names [ %s ]" (String.concat ", " @@ List.map Dns.Name.to_string host_names) in
+      f "%s will map to local IP %s" prefix (Ipaddr.to_string local_ip));
     fun clock -> function
     | `Upstream config ->
       let open Dns_forward.Config.Address in

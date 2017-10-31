@@ -58,7 +58,8 @@ module Make(Files: Sig.FILES) = struct
         | Ok txt ->
           etc_hosts := of_string txt;
           Log.info (fun f ->
-              f "hosts file has bindings for %s"
+              f "%s file has bindings for %s"
+                filename
                 (String.concat " " @@ List.map fst !etc_hosts))
       )
 
