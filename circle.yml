@@ -1,6 +1,6 @@
 machine:
   xcode:
-    version: "8.0"
+    version: "9.0"
   environment:
     OPAMYES: "1"
     OPAMJOBS: "2"
