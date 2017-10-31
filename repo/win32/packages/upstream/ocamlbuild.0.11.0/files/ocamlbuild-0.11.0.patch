@@ -154,7 +154,7 @@
 +  let qlen = Filename.quote cmd |> String.length in
 +  (* old versions of dash had problems with bs *)
 +  try
-+    if qlen < 30_000 then
++    if qlen < 7_900 then
 +      command_plain (Array.append shell [| "-ec" ; cmd |])
 +    else begin
 +      (* it can still work, if the called command is a cygwin tool *)
@@ -213,15 +213,16 @@
 +val prep_windows_cmd : string -> string
 --- ./src/ocamlbuild_executor.ml
 +++ ./src/ocamlbuild_executor.ml
-@@ -34,6 +34,7 @@
+@@ -34,6 +34,8 @@
    job_stdin   : out_channel;
    job_stderr  : in_channel;
    job_buffer  : Buffer.t;
 +  job_pid     : int;
++  job_tmp_file: string option;
    mutable job_dying : bool;
  };;
  
-@@ -76,6 +77,36 @@
+@@ -76,6 +78,61 @@
    in
    loop 0
  ;;
@@ -236,37 +237,62 @@
 +  let inchan = Unix.in_channel_of_descr in_read in
 +  let outchan = Unix.out_channel_of_descr out_write in
 +  let errchan = Unix.in_channel_of_descr err_read in
-+  let argv =
++  let shell = Lazy.force Ocamlbuild_pack.My_std.windows_shell in
++  let test_cmd =
++    String.concat " " (List.map Filename.quote (Array.to_list shell)) ^
++    "-ec " ^
++    Filename.quote (Ocamlbuild_pack.My_std.prep_windows_cmd cmd) in
++  let argv,tmp_file =
++    if String.length test_cmd < 7_900 then
++      Array.append
++        shell
++        [| "-ec" ; Ocamlbuild_pack.My_std.prep_windows_cmd cmd |],None
++    else
++    let fln,ch = Filename.open_temp_file ~mode:[Open_binary] "ocamlbuild" ".sh" in
++    output_string ch (Ocamlbuild_pack.My_std.prep_windows_cmd cmd);
++    close_out ch;
++    let fln' = String.map (function '\\' -> '/' | c -> c) fln in
 +    Array.append
-+      (Lazy.force Ocamlbuild_pack.My_std.windows_shell)
-+      [| "-ec" ; Ocamlbuild_pack.My_std.prep_windows_cmd cmd |] in
++      shell
++      [| "-c" ; fln' |], Some fln in
 +  let pid =
 +    Unix.create_process_env argv.(0) argv env out_read in_write err_write in
 +  Unix.close out_read;
 +  Unix.close in_write;
 +  Unix.close err_write;
-+  (pid, inchan, outchan, errchan)
++  (pid, inchan, outchan, errchan,tmp_file)
 +
-+let close_process_full_win (pid,inchan, outchan, errchan) =
-+  close_in inchan;
-+  close_out outchan;
-+  close_in errchan;
-+  snd(Unix.waitpid [] pid)
-+
-+
++let close_process_full_win (pid,inchan, outchan, errchan, tmp_file) =
++  let delete tmp_file =
++    match tmp_file with
++    | None -> ()
++    | Some x -> try Sys.remove x with Sys_error _ -> () in
++  let tmp_file_deleted = ref false in
++  try
++    close_in inchan;
++    close_out outchan;
++    close_in errchan;
++    let res = snd(Unix.waitpid [] pid) in
++    tmp_file_deleted := true;
++    delete tmp_file;
++    res
++  with
++  | x when tmp_file <> None && !tmp_file_deleted = false ->
++    delete tmp_file;
++    raise x
 +
  (* ***)
  (*** execute *)
  (* XXX: Add test for non reentrancy *)
-@@ -130,10 +161,16 @@
+@@ -130,10 +187,16 @@
    (*** add_job *)
    let add_job cmd rest result id =
      (*display begin fun oc -> fp oc "Job %a is %s\n%!" print_job_id id cmd; end;*)
 -    let (stdout', stdin', stderr') = open_process_full cmd env in
-+    let (pid,stdout', stdin', stderr') =
++    let (pid,stdout', stdin', stderr', tmp_file) =
 +      if Sys.win32 then open_process_full_win cmd env else
 +      let a,b,c = open_process_full cmd env in
-+      -1,a,b,c
++      -1,a,b,c,None
 +    in
      incr jobs_active;
 -    set_nonblock (doi stdout');
@@ -278,17 +304,18 @@
      let job =
        { job_id          = id;
          job_command     = cmd;
-@@ -143,7 +180,8 @@
+@@ -143,7 +206,9 @@
          job_stdin       = stdin';
          job_stderr      = stderr';
          job_buffer      = Buffer.create 1024;
 -        job_dying       = false }
 +        job_dying       = false;
++        job_tmp_file    = tmp_file;
 +        job_pid         = pid }
      in
      outputs := FDM.add (doi stdout') job (FDM.add (doi stderr') job !outputs);
      jobs := JS.add job !jobs;
-@@ -199,6 +237,7 @@
+@@ -199,6 +264,7 @@
                try
                  read fd u 0 (Bytes.length u)
                with
@@ -296,7 +323,7 @@
                | Unix.Unix_error(e,_,_)  ->
                  let msg = error_message e in
                  display (fun oc -> fp oc
-@@ -241,14 +280,19 @@
+@@ -241,14 +307,19 @@
        decr jobs_active;
  
        (* PR#5371: we would get EAGAIN below otherwise *)
@@ -314,7 +341,7 @@
 -      let status = close_process_full (job.job_stdout, job.job_stdin, job.job_stderr) in
 +      let status =
 +        if Sys.win32 then
-+          close_process_full_win (job.job_pid, job.job_stdout, job.job_stdin, job.job_stderr)
++          close_process_full_win (job.job_pid, job.job_stdout, job.job_stdin, job.job_stderr, job.job_tmp_file)
 +        else
 +          close_process_full (job.job_stdout, job.job_stdin, job.job_stderr) in
  

@@ -16,7 +16,7 @@ build: [
 build-test: ["jbuilder" "runtest" "-p" name "-j" jobs]
 
 depends: [
-  "jbuilder" {>="1.0+beta9"}
+  "jbuilder" {build & >="1.0+beta9"}
   "ounit" {test}
   "alcotest"     {test}
   "charrua-core" {>= "0.9"}

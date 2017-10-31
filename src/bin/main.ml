@@ -85,27 +85,43 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         f "connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
           sockaddr.Hvsock.serviceid);
     let rec aux () =
-      let socket = HV.Hvsock.create () in
+      let rec create () =
+        match HV.Hvsock.create () with
+        | x -> Lwt.return x
+        | exception e ->
+          Log.err (fun f -> f "caught %s while creating Hyper-V socket" (Printexc.to_string e));
+          Host.Time.sleep_ns (Duration.of_sec 1)
+          >>= fun () ->
+          create () in
+      create ()
+      >>= fun socket ->
       Lwt.catch (fun () ->
           HV.Hvsock.connect ~timeout_ms:300 socket sockaddr >>= fun () ->
           Log.info (fun f -> f "hvsock connected successfully");
           callback socket
         ) (function
         | Unix.Unix_error(Unix.ETIMEDOUT, _, _) ->
-          HV.Hvsock.close socket
+          log_exception_continue "HV.Hvsock.close" (fun () -> HV.Hvsock.close socket)
           (* no need to add more delay *)
         | Unix.Unix_error(_, _, _) ->
-          HV.Hvsock.close socket >>= fun () ->
+          log_exception_continue "HV.Hvsock.close" (fun () -> HV.Hvsock.close socket)
+          >>= fun () ->
           Host.Time.sleep_ns (Duration.of_sec 1)
         | _ ->
-          HV.Hvsock.close socket >>= fun () ->
+          log_exception_continue "HV.Hvsock.close" (fun () -> HV.Hvsock.close socket)
+          >>= fun () ->
           Host.Time.sleep_ns (Duration.of_sec 1)
         )
       >>= fun () ->
       aux ()
     in
     Log.debug (fun f -> f "Waiting for connections on socket %s" url);
-    aux ()
+    Lwt.catch
+      aux
+      (fun e ->
+        Log.err (fun f -> f "Caught %s while accepting connections on socket %s" (Printexc.to_string e) url);
+        Lwt.return_unit
+      )
 
   let start_introspection introspection_url root =
     if introspection_url = ""

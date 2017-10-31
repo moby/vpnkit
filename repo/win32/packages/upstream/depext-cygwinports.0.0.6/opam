@@ -20,3 +20,4 @@ post-messages: [
  Otherwise many packages can't be built." {success & os = "win32" }
 ]
 available: [ os = "win32" ]
+patches: "depext-cygwinports-0.0.6.patch" {ocaml-version >= "4.04.0"}

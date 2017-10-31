@@ -1,0 +1,11 @@
+--- ./run.ml
++++ ./run.ml
+@@ -219,7 +219,7 @@
+           assert (p_stdin_write.fd = fd);
+           let str_len = String.length !to_write in
+           assert (str_len > 0 );
+-          let n_written = eintr4 U.write fd !to_write 0 str_len in
++          let n_written = eintr4 U.write_substring fd !to_write 0 str_len in
+           if n_written >= str_len then (
+             to_write := "";
+             close_pipe p_stdin_write
