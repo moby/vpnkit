@@ -4,7 +4,7 @@ type t =
   | Icmp:     { ty: int; code: int; seq: int; id: int;
                 raw: Cstruct.t; payload: t } -> t
   | Ipv4:     { src: Ipaddr.V4.t; dst: Ipaddr.V4.t; dnf: bool; ihl: int;
-                raw: Cstruct.t; payload: t } -> t
+                ttl: int; raw: Cstruct.t; payload: t } -> t
   | Udp:      { src: int; dst: int; len: int; payload: t } -> t
   | Tcp:      { src: int; dst: int; syn: bool; raw: Cstruct.t; payload: t } -> t
   | Payload:  Cstruct.t -> t
@@ -45,6 +45,7 @@ let parse bufs =
         let vihl  = Cstructs.get_uint8     inner 0 in
         let len   = Cstructs.BE.get_uint16 inner (1 + 1) in
         let off   = Cstructs.BE.get_uint16 inner (1 + 1 + 2 + 2) in
+        let ttl   = Cstructs.get_uint8     inner (1 + 1 + 2 + 2 + 2) in
         let proto = Cstructs.get_uint8     inner (1 + 1 + 2 + 2 + 2 + 1) in
         let src   = Cstructs.BE.get_uint32 inner (1 + 1 + 2 + 2 + 2 + 1 + 1 + 2)
                     |> Ipaddr.V4.of_int32 in
@@ -93,7 +94,7 @@ let parse bufs =
         | _ ->
           Ok Unknown )
         >>= fun payload ->
-        Ok (Ipv4 { src; dst; dnf; ihl; raw; payload })
+        Ok (Ipv4 { src; dst; dnf; ihl; ttl; raw; payload })
       | 0x0806 ->
         need_space_for inner 2 "ARP header"
         >>= fun () ->

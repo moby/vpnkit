@@ -4,7 +4,7 @@ type t =
   | Icmp:     { ty: int; code: int; seq: int; id: int;
                 raw: Cstruct.t; payload: t } -> t
   | Ipv4:     { src: Ipaddr.V4.t; dst: Ipaddr.V4.t; dnf: bool; ihl: int;
-                raw: Cstruct.t; payload: t } -> t
+                ttl: int; raw: Cstruct.t; payload: t } -> t
   | Udp:      { src: int; dst: int; len: int; payload: t } -> t
   | Tcp:      { src: int; dst: int; syn: bool; raw: Cstruct.t; payload: t } -> t
   | Payload:  Cstruct.t -> t
