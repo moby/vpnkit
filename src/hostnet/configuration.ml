@@ -20,12 +20,13 @@ type t = {
   extra_dns: Ipaddr.V4.t list;
   mtu: int;
   http_intercept: Ezjsonm.value option;
+  http_intercept_path: string option;
   port_max_idle_time: int;
   host_names: Dns.Name.t list;
 }
 
 let to_string t =
-  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; port_max_idle_time = %s; host_names = %s"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; peer = %s; highest_ip = %s; extra_dns = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s"
     (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
     (match t.dns_path with None -> "None" | Some x -> x)
@@ -39,6 +40,7 @@ let to_string t =
     (String.concat ", " (List.map Ipaddr.V4.to_string t.extra_dns))
     t.mtu
     (match t.http_intercept with None -> "None" | Some x -> Ezjsonm.(to_string @@ wrap x))
+    (match t.http_intercept_path with None -> "None" | Some x -> x)
     (string_of_int t.port_max_idle_time)
     (String.concat ", " (List.map Dns.Name.to_string t.host_names))
 
@@ -74,6 +76,7 @@ let default = {
   extra_dns = default_extra_dns;
   mtu = default_mtu;
   http_intercept = None;
+  http_intercept_path = None;
   port_max_idle_time = default_port_max_idle_time;
   host_names = default_host_names;
 }

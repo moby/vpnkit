@@ -1105,10 +1105,13 @@ struct
       Http_forwarder.of_json x
       >>= function
       | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to decode http-intercept json: %s" m);
+        Log.err (fun f -> f "Failed to decode transparent HTTP redirection json: %s" m);
         Lwt.return_unit
       | Ok t ->
         http := Some t;
+        Log.info (fun f ->
+          f "updating transparent HTTP redirection: %s" (Http_forwarder.to_string t)
+        );
         Lwt.return_unit
 
   let create_common clock vnet_switch c =
@@ -1151,6 +1154,44 @@ struct
         end;
         Lwt.return_unit
     ) >>= fun () ->
+
+    let read_http_intercept_file path =
+      Log.info (fun f -> f "Reading transparent HTTP redirection from %s" path);
+      Host.Files.read_file path
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to read transparent HTTP redirection from %s: %s. Disabling transparent HTTP redirection." path m);
+        update_http { c with http_intercept = None }
+      | Ok txt ->
+        begin match Ezjsonm.from_string txt with
+        | exception _ ->
+          Log.err (fun f -> f "Failed to parse transparent HTTP redirection json: %s" txt);
+          update_http { c with http_intercept = None }
+        | http_intercept ->
+          update_http { c with http_intercept = Some http_intercept }
+        end in
+    ( match c.http_intercept_path with
+    | None -> Lwt.return_unit
+    | Some path ->
+      read_http_intercept_file path
+      >>= fun () ->
+      begin match Host.Files.watch_file path
+        (fun () ->
+          Log.info (fun f -> f "Transparent HTTP redirection configuration file %s has changed" path);
+          Lwt.async (fun () ->
+            log_exception_continue "Parsing transparent HTTP redirection configuration"
+              (fun () ->
+                read_http_intercept_file path
+              )
+          )
+        ) with
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to watch transparent HTTP redirection configuration file %s for changes: %s" path m)
+      | Ok _watch ->
+        Log.info (fun f -> f "Watching transparent HTTP redirection configuration file %s for changes" path)
+      end;
+      Lwt.return_unit
+  ) >>= fun () ->
 
     Log.info (fun f -> f "Configuration %s" (Configuration.to_string c));
     let global_arp_table : arp_table = {

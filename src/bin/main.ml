@@ -339,7 +339,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main
       socket_url port_control_url introspection_url diagnostics_url
-      max_connections vsock_path db_path db_branch dns hosts host_names
+      max_connections vsock_path db_path db_branch dns http hosts host_names
       listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip highest_ip
       mtu log_destination
@@ -367,6 +367,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       host_names;
       dns = Configuration.no_dns_servers;
       dns_path;
+      http_intercept_path = http;
       resolver;
       server_macaddr;
       domain;
@@ -489,6 +490,21 @@ let dns =
   in
   Arg.(value & opt (some string) None doc)
 
+let http =
+  let doc =
+    Arg.info ~doc:
+      "File containing transparent HTTP redirection configuration.\
+      If this argument is given, then outgoing connections to port 80 (HTTP) \
+      and 443 (HTTPS) are transparently redirected to the proxies mentioned \
+      in the configuration file. The configuration file is in .json format as \
+      follows: `{\"http\": \"host:3128\",\
+        \"https\": \"host:3128\",\
+        \"exclude\": \"*.local\"\
+      }`\
+      " ["http"]
+  in
+  Arg.(value & opt (some string) None doc)
+
 let hosts =
   let doc =
     Arg.info ~doc:
@@ -568,7 +584,7 @@ let command =
   in
   Term.(pure main
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
-        $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
+        $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip
         $ highest_ip $ mtu $ Logging.log_destination),
