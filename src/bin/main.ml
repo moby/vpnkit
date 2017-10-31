@@ -89,14 +89,14 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         )
   let hvsock_connect_forever url sockaddr callback =
     Log.info (fun f ->
-        f "connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
+        f "Connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
           sockaddr.Hvsock.serviceid);
     let rec aux () =
       let rec create () =
         match HV.Hvsock.create () with
         | x -> Lwt.return x
         | exception e ->
-          Log.err (fun f -> f "caught %s while creating Hyper-V socket" (Printexc.to_string e));
+          Log.err (fun f -> f "Caught %s while creating Hyper-V socket" (Printexc.to_string e));
           Host.Time.sleep_ns (Duration.of_sec 1)
           >>= fun () ->
           create () in
@@ -104,7 +104,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       >>= fun socket ->
       Lwt.catch (fun () ->
           HV.Hvsock.connect ~timeout_ms:300 socket sockaddr >>= fun () ->
-          Log.info (fun f -> f "hvsock connected successfully");
+          Log.info (fun f -> f "AF_HVSOCK connected successfully");
           callback socket
         ) (function
         | Unix.Unix_error(Unix.ETIMEDOUT, _, _) ->
@@ -133,13 +133,13 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let start_introspection introspection_url root =
     if introspection_url = ""
     then Log.info (fun f ->
-        f "no introspection server requested. See the --introspection argument")
+        f "There is no introspection server requested. See the --introspection argument")
     else Lwt.async (fun () ->
         log_exception_continue
-          ("starting introspection server on: " ^ introspection_url)
+          ("Starting introspection server on: " ^ introspection_url)
           (fun () ->
              Log.info (fun f ->
-                 f "starting introspection server on: %s" introspection_url);
+                 f "Starting introspection server on: %s" introspection_url);
              let module Server = Fs9p.Make(Host.Sockets.Stream.Unix) in
              unix_listen introspection_url
              >>= function
@@ -152,7 +152,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
                  Server.accept ~root ~msg:introspection_url flow >>= function
                  | Error (`Msg m) ->
                    Log.err (fun f ->
-                       f "failed to establish 9P connection: %s" m);
+                       f "Failed to establish 9P connection: %s" m);
                    Lwt.return ()
                  | Ok () ->
                    Lwt.return_unit
@@ -162,13 +162,13 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let start_diagnostics diagnostics_url flow_cb =
     if diagnostics_url = ""
     then Log.info (fun f ->
-        f "no diagnostics server requested. See the --diagnostics argument")
+        f "No diagnostics server requested. See the --diagnostics argument")
     else Lwt.async (fun () ->
         log_exception_continue
-          ("starting diagnostics server on: " ^ diagnostics_url)
+          ("Starting diagnostics server on: " ^ diagnostics_url)
           (fun () ->
              Log.info (fun f ->
-                 f "starting diagnostics server on: %s" diagnostics_url);
+                 f "Starting diagnostics server on: %s" diagnostics_url);
              unix_listen diagnostics_url
              >>= function
              | Error (`Msg m) ->
@@ -181,7 +181,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let start_port_forwarding port_control_url max_connections vsock_path =
     Log.info (fun f ->
-        f "starting port forwarding server on port_control_url:%s vsock_path:%s"
+        f "Starting port forwarding server on port_control_url:%s vsock_path:%s"
           port_control_url vsock_path);
     (* Start the 9P port forwarding server *)
     Connect_unix.vsock_path := vsock_path;
@@ -206,7 +206,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           let flow = HV.connect fd in
           Server.connect fs flow () >>= function
           | Error (`Msg m) ->
-            Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+            Log.err (fun f -> f "Failed to establish 9P connection: %s" m);
             Lwt.return ()
           | Ok server -> Server.after_disconnect server)
     | _ ->
@@ -225,7 +225,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         Host.Sockets.Stream.Unix.listen port_s (fun conn ->
           Server.connect fs conn () >>= function
           | Error (`Msg m) ->
-            Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+            Log.err (fun f -> f "Failed to establish 9P connection: %s" m);
             Lwt.return_unit
           | Ok server ->
             Server.after_disconnect server);
@@ -245,7 +245,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore
     with Invalid_argument _ -> ());
     Log.info (fun f ->
-        f "vpnkit version %%VERSION%% from %%VCS_COMMIT_ID%%"
+        f "Version %%VERSION%% from %%VCS_COMMIT_ID%%"
     );
 
     Log.info (fun f -> f "System SOMAXCONN is %d" !Utils.somaxconn);
@@ -263,7 +263,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     in
 
     Lwt.async (fun () ->
-        log_exception_continue "start_port_server" (fun () ->
+        log_exception_continue "Starting the 9P port control filesystem" (fun () ->
             start_port_forwarding port_control_url configuration.Configuration.max_connections vsock_path
           )
       );
@@ -282,7 +282,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       Some (Config.create ~reconnect ~branch:db_branch ())
     | None ->
       Log.warn (fun f ->
-          f "no database: using hardcoded network configuration values");
+          f "There is no database: using hardcoded network configuration values");
       None
     in
 
@@ -305,11 +305,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       hvsock_connect_forever socket_url sockaddr (fun fd ->
           let conn = HV.connect fd in
           Slirp_stack.connect stack_config conn >>= fun stack ->
-          Log.info (fun f -> f "stack connected");
+          Log.info (fun f -> f "TCP/IP stack connected");
           start_introspection introspection_url (Slirp_stack.filesystem stack);
           start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
           Slirp_stack.after_disconnect stack >|= fun () ->
-          Log.info (fun f -> f "stack disconnected"))
+          Log.info (fun f -> f "TCP/IP stack disconnected"))
 
     | _ ->
       let module Slirp_stack =
@@ -328,11 +328,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       ) >>= fun stack_config ->
       Host.Sockets.Stream.Unix.listen server (fun conn ->
           Slirp_stack.connect stack_config conn >>= fun stack ->
-          Log.info (fun f -> f "stack connected");
+          Log.info (fun f -> f "TCP/IP stack connected");
           start_introspection introspection_url (Slirp_stack.filesystem stack);
           start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
           Slirp_stack.after_disconnect stack >|= fun () ->
-          Log.info (fun f -> f "stack disconnected")
+          Log.info (fun f -> f "TCP/IP stack disconnected")
         );
       let wait_forever, _ = Lwt.task () in
       wait_forever

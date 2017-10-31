@@ -1086,7 +1086,7 @@ struct
     | `Host, _ -> `Host
     in
     Log.info (fun f ->
-        f "updating resolvers to %s" (Hostnet_dns.Config.to_string config));
+        f "Updating resolvers to %s" (Hostnet_dns.Config.to_string config));
     !dns >>= Dns_forwarder.destroy >|= fun () ->
     Dns_policy.remove ~priority:3;
     Dns_policy.add ~priority:3 ~config;
@@ -1110,7 +1110,7 @@ struct
       | Ok t ->
         http := Some t;
         Log.info (fun f ->
-          f "updating transparent HTTP redirection: %s" (Http_forwarder.to_string t)
+          f "Updating transparent HTTP redirection: %s" (Http_forwarder.to_string t)
         );
         Lwt.return_unit
 

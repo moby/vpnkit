@@ -55,8 +55,8 @@ module Sockets = struct
 
   let set_max_connections x =
     begin match x with
-      | None -> Log.info (fun f -> f "removed connection limit")
-      | Some limit -> Log.info (fun f -> f "updated connection limit to %d" limit)
+      | None -> Log.info (fun f -> f "Removed connection limit")
+      | Some limit -> Log.info (fun f -> f "Updated connection limit to %d" limit)
     end;
     max_connections := x
 
@@ -89,7 +89,7 @@ module Sockets = struct
       if (now -. !last_error_log) > 30. then begin
         (* Avoid hammering the logging system *)
         Log.warn (fun f ->
-            f "exceeded maximum number of forwarded connections (%d)" m);
+            f "Exceeded maximum number of forwarded connections (%d)" m);
         last_error_log := now;
       end;
       Lwt.fail Too_many_connections
@@ -102,7 +102,7 @@ module Sockets = struct
 
   let deregister_connection idx =
     if not(Hashtbl.mem connection_table idx) then begin
-      Log.warn (fun f -> f "deregistered connection %d more than once" idx)
+      Log.warn (fun f -> f "Deregistered connection %d more than once" idx)
     end;
     Hashtbl.remove connection_table idx
 
@@ -662,7 +662,7 @@ module Sockets = struct
             || Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.any) = 0
             then begin
               Log.debug (fun f ->
-                  f "attempting a best-effort bind of ::1:%d" local_port);
+                  f "Attempting a best-effort bind of ::1:%d" local_port);
               bind_one (Ipaddr.(V6 V6.localhost), local_port)
               >>= fun (idx, _, fd) ->
               Lwt.return [ idx, fd ]
@@ -670,7 +670,7 @@ module Sockets = struct
               Lwt.return []
           ) (fun e ->
             Log.debug (fun f ->
-                f "ignoring failed bind to ::1:%d (%a)" local_port Fmt.exn e);
+                f "Ignoring failed bind to ::1:%d (%a)" local_port Fmt.exn e);
             Lwt.return []
           )
         >|= fun extra ->
