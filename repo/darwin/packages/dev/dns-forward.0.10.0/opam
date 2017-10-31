@@ -32,6 +32,5 @@ depends: [
   "mtime"
   "sexplib"
   "ipaddr"
-  "nocrypto"
 ]
 available: [ocaml-version >= "4.03.0"]
