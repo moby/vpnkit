@@ -1135,8 +1135,6 @@ struct
     ( match c.dns_path with
       | None -> Lwt.return_unit
       | Some path ->
-        read_dns_file path
-        >>= fun () ->
         begin match Host.Files.watch_file path
           (fun () ->
             Log.info (fun f -> f "DNS configuration file %s has changed" path);
@@ -1173,8 +1171,6 @@ struct
     ( match c.http_intercept_path with
     | None -> Lwt.return_unit
     | Some path ->
-      read_http_intercept_file path
-      >>= fun () ->
       begin match Host.Files.watch_file path
         (fun () ->
           Log.info (fun f -> f "Transparent HTTP redirection configuration file %s has changed" path);
