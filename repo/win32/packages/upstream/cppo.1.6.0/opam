@@ -11,7 +11,7 @@ build: [
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
 build-test: [
-  ["jbuilder" "runtest" "-p" name]
+  ["jbuilder" "runtest" "-p" name]  {os != "win32"}
 ]
 
 depends: [
