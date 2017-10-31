@@ -121,7 +121,7 @@ struct
       Lwt.return ()
     | true -> loop t server d buf
 
-  let input ~t ~datagram () =
+  let input ~t ~datagram ~ttl () =
     let d = description datagram in
     (if Hashtbl.mem t.table datagram.src then begin
         Lwt.return (Some (Hashtbl.find t.table datagram.src))
@@ -151,7 +151,7 @@ struct
     | None -> Lwt.return ()
     | Some flow ->
       Lwt.catch (fun () ->
-          Udp.sendto flow.server datagram.dst datagram.payload >|= fun () ->
+          Udp.sendto flow.server datagram.dst ~ttl datagram.payload >|= fun () ->
           flow.last_use <- Clock.elapsed_ns t.clock;
         ) (fun e ->
           Log.err (fun f ->

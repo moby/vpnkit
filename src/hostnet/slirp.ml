@@ -517,7 +517,7 @@ struct
       >|= ok
 
     (* UDP to port 123: localhost NTP *)
-    | Ipv4 { src;
+    | Ipv4 { src; ttl;
              payload = Udp { src = src_port; dst = 123;
                              payload = Payload payload; _ }; _ } ->
       let localhost = Ipaddr.V4.localhost in
@@ -528,11 +528,11 @@ struct
         { Hostnet_udp.src = Ipaddr.V4 src, src_port;
           dst = Ipaddr.V4 localhost, 123; payload }
       in
-      Udp_nat.input ~t:t.udp_nat ~datagram ()
+      Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
       >|= ok
 
     (* UDP to any other port: localhost *)
-    | Ipv4 { src; dst; ihl; dnf; raw;
+    | Ipv4 { src; dst; ihl; dnf; raw; ttl;
              payload = Udp { src = src_port; dst = dst_port; len;
                              payload = Payload payload; _ }; _ } ->
       let description =
@@ -555,7 +555,7 @@ struct
           { Hostnet_udp.src = Ipaddr.V4 src, src_port;
             dst = Ipaddr.(V4 V4.localhost), dst_port; payload }
         in
-        Udp_nat.input ~t:t.udp_nat ~datagram ()
+        Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
         >|= ok
       end
 
@@ -608,11 +608,11 @@ struct
     (** Handle IPv4 datagrams by proxying them to a remote system *)
     let input_ipv4 t ipv4 = match ipv4 with
 
-    (* Respond to ICMP *)
-    | Ipv4 { src; dst; ttl; payload = Icmp { ty; code; seq; id; payload = Payload p; _ }; _ } ->
+    (* Respond to ICMP ECHO *)
+    | Ipv4 { src; dst; ttl; payload = Icmp { ty; code; icmp = Echo { id; seq; payload }; _ }; _ } ->
       let datagram = {
         Hostnet_icmp.src = src; dst = dst;
-        ty; code; seq; id; payload = p
+        ty; code; seq; id; payload
       } in
       ( match t.icmp_nat with
         | Some icmp_nat ->
@@ -642,7 +642,7 @@ struct
         Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
         >|= ok
       end
-    | Ipv4 { src; dst; ihl; dnf; raw;
+    | Ipv4 { src; dst; ihl; dnf; raw; ttl;
              payload = Udp { src = src_port; dst = dst_port; len;
                              payload = Payload payload; _ }; _ } ->
       let description = Printf.sprintf "%s:%d -> %s:%d"
@@ -660,7 +660,7 @@ struct
           { Hostnet_udp.src = Ipaddr.V4 src, src_port;
             dst = Ipaddr.V4 dst, dst_port; payload }
         in
-        Udp_nat.input ~t:t.udp_nat ~datagram ()
+        Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
         >|= ok
       end
 

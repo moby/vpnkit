@@ -113,6 +113,25 @@ module Make
 
   let start_receiver t =
     let buf = Cstruct.create 4096 in
+
+    let try_to_forward phys src payload =
+      if Hashtbl.mem t.phys_to_flow phys then begin
+        let flow = Hashtbl.find t.phys_to_flow phys in
+        match t.send_reply with
+        | Some fn ->
+          fn ~src ~dst:(fst flow.virt) ~payload
+          >>= fun () ->
+          Lwt.return true
+        | None ->
+          Log.warn (fun f -> f "dropping ICMP because reply callback not set");
+          Lwt.return true
+      end else begin
+        (* This happens when the host receives other ICMP which we're not listening for *)
+        Log.info (fun f ->
+          f "ICMP dropping (%a, %d) %a"
+            Ipaddr.V4.pp_hum (fst phys) (snd phys) Cstruct.hexdump_pp payload);
+        Lwt.return true
+      end in
     let rec loop () =
       Lwt.catch (fun () ->
         Icmp.recvfrom t.server buf
@@ -124,54 +143,55 @@ module Make
            here. *)
         let len = Ipv4_wire.get_ipv4_len datagram in
         Ipv4_wire.set_ipv4_len datagram (min len n);
-        match Ipv4_packet.Unmarshal.of_cstruct buf with
-        | Error msg ->
-          Log.err (fun f -> f "Error unmarshalling IP datagram: %s" msg);
+        match Frame.ipv4 [ datagram ] with
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Error unmarshalling IP datagram: %s" m);
           Lwt.return_true
-        | Ok (ipv4, ip_payload) ->
-          match Icmpv4_packet.Unmarshal.of_cstruct ip_payload with
-          | Error msg ->
-            Log.err (fun f -> f "Error unmarshalling ICMP message: %s" msg);
-            Lwt.return_true
-          | Ok (icmp, icmp_payload) ->
-            let open Icmpv4_packet in
-            begin match icmp.subheader with
-            | Next_hop_mtu _ | Pointer _ | Address _ | Unused ->
-              Log.debug (fun f ->
-                f "received an ICMP message which wasn't an echo-request or reply: %a" Cstruct.hexdump_pp buf);
-              Lwt.return true
-            | Id_and_seq (id, seq) ->
-              let ty = Icmpv4_wire.ty_to_int icmp.Icmpv4_packet.ty in
-              let phys = ipv4.Ipv4_packet.src, id in
-              if Hashtbl.mem t.phys_to_flow phys then begin
-                let flow = Hashtbl.find t.phys_to_flow phys in
-                let id' = snd flow.virt in
-                let icmp' = { icmp with subheader = Id_and_seq(id', seq) } in
-                let header = Marshal.make_cstruct icmp' ~payload:icmp_payload in
-                let payload = Cstruct.concat [ header; icmp_payload ] in
-                Log.debug (fun f ->
-                  f "ICMP sending %a -> %a ty=%d code=%d id=%d seq=%d payload len %d"
-                    Ipaddr.V4.pp_hum ipv4.Ipv4_packet.src Ipaddr.V4.pp_hum ipv4.Ipv4_packet.dst
-                    ty icmp.Icmpv4_packet.code id seq
-                    (Cstruct.len icmp_payload));
-                match t.send_reply with
-                | Some fn ->
-                  fn ~src:ipv4.Ipv4_packet.src ~dst:(fst flow.virt) ~payload
-                  >>= fun () ->
-                  Lwt.return true
-                | None ->
-                  Log.warn (fun f -> f "dropping ICMP because reply callback not set");
-                  Lwt.return true
-              end else begin
-                (* This happens when the host receives other ICMP which we're not listening for *)
-                Log.info (fun f ->
-                  f "ICMP dropping %a -> %a ty=%d code=%d id=%d seq=%d %a"
-                    Ipaddr.V4.pp_hum ipv4.Ipv4_packet.src Ipaddr.V4.pp_hum ipv4.Ipv4_packet.dst
-                    ty icmp.Icmpv4_packet.code id seq
-                    Cstruct.hexdump_pp icmp_payload);
-                Lwt.return true
-              end
-            end
+        | Ok { src; payload = Frame.Icmp { raw; icmp = Frame.Echo { id; _ }; _ }; _ } ->
+          if Hashtbl.mem t.phys_to_flow (src, id) then begin
+            let flow = Hashtbl.find t.phys_to_flow (src, id) in
+            let id' = snd flow.virt in
+            (* Rewrite the id in the Echo response *)
+            Icmpv4_wire.set_icmpv4_id raw id';
+            Icmpv4_wire.set_icmpv4_csum raw 0;
+            Icmpv4_wire.set_icmpv4_csum raw (Tcpip_checksum.ones_complement raw)
+          end;
+          try_to_forward (src, id) src raw
+        | Ok { src=src'; dst=dst'; payload = Frame.Icmp { raw = icmp_buffer; icmp = Frame.Time_exceeded { ipv4 = Ok { src; dst; raw = original_ipv4; payload = Frame.Icmp { raw = original_icmp; icmp = Frame.Echo { id; _ }; _ }; _ }; _ }; _ }; _ } ->
+          (* This message comes from a router. We need to examine the nested packet to see
+             where to forward it. *)
+          Log.info (fun f -> f "TTL exceeded src' = %a dst' = %a; src = %a; dst = %a; id = %d"
+            Ipaddr.V4.pp_hum src'
+            Ipaddr.V4.pp_hum dst'
+            Ipaddr.V4.pp_hum src
+            Ipaddr.V4.pp_hum dst
+            id
+          );
+          if Hashtbl.mem t.phys_to_flow (dst, id) then begin
+            (* Our only idea of the true destination is in the NAT table *)
+            let flow = Hashtbl.find t.phys_to_flow (dst, id) in
+            let id' = snd flow.virt in
+            (* Rewrite the id in the nested original packet *)
+            Icmpv4_wire.set_icmpv4_id original_icmp id';
+            Icmpv4_wire.set_icmpv4_csum original_icmp 0;
+            Icmpv4_wire.set_icmpv4_csum original_icmp (Tcpip_checksum.ones_complement original_icmp);
+            (* Rewrite the src address to use the internal address *)
+            let new_src = Ipaddr.V4.to_int32 @@ fst flow.virt in
+            Ipv4_wire.set_ipv4_src original_ipv4 new_src;
+            (* Note we don't recompute the IPv4 checksum since the packet is truncated *)
+          end;
+          Icmpv4_wire.set_icmpv4_csum icmp_buffer 0;
+          Icmpv4_wire.set_icmpv4_csum icmp_buffer (Tcpip_checksum.ones_complement icmp_buffer);
+          try_to_forward (dst, id) src' icmp_buffer
+        | Ok { payload = Frame.Icmp { icmp = Frame.Time_exceeded { ipv4 = Error (`Msg m) }; _ }; _ } ->
+          Log.err (fun f -> f "Failed to forward TTL exceeeded: failed to parse inner packet: %s" m);
+          Lwt.return_true
+        | Ok { payload = Frame.Icmp _; _ } ->
+          Log.err (fun f -> f "Failed to forward unexpected ICMP datagram");
+          Lwt.return_true
+        | Ok _ ->
+          Log.err (fun f -> f "Failed to forward unexpected IPv4 datagram");
+          Lwt.return_true
       ) (fun e ->
         Log.err (fun f ->
             f "Hostnet_icmp: caught unexpected exception %a"
@@ -188,7 +208,7 @@ module Make
     start_receiver t
 
   let input ~t ~datagram:{src; dst; ty; code; id; seq; payload} ~ttl () =
-    Log.debug (fun f ->
+    Log.info (fun f ->
       f "ICMP received %a -> %a ttl=%d ty=%d code=%d id=%d seq=%d payload len %d"
         Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum dst
         ttl ty code id seq (Cstruct.len payload));
@@ -219,7 +239,6 @@ module Make
                                       subheader = Id_and_seq (id', seq)}) in
             let header = Icmpv4_packet.Marshal.make_cstruct req ~payload in
             let icmp = Cstruct.concat [ header; payload ] in
-            Utils.setSocketTTL t.server_fd ttl;
-            Icmp.sendto t.server (Ipaddr.V4 dst, 0) icmp
+            Icmp.sendto t.server (Ipaddr.V4 dst, 0) ~ttl icmp
         end
 end

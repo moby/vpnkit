@@ -31,7 +31,7 @@ sig
   (** Register a reply callback which will be used to send datagrams to the
       NAT client. *)
 
-  val input: t:t -> datagram:datagram -> unit -> unit Lwt.t
+  val input: t:t -> datagram:datagram -> ttl:int -> unit -> unit Lwt.t
   (** Process an incoming datagram, forwarding it over the Sockets implementation
       and set up a listening rule to catch replies. *)
 
