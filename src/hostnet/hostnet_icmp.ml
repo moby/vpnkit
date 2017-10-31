@@ -43,6 +43,7 @@ module Make
 
   type t = {
     clock: Clock.t;
+    server_fd: Unix.file_descr;
     server: Icmp.server;
     phys_to_flow: (key, flow) Hashtbl.t;
     virt_to_flow: (key, flow) Hashtbl.t;
@@ -102,13 +103,13 @@ module Make
   let create ?(max_idle_time = Duration.(of_sec 60)) clock =
     let phys_to_flow = Hashtbl.create 7 in
     let virt_to_flow = Hashtbl.create 7 in
-    let fd = Unix.socket Unix.PF_INET sock_icmp ipproto_icmp in
-    let server = Icmp.of_bound_fd fd in
+    let server_fd = Unix.socket Unix.PF_INET sock_icmp ipproto_icmp in
+    let server = Icmp.of_bound_fd server_fd in
     let ids_in_use = ref IntSet.empty in
     let next_id = 0 in
     let send_reply = None in
     let _background_gc_t = start_background_gc clock phys_to_flow virt_to_flow ids_in_use max_idle_time in
-    { clock; server; phys_to_flow; virt_to_flow; ids_in_use; next_id; send_reply }
+    { clock; server; server_fd; phys_to_flow; virt_to_flow; ids_in_use; next_id; send_reply }
 
   let start_receiver t =
     let buf = Cstruct.create 4096 in
@@ -186,11 +187,11 @@ module Make
     t.send_reply <- Some send_reply;
     start_receiver t
 
-  let input ~t ~datagram:{src; dst; ty; code; id; seq; payload} () =
+  let input ~t ~datagram:{src; dst; ty; code; id; seq; payload} ~ttl () =
     Log.debug (fun f ->
-      f "ICMP received %a -> %a ty=%d code=%d id=%d seq=%d payload len %d"
+      f "ICMP received %a -> %a ttl=%d ty=%d code=%d id=%d seq=%d payload len %d"
         Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum dst
-        ty code id seq (Cstruct.len payload));
+        ttl ty code id seq (Cstruct.len payload));
     match Icmpv4_wire.int_to_ty ty with
       | None ->
         Log.err (fun f -> f "Unknown ICMP type: %d" ty);
@@ -218,6 +219,7 @@ module Make
                                       subheader = Id_and_seq (id', seq)}) in
             let header = Icmpv4_packet.Marshal.make_cstruct req ~payload in
             let icmp = Cstruct.concat [ header; payload ] in
+            Utils.setSocketTTL t.server_fd ttl;
             Icmp.sendto t.server (Ipaddr.V4 dst, 0) icmp
         end
 end

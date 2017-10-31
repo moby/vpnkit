@@ -260,12 +260,14 @@ module Sockets = struct
         idx: int;
         label: string;
         fd: Uwt.Udp.t;
+        fd_mutex: Lwt_mutex.t;
         mutable closed: bool;
         mutable disable_connection_tracking: bool;
       }
 
       let make ~idx ~label fd =
-        { idx; label; fd; closed = false; disable_connection_tracking = false }
+        let fd_mutex = Lwt_mutex.create () in
+        { idx; label; fd; fd_mutex; closed = false; disable_connection_tracking = false }
 
       let disable_connection_tracking server =
         server.disable_connection_tracking <- true
@@ -405,12 +407,20 @@ module Sockets = struct
         in
         Lwt.async loop
 
-      let sendto server (ip, port) buf =
-        let sockaddr =
-          Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port)
-        in
-        Uwt.Udp.send_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len
-          ~buf:buf.Cstruct.buffer server.fd sockaddr
+      let sendto server (ip, port) ?(ttl=64) buf =
+        (* Avoid a race between the setSocketTTL and the send_ba *)
+        Lwt_mutex.with_lock server.fd_mutex
+          (fun () ->
+            begin match Uwt.Udp.fileno server.fd with
+            | Error _ -> ()
+            | Ok fd -> Utils.setSocketTTL fd ttl
+            end;
+            let sockaddr =
+              Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string ip, port)
+            in
+            Uwt.Udp.send_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len
+              ~buf:buf.Cstruct.buffer server.fd sockaddr
+          )
     end
 
   end

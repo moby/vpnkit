@@ -609,14 +609,14 @@ struct
     let input_ipv4 t ipv4 = match ipv4 with
 
     (* Respond to ICMP *)
-    | Ipv4 { src; dst; payload = Icmp { ty; code; seq; id; payload = Payload p; _ }; _ } ->
+    | Ipv4 { src; dst; ttl; payload = Icmp { ty; code; seq; id; payload = Payload p; _ }; _ } ->
       let datagram = {
         Hostnet_icmp.src = src; dst = dst;
         ty; code; seq; id; payload = p
       } in
       ( match t.icmp_nat with
         | Some icmp_nat ->
-          Icmp_nat.input ~t:icmp_nat ~datagram ()
+          Icmp_nat.input ~t:icmp_nat ~datagram ~ttl ()
           >|= ok
         | None ->
           Lwt.return (Ok ()) )
