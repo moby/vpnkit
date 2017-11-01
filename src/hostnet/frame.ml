@@ -21,7 +21,7 @@ and t =
   | Arp:      { op: [ `Request | `Reply | `Unknown ] } -> t
   | Icmp:     { ty: int; code: int; raw: Cstruct.t; icmp: icmp } -> t
   | Ipv4:     ipv4 -> t
-  | Udp:      { src: int; dst: int; len: int; payload: t } -> t
+  | Udp:      { src: int; dst: int; len: int; raw: Cstruct.t; payload: t } -> t
   | Tcp:      { src: int; dst: int; syn: bool; raw: Cstruct.t; payload: t } -> t
   | Payload:  Cstruct.t -> t
   | Unknown:  t
@@ -95,6 +95,7 @@ let rec ipv4 inner =
     Ok (Tcp { src; dst; syn; raw = Cstructs.to_cstruct inner;
               payload = Payload payload })
   | 17 ->
+    let raw = Cstructs.to_cstruct inner in
     need_space_for inner 8 "UDP header"
     >>= fun () ->
     let src     = Cstructs.BE.get_uint16 inner 0 in
@@ -102,7 +103,7 @@ let rec ipv4 inner =
     let len     = Cstructs.BE.get_uint16 inner 4 in
     let payload = Cstructs.shift         inner 8 |> Cstructs.to_cstruct in
     let len = len - 8 in (* subtract header length *)
-    Ok (Udp { src; dst; len; payload = Payload payload })
+    Ok (Udp { src; dst; len; raw; payload = Payload payload })
   | _ ->
     Ok Unknown )
   >>= fun payload ->

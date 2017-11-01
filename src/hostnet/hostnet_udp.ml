@@ -17,6 +17,12 @@ type datagram = {
   payload: Cstruct.t;
 }
 
+(* A table mapping host ports to the corresponding internal address.
+   This is needed for the ICMP implementation to send back TTL exceeded
+   messages for UDP frames. The fact this is outside the functors suggests
+   that the code is badly factored. *)
+let external_to_internal = Hashtbl.create 7
+
 module Make
     (Sockets: Sig.SOCKETS)
     (Clock: Mirage_clock_lwt.MCLOCK)
@@ -25,9 +31,11 @@ struct
 
   module Udp = Sockets.Datagram.Udp
 
+  (* For every source address, we allocate a flow with a receiving loop *)
   type flow = {
     description: string;
     server: Udp.server;
+    external_address: address;
     mutable last_use: int64;
   }
 
@@ -70,6 +78,7 @@ struct
             )
           >>= fun () ->
           Hashtbl.remove table k;
+          Hashtbl.remove external_to_internal (snd flow.external_address);
           Lwt.return_unit
         ) to_shutdown
       >>= fun () ->
@@ -135,9 +144,11 @@ struct
          Lwt.catch (fun () ->
              Udp.bind ~description:(description datagram) (Ipaddr.(V4 V4.any), 0)
              >>= fun server ->
+             let external_address = Udp.getsockname server in
              let last_use = Clock.elapsed_ns t.clock in
-             let flow = { description = d; server; last_use } in
+             let flow = { description = d; server; external_address; last_use } in
              Hashtbl.replace t.table datagram.src flow;
+             Hashtbl.replace external_to_internal (snd external_address) datagram.src;
              (* Start a listener *)
              let buf = Cstruct.create Constants.max_udp_length in
              Lwt.async (fun () -> loop t server datagram buf);

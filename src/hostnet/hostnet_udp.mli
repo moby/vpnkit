@@ -38,3 +38,6 @@ sig
   val get_nat_table_size: t -> int
   (** Return the current number of allocated NAT table entries *)
 end
+
+val external_to_internal: (int, address) Hashtbl.t
+(** A mapping of external (host) port to internal address *)
