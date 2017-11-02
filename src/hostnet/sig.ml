@@ -91,7 +91,7 @@ module type SOCKETS = sig
 
       val recvfrom: server -> Cstruct.t -> (int * address) Lwt.t
 
-      val sendto: server -> address -> Cstruct.t -> unit Lwt.t
+      val sendto: server -> address -> ?ttl:int -> Cstruct.t -> unit Lwt.t
     end
   end
   module Stream: sig

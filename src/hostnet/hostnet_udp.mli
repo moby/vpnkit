@@ -31,10 +31,13 @@ sig
   (** Register a reply callback which will be used to send datagrams to the
       NAT client. *)
 
-  val input: t:t -> datagram:datagram -> unit -> unit Lwt.t
+  val input: t:t -> datagram:datagram -> ttl:int -> unit -> unit Lwt.t
   (** Process an incoming datagram, forwarding it over the Sockets implementation
       and set up a listening rule to catch replies. *)
 
   val get_nat_table_size: t -> int
   (** Return the current number of allocated NAT table entries *)
 end
+
+val external_to_internal: (int, address) Hashtbl.t
+(** A mapping of external (host) port to internal address *)

@@ -14,6 +14,8 @@
 #include <NTSecAPI.h>
 #else
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <errno.h>
 #endif
 
 CAMLprim value stub_get_SOMAXCONN(value unit){
@@ -36,7 +38,6 @@ CAMLprim value stub_RtlGenRandom(value len){
   ZeroMemory(String_val(str), c_len);
 
   if (!RtlGenRandom((PVOID)(String_val(str)), c_len)) {
-    fprintf(stderr, "RtlGenRandom failed with %d\n", GetLastError());
     win32_maperr(GetLastError());
     unix_error(errno, "RtlGenRandom", Nothing);
   }
@@ -45,4 +46,20 @@ CAMLprim value stub_RtlGenRandom(value len){
   ret = some;
 #endif
   CAMLreturn(ret);
+}
+
+CAMLprim value stub_setSocketTTL(value s, value ttl){
+  CAMLparam2(s, ttl);
+  int c_ttl = Int_val(ttl);
+#ifdef WIN32
+  SOCKET c_s = Socket_val(s);
+  if (setsockopt(c_s, IPPROTO_IP, IP_TTL, (const char *)&c_ttl, sizeof(c_ttl)) != 0) {
+    win32_maperr(GetLastError());
+#else
+  int c_fd = Int_val(s);
+  if (setsockopt(c_fd, IPPROTO_IP, IP_TTL, &c_ttl, sizeof(c_ttl)) != 0) {
+#endif
+    unix_error(errno, "setsockopt", Nothing);
+  }
+  CAMLreturn(Val_unit);
 }
