@@ -182,7 +182,8 @@ module Make
             );
             Lwt.return_true
           end
-        | Ok { src=src'; dst=dst'; payload = Frame.Icmp { raw = icmp_buffer; icmp = Frame.Time_exceeded { ipv4 = Ok { src; dst; raw = original_ipv4; payload = Frame.Udp { raw = original_udp; src = src_port; dst = dst_port; _ }; _ }; _ }; _ }; _ } ->
+        | Ok { src=src'; dst=dst'; payload = Frame.Icmp { raw = icmp_buffer; icmp = Frame.Time_exceeded { ipv4 = Ok { src; dst; raw = original_ipv4; payload = Frame.Udp { raw = original_udp; src = src_port; dst = dst_port; _ }; _ }; _ }; _ }; _ }
+        | Ok { src=src'; dst=dst'; payload = Frame.Icmp { raw = icmp_buffer; icmp = Frame.Destination_unreachable { ipv4 = Ok { src; dst; raw = original_ipv4; payload = Frame.Udp { raw = original_udp; src = src_port; dst = dst_port; _ }; _ }; _ }; _ }; _ } ->
           (* src:src_port are host addresses. We need to discover the internal IP and port *)
           if Hashtbl.mem Hostnet_udp.external_to_internal src_port then begin
             match Hashtbl.find Hostnet_udp.external_to_internal src_port with
@@ -209,8 +210,17 @@ module Make
         | Ok { payload = Frame.Icmp { icmp = Frame.Time_exceeded { ipv4 = Error (`Msg m) }; _ }; _ } ->
           Log.err (fun f -> f "Failed to forward TTL exceeeded: failed to parse inner packet: %s" m);
           Lwt.return_true
-        | Ok { payload = Frame.Icmp _; _ } ->
-          Log.err (fun f -> f "Failed to forward unexpected ICMP datagram");
+        | Ok { payload = Frame.Icmp { icmp = Frame.Time_exceeded { ipv4 = Ok { src; dst; payload = Frame.Tcp { src = src_port; dst = dst_port; _ }; _ }; _ }; _ }; _ } ->
+          (* TODO: implement for TCP *)
+          Log.info (fun f -> f "Dropping TTL exceeeded for TCP %a:%d -> %a%d"
+            Ipaddr.V4.pp_hum src src_port Ipaddr.V4.pp_hum dst dst_port
+          );
+          Lwt.return_true
+        | Ok { payload = Frame.Icmp { icmp = Frame.Time_exceeded _; _ }; _ } ->
+          Log.info (fun f -> f "Dropping TTL exceeded for non-ICMP/UDP/TCP");
+          Lwt.return_true
+        | Ok { payload = Frame.Icmp { icmp = Frame.Unknown_icmp { ty } ; _ }; _ } ->
+          Log.err (fun f -> f "Failed to forward unexpected ICMP datagram with type %d" ty);
           Lwt.return_true
         | Ok _ ->
           Log.err (fun f -> f "Failed to forward unexpected IPv4 datagram");

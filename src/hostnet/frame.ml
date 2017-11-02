@@ -8,7 +8,8 @@ module Log = (val Logs.src_log src : Logs.LOG)
 type icmp =
   | Echo:     { seq: int; id: int; payload: Cstruct.t } -> icmp
   | Time_exceeded: { ipv4: (ipv4, [ `Msg of string ]) result } -> icmp
-  | Unknown_icmp: icmp
+  | Destination_unreachable: { ipv4: (ipv4, [ `Msg of string ]) result } -> icmp
+  | Unknown_icmp: {ty: int } -> icmp
 
 and ipv4 = {
   src: Ipaddr.V4.t; dst: Ipaddr.V4.t;
@@ -73,12 +74,16 @@ let rec ipv4 inner =
         let seq    = Cstructs.BE.get_uint16 inner 6 in
         let payload = Cstructs.shift         inner 8 |> Cstructs.to_cstruct in
         Ok (Icmp { ty; code; raw; icmp = Echo { id; seq; payload } })
+      | 3 ->
+        let nested_ip = Cstructs.shift inner 8 in
+        let ipv4 = ipv4 nested_ip in (* truncated so might not parse correctly *)
+        Ok (Icmp { ty; code; raw; icmp = Destination_unreachable { ipv4 }})
       | 11 ->
         let nested_ip = Cstructs.shift inner 8 in
         let ipv4 = ipv4 nested_ip in (* truncated so might not parse correctly *)
         Ok (Icmp { ty; code; raw; icmp = Time_exceeded { ipv4 }})
       | _ ->
-        Ok (Icmp { ty; code; raw; icmp = Unknown_icmp })
+        Ok (Icmp { ty; code; raw; icmp = Unknown_icmp { ty } })
     )
   | 6 ->
     need_space_for inner 14 "TCP header"

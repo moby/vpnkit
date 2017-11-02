@@ -1,7 +1,8 @@
 type icmp =
   | Echo:     { seq: int; id: int; payload: Cstruct.t } -> icmp
   | Time_exceeded: { ipv4: (ipv4, [ `Msg of string ]) result } -> icmp
-  | Unknown_icmp: icmp
+  | Destination_unreachable: { ipv4: (ipv4, [ `Msg of string ]) result } -> icmp
+  | Unknown_icmp: { ty: int } -> icmp
 
 and ipv4 = {
   src: Ipaddr.V4.t; dst: Ipaddr.V4.t;
