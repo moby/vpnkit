@@ -18,14 +18,14 @@ type Port struct {
 	client  *datakit.Client
 	proto   string
 	outIP   net.IP
-	outPort int16
+	outPort uint16
 	inIP    net.IP
-	inPort  int16
+	inPort  uint16
 	handle  *datakit.File
 }
 
 // NewPort constructs an instance of Port
-func NewPort(connection *Connection, proto string, outIP net.IP, outPort int16, inIP net.IP, inPort int16) *Port {
+func NewPort(connection *Connection, proto string, outIP net.IP, outPort uint16, inIP net.IP, inPort uint16) *Port {
 	return &Port{connection.client, proto, outIP, outPort, inIP, inPort, nil}
 }
 
@@ -69,20 +69,20 @@ func parse(name string) (*Port, error) {
 	}
 	outProto := bits[0]
 	outIP := net.ParseIP(bits[1])
-	outPort, err := strconv.ParseInt(bits[2], 10, 16)
+	outPort, err := strconv.ParseUint(bits[2], 10, 16)
 	if err != nil {
 		return nil, err
 	}
 	inProto := bits[3]
 	inIP := net.ParseIP(bits[4])
-	inPort, err := strconv.ParseInt(bits[5], 10, 16)
+	inPort, err := strconv.ParseUint(bits[5], 10, 16)
 	if err != nil {
 		return nil, err
 	}
 	if outProto != inProto {
 		return nil, errors.New("Failed to parse port: external proto is " + outProto + " but internal proto is " + inProto)
 	}
-	return &Port{nil, outProto, outIP, int16(outPort), inIP, int16(inPort), nil}, nil
+	return &Port{nil, outProto, outIP, uint16(outPort), inIP, uint16(inPort), nil}, nil
 }
 
 // Expose asks vpnkit to expose the port
@@ -183,7 +183,7 @@ func (p *Port) OutIP() net.IP {
 }
 
 // OutPort returns the public port number
-func (p *Port) OutPort() int16 {
+func (p *Port) OutPort() uint16 {
 	return p.outPort
 }
 
@@ -193,7 +193,7 @@ func (p *Port) InIP() net.IP {
 }
 
 // InPort returns the private port number
-func (p *Port) InPort() int16 {
+func (p *Port) InPort() uint16 {
 	return p.inPort
 }
 
