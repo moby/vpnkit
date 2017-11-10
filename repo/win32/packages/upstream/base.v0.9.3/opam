@@ -11,5 +11,5 @@ depends: [
   "sexplib" {>= "v0.9.1" & < "v0.10"}
 ]
 depopts: "base-native-int63"
-available: [ocaml-version >= "4.03.0"]
+available: [ocaml-version >= "4.03.0" & ocaml-version < "4.06.0" ]
 patches: "base-0.9.3.patch" {os = "win32"}
