@@ -4,7 +4,10 @@ package libproxy
 
 import (
 	"fmt"
+	"log"
 	"net"
+	"os"
+	"syscall"
 
 	"github.com/linuxkit/virtsock/pkg/vsock"
 )
@@ -70,4 +73,25 @@ func NewIPProxy(frontendAddr, backendAddr net.Addr) (Proxy, error) {
 	default:
 		panic(fmt.Errorf("Unsupported protocol"))
 	}
+}
+
+// Best-effort attempt to listen on the address in the VM. This is for
+// backwards compatibility with software that expects to be able to listen on
+// 0.0.0.0 and then connect from within a container to the external port.
+// If the address doesn't exist in the VM (i.e. it exists only on the host)
+// then this is not a hard failure.
+func NewBestEffortIPProxy(host net.Addr, container net.Addr) (Proxy, error) {
+	ipP, err := NewIPProxy(host, container)
+	if err == nil {
+		return ipP, nil
+	}
+	if opError, ok := err.(*net.OpError); ok {
+		if syscallError, ok := opError.Err.(*os.SyscallError); ok {
+			if syscallError.Err == syscall.EADDRNOTAVAIL {
+				log.Printf("Address %s doesn't exist in the VM: only binding on the host", host)
+				return nil, nil // Non-fatal error
+			}
+		}
+	}
+	return nil, err
 }
