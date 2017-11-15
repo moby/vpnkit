@@ -86,7 +86,7 @@ module Command = struct
 
   let unmarshal rest =
     let process_uuid uuid_str =
-      if (Bytes.compare (Bytes.make 36 '\000') uuid_str) = 0 then
+      if (String.compare (String.make 36 '\000') uuid_str) = 0 then
         begin
           let random_uuid = (Uuidm.v `V4) in
           Log.info (fun f ->
@@ -137,7 +137,7 @@ module Vif = struct
   let marshal t rest =
     Cstruct.LE.set_uint16 rest 0 t.mtu;
     Cstruct.LE.set_uint16 rest 2 t.max_packet_size;
-    Cstruct.blit_from_bytes (Macaddr.to_bytes t.client_macaddr) 0 rest 4 6;
+    Cstruct.blit_from_string (Macaddr.to_bytes t.client_macaddr) 0 rest 4 6;
     Cstruct.shift rest sizeof
 
   let unmarshal rest =
@@ -362,10 +362,10 @@ module Make(C: Sig.CONN) = struct
      would use a FLOW handle referencing a file/stream. *)
   let really_write fd str =
     let rec loop ofs =
-      if ofs = (String.length str)
+      if ofs = (Bytes.length str)
       then ()
       else
-        let n = Unix.write fd str ofs (String.length str - ofs) in
+        let n = Unix.write fd str ofs (Bytes.length str - ofs) in
         loop (ofs + n)
     in
     loop 0
@@ -387,7 +387,7 @@ module Make(C: Sig.CONN) = struct
         set_pcap_header_snaplen buf 1500l;
         set_pcap_header_network buf
           (Pcap.Network.to_int32 Pcap.Network.Ethernet);
-        really_write fd (Cstruct.to_string buf);
+        really_write fd (Cstruct.to_string buf |> Bytes.of_string);
         t.pcap <- Some fd;
         t.pcap_size_limit <- size_limit;
         Lwt.return ()
@@ -477,8 +477,8 @@ module Make(C: Sig.CONN) = struct
           set_pcap_packet_ts_usec buf usecs;
           set_pcap_packet_incl_len buf @@ Int32.of_int len;
           set_pcap_packet_orig_len buf @@ Int32.of_int len;
-          really_write pcap (Cstruct.to_string buf);
-          List.iter (fun buf -> really_write pcap (Cstruct.to_string buf)) bufs;
+          really_write pcap (Cstruct.to_string buf |> Bytes.of_string);
+          List.iter (fun buf -> really_write pcap (Cstruct.to_string buf |> Bytes.of_string)) bufs;
           match t.pcap_size_limit with
           | None -> Lwt.return () (* no limit *)
           | Some limit ->

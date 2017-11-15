@@ -267,7 +267,7 @@ struct
     if bound <> 0x10000 then failwith "gen_transaction_id";
     match Utils.rtlGenRandom 2 with
     | Some bytes ->
-      (int_of_char bytes.[0] lsl 8) lor (int_of_char bytes.[1])
+      (int_of_char (Bytes.get bytes 0) lsl 8) lor (int_of_char (Bytes.get bytes 1))
     | None ->
       Random.int bound
 

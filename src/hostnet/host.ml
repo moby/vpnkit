@@ -1039,7 +1039,7 @@ module Files = struct
                 | 0 ->
                   Lwt_result.return (Buffer.contents buffer)
                 | n ->
-                  Buffer.add_substring buffer frag 0 n;
+                  Buffer.add_subbytes buffer frag 0 n;
                   loop () in
               loop ()
            ) (fun () ->

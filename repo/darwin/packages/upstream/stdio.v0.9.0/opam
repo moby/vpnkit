@@ -12,4 +12,4 @@ depends: [
   "base"     {>= "v0.9" & < "v0.10"}
   "jbuilder" {build & >= "1.0+beta4"}
 ]
-available: [ ocaml-version >= "4.03.0" ]
+available: [ ocaml-version >= "4.03.0" & ocaml-version < "4.06.0" ]
