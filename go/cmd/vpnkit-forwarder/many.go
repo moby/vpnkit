@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"flag"
 	"log"
 	"net"
@@ -46,72 +45,13 @@ func manyPorts() {
 					log.Printf("Error accepting connection: %#v", err)
 					return // no more listening
 				}
-				go func(conn net.Conn) {
-					// Read header which describes TCP/UDP and destination IP:port
-					d, err := unmarshalDestination(conn)
-					if err != nil {
-						log.Printf("Failed to unmarshal header: %#v", err)
-						conn.Close()
-						return
-					}
-					switch d.Proto {
-					case TCP:
-						backendAddr := net.TCPAddr{IP: d.IP, Port: int(d.Port), Zone: ""}
-						libproxy.HandleTCPConnection(conn.(libproxy.Conn), &backendAddr, quit)
-						break
-					case UDP:
-						backendAddr := &net.UDPAddr{IP: d.IP, Port: int(d.Port), Zone: ""}
-
-						proxy, err := libproxy.NewUDPProxy(backendAddr, libproxy.NewUDPConn(conn), backendAddr)
-						if err != nil {
-							log.Printf("Failed to setup UDP proxy for %s: %#v", backendAddr, err)
-							conn.Close()
-							return
-						}
-						proxy.Run()
-						break
-					default:
-						log.Printf("Unknown protocol: %d", d.Proto)
-						conn.Close()
-						return
-					}
-				}(conn)
+				if err := libproxy.HandleMultiplexedConnections(conn, quit); err != nil {
+					log.Println(err)
+					conn.Close()
+				}
 			}
 		}(l)
 	}
 	forever := make(chan int)
 	<-forever
-}
-
-const (
-	// TCP protocol const
-	TCP = 1
-	// UDP protocol const
-	UDP = 2
-)
-
-type destination struct {
-	Proto uint8
-	IP    net.IP
-	Port  uint16
-}
-
-func unmarshalDestination(conn net.Conn) (destination, error) {
-	d := destination{}
-	if err := binary.Read(conn, binary.LittleEndian, &d.Proto); err != nil {
-		return d, err
-	}
-	var length uint16
-	// IP length
-	if err := binary.Read(conn, binary.LittleEndian, &length); err != nil {
-		return d, err
-	}
-	d.IP = make([]byte, length)
-	if err := binary.Read(conn, binary.LittleEndian, &d.IP); err != nil {
-		return d, err
-	}
-	if err := binary.Read(conn, binary.LittleEndian, &d.Port); err != nil {
-		return d, err
-	}
-	return d, nil
 }
