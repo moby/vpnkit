@@ -71,25 +71,32 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       prefix' <= x' && (String.sub x 0 prefix' = prefix) in
     if startswith "fd:" path then begin
       let i = String.sub path 3 (String.length path - 3) in
-      (try Lwt.return (int_of_string i) with
-      | _ ->
-        Fmt.kstrf Lwt.fail_with "Failed to parse command-line argument [%s]" path
-      ) >|= fun x ->
-      let fd = file_descr_of_int x in
-      Host.Sockets.Stream.Unix.of_bound_fd fd
+      try
+        let fd = file_descr_of_int @@ int_of_string i in
+        Lwt.return (Ok (Host.Sockets.Stream.Unix.of_bound_fd fd))
+      with _ ->
+        Log.err (fun f -> f "Failed to parse command-line argument [%s] expected fd:<int>" path);
+        Lwt.return (Error (`Msg "Failed to parase command-line argument"))
     end else
-      Host.Sockets.Stream.Unix.bind path
-
+      Lwt.catch
+        (fun () ->
+          Host.Sockets.Stream.Unix.bind path
+          >>= fun s ->
+          Lwt.return (Ok s)
+        ) (fun e ->
+          Log.err (fun f -> f "Failed to call Stream.Unix.bind \"%s\": %s" path (Printexc.to_string e));
+          Lwt.return (Error (`Msg  "Failed to bind to Unix domain socket"))
+        )
   let hvsock_connect_forever url sockaddr callback =
     Log.info (fun f ->
-        f "connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
+        f "Connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
           sockaddr.Hvsock.serviceid);
     let rec aux () =
       let rec create () =
         match HV.Hvsock.create () with
         | x -> Lwt.return x
         | exception e ->
-          Log.err (fun f -> f "caught %s while creating Hyper-V socket" (Printexc.to_string e));
+          Log.err (fun f -> f "Caught %s while creating Hyper-V socket" (Printexc.to_string e));
           Host.Time.sleep_ns (Duration.of_sec 1)
           >>= fun () ->
           create () in
@@ -97,7 +104,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       >>= fun socket ->
       Lwt.catch (fun () ->
           HV.Hvsock.connect ~timeout_ms:300 socket sockaddr >>= fun () ->
-          Log.info (fun f -> f "hvsock connected successfully");
+          Log.info (fun f -> f "AF_HVSOCK connected successfully");
           callback socket
         ) (function
         | Unix.Unix_error(Unix.ETIMEDOUT, _, _) ->
@@ -126,44 +133,55 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let start_introspection introspection_url root =
     if introspection_url = ""
     then Log.info (fun f ->
-        f "no introspection server requested. See the --introspection argument")
+        f "There is no introspection server requested. See the --introspection argument")
     else Lwt.async (fun () ->
         log_exception_continue
-          ("starting introspection server on: " ^ introspection_url)
+          ("Starting introspection server on: " ^ introspection_url)
           (fun () ->
              Log.info (fun f ->
-                 f "starting introspection server on: %s" introspection_url);
+                 f "Starting introspection server on: %s" introspection_url);
              let module Server = Fs9p.Make(Host.Sockets.Stream.Unix) in
-             unix_listen introspection_url >>= fun s ->
-             Host.Sockets.Stream.Unix.disable_connection_tracking s;
-             Host.Sockets.Stream.Unix.listen s (fun flow ->
+             unix_listen introspection_url
+             >>= function
+             | Error (`Msg m) ->
+               Log.err (fun f -> f "Failed to start introspection server because: %s" m);
+               Lwt.return_unit
+             | Ok s ->
+               Host.Sockets.Stream.Unix.disable_connection_tracking s;
+               Host.Sockets.Stream.Unix.listen s (fun flow ->
                  Server.accept ~root ~msg:introspection_url flow >>= function
                  | Error (`Msg m) ->
                    Log.err (fun f ->
-                       f "failed to establish 9P connection: %s" m);
+                       f "Failed to establish 9P connection: %s" m);
                    Lwt.return ()
                  | Ok () ->
                    Lwt.return_unit
                );
-             Lwt.return_unit))
+               Lwt.return_unit))
 
   let start_diagnostics diagnostics_url flow_cb =
     if diagnostics_url = ""
     then Log.info (fun f ->
-        f "no diagnostics server requested. See the --diagnostics argument")
+        f "No diagnostics server requested. See the --diagnostics argument")
     else Lwt.async (fun () ->
         log_exception_continue
-          ("starting diagnostics server on: " ^ diagnostics_url)
+          ("Starting diagnostics server on: " ^ diagnostics_url)
           (fun () ->
              Log.info (fun f ->
-                 f "starting diagnostics server on: %s" diagnostics_url);
-             unix_listen diagnostics_url >|= fun s ->
-             Host.Sockets.Stream.Unix.disable_connection_tracking s;
-             Host.Sockets.Stream.Unix.listen s flow_cb))
+                 f "Starting diagnostics server on: %s" diagnostics_url);
+             unix_listen diagnostics_url
+             >>= function
+             | Error (`Msg m) ->
+               Log.err (fun f -> f "Failed to start diagnostics server because: %s" m);
+               Lwt.return_unit
+             | Ok s ->
+               Host.Sockets.Stream.Unix.disable_connection_tracking s;
+               Host.Sockets.Stream.Unix.listen s flow_cb;
+               Lwt.return_unit))
 
   let start_port_forwarding port_control_url max_connections vsock_path =
     Log.info (fun f ->
-        f "starting port forwarding server on port_control_url:%s vsock_path:%s"
+        f "Starting port forwarding server on port_control_url:\"%s\" vsock_path:\"%s\""
           port_control_url vsock_path);
     (* Start the 9P port forwarding server *)
     Connect_unix.vsock_path := vsock_path;
@@ -188,7 +206,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           let flow = HV.connect fd in
           Server.connect fs flow () >>= function
           | Error (`Msg m) ->
-            Log.err (fun f -> f "failed to establish 9P connection: %s" m);
+            Log.err (fun f -> f "Failed to establish 9P connection: %s" m);
             Lwt.return ()
           | Ok server -> Server.after_disconnect server)
     | _ ->
@@ -198,45 +216,27 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       let module Server =
         Protocol_9p.Server.Make(Log9P)(Host.Sockets.Stream.Unix)(Ports)
       in
-      unix_listen port_control_url >|= fun port_s ->
-      Host.Sockets.Stream.Unix.listen port_s (fun conn ->
+      unix_listen port_control_url
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to start port forwarding server because: %s" m);
+        Lwt.return_unit
+      | Ok port_s ->
+        Host.Sockets.Stream.Unix.listen port_s (fun conn ->
           Server.connect fs conn () >>= function
           | Error (`Msg m) ->
-            Log.err (fun f -> f "failed to establish 9P connection: %s" m);
-            Lwt.return ()
+            Log.err (fun f -> f "Failed to establish 9P connection: %s" m);
+            Lwt.return_unit
           | Ok server ->
-            Server.after_disconnect server)
+            Server.after_disconnect server);
+        Lwt.return_unit
 
   let main_t
+      configuration
       socket_url port_control_url introspection_url diagnostics_url
-      max_connections vsock_path db_path db_branch dns hosts host_names
-      listen_backlog port_max_idle_time debug
+      vsock_path db_path db_branch hosts
+      listen_backlog
     =
-    (* Write to stdout if expicitly requested [debug = true] or if the
-       environment variable DEBUG is set *)
-    let env_debug =
-      try ignore @@ Unix.getenv "DEBUG"; true
-      with Not_found -> false
-    in
-    if debug || env_debug then begin
-      Logs.set_reporter (Logs_fmt.reporter ());
-      Log.info (fun f ->
-          f "Logging to stdout (stdout:%b DEBUG:%b)" debug env_debug);
-    end else begin
-      if Sys.os_type = "Win32" then begin
-        let h = Eventlog.register "Docker.exe" in
-        Logs.set_reporter (Log_eventlog.reporter ~eventlog:h ());
-        Log.info (fun f -> f "Logging to the Windows event log")
-      end else begin
-        let facility = Filename.basename Sys.executable_name in
-        let client = Asl.Client.create ~ident:"Docker" ~facility () in
-        Logs.set_reporter (Log_asl.reporter ~client ());
-        let dev_null = Unix.openfile "/dev/null" [ Unix.O_WRONLY ] 0 in
-        Unix.dup2 dev_null Unix.stdout;
-        Unix.dup2 dev_null Unix.stderr;
-        Log.info (fun f -> f "Logging to Apple System Log")
-      end
-    end;
     Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
     (* This will always succeed on Mac but will raise Illegal_argument
        on Windows. Happily on Windows there is no such thing as
@@ -245,7 +245,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore
     with Invalid_argument _ -> ());
     Log.info (fun f ->
-        f "vpnkit version %%VERSION%% from %%VCS_COMMIT_ID%%"
+        f "Version %%VERSION%% from %%VCS_COMMIT_ID%%"
     );
 
     Log.info (fun f -> f "System SOMAXCONN is %d" !Utils.somaxconn);
@@ -255,89 +255,38 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     Printexc.record_backtrace true;
 
-    ( match dns with
-    | None    -> ()
-    | Some ip ->
-      let open Dns_forward.Config in
-      let servers = Server.Set.of_list [
-          { Server.address = { Address.ip = Ipaddr.of_string_exn ip; port = 53 };
-            zones = Domain.Set.empty; timeout_ms = Some 2000; order = 0;
-          }
-        ] in
-      Dns_policy.add ~priority:1
-        ~config:(`Upstream { servers; search = [];
-                             assume_offline_after_drops = None }) );
-
-    let etc_hosts_watch = match HostsFile.watch ~path:hosts () with
-    | Ok watch       -> Some watch
+    let () = match HostsFile.watch ~path:hosts () with
+    | Ok _       -> ()
     | Error (`Msg m) ->
       Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
-      None
+      ()
     in
-
-    Lwt.async_exception_hook := (fun exn ->
-        Log.err (fun f ->
-            f "Lwt.async failure %a: %s" Fmt.exn exn (Printexc.get_backtrace ()))
-      );
 
     Lwt.async (fun () ->
-        log_exception_continue "start_port_server" (fun () ->
-            start_port_forwarding port_control_url max_connections vsock_path
+        log_exception_continue "Starting the 9P port control filesystem" (fun () ->
+            start_port_forwarding port_control_url configuration.Configuration.max_connections vsock_path
           )
       );
-    let host_names =
-      List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names
-    in
 
     Mclock.connect () >>= fun clock ->
     let vnet_switch = Vnet.create () in
-
-    let hardcoded_configuration =
-      let server_macaddr = Slirp.default_server_macaddr in
-      let peer_ip = Ipaddr.V4.of_string_exn "192.168.65.2" in
-      let local_ip = Ipaddr.V4.of_string_exn "192.168.65.1" in
-      let highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254" in
-      let client_uuids : Slirp.uuid_table = {
-        Slirp.mutex = Lwt_mutex.create ();
-        table = Hashtbl.create 50;
-      } in
-      let global_arp_table : Slirp.arp_table = {
-        Slirp.mutex = Lwt_mutex.create ();
-        table = [(local_ip, server_macaddr)];
-      } in
-      {
-        Slirp.server_macaddr;
-        peer_ip;
-        local_ip;
-        highest_ip;
-        extra_dns_ip = [];
-        get_domain_search = (fun () -> []);
-        get_domain_name = (fun () -> "localdomain");
-        global_arp_table;
-        client_uuids;
-        vnet_switch;
-        mtu = 1500;
-        host_names;
-        clock;
-        port_max_idle_time }
-    in
 
     let config = match db_path with
     | Some db_path ->
       let reconnect () =
         let open Lwt_result.Infix in
+        Log.info (fun f -> f "Connecting to database on %s" db_path);
         Host.Sockets.Stream.Unix.connect db_path >>= fun x ->
         Lwt_result.return x
       in
       Some (Config.create ~reconnect ~branch:db_branch ())
     | None ->
       Log.warn (fun f ->
-          f "no database: using hardcoded network configuration values");
+          f "There is no database: using hardcoded network configuration values");
       None
     in
 
     let uri = Uri.of_string socket_url in
-
 
     match Uri.scheme uri with
     | Some "hyperv-connect" ->
@@ -350,52 +299,94 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           (Uri.of_string socket_url)
       in
       ( match config with
-      | Some config -> Slirp_stack.create ~host_names clock vnet_switch config
-      | None -> Lwt.return hardcoded_configuration
+      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
+      | None -> Slirp_stack.create_static clock vnet_switch configuration
       ) >>= fun stack_config ->
       hvsock_connect_forever socket_url sockaddr (fun fd ->
           let conn = HV.connect fd in
           Slirp_stack.connect stack_config conn >>= fun stack ->
-          Log.info (fun f -> f "stack connected");
+          Log.info (fun f -> f "TCP/IP stack connected");
           start_introspection introspection_url (Slirp_stack.filesystem stack);
           start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
           Slirp_stack.after_disconnect stack >|= fun () ->
-          Log.info (fun f -> f "stack disconnected"))
+          Log.info (fun f -> f "TCP/IP stack disconnected"))
 
     | _ ->
       let module Slirp_stack =
         Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
           (Mclock)(Stdlibrandom)(Vnet)
       in
-      unix_listen socket_url >>= fun server ->
+      unix_listen socket_url
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to listen on ethernet socket because: %s" m);
+        Lwt.return_unit
+      | Ok server ->
       ( match config with
-      | Some config -> Slirp_stack.create ~host_names clock vnet_switch config
-      | None -> Lwt.return hardcoded_configuration
+      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
+      | None -> Slirp_stack.create_static clock vnet_switch configuration
       ) >>= fun stack_config ->
       Host.Sockets.Stream.Unix.listen server (fun conn ->
           Slirp_stack.connect stack_config conn >>= fun stack ->
-          Log.info (fun f -> f "stack connected");
+          Log.info (fun f -> f "TCP/IP stack connected");
           start_introspection introspection_url (Slirp_stack.filesystem stack);
           start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
           Slirp_stack.after_disconnect stack >|= fun () ->
-          Log.info (fun f -> f "stack disconnected")
+          Log.info (fun f -> f "TCP/IP stack disconnected")
         );
       let wait_forever, _ = Lwt.task () in
-      wait_forever >|= fun () ->
-      match etc_hosts_watch with
-      | Some watch -> HostsFile.unwatch watch
-      | None       -> ()
+      wait_forever
 
   let main
       socket_url port_control_url introspection_url diagnostics_url
-      max_connections vsock_path db_path db_branch dns hosts host_names
+      max_connections vsock_path db_path db_branch dns http hosts host_names
       listen_backlog port_max_idle_time debug
+      server_macaddr domain allowed_bind_addresses gateway_ip highest_ip
+      mtu log_destination
     =
-    Host.Main.run
-      (main_t socket_url port_control_url introspection_url diagnostics_url
-         max_connections vsock_path db_path db_branch dns hosts host_names
-         listen_backlog port_max_idle_time debug)
+    let level =
+      let env_debug =
+        try ignore @@ Unix.getenv "DEBUG"; true
+        with Not_found -> false
+      in
+      if debug || env_debug then Some Logs.Debug else Some Logs.Info in
+    Logging.setup log_destination level;
 
+    let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
+    let dns_path, resolver = match dns with
+    | None -> None, Configuration.default_resolver
+    | Some file -> Some file, `Upstream in
+    let server_macaddr = Macaddr.of_string_exn server_macaddr in
+    let allowed_bind_addresses = Configuration.Parse.ipv4_list [] allowed_bind_addresses in
+    let gateway_ip = Ipaddr.V4.of_string_exn gateway_ip in
+    let highest_ip = Ipaddr.V4.of_string_exn highest_ip in
+    let configuration = {
+      Configuration.default with
+      max_connections;
+      port_max_idle_time;
+      host_names;
+      dns = Configuration.no_dns_servers;
+      dns_path;
+      http_intercept_path = http;
+      resolver;
+      server_macaddr;
+      domain;
+      allowed_bind_addresses;
+      gateway_ip;
+      highest_ip;
+      mtu;
+    } in
+    match socket_url with
+      | None ->
+        Printf.fprintf stderr "Please provide an --ethernet argument\n"
+      | Some socket_url ->
+    try
+      Host.Main.run
+        (main_t configuration socket_url port_control_url introspection_url diagnostics_url
+          vsock_path db_path db_branch hosts
+          listen_backlog);
+    with e ->
+      Log.err (fun f -> f "Host.Main.run caught exception %s: %s" (Printexc.to_string e) (Printexc.get_backtrace ()))
 open Cmdliner
 
 let socket =
@@ -409,7 +400,7 @@ let socket =
        incoming connections."
       [ "ethernet" ]
   in
-  Arg.(value & opt string "" doc)
+  Arg.(value & opt (some string) None doc)
 
 let port_control_path =
   let doc =
@@ -492,7 +483,25 @@ let db_branch =
 let dns =
   let doc =
     Arg.info ~doc:
-      "IP address of upstream DNS server" ["dns"]
+      "File containing DNS configuration. The file consists of a series of lines, \
+      each line starting either with a # comment or containing a keyword followed by \
+      arguments. For example 'nameserver 8.8.8.8' or 'timeout 5000'.\
+      " ["dns"]
+  in
+  Arg.(value & opt (some string) None doc)
+
+let http =
+  let doc =
+    Arg.info ~doc:
+      "File containing transparent HTTP redirection configuration.\
+      If this argument is given, then outgoing connections to port 80 (HTTP) \
+      and 443 (HTTPS) are transparently redirected to the proxies mentioned \
+      in the configuration file. The configuration file is in .json format as \
+      follows: `{\"http\": \"host:3128\",\
+        \"https\": \"host:3128\",\
+        \"exclude\": \"*.local\"\
+      }`\
+      " ["http"]
   in
   Arg.(value & opt (some string) None doc)
 
@@ -524,6 +533,48 @@ let debug =
   let doc = "Verbose debug logging to stdout" in
   Arg.(value & flag & info [ "debug" ] ~doc)
 
+let server_macaddr =
+  let doc = "Ethernet MAC for the host to use" in
+  Arg.(value & opt string (Macaddr.to_string Configuration.default_server_macaddr) & info [ "server-macaddr" ] ~doc)
+
+let domain =
+  let doc = "Domain name to include in DHCP offers" in
+  Arg.(value & opt string Configuration.default_domain & info [ "domain" ] ~doc)
+
+let allowed_bind_addresses =
+  let doc =
+    Arg.info ~doc:
+      "List of interfaces where container ports may be exposed. For example \
+       to limit port exposure to localhost, use `127.0.0.1`. The default setting \
+       allows ports to be exposed on any interface."
+      [ "allowed-bind-addresses" ]
+  in
+  Arg.(value & opt string "0.0.0.0" doc)
+
+let gateway_ip =
+  let doc =
+    Arg.info ~doc:
+      "IP address of the vpnkit gateway"
+      [ "gateway-ip" ]
+  in
+  Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_gateway_ip) doc)
+
+let highest_ip =
+  let doc =
+    Arg.info ~doc:
+      "Highest IP address to hand out by DHCP"
+      [ "highest-dhcp-ip" ]
+  in
+  Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_highest_ip) doc)
+
+let mtu =
+  let doc =
+    Arg.info ~doc:
+      "Maximum Transfer Unit of the ethernet links"
+      [ "mtu" ]
+  in
+  Arg.(value & opt int Configuration.default_mtu doc)
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -533,13 +584,17 @@ let command =
   in
   Term.(pure main
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
-        $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ hosts
-        $ host_names $ listen_backlog $ port_max_idle_time $ debug),
+        $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
+        $ host_names $ listen_backlog $ port_max_idle_time $ debug
+        $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip
+        $ highest_ip $ mtu $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
   Printexc.record_backtrace true;
 
-  match Term.eval command with
-  | `Error _ -> exit 1
-  | _ -> exit 0
+  Lwt.async_exception_hook := (fun exn ->
+  Log.err (fun f ->
+      f "Lwt.async failure %a: %s" Fmt.exn exn (Printexc.get_backtrace ()))
+  );
+  Term.exit @@ Term.eval command

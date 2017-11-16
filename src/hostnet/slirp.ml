@@ -9,14 +9,6 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module IPMap = Map.Make(Ipaddr.V4)
 
-let default_peer = "192.168.65.2"
-let default_host = "192.168.65.1"
-let default_highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
-
-(* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
-let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
-let default_dns_extra = []
-
 (* When forwarding TCP, the connection is proxied so the MTU/MSS is
    link-local.  When forwarding UDP, the datagram on the internal link
    is the same size as the corresponding datagram on the external
@@ -24,11 +16,6 @@ let default_dns_extra = []
    bit. *)
 let safe_outgoing_mtu = 1452 (* packets above this size with DNF set
                                 will get ICMP errors *)
-
-(* The default MTU is limited by the maximum message size on a Hyper-V
-   socket. On currently available windows versions, we need to stay
-   below 8192 bytes *)
-let default_mtu = 1500 (* used for the virtual ethernet link *)
 
 let log_exception_continue description f =
   Lwt.catch
@@ -44,14 +31,6 @@ let or_failwith name m =
   m >>= function
   | Error _ -> failf "Failed to connect %s device" name
   | Ok x  -> Lwt.return x
-
-let restart_on_change name to_string values =
-  Active_config.tl values
-  >>= fun values ->
-  let v = Active_config.hd values in
-  Log.info (fun f ->
-      f "%s changed to %s in the database: restarting" name (to_string v));
-  exit 1
 
 type pcap = (string * int64 option) option
 
@@ -71,23 +50,6 @@ type uuid_table = {
   table: (Uuidm.t, Ipaddr.V4.t * int) Hashtbl.t;
 }
 
-type ('a, 'b) config = {
-  server_macaddr: Macaddr.t;
-  peer_ip: Ipaddr.V4.t;
-  local_ip: Ipaddr.V4.t;
-  highest_ip: Ipaddr.V4.t;
-  extra_dns_ip: Ipaddr.V4.t list;
-  get_domain_search: unit -> string list;
-  get_domain_name: unit -> string;
-  global_arp_table: arp_table;
-  client_uuids: uuid_table;
-  vnet_switch: 'b;
-  mtu: int;
-  host_names: Dns.Name.t list;
-  clock: 'a;
-  port_max_idle_time: int;
-}
-
 module Make
     (Config: Active_config.S)
     (Vmnet: Sig.VMNET)
@@ -100,6 +62,14 @@ module Make
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) =
 struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
+
+  type stack = {
+    configuration: Configuration.t;
+    global_arp_table: arp_table;
+    client_uuids: uuid_table;
+    vnet_switch: Vnet.t;
+    clock: Clock.t;
+  }
 
   module Filteredif = Filter.Make(Vmnet)
   module Netif = Capture.Make(Filteredif)
@@ -144,7 +114,7 @@ struct
 
   (* Global variable containing the global DNS configuration *)
   let dns =
-    let ip = Ipaddr.V4 (Ipaddr.V4.of_string_exn default_host) in
+    let ip = Ipaddr.V4 Configuration.default_gateway_ip in
     let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
     ref (
       Clock.connect () >>= fun clock ->
@@ -442,7 +412,7 @@ struct
       Stack_ipv4.writev t.ipv4 ethernet_ip_hdr [ reply ];
   end
 
-  type t = {
+  type connection = {
     vnet_client_id: Vnet.id;
     after_disconnect: unit Lwt.t;
     interface: Netif.t;
@@ -851,9 +821,8 @@ struct
       delete_unused_endpoints t ~port_max_idle_time ()
     end
 
-  let connect x vnet_switch vnet_client_id client_macaddr server_macaddr peer_ip
-      local_ip highest_ip extra_dns_ip mtu get_domain_search get_domain_name
-      (global_arp_table:arp_table) clock port_max_idle_time
+  let connect x vnet_switch vnet_client_id client_macaddr
+      c (global_arp_table:arp_table) clock
     =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
@@ -880,18 +849,16 @@ struct
 
     (* Serve a static ARP table *)
     let local_arp_table = [
-      peer_ip, client_macaddr;
-      local_ip, server_macaddr;
-    ] @ (List.map (fun ip -> ip, server_macaddr) extra_dns_ip) in
+      c.Configuration.peer, client_macaddr;
+      c.Configuration.gateway_ip, c.Configuration.server_macaddr;
+    ] @ (List.map (fun ip -> ip, c.Configuration.server_macaddr) c.Configuration.extra_dns) in
     Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
 
     (* Listen on local IPs *)
-    let local_ips = local_ip :: extra_dns_ip in
+    let local_ips = c.Configuration.gateway_ip :: c.Configuration.extra_dns in
 
-    let highest_peer_ip = Some highest_ip in
-    let dhcp = Dhcp.make ~server_macaddr ~peer_ip ~highest_peer_ip ~local_ip
-        ~extra_dns_ip ~get_domain_search ~get_domain_name clock switch in
+    let dhcp = Dhcp.make ~configuration:c clock switch in
 
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
@@ -914,7 +881,7 @@ struct
       udp_nat;
       icmp_nat;
     } in
-    Lwt.async @@ delete_unused_endpoints ~port_max_idle_time t;
+    Lwt.async @@ delete_unused_endpoints ~port_max_idle_time:c.Configuration.port_max_idle_time t;
 
     let find_endpoint ip =
       Lwt_mutex.with_lock t.endpoints_m
@@ -922,7 +889,7 @@ struct
            if IPMap.mem ip t.endpoints
            then Lwt.return (Ok (IPMap.find ip t.endpoints))
            else begin
-             Endpoint.create interface switch local_arp_table ip mtu clock
+             Endpoint.create interface switch local_arp_table ip c.Configuration.mtu clock
              >|= fun endpoint ->
              t.endpoints <- IPMap.add ip endpoint t.endpoints;
              Ok endpoint
@@ -937,7 +904,7 @@ struct
          virtual IP. This is the inverse of the rewrite above[1] *)
       let src =
         if Ipaddr.V4.compare src Ipaddr.V4.localhost = 0
-        then local_ip
+        then c.Configuration.gateway_ip
         else src in
       begin
         find_endpoint src >>= function
@@ -1001,13 +968,13 @@ struct
     (* Add a listener which looks for new flows *)
     Log.info (fun f ->
         f "Client mac: %s server mac: %s"
-          (Macaddr.to_string client_macaddr) (Macaddr.to_string server_macaddr));
+          (Macaddr.to_string client_macaddr) (Macaddr.to_string c.Configuration.server_macaddr));
     Switch.listen switch (fun buf ->
         let open Frame in
         match parse [ buf ] with
         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
             (not (Macaddr.compare eth_dst client_macaddr = 0 ||
-                  Macaddr.compare eth_dst server_macaddr = 0 ||
+                  Macaddr.compare eth_dst c.Configuration.server_macaddr = 0 ||
                   Macaddr.compare eth_dst Macaddr.broadcast = 0)) ->
           (* not to server, client or broadcast.. *)
           Log.debug (fun f ->
@@ -1100,329 +1067,256 @@ struct
       Log.info (fun f -> f "TCP/IP ready");
       Lwt.return t
 
-  let create ?(host_names = [ Dns.Name.of_string "vpnkit.host" ]) clock vnet_switch config =
-    let driver = [ "com.docker.driver.amd64-linux" ] in
-
-    let max_connections_path = driver @ [ "slirp"; "max-connections" ] in
-    Config.string_option config max_connections_path
-    >>= fun string_max_connections ->
-    let parse_max = function
-    | None -> Lwt.return None
-    | Some x -> Lwt.return (
-        try Some (int_of_string @@ String.trim x)
-        with _ ->
-          Log.err (fun f ->
-              f "Failed to parse slirp/max-connections value: '%s'" x);
-          None
-      ) in
-    Active_config.map parse_max string_max_connections
-    >>= fun max_connections ->
-    let rec monitor_max_connections_settings settings =
-      begin match Active_config.hd settings with
-      | None ->
-        Log.info (fun f -> f "remove connection limit");
-        Host.Sockets.set_max_connections None
-      | Some limit ->
-        Log.info (fun f -> f "updating connection limit to %d" limit);
-        Host.Sockets.set_max_connections (Some limit)
-      end;
-      Active_config.tl settings
-      >>= fun settings ->
-      monitor_max_connections_settings settings
-    in
-    Lwt.async (fun () ->
-        log_exception_continue "monitor max connections settings" (fun () ->
-            monitor_max_connections_settings max_connections));
-
-    (* TODO Don't hardcode this *)
-    let server_macaddr = default_server_macaddr in
-
-    (* Watch for DNS server overrides *)
-    let domain_search = ref [] in
-    let get_domain_search () = !domain_search in
-    let dns_path = driver @ [ "slirp"; "dns" ] in
-    Config.string_option config dns_path
-    >>= fun string_dns_settings ->
-    Active_config.map
-      (function
-      | Some txt ->
-        let open Dns_forward in
-        begin match Config.of_string txt with
-        | Ok config ->
-          domain_search := config.Config.search;
-          Lwt.return (Some config)
-        | Error (`Msg m) ->
-          Log.err (fun f ->
-              f "failed to parse %s: %s" (String.concat "/" dns_path) m);
-          Lwt.return None
-        end
-      | None ->
-        Lwt.return None
-      ) string_dns_settings
-    >>= fun dns_settings ->
-    let resolver_path = driver @ [ "slirp"; "resolver" ] in
-    Config.string_option config resolver_path
-    >>= fun string_resolver_settings ->
-    Active_config.map
-      (function
-      | Some "host" -> Lwt.return `Host
-      | _ -> Lwt.return `Upstream
-      ) string_resolver_settings
-    >>= fun resolver_settings ->
-
-    let domain_name = ref "localdomain" in
-    let get_domain_name () = !domain_name in
-    let domain_name_path = driver @ [ "slirp"; "domain" ] in
-    Config.string config ~default:(!domain_name) domain_name_path
-    >>= fun domain_name_settings ->
-    Lwt.async
-      (fun () ->
-         Active_config.iter
-           (fun x ->
-              domain_name := x;
-              Lwt.return_unit
-           ) domain_name_settings
-      );
-
-    let bind_path = driver @ [ "allowed-bind-address" ] in
-    Config.string_option config bind_path
-    >>= fun string_allowed_bind_address ->
-    let parse_bind_address = function
-    | None -> Lwt.return None
-    | Some x ->
-      let strings = List.map String.trim @@ Stringext.split x ~on:',' in
-      let ip_opts = List.map
-          (fun x ->
-             try
-               if x = ""
-               then None
-               else Some (Ipaddr.of_string_exn x)
-             with _ ->
-               Log.err (fun f ->
-                   f "Failed to parse IP address in allowed-bind-address: %s" x);
-               None
-          ) strings in
-      let ips =
-        List.fold_left (fun acc x -> match x with
-          | None   -> acc
-          | Some x -> x :: acc
-          ) [] ip_opts
-      in
-      Lwt.return (Some ips)
-    in
-    Active_config.map parse_bind_address string_allowed_bind_address
-    >>= fun allowed_bind_address ->
-
-    let rec monitor_allowed_bind_settings allowed_bind_address =
-      Forward.set_allowed_addresses (Active_config.hd allowed_bind_address);
-      Active_config.tl allowed_bind_address
-      >>= fun allowed_bind_address ->
-      monitor_allowed_bind_settings allowed_bind_address in
-    Lwt.async (fun () ->
-        log_exception_continue "monitor_allowed_bind_settings" (fun () ->
-            monitor_allowed_bind_settings allowed_bind_address));
-
-    let peer_ips_path = driver @ [ "slirp"; "docker" ] in
-    let parse_ipv4 default x = match Ipaddr.V4.of_string @@ String.trim x with
-    | None ->
-      Log.err (fun f ->
-          f "Failed to parse IPv4 address '%s', using default of %a"
-            x Ipaddr.V4.pp_hum default);
-      Lwt.return default
-    | Some x -> Lwt.return x in
-    let parse_ipv4_list default x =
-      let all =
-        List.map Ipaddr.V4.of_string @@
-        List.filter (fun x -> x <> "") @@
-        List.map String.trim @@
-        Astring.String.cuts ~sep:"," x
-      in
-      let any_none, some = List.fold_left (fun (any_none, some) x -> match x with
-        | None -> true, some
-        | Some x -> any_none, x :: some
-        ) (false, []) all in
-      if any_none then begin
-        Log.err (fun f ->
-            f "Failed to parse IPv4 address list '%s', using default of %s" x
-              (String.concat "," (List.map Ipaddr.V4.to_string default)));
-        Lwt.return default
-      end else Lwt.return some
-    in
-
-    Config.string config ~default:default_peer peer_ips_path
-    >>= fun string_peer_ips ->
-    Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_peer))
-      string_peer_ips
-    >>= fun peer_ips ->
-    Lwt.async (fun () ->
-        restart_on_change "slirp/docker" Ipaddr.V4.to_string peer_ips);
-
-    let host_ips_path = driver @ [ "slirp"; "host" ] in
-    Config.string config ~default:default_host host_ips_path
-    >>= fun string_host_ips ->
-    Active_config.map (parse_ipv4 (Ipaddr.V4.of_string_exn default_host))
-      string_host_ips
-    >>= fun host_ips ->
-    Lwt.async (fun () ->
-        restart_on_change "slirp/host" Ipaddr.V4.to_string host_ips);
-
-    let highest_ips_path = driver @ [ "slirp"; "highest-ip" ] in
-    Config.string config ~default:"" highest_ips_path
-    >>= fun string_highest_ips ->
-    Active_config.map (parse_ipv4 default_highest_ip) string_highest_ips
-    >>= fun highest_ips ->
-    Lwt.async (fun () ->
-        restart_on_change "slirp/highest-ips" Ipaddr.V4.to_string highest_ips);
-
-    let extra_dns_ips_path = driver @ [ "slirp"; "extra_dns" ] in
-    Config.string config ~default:(String.concat "," default_dns_extra)
-      extra_dns_ips_path
-    >>= fun string_extra_dns_ips ->
-    Active_config.map
-      (parse_ipv4_list (List.map Ipaddr.V4.of_string_exn default_dns_extra))
-      string_extra_dns_ips
-    >>= fun extra_dns_ips ->
-    Lwt.async (fun () ->
-        restart_on_change "slirp/extra_dns" (fun x ->
-            String.concat "," (List.map Ipaddr.V4.to_string x)) extra_dns_ips);
-
-    let peer_ip = Active_config.hd peer_ips in
-    let local_ip = Active_config.hd host_ips in
-    let highest_ip = Active_config.hd highest_ips in
-    let extra_dns_ip = Active_config.hd extra_dns_ips in
-
-    let upstream_servers =
-      ref Dns_forward.Config.({servers = Server.Set.empty; search = [];
-                               assume_offline_after_drops = None })
-    in
-    let resolver = ref `Upstream in
-    let update_dns () =
-      let config = match !resolver, !upstream_servers with
-      | `Upstream, servers -> `Upstream servers
-      | `Host, _ -> `Host
-      in
-      Log.info (fun f ->
-          f "updating resolvers to %s" (Hostnet_dns.Config.to_string config));
-      !dns >>= Dns_forwarder.destroy >|= fun () ->
-      Dns_policy.remove ~priority:3;
-      Dns_policy.add ~priority:3 ~config;
-      let local_address =
-        { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 }
-      in
-      dns := dns_forwarder ~local_address ~host_names clock
-    in
-
-    let rec monitor_dns_settings settings =
-      begin match Active_config.hd settings with
-      | None ->
-        upstream_servers :=
-          Dns_forward.Config.({ servers = Server.Set.empty;
-                                search = [];
-                                assume_offline_after_drops = None });
-      | Some (servers: Dns_forward.Config.t) ->
-        upstream_servers := servers;
-      end;
-      update_dns ()
+  let on_change settings f =
+    let rec loop settings =
+      f (Active_config.hd settings)
       >>= fun () ->
       Active_config.tl settings
       >>= fun settings ->
-      monitor_dns_settings settings
-    in
+      loop settings in
     Lwt.async (fun () ->
-        log_exception_continue "monitor upstream server DNS settings" (fun () ->
-            monitor_dns_settings dns_settings));
+      log_exception_continue "monitor database settings" (fun () ->
+          loop settings
+      )
+    )
 
-    let rec monitor_resolver_settings settings =
-      resolver := Active_config.hd settings;
-      update_dns ()
-      >>= fun () ->
-      Active_config.tl settings
-      >>= fun settings ->
-      monitor_resolver_settings settings
+  let update_dns c clock =
+    let config = match c.Configuration.resolver, c.Configuration.dns with
+    | `Upstream, servers -> `Upstream servers
+    | `Host, _ -> `Host
     in
-    Lwt.async (fun () ->
-        log_exception_continue "monitor upstream DNS resolver settings" (fun () ->
-            monitor_resolver_settings resolver_settings));
-
-    let mtu_path = driver @ [ "slirp"; "mtu" ] in
-    Config.int config ~default:default_mtu mtu_path
-    >>= fun mtus ->
-    Lwt.async (fun () -> restart_on_change "slirp/mtu" string_of_int mtus);
-    let mtu = Active_config.hd mtus in
-
-    let http_intercept_path = driver @ [ "slirp"; "http-intercept" ] in
-    Config.string_option config http_intercept_path
-    >>= fun string_http_intercept_settings ->
-    let parse_http_intercept = function
-    | None -> Lwt.return None
-    | Some txt ->
-      match Ezjsonm.from_string txt with
-      | exception _ ->
-        Log.err (fun f -> f "Failed to parse http-intercept json: %s" txt);
-        Lwt.return None
-      | j ->
-        Http_forwarder.of_json j
-        >>= function
-        | Error (`Msg m) ->
-          Log.err (fun f -> f "Failed to decode http-intercept json: %s" m);
-          Lwt.return None
-        | Ok t ->
-          Lwt.return (Some t)
-    in
-    Active_config.map parse_http_intercept string_http_intercept_settings
-    >>= fun http_intercept_settings ->
-    let rec monitor_http_intercept_settings settings =
-      http := Active_config.hd settings;
-      ( match !http with
-      | None -> Log.info (fun f -> f "Disabling transparent HTTP redirection")
-      | Some x -> Log.info (fun f ->
-          f "Enabling transparent HTTP redirection to %s"
-            (Http_forwarder.to_string x)) );
-      Active_config.tl settings
-      >>= fun settings ->
-      monitor_http_intercept_settings settings
-    in
-    Lwt.async (fun () ->
-        log_exception_continue "monitor http interception settings" (fun () ->
-            monitor_http_intercept_settings http_intercept_settings));
-
-    let port_max_idle_time_path = driver @ [ "slirp"; "port-max-idle-time" ] in
-    Config.int config ~default:300 port_max_idle_time_path
-    >>= fun port_max_idle_times ->
-    let port_max_idle_time = Active_config.hd port_max_idle_times in
-
     Log.info (fun f ->
-        f "Creating slirp server peer_ip:%s local_ip:%s domain_search:%s \
-           mtu:%d port_max_idle_time:%d"
-          (Ipaddr.V4.to_string peer_ip) (Ipaddr.V4.to_string local_ip)
-          (String.concat " " !domain_search) mtu port_max_idle_time
-      );
+        f "Updating resolvers to %s" (Hostnet_dns.Config.to_string config));
+    !dns >>= Dns_forwarder.destroy >|= fun () ->
+    Dns_policy.remove ~priority:3;
+    Dns_policy.add ~priority:3 ~config;
+    let local_ip = c.Configuration.gateway_ip in
+    let local_address =
+      { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 }
+    in
+    dns := dns_forwarder ~local_address ~host_names:c.Configuration.host_names clock
 
+  let update_http c = match c.Configuration.http_intercept with
+    | None ->
+      Log.info (fun f -> f "Disabling transparent HTTP redirection");
+      http := None;
+      Lwt.return_unit
+    | Some x ->
+      Http_forwarder.of_json x
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to decode transparent HTTP redirection json: %s" m);
+        Lwt.return_unit
+      | Ok t ->
+        http := Some t;
+        Log.info (fun f ->
+          f "Updating transparent HTTP redirection: %s" (Http_forwarder.to_string t)
+        );
+        Lwt.return_unit
+
+  let create_common clock vnet_switch c =
+    (* If a `dns_path` is provided then watch it for updates *)
+    let read_dns_file path =
+      Log.info (fun f -> f "Reading DNS configuration from %s" path);
+      Host.Files.read_file path
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to read DNS configuration file %s: %s. Disabling current configuration." path m);
+        update_dns { c with dns = Configuration.no_dns_servers } clock
+      | Ok contents ->
+        begin match Configuration.Parse.dns contents with
+        | None ->
+          Log.err (fun f -> f "Failed to parse DNS configuration file %s. Disabling current configuration." path);
+          update_dns { c with dns = Configuration.no_dns_servers } clock
+        | Some dns ->
+          Log.info (fun f -> f "Updating DNS configuration to %s" (Dns_forward.Config.to_string dns));
+          update_dns { c with dns } clock
+        end in
+    ( match c.dns_path with
+      | None -> Lwt.return_unit
+      | Some path ->
+        begin match Host.Files.watch_file path
+          (fun () ->
+            Log.info (fun f -> f "DNS configuration file %s has changed" path);
+            Lwt.async (fun () ->
+              log_exception_continue "Parsing DNS configuration"
+                (fun () ->
+                  read_dns_file path
+                )
+            )
+          ) with
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to watch DNS configuration file %s for changes: %s" path m)
+        | Ok _watch ->
+          Log.info (fun f -> f "Watching DNS configuration file %s for changes" path)
+        end;
+        Lwt.return_unit
+    ) >>= fun () ->
+
+    let read_http_intercept_file path =
+      Log.info (fun f -> f "Reading transparent HTTP redirection from %s" path);
+      Host.Files.read_file path
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to read transparent HTTP redirection from %s: %s. Disabling transparent HTTP redirection." path m);
+        update_http { c with http_intercept = None }
+      | Ok txt ->
+        begin match Ezjsonm.from_string txt with
+        | exception _ ->
+          Log.err (fun f -> f "Failed to parse transparent HTTP redirection json: %s" txt);
+          update_http { c with http_intercept = None }
+        | http_intercept ->
+          update_http { c with http_intercept = Some http_intercept }
+        end in
+    ( match c.http_intercept_path with
+    | None -> Lwt.return_unit
+    | Some path ->
+      begin match Host.Files.watch_file path
+        (fun () ->
+          Log.info (fun f -> f "Transparent HTTP redirection configuration file %s has changed" path);
+          Lwt.async (fun () ->
+            log_exception_continue "Parsing transparent HTTP redirection configuration"
+              (fun () ->
+                read_http_intercept_file path
+              )
+          )
+        ) with
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to watch transparent HTTP redirection configuration file %s for changes: %s" path m)
+      | Ok _watch ->
+        Log.info (fun f -> f "Watching transparent HTTP redirection configuration file %s for changes" path)
+      end;
+      Lwt.return_unit
+  ) >>= fun () ->
+
+    Log.info (fun f -> f "Configuration %s" (Configuration.to_string c));
     let global_arp_table : arp_table = {
       mutex = Lwt_mutex.create();
-      table = [(local_ip, server_macaddr)];
+      table = [c.Configuration.gateway_ip, c.Configuration.server_macaddr];
     } in
     let client_uuids : uuid_table = {
       mutex = Lwt_mutex.create();
       table = Hashtbl.create 50;
     } in
     let t = {
-      server_macaddr;
-      peer_ip;
-      local_ip;
-      highest_ip;
-      extra_dns_ip;
-      get_domain_search;
-      get_domain_name;
+      configuration = c;
       global_arp_table;
       client_uuids;
       vnet_switch;
-      mtu;
-      host_names;
       clock;
-      port_max_idle_time;
     } in
     Lwt.return t
+
+  let create_static clock vnet_switch c =
+    update_http c
+    >>= fun () ->
+    update_dns c clock
+    >>= fun () ->
+    create_common clock vnet_switch c
+
+  let create_from_active_config clock vnet_switch static_configuration config =
+    let c = ref static_configuration in
+    let update f =
+      let c' = f (!c) in
+      c := c';      
+      Host.Sockets.set_max_connections c'.Configuration.max_connections;
+      update_http c'
+      >>= fun () ->
+      update_dns c' clock
+      in
+
+    let driver = [ "com.docker.driver.amd64-linux" ] in
+    let max_connections_path = driver @ [ "slirp"; "max-connections" ] in
+    Config.string_option config max_connections_path
+    >>= fun string_max_connections ->
+    Active_config.map Configuration.Parse.int string_max_connections
+    >>= fun max_connections ->
+    on_change max_connections (fun max_connections -> update (fun c -> { c with max_connections }));
+    let peer_ips_path = driver @ [ "slirp"; "docker" ] in
+    Config.string config ~default:"" peer_ips_path
+    >>= fun string_peer_ips ->
+    Active_config.map (Configuration.Parse.ipv4 Configuration.default_peer)
+      string_peer_ips
+    >>= fun peer_ips ->
+    on_change peer_ips (fun peer -> update (fun c -> { c with peer }));
+    let host_ips_path = driver @ [ "slirp"; "host" ] in
+    Config.string config ~default:"" host_ips_path
+    >>= fun string_host_ips ->
+    Active_config.map (Configuration.Parse.ipv4 Configuration.default_gateway_ip)
+      string_host_ips
+    >>= fun gateway_ips ->
+    on_change gateway_ips (fun gateway_ip -> update (fun c -> { c with gateway_ip }));
+    let highest_ips_path = driver @ [ "slirp"; "highest-ip" ] in
+    Config.string config ~default:"" highest_ips_path
+    >>= fun string_highest_ips ->
+    Active_config.map (Configuration.Parse.ipv4 Configuration.default_highest_ip) string_highest_ips
+    >>= fun highest_ips ->
+    on_change highest_ips (fun highest_ip -> update (fun c -> { c with highest_ip }));
+    let extra_dns_ips_path = driver @ [ "slirp"; "extra_dns" ] in
+    Config.string config ~default:""
+      extra_dns_ips_path
+    >>= fun string_extra_dns_ips ->
+    Active_config.map
+      (fun x -> Lwt.return @@ Configuration.Parse.ipv4_list (List.map Ipaddr.V4.of_string_exn Configuration.default_extra_dns) x)
+      string_extra_dns_ips
+    >>= fun extra_dns_ips ->
+    on_change extra_dns_ips (fun extra_dns -> update (fun c -> { c with extra_dns }));
+    let domain_name_path = driver @ [ "slirp"; "domain" ] in
+    Config.string config ~default:((!c).domain) domain_name_path
+    >>= fun domain_name_settings ->
+    on_change domain_name_settings (fun domain -> update (fun c -> { c with domain }));
+    let resolver_path = driver @ [ "slirp"; "resolver" ] in
+    Config.string_option config resolver_path
+    >>= fun string_resolver_settings ->
+    Active_config.map Configuration.Parse.resolver string_resolver_settings
+    >>= fun resolver_settings ->
+    on_change resolver_settings (fun resolver -> update (fun c -> { c with resolver }));
+    let bind_path = driver @ [ "allowed-bind-address" ] in
+    Config.string ~default:"" config bind_path
+    >>= fun string_allowed_bind_address ->
+    Active_config.map (fun x -> Lwt.return @@ Configuration.Parse.ipv4_list [] x) string_allowed_bind_address
+    >>= fun allowed_bind_address ->
+    on_change allowed_bind_address (fun allowed_bind_addresses -> update (fun c -> { c with allowed_bind_addresses }));
+    let mtu_path = driver @ [ "slirp"; "mtu" ] in
+    Config.int config ~default:Configuration.default_mtu mtu_path
+    >>= fun mtus ->
+    on_change mtus (fun mtu -> update (fun c -> { c with mtu }));
+    let dns_path = driver @ [ "slirp"; "dns" ] in
+    Config.string_option config dns_path
+    >>= fun string_dns_settings ->
+    Active_config.map
+      (function
+        | None -> Lwt.return Configuration.no_dns_servers
+        | Some x ->
+          begin match Configuration.Parse.dns x with
+          | None -> Lwt.return Configuration.no_dns_servers
+          | Some x -> Lwt.return x
+          end
+      ) string_dns_settings
+    >>= fun dns_settings ->
+    on_change dns_settings (fun dns -> update (fun c -> { c with dns }));
+    let http_intercept_path = driver @ [ "slirp"; "http-intercept" ] in
+    Config.string_option config http_intercept_path
+    >>= fun string_http_intercept_settings ->
+    Active_config.map
+      (function
+        | None -> Lwt.return None
+        | Some txt ->
+          match Ezjsonm.from_string txt with
+          | exception _ ->
+            Log.err (fun f -> f "Failed to parse http-intercept json: %s" txt);
+            Lwt.return None
+          | j ->
+            Lwt.return (Some j)
+      ) string_http_intercept_settings
+    >>= fun http_intercept_settings ->
+    on_change http_intercept_settings (fun http_intercept -> update (fun c -> { c with http_intercept }));
+    let port_max_idle_time_path = driver @ [ "slirp"; "port-max-idle-time" ] in
+    Config.int config ~default:Configuration.default_port_max_idle_time port_max_idle_time_path
+    >>= fun port_max_idle_times ->
+    on_change port_max_idle_times (fun port_max_idle_time -> update (fun c -> { c with port_max_idle_time }));
+
+    create_common clock vnet_switch (!c)
 
   let connect_client_by_uuid_ip t (uuid:Uuidm.t) (preferred_ip:Ipaddr.V4.t option) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
@@ -1466,8 +1360,8 @@ struct
                   Log.info (fun f ->
                       f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
                   let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
-                  let highest_ip_int32 = Ipaddr.V4.to_int32 t.highest_ip in
-                  let lowest_ip_int32 = Ipaddr.V4.to_int32 t.peer_ip in
+                  let highest_ip_int32 = Ipaddr.V4.to_int32 t.configuration.Configuration.highest_ip in
+                  let lowest_ip_int32 = Ipaddr.V4.to_int32 t.configuration.Configuration.peer in
                   if (preferred_ip_int32 > highest_ip_int32)
                   || (preferred_ip_int32 <  lowest_ip_int32)
                   then begin
@@ -1483,7 +1377,7 @@ struct
 
             (* look for a new unique IP *)
             let rec next_unique_ip next_ip =
-              if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 t.highest_ip)
+              if (Ipaddr.V4.to_int32 next_ip) > (Ipaddr.V4.to_int32 t.configuration.Configuration.highest_ip)
               then begin
                 failwith "No IP addresses available."
               end;
@@ -1498,7 +1392,7 @@ struct
             in
 
             let client_ip = match preferred_ip with
-            | None    -> next_unique_ip t.peer_ip
+            | None    -> next_unique_ip t.configuration.Configuration.peer
             | Some ip -> ip
             in
 
@@ -1528,16 +1422,16 @@ struct
       or_failwith "vmnet" @@
       Vmnet.of_fd
         ~connect_client_fn:(connect_client_by_uuid_ip t)
-        ~server_macaddr:t.server_macaddr ~mtu:t.mtu client
+        ~server_macaddr:t.configuration.Configuration.server_macaddr
+        ~mtu:t.configuration.Configuration.mtu client
       >>= fun x ->
       let client_macaddr = Vmnet.get_client_macaddr x in
       let client_uuid = Vmnet.get_client_uuid x in
       get_client_ip_id t client_uuid
       >>= fun (client_ip, vnet_client_id) ->
-      connect x t.vnet_switch vnet_client_id client_macaddr t.server_macaddr
-        client_ip t.local_ip t.highest_ip t.extra_dns_ip t.mtu
-        t.get_domain_search t.get_domain_name t.global_arp_table
-        t.clock t.port_max_idle_time
+      connect x t.vnet_switch vnet_client_id
+        client_macaddr { t.configuration with peer = client_ip }
+        t.global_arp_table t.clock
     end
 
 end
