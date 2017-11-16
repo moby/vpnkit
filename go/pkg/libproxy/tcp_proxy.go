@@ -35,7 +35,7 @@ func NewTCPProxy(listener net.Listener, backendAddr *net.TCPAddr) (*TCPProxy, er
 }
 
 // HandleTCPConnection forwards the TCP traffic to a specified backend address
-func HandleTCPConnection(client Conn, backendAddr *net.TCPAddr, quit chan bool) {
+func HandleTCPConnection(client Conn, backendAddr *net.TCPAddr, quit chan struct{}) {
 	backend, err := net.DialTCP("tcp", nil, backendAddr)
 	if err != nil {
 		log.Printf("Can't forward traffic to backend tcp/%v: %s\n", backendAddr, err)
@@ -84,7 +84,7 @@ func HandleTCPConnection(client Conn, backendAddr *net.TCPAddr, quit chan bool) 
 
 // Run starts forwarding the traffic using TCP.
 func (proxy *TCPProxy) Run() {
-	quit := make(chan bool)
+	quit := make(chan struct{})
 	defer close(quit)
 	for {
 		client, err := proxy.listener.Accept()

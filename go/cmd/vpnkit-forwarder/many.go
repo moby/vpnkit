@@ -34,7 +34,7 @@ func manyPorts() {
 		listeners = append(listeners, hvsock)
 	}
 
-	quit := make(chan bool)
+	quit := make(chan struct{})
 	defer close(quit)
 
 	for _, l := range listeners {
@@ -52,6 +52,6 @@ func manyPorts() {
 			}
 		}(l)
 	}
-	forever := make(chan int)
+	forever := make(chan struct{})
 	<-forever
 }

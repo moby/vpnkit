@@ -40,7 +40,7 @@ func unmarshalDestination(conn net.Conn) (destination, error) {
 	return d, nil
 }
 
-func HandleMultiplexedConnections(conn net.Conn, quit chan bool) error {
+func HandleMultiplexedConnections(conn net.Conn, quit chan struct{}) error {
 	d, err := unmarshalDestination(conn)
 	if err != nil {
 		return fmt.Errorf("Failed to unmarshal header: %#v", err)
