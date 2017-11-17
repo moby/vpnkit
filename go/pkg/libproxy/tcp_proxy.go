@@ -1,6 +1,7 @@
 package libproxy
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -35,12 +36,10 @@ func NewTCPProxy(listener net.Listener, backendAddr *net.TCPAddr) (*TCPProxy, er
 }
 
 // HandleTCPConnection forwards the TCP traffic to a specified backend address
-func HandleTCPConnection(client Conn, backendAddr *net.TCPAddr, quit chan struct{}) {
+func HandleTCPConnection(client Conn, backendAddr *net.TCPAddr, quit chan struct{}) error {
 	backend, err := net.DialTCP("tcp", nil, backendAddr)
 	if err != nil {
-		log.Printf("Can't forward traffic to backend tcp/%v: %s\n", backendAddr, err)
-		client.Close()
-		return
+		return fmt.Errorf("Can't forward traffic to backend tcp/%v: %s\n", backendAddr, err)
 	}
 
 	event := make(chan int64)
@@ -70,16 +69,15 @@ func HandleTCPConnection(client Conn, backendAddr *net.TCPAddr, quit chan struct
 			transferred += written
 		case <-quit:
 			// Interrupt the two brokers and "join" them.
-			client.Close()
 			backend.Close()
 			for ; i < 2; i++ {
 				transferred += <-event
 			}
-			return
+			return nil
 		}
 	}
-	client.Close()
 	backend.Close()
+	return nil
 }
 
 // Run starts forwarding the traffic using TCP.

@@ -48,8 +48,9 @@ func HandleMultiplexedConnections(conn net.Conn, quit chan struct{}) error {
 	switch d.Proto {
 	case TCP:
 		backendAddr := net.TCPAddr{IP: d.IP, Port: int(d.Port), Zone: ""}
-		HandleTCPConnection(conn.(Conn), &backendAddr, quit)
-		return nil
+		if err := HandleTCPConnection(conn.(Conn), &backendAddr, quit); err != nil {
+			return err
+		}
 	case UDP:
 		backendAddr := &net.UDPAddr{IP: d.IP, Port: int(d.Port), Zone: ""}
 
@@ -62,4 +63,5 @@ func HandleMultiplexedConnections(conn net.Conn, quit chan struct{}) error {
 	default:
 		return fmt.Errorf("Unknown protocol: %d", d.Proto)
 	}
+	return nil
 }
