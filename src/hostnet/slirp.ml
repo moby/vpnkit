@@ -849,7 +849,7 @@ struct
 
     (* Serve a static ARP table *)
     let local_arp_table = [
-      c.Configuration.peer, client_macaddr;
+      c.Configuration.lowest_ip, client_macaddr;
       c.Configuration.gateway_ip, c.Configuration.server_macaddr;
     ] @ (List.map (fun ip -> ip, c.Configuration.server_macaddr) c.Configuration.extra_dns) in
     Global_arp_ethif.connect switch
@@ -1232,13 +1232,13 @@ struct
     Active_config.map Configuration.Parse.int string_max_connections
     >>= fun max_connections ->
     on_change max_connections (fun max_connections -> update (fun c -> { c with max_connections }));
-    let peer_ips_path = driver @ [ "slirp"; "docker" ] in
-    Config.string config ~default:"" peer_ips_path
-    >>= fun string_peer_ips ->
-    Active_config.map (Configuration.Parse.ipv4 Configuration.default_peer)
-      string_peer_ips
-    >>= fun peer_ips ->
-    on_change peer_ips (fun peer -> update (fun c -> { c with peer }));
+    let lowest_ips_path = driver @ [ "slirp"; "docker" ] in
+    Config.string config ~default:"" lowest_ips_path
+    >>= fun string_lowest_ips ->
+    Active_config.map (Configuration.Parse.ipv4 Configuration.default_lowest_ip)
+      string_lowest_ips
+    >>= fun lowest_ips ->
+    on_change lowest_ips (fun lowest_ip -> update (fun c -> { c with lowest_ip }));
     let host_ips_path = driver @ [ "slirp"; "host" ] in
     Config.string config ~default:"" host_ips_path
     >>= fun string_host_ips ->
@@ -1361,7 +1361,7 @@ struct
                       f "Client requested IP %s" (Ipaddr.V4.to_string preferred_ip));
                   let preferred_ip_int32 = Ipaddr.V4.to_int32 preferred_ip in
                   let highest_ip_int32 = Ipaddr.V4.to_int32 t.configuration.Configuration.highest_ip in
-                  let lowest_ip_int32 = Ipaddr.V4.to_int32 t.configuration.Configuration.peer in
+                  let lowest_ip_int32 = Ipaddr.V4.to_int32 t.configuration.Configuration.lowest_ip in
                   if (preferred_ip_int32 > highest_ip_int32)
                   || (preferred_ip_int32 <  lowest_ip_int32)
                   then begin
@@ -1392,7 +1392,7 @@ struct
             in
 
             let client_ip = match preferred_ip with
-            | None    -> next_unique_ip t.configuration.Configuration.peer
+            | None    -> next_unique_ip t.configuration.Configuration.lowest_ip
             | Some ip -> ip
             in
 
@@ -1430,7 +1430,7 @@ struct
       get_client_ip_id t client_uuid
       >>= fun (client_ip, vnet_client_id) ->
       connect x t.vnet_switch vnet_client_id
-        client_macaddr { t.configuration with peer = client_ip }
+        client_macaddr { t.configuration with lowest_ip = client_ip }
         t.global_arp_table t.clock
     end
 

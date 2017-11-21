@@ -341,7 +341,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       socket_url port_control_url introspection_url diagnostics_url
       max_connections vsock_path db_path db_branch dns http hosts host_names
       listen_backlog port_max_idle_time debug
-      server_macaddr domain allowed_bind_addresses gateway_ip highest_ip
+      server_macaddr domain allowed_bind_addresses gateway_ip lowest_ip highest_ip
       mtu log_destination
     =
     let level =
@@ -359,6 +359,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let server_macaddr = Macaddr.of_string_exn server_macaddr in
     let allowed_bind_addresses = Configuration.Parse.ipv4_list [] allowed_bind_addresses in
     let gateway_ip = Ipaddr.V4.of_string_exn gateway_ip in
+    let lowest_ip = Ipaddr.V4.of_string_exn lowest_ip in
     let highest_ip = Ipaddr.V4.of_string_exn highest_ip in
     let configuration = {
       Configuration.default with
@@ -373,6 +374,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       domain;
       allowed_bind_addresses;
       gateway_ip;
+      lowest_ip;
       highest_ip;
       mtu;
     } in
@@ -559,6 +561,14 @@ let gateway_ip =
   in
   Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_gateway_ip) doc)
 
+let lowest_ip =
+  let doc =
+    Arg.info ~doc:
+      "Lowest IP address to hand out by DHCP"
+      [ "peer-ip" ]
+  in
+  Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_lowest_ip) doc)
+
 let highest_ip =
   let doc =
     Arg.info ~doc:
@@ -587,7 +597,7 @@ let command =
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip
-        $ highest_ip $ mtu $ Logging.log_destination),
+        $ lowest_ip $ highest_ip $ mtu $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
