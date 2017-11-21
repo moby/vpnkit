@@ -40,12 +40,12 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
        resolved in the future *)
     let low_ip, high_ip =
       let open Ipaddr.V4 in
-      let all_static_ips = c.Configuration.gateway_ip :: c.Configuration.peer :: c.Configuration.extra_dns in
+      let all_static_ips = c.Configuration.gateway_ip :: c.Configuration.lowest_ip :: c.Configuration.extra_dns in
       let highest = maximum_ip all_static_ips in
       let i32 = to_int32 highest in
       of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
     let ip_list = [ c.Configuration.gateway_ip; low_ip; high_ip; c.Configuration.highest_ip ] in
-    let prefix = smallest_prefix c.Configuration.peer ip_list 32 in
+    let prefix = smallest_prefix c.Configuration.lowest_ip ip_list 32 in
     let domain_search = c.dns.Dns_forward.Config.search in
 
     let get_dhcp_configuration () : Dhcp_server.Config.t =
@@ -83,7 +83,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
         mac_addr = c.Configuration.server_macaddr;
         network = prefix;
         (* FIXME: this needs https://github.com/haesbaert/charrua-core/pull/31 *)
-        range = Some (c.Configuration.peer, c.Configuration.peer); (* allow one dynamic client *)
+        range = Some (c.Configuration.lowest_ip, c.Configuration.lowest_ip); (* allow one dynamic client *)
       } in
     { clock; netif; server_macaddr = c.Configuration.server_macaddr; get_dhcp_configuration }
 
