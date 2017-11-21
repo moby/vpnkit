@@ -565,7 +565,7 @@ let lowest_ip =
   let doc =
     Arg.info ~doc:
       "Lowest IP address to hand out by DHCP"
-      [ "peer-ip" ]
+      [ "lowest-ip" ]
   in
   Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_lowest_ip) doc)
 
@@ -573,7 +573,7 @@ let highest_ip =
   let doc =
     Arg.info ~doc:
       "Highest IP address to hand out by DHCP"
-      [ "highest-dhcp-ip" ]
+      [ "highest-ip" ]
   in
   Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_highest_ip) doc)
 
