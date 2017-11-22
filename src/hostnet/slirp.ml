@@ -25,6 +25,14 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
+let restart_on_change name to_string values =
+  Active_config.tl values
+  >>= fun values ->
+  let v = Active_config.hd values in
+  Log.info (fun f ->
+    f "%s changed to %s in the database: restarting" name (to_string v));
+  exit 1
+
 let failf fmt = Fmt.kstrf Lwt.fail_with fmt
 
 let or_failwith name m =
@@ -1315,6 +1323,14 @@ struct
     Config.int config ~default:Configuration.default_port_max_idle_time port_max_idle_time_path
     >>= fun port_max_idle_times ->
     on_change port_max_idle_times (fun port_max_idle_time -> update (fun c -> { c with port_max_idle_time }));
+
+    Lwt.async (fun () ->
+      restart_on_change "slirp/docker" Ipaddr.V4.to_string lowest_ips);
+    Lwt.async (fun () ->
+      restart_on_change "slirp/host" Ipaddr.V4.to_string gateway_ips);
+    Lwt.async (fun () ->
+      restart_on_change "slirp/highest-ips" Ipaddr.V4.to_string highest_ips);
+    Lwt.async (fun () -> restart_on_change "slirp/mtu" string_of_int mtus);
 
     create_common clock vnet_switch (!c)
 
