@@ -1,0 +1,33 @@
+opam-version: "1.2"
+name: "ocamlbuild"
+maintainer: "Gabriel Scherer <gabriel.scherer@gmail.com>"
+version: "0.11.0"
+
+authors: [
+  "Nicolas Pouillard"
+  "Berke Durak"
+]
+
+license: "LGPL-2 with OCaml linking exception"
+dev-repo: "https://github.com/ocaml/ocamlbuild.git"
+homepage: "https://github.com/ocaml/ocamlbuild/"
+bug-reports: "https://github.com/ocaml/ocamlbuild/issues"
+doc: "https://github.com/ocaml/ocamlbuild/blob/master/manual/manual.adoc"
+
+build: [
+  [make "-f" "configure.make" "all"
+    "OCAMLBUILD_PREFIX=%{prefix}%"
+    "OCAMLBUILD_BINDIR=%{bin}%"
+    "OCAMLBUILD_LIBDIR=%{lib}%"
+    "OCAMLBUILD_MANDIR=%{man}%"
+    "OCAML_NATIVE=%{ocaml-native}%"
+    "OCAML_NATIVE_TOOLS=%{ocaml-native}%"]
+  [make "check-if-preinstalled" "all" "opam-install"]
+]
+
+available: [ocaml-version >= "4.03"]
+depends: [ ]
+conflicts: [
+  "base-ocamlbuild"
+  "ocamlfind" {< "1.6.2"}
+]
