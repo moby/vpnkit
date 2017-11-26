@@ -13,7 +13,13 @@ export OPAMROOT
 export OPAMYES=1
 export OPAMCOLORS=1
 
-opam init -v -n --comp="${OPAM_COMP}" --switch="${OPAM_COMP}" local "${OPAM_REPO}"
+# if a compiler is specified, use it; otherwise use the system compiler
+if [ -n "${OPAM_COMP}" ]; then
+  OPAM_COMP_ARG="--comp=${OPAM_COMP}"
+  OPAM_SWITCH_ARG="--switch=${OPAM_COMP}"
+fi
+
+opam init -v -n "${OPAM_COMP_ARG}" "${OPAM_SWITCH_ARG}" local "${OPAM_REPO}"
 echo opam configuration is:
 opam config env
 eval $(opam config env)
