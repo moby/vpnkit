@@ -145,7 +145,7 @@ let config =
   let configuration = {
     Configuration.default with
     extra_dns = extra_dns_ip;
-    domain = "local";
+    domain = Some "local";
   } in
   Mclock.connect () >>= fun clock ->
   let vnet = Vnet.create () in

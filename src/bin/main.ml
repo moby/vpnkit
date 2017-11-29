@@ -342,7 +342,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections vsock_path db_path db_branch dns http hosts host_names
       listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip lowest_ip highest_ip
-      mtu log_destination
+      dhcp_json_path mtu log_destination
     =
     let level =
       let env_debug =
@@ -376,6 +376,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       gateway_ip;
       lowest_ip;
       highest_ip;
+      dhcp_json_path;
       mtu;
     } in
     match socket_url with
@@ -541,7 +542,7 @@ let server_macaddr =
 
 let domain =
   let doc = "Domain name to include in DHCP offers" in
-  Arg.(value & opt string Configuration.default_domain & info [ "domain" ] ~doc)
+  Arg.(value & opt (some string) None & info [ "domain" ] ~doc)
 
 let allowed_bind_addresses =
   let doc =
@@ -577,6 +578,14 @@ let highest_ip =
   in
   Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_highest_ip) doc)
 
+let dhcp_json_path =
+  let doc =
+    Arg.info ~doc:
+      "Path of DHCP configuration file"
+      [ "dhcp-path" ]
+  in
+  Arg.(value & opt (some file) None doc)
+
 let mtu =
   let doc =
     Arg.info ~doc:
@@ -597,7 +606,7 @@ let command =
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip
-        $ lowest_ip $ highest_ip $ mtu $ Logging.log_destination),
+        $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =

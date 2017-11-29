@@ -75,7 +75,7 @@ struct
   module Netif = Capture.Make(Filteredif)
   module Recorder = (Netif: Sig.RECORDER with type t = Netif.t)
   module Switch = Mux.Make(Netif)
-  module Dhcp = Dhcp.Make(Clock)(Switch)
+  module Dhcp = Hostnet_dhcp.Make(Clock)(Switch)
 
   (* This ARP implementation will respond to the VM: *)
   module Global_arp_ethif = Ethif.Make(Switch)
@@ -1096,6 +1096,16 @@ struct
     in
     dns := dns_forwarder ~local_address ~host_names:c.Configuration.host_names clock
 
+  let update_dhcp c =
+    Log.info (fun f ->
+      f "Update DHCP configuration to %s"
+        (match c.Configuration.dhcp_configuration with
+         | None -> "None"
+         | Some x -> Configuration.Dhcp_configuration.to_string x)
+    );
+    Hostnet_dhcp.update_global_configuration c.Configuration.dhcp_configuration;
+    Lwt.return_unit
+
   let update_http c = match c.Configuration.http_intercept with
     | None ->
       Log.info (fun f -> f "Disabling transparent HTTP redirection");
@@ -1187,7 +1197,39 @@ struct
         Log.info (fun f -> f "Watching transparent HTTP redirection configuration file %s for changes" path)
       end;
       Lwt.return_unit
-  ) >>= fun () ->
+    ) >>= fun () ->
+
+    Hostnet_dhcp.update_global_configuration c.Configuration.dhcp_configuration;
+    let read_dhcp_json_file path =
+      Log.info (fun f -> f "Reading DHCP configuration file from %s" path);
+      Host.Files.read_file path
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to read DHCP configuration from %s: %s. Disabling transparent HTTP redirection." path m);
+        update_dhcp { c with dhcp_configuration = None }
+      | Ok txt ->
+        update_dhcp { c with dhcp_configuration = Configuration.Dhcp_configuration.of_string txt }
+      in
+    ( match c.dhcp_json_path with
+    | None -> Lwt.return_unit
+    | Some path ->
+      begin match Host.Files.watch_file path
+        (fun () ->
+          Log.info (fun f -> f "DHCP configuration file %s has changed" path);
+          Lwt.async (fun () ->
+            log_exception_continue "Parsing DHCP configuration"
+              (fun () ->
+                read_dhcp_json_file path
+              )
+          )
+        ) with
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to watch DHCP configuration file %s for changes: %s" path m)
+      | Ok _watch ->
+        Log.info (fun f -> f "Watching DHCP configuration file %s for changes" path)
+      end;
+      Lwt.return_unit
+    ) >>= fun () ->
 
     Log.info (fun f -> f "Configuration %s" (Configuration.to_string c));
     let global_arp_table : arp_table = {
@@ -1261,10 +1303,6 @@ struct
       string_extra_dns_ips
     >>= fun extra_dns_ips ->
     on_change extra_dns_ips (fun extra_dns -> update (fun c -> { c with extra_dns }));
-    let domain_name_path = driver @ [ "slirp"; "domain" ] in
-    Config.string config ~default:((!c).domain) domain_name_path
-    >>= fun domain_name_settings ->
-    on_change domain_name_settings (fun domain -> update (fun c -> { c with domain }));
     let resolver_path = driver @ [ "slirp"; "resolver" ] in
     Config.string_option config resolver_path
     >>= fun string_resolver_settings ->
