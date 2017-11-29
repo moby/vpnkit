@@ -7,13 +7,19 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+(* Global configuration: options, gateway etc *)
+let global_dhcp_configuration = ref None
+
+let update_global_configuration x =
+    global_dhcp_configuration := x
+
 module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
 
   type t = {
     clock: Clock.t;
     netif: Netif.t;
     server_macaddr: Macaddr.t;
-    get_dhcp_configuration : unit -> Dhcp_server.Config.t;
+    get_dhcp_configuration: unit -> Dhcp_server.Config.t;
   }
 
   (* Compute the smallest IPv4 network which includes both [a_ip]
@@ -46,9 +52,11 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
       of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
     let ip_list = [ c.Configuration.gateway_ip; low_ip; high_ip; c.Configuration.highest_ip ] in
     let prefix = smallest_prefix c.Configuration.lowest_ip ip_list 32 in
-    let domain_search = c.dns.Dns_forward.Config.search in
-
-    let get_dhcp_configuration () : Dhcp_server.Config.t =
+    (* Use the dhcp.json in preference, otherwise fall back to the DNS configuration *)
+    let domain_search = match !global_dhcp_configuration with
+      | Some { Configuration.Dhcp_configuration.searchDomains = domain_search; _ } when domain_search <> [] -> domain_search
+      | _ -> c.dns.Dns_forward.Config.search in
+    let get_dhcp_configuration () =
       (* The domain search is encoded using the scheme used for DNS names *)
       let domain_search =
         let open Dns in
@@ -57,7 +65,12 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
             Name.marshal map n buffer (Name.of_string name)
           ) (Name.Map.empty, 0, buffer) domain_search in
         Cstruct.(to_string (sub buffer 0 n)) in
-      let domain_name = c.Configuration.domain in
+      (* Use the domainName from the command-line if present, otherwise use the
+          dhcp.json file *)
+      let domain_name = match c.Configuration.domain, !global_dhcp_configuration with
+        | Some domain_name, _ -> domain_name
+        | None, Some { Configuration.Dhcp_configuration.domainName = Some domain_name; _ } -> domain_name
+        | _, _ -> Configuration.default_domain in
       let options = [
         Dhcp_wire.Routers [ c.Configuration.gateway_ip ];
         Dhcp_wire.Dns_servers (c.Configuration.gateway_ip :: c.Configuration.extra_dns);
@@ -66,7 +79,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
         Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix);
       ] in
       (* domain_search and get_domain_name may produce an empty string, which is
-       * invalid, so only add the option if there is content *)
+        * invalid, so only add the option if there is content *)
       let options = if domain_search = "" then options
         else Dhcp_wire.Domain_search domain_search :: options in
       let options = if domain_name = "" then options
@@ -85,7 +98,8 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
         (* FIXME: this needs https://github.com/haesbaert/charrua-core/pull/31 *)
         range = Some (c.Configuration.lowest_ip, c.Configuration.lowest_ip); (* allow one dynamic client *)
       } in
-    { clock; netif; server_macaddr = c.Configuration.server_macaddr; get_dhcp_configuration }
+
+    { server_macaddr = c.Configuration.server_macaddr; get_dhcp_configuration; clock; netif }
 
   let of_interest mac dest =
     Macaddr.compare dest mac = 0 || not (Macaddr.is_unicast dest)
