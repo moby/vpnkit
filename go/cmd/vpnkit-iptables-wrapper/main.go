@@ -89,7 +89,7 @@ func useNativePortForwarding() bool {
 		buf := bufio.NewScanner(f)
 		if buf.Scan() {
 			s := strings.ToLower(strings.Trim(buf.Text(), " \n"))
-			return s == "1" && s == "true"
+			return s == "1" || s == "true"
 		}
 		defer f.Close()
 	} else {
