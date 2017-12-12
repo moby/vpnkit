@@ -38,7 +38,7 @@ const (
 func main() {
 	flag.Parse()
 
-	log.Println("Starting vpnkit-expose-port-controller...")
+	log.Println("Starting kube-vpnkit-forwarder...")
 
 	if err := os.MkdirAll(stateDir, 0777); err != nil {
 		log.Fatal(err)
