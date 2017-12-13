@@ -57,7 +57,7 @@ items:
               operator: Exists
           containers:
             - name: app
-              image: 'linuxkitprojects/kube-vpnkit-forwarder:current'
+              image: 'vpnkit/kube-vpnkit-forwarder:current'
               imagePullPolicy: IfNotPresent
               volumeMounts:
               - mountPath: /port
