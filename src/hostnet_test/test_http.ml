@@ -178,12 +178,33 @@ let test_interception () =
     Lwt.return ()
   end
 
-(* Test that the URI becomes absolute *)
-let test_uri_absolute () =
+(* Test that a relative URI becomes absolute *)
+let test_uri_relative () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+    in
+    intercept ~pcap:"test_uri_relative.pcap" request >>= fun result ->
+    Log.info (fun f ->
+        f "original was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
+    Log.info (fun f ->
+        f "proxied  was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t result)));
+    let uri = Uri.of_string result.Cohttp.Request.resource in
+    Alcotest.check Alcotest.(option string) "scheme"
+      (Some "http") (Uri.scheme uri);
+    Lwt.return ()
+  end
+
+(* Test that an absolute URI is preserved. This is expected when the
+   client explicitly uses us as a proxy rather than being transparent. *)
+let test_uri_absolute () =
+  Host.Main.run begin
+    let request =
+      Cohttp.Request.make
+        (Uri.make ~host:"dave.recoil.org" ~path:"/" ())
     in
     intercept ~pcap:"test_uri_absolute.pcap" request >>= fun result ->
     Log.info (fun f ->
@@ -315,7 +336,10 @@ let tests = [
   [ "", `Quick, test_interception ];
 
   "HTTP: URI",
-  [ "check that URIs are rewritten", `Quick, test_uri_absolute ];
+  [ "check that relative URIs are rewritten", `Quick, test_uri_relative ];
+
+  "HTTP: absolute URI",
+  [ "check that absolute URIs from proxies are preserved", `Quick, test_uri_absolute ];
 
   "HTTP: custom header",
   ["check that custom headers are preserved", `Quick, test_x_header_preserved];

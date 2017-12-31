@@ -239,9 +239,14 @@ module Make
             Ipaddr.V4.pp_hum dst x);
       Lwt.return_unit
     | `Ok req ->
-      (* The scheme from cohttp is missing. If we send to an HTTP
-         proxy then we need it. *)
-      let uri = Uri.with_scheme (Cohttp.Request.uri req) (Some "http") in
+      (* An HTTP request will have a missing scheme so we fill it in.
+         An HTTP proxy request will have a scheme already so we keep it.
+         An HTTPS proxy request will be a CONNECT host:port *)
+      let uri =
+        let original = Cohttp.Request.uri req in
+        match Uri.scheme original with
+        | None -> Uri.with_scheme original (Some "http")
+        | Some _ -> original in
       let address =
         if Exclude.matches dst (Some req) t.exclude
         then Ipaddr.V4 dst, 80 (* direct connection *)
