@@ -436,6 +436,34 @@ module Make
     in
     Lwt.return listeners
 
+  let tcp ~dst:(original_ip, original_port) ((ip, port) as address) =
+    let listeners _port =
+      let f flow =
+        Lwt.finalize (fun () ->
+            let description =
+              Fmt.strf "%s:%d %s %s:%d" (Ipaddr.V4.to_string original_ip) original_port
+                "-->" (Ipaddr.to_string ip) port
+            in
+            Log.debug (fun f -> f "%s: HTTP proxy TCP handshake complete" description);
+            Socket.Stream.Tcp.connect address >>= function
+            | Error _ ->
+              Log.err (fun f ->
+                  f "%s: Failed to connect to %s" description (string_of_address address));
+              Lwt.return_unit
+            | Ok remote ->
+              let outgoing = Outgoing.C.create remote in
+              Lwt.finalize  (fun () ->
+                    let incoming = Incoming.C.create flow in
+                    Lwt.join [
+                      a_t flow ~incoming ~outgoing;
+                      b_t remote ~incoming ~outgoing
+                    ]
+                ) (fun () -> Socket.Stream.Tcp.close remote)
+          ) (fun () -> Tcp.close flow)
+      in Some f
+    in
+    Lwt.return listeners
+
   let handle ~dst:(ip, port) ~t =
     match port, t.http, t.https with
     | 80, Some h, _ -> Some (http ~dst:ip ~t h)
@@ -443,5 +471,6 @@ module Make
       if Exclude.matches ip None t.exclude
       then None
       else Some (https ~dst:ip h)
+    | 3128, Some h, _ -> Some (tcp ~dst:(ip, port) h)
     | _, _, _ -> None
 end
