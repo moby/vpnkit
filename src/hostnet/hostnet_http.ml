@@ -105,22 +105,22 @@ module Make
     exclude: Exclude.t;
   }
 
+  let resolve_ip name_or_ip =
+    match Ipaddr.of_string name_or_ip with
+    | None ->
+      let open Dns.Packet in
+      let question =
+        make_question ~q_class:Q_IN Q_A (Dns.Name.of_string name_or_ip)
+      in
+      begin Dns_resolver.resolve question >>= function
+        | { cls = RR_IN; rdata = A ipv4; _ } :: _ ->
+          Lwt.return (Ok (Ipaddr.V4 ipv4))
+        | _ -> errorf "Failed to lookup host: %s" name_or_ip
+      end
+    | Some x -> Lwt.return (Ok x)
+
   let parse_host_port x =
     (* host:port or [host]:port *)
-    let find_host name_or_ip =
-      match Ipaddr.of_string name_or_ip with
-      | None ->
-        let open Dns.Packet in
-        let question =
-          make_question ~q_class:Q_IN Q_A (Dns.Name.of_string name_or_ip)
-        in
-        begin Dns_resolver.resolve question >>= function
-          | { cls = RR_IN; rdata = A ipv4; _ } :: _ ->
-            Lwt.return (Ok (Ipaddr.V4 ipv4))
-          | _ -> errorf "Failed to lookup host: %s" name_or_ip
-        end
-      | Some x -> Lwt.return (Ok x)
-    in
     let parse_port port =
       match int_of_string port with
       | x -> Lwt.return (Ok x)
@@ -131,14 +131,14 @@ module Make
     match Uri.host uri, Uri.port uri with
     | Some host, Some port ->
       let open Lwt_result.Infix in
-      find_host host >|= fun ip ->
+      resolve_ip host >|= fun ip ->
       Some (ip, port)
     | _, _ ->
       match String.cuts ~sep:":" x with
       | [] -> errorf "Failed to find a :port in %s" x
       | [host; port] ->
         let open Lwt_result.Infix in
-        find_host host >>= fun ip ->
+        resolve_ip host >>= fun ip ->
         parse_port port >|= fun port ->
         Some (ip, port)
       | _ -> errorf "Failed to parse proxy address: %s" x
