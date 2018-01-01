@@ -230,6 +230,51 @@ module Make
       Incoming.Response.write_body writer x >>= fun () ->
       proxy_body_response ~reader ~writer
 
+  (* Take a request and a pair (incoming, outgoing) of channels, send
+     the request to the outgoing channel and then proxy back any response. *)
+  let proxy_request ~description ~incoming ~outgoing ~req =
+    let reader = Incoming.Request.make_body_reader req incoming in
+    Outgoing.Request.write ~flush:true (fun writer ->
+        match Incoming.Request.has_body req with
+        | `Yes     -> proxy_body_request ~reader ~writer
+        | `No      -> Lwt.return_unit
+        | `Unknown ->
+          Log.warn (fun f ->
+              f "Request.has_body returned `Unknown: not sure what \
+                  to do");
+          Lwt.return_unit
+      ) req outgoing
+    >>= fun () ->
+    Outgoing.Response.read outgoing >>= function
+    | `Eof ->
+      Log.warn (fun f -> f "%s: EOF" (description false));
+      Lwt.return_unit
+    | `Invalid x ->
+      Log.warn (fun f ->
+          f "%s: Failed to parse HTTP response: %s"
+            (description false) x);
+      Lwt.return_unit
+    | `Ok res ->
+      Log.info (fun f ->
+          f "%s: %s %s"
+            (description false)
+            (Cohttp.Code.string_of_version res.Cohttp.Response.version)
+            (Cohttp.Code.string_of_status res.Cohttp.Response.status));
+      Log.debug (fun f ->
+          f "%s" (Sexplib.Sexp.to_string_hum
+                    (Cohttp.Response.sexp_of_t res)));
+      let reader = Outgoing.Response.make_body_reader res outgoing in
+      Incoming.Response.write ~flush:true (fun writer ->
+          match Incoming.Response.has_body res with
+          | `Yes     -> proxy_body_response ~reader ~writer
+          | `No      -> Lwt.return_unit
+          | `Unknown ->
+            Log.warn (fun f ->
+                f "Response.has_body returned `Unknown: not sure \
+                    what to do");
+            Lwt.return_unit
+        ) res incoming
+
   let proxy_one ~dst ~t h incoming =
     Incoming.Request.read incoming >>= function
     | `Eof -> Lwt.return_unit
@@ -276,48 +321,8 @@ module Make
         let req = { req with Cohttp.Request.resource = Uri.to_string uri } in
         Lwt.finalize (fun () ->
             let outgoing = Outgoing.C.create remote in
-            let reader = Incoming.Request.make_body_reader req incoming in
-            Outgoing.Request.write ~flush:true (fun writer ->
-                match Incoming.Request.has_body req with
-                | `Yes     -> proxy_body_request ~reader ~writer
-                | `No      -> Lwt.return_unit
-                | `Unknown ->
-                  Log.warn (fun f ->
-                      f "Request.has_body returned `Unknown: not sure what \
-                         to do");
-                  Lwt.return_unit
-              ) req outgoing
-            >>= fun () ->
-            Outgoing.Response.read outgoing >>= function
-            | `Eof ->
-              Log.warn (fun f -> f "EOF from %s" (string_of_address address));
-              Lwt.return_unit
-            | `Invalid x ->
-              Log.warn (fun f ->
-                  f "Failed to parse HTTP response on port %s: %s"
-                    (string_of_address address) x);
-              Lwt.return_unit
-            | `Ok res ->
-              Log.info (fun f ->
-                  f "%s: %s %s"
-                    (description false)
-                    (Cohttp.Code.string_of_version res.Cohttp.Response.version)
-                    (Cohttp.Code.string_of_status res.Cohttp.Response.status));
-              Log.debug (fun f ->
-                  f "%s" (Sexplib.Sexp.to_string_hum
-                            (Cohttp.Response.sexp_of_t res)));
-              let reader = Outgoing.Response.make_body_reader res outgoing in
-              Incoming.Response.write ~flush:true (fun writer ->
-                  match Incoming.Response.has_body res with
-                  | `Yes     -> proxy_body_response ~reader ~writer
-                  | `No      -> Lwt.return_unit
-                  | `Unknown ->
-                    Log.warn (fun f ->
-                        f "Response.has_body returned `Unknown: not sure \
-                           what to do");
-                    Lwt.return_unit
-                ) res incoming
-          ) (fun () -> Socket.Stream.Tcp.close remote)
+            proxy_request ~description ~incoming ~outgoing ~req
+        ) (fun () -> Socket.Stream.Tcp.close remote)
 
   let http ~dst ~t h =
     let listeners _port =
