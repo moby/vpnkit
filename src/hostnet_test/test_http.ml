@@ -514,7 +514,7 @@ let test_http_connect () =
         | Ok flow ->
           Log.info (fun f -> f "Connected to localhost:80");
           let oc = Outgoing.C.create flow in
-          let host = "bark.recoil.org" in
+          let host = "dave.recoil.org" in
           let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ()) in
           Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
           >>= fun () ->
@@ -525,7 +525,7 @@ let test_http_connect () =
           | `Invalid x ->
             failwith ("test_proxy_get: Invalid HTTP response: " ^ x)
           | `Ok res ->
-            if res.Cohttp.Response.status <> `Not_found
+            if res.Cohttp.Response.status <> `OK
             then failwith "test_proxy_get: HTTP GET failed unexpectedly";
             Lwt.return_unit
         )
