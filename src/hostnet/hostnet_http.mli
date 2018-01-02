@@ -34,7 +34,15 @@ sig
   val to_json: t -> Ezjsonm.t
   (** [to_json t] encodes [t] into json *)
 
-  val handle: dst:(Ipaddr.V4.t * int) -> t:t ->
+  val transparent_proxy_handler: dst:(Ipaddr.V4.t * int) -> t:t ->
     (int -> (Tcp.flow -> unit Lwt.t) option) Lwt.t option
+  (** Intercept outgoing HTTP flows and redirect to the upstream proxy
+      if one is defined. *)
+
+  val explicit_proxy_handler: dst:(Ipaddr.V4.t * int) -> t:t ->
+    (int -> (Tcp.flow -> unit Lwt.t) option) Lwt.t option
+  (** Intercept outgoing HTTP proxy flows and if an upstream proxy is
+      defined, redirect to it, otherwise implement the proxy function
+      ourselves. *)
 
 end
