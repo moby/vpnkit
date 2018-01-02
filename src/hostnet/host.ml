@@ -1133,7 +1133,7 @@ module Dns = struct
 
   let resolve_dnssd question =
     let open Dns.Packet in
-    let query name ty =
+    let query_one name ty =
       let query = Dnssd.LowLevel.query (Dns.Name.to_string name) ty in
       let socket = Dnssd.LowLevel.socket query in
       let t, u = Lwt.task () in
@@ -1163,6 +1163,36 @@ module Dns = struct
               Dnssd.LowLevel.response query
             ) ()
         end in
+
+    let query requested_name ty =
+      (* The DNSServiceRef API will return CNAMEs first, without resolving to
+        A/AAAA/... This function recursively resolves the CNAMES while avoiding
+        returning duplicate records. *)
+      (* NB we only return NoSuchRecord if we find no records. This is because it
+        is possible to query a CNAME which exists, but which points to a non-existent
+        record. *)
+      let open Dnssd in
+      let rec loop acc name ty =
+        query_one name ty
+        >>= function
+        (* When we're recursing, ignore the NoSuchRecord error *)
+        | Error NoSuchRecord when name <> requested_name -> Lwt.return (Ok acc)
+        | Error e -> Lwt.return (Error e)
+        | Ok rrs ->
+          let not_seen_before = List.filter (fun x -> not (List.mem x acc)) rrs in
+          (* If there are any CNAMEs, resolve these too *)
+          let cnames = List.rev @@ List.fold_left (fun acc rr ->
+            match rr.Dns.Packet.rdata with
+            | CNAME name -> name :: acc
+            | _ -> acc
+          ) [] not_seen_before in
+          Lwt_list.fold_left_s
+            (fun acc name -> match acc with
+              | Error e -> Lwt.return (Error e)
+              | Ok acc ->
+                loop acc name ty
+            ) (Ok (acc @ not_seen_before)) cnames in
+      loop [] requested_name ty in
 
     begin match question with
     | { q_class = Q_IN; q_name; _ } when q_name = localhost_local ->
