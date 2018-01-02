@@ -352,6 +352,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       if debug || env_debug then Some Logs.Debug else Some Logs.Info in
     Logging.setup log_destination level;
 
+    if Sys.os_type = "Unix" then begin
+      Log.info (fun f -> f "Increasing preemptive thread pool size to 1024 threads");
+      Uwt_preemptive.set_bounds (0, 1024);
+    end;
+
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
     let dns_path, resolver = match dns with
     | None -> None, Configuration.default_resolver
