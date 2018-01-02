@@ -536,9 +536,20 @@ struct
       let id =
         Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
       in
-      Endpoint.input_tcp t.endpoint ~id ~syn
-        (Ipaddr.V4 Ipaddr.V4.localhost, dst_port) raw
-      >|= ok
+      (* local HTTP proxy *)
+      let callback = match !http with
+      | None -> None
+      | Some http -> Http_forwarder.explicit_proxy_handler ~dst:(dst, dst_port) ~t:http
+      in
+      begin match callback with
+      | None ->
+        Endpoint.input_tcp t.endpoint ~id ~syn
+          (Ipaddr.V4 Ipaddr.V4.localhost, dst_port) raw
+        >|= ok
+      | Some cb ->
+        Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
+        >|= ok
+      end
     | _ ->
       Lwt.return (Ok ())
 
@@ -601,7 +612,7 @@ struct
       in
       let callback = match !http with
       | None -> None
-      | Some http -> Http_forwarder.handle ~dst:(local_ip, local_port) ~t:http
+      | Some http -> Http_forwarder.transparent_proxy_handler ~dst:(local_ip, local_port) ~t:http
       in
       begin match callback with
       | None ->

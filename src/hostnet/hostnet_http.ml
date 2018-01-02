@@ -601,13 +601,17 @@ module Make
     in
     Lwt.return listeners
 
-  let handle ~dst:(ip, port) ~t =
+  let transparent_proxy_handler ~dst:(ip, port) ~t =
     match port, t.http, t.https with
     | 80, Some h, _ -> Some (http ~dst:ip ~t h)
     | 443, _, Some h ->
       if Exclude.matches ip None t.exclude
       then None
       else Some (https ~dst:ip h)
+    | _, _, _ -> None
+
+  let explicit_proxy_handler ~dst:(ip, port) ~t =
+    match port, t.http, t.https with
     | 3128, Some h, _ -> Some (tcp ~dst:(ip, port) h)
     | 3128, None, _ -> Some (proxy ())
     | _, _, _ -> None

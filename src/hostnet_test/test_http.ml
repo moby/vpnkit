@@ -178,32 +178,6 @@ let test_interception () =
     Lwt.return ()
   end
 
-(* Test that port 3128 passes through to an upstream proxy *)
-let test_proxy_passthrough () =
-  Host.Main.run begin
-    let request =
-      Cohttp.Request.make
-        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
-    in
-    intercept ~pcap:"test_proxy_passthrough.pcap" ~port:3128 request >>= fun result ->
-    Log.info (fun f ->
-        f "original was: %s"
-          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
-    Log.info (fun f ->
-        f "proxied  was: %s"
-          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t result)));
-    Alcotest.check Alcotest.string "resource"
-      request.Cohttp.Request.resource
-      result.Cohttp.Request.resource;
-    Alcotest.check Alcotest.string "method"
-      (Cohttp.Code.string_of_method request.Cohttp.Request.meth)
-      (Cohttp.Code.string_of_method result.Cohttp.Request.meth);
-    Alcotest.check Alcotest.string "version"
-      (Cohttp.Code.string_of_version request.Cohttp.Request.version)
-      (Cohttp.Code.string_of_version result.Cohttp.Request.version);
-    Lwt.return ()
-  end
-
 (* Test that a relative URI becomes absolute *)
 let test_uri_relative () =
   Host.Main.run begin
@@ -292,6 +266,72 @@ let test_user_agent_preserved () =
   end
 
 let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
+
+let test_proxy_passthrough () =
+  let forwarded, forwarded_u = Lwt.task () in
+  Host.Main.run begin
+  Slirp_stack.with_stack ~pcap:"test_proxy_passthrough.pcap" (fun _ stack ->
+      with_server (fun flow ->
+          let ic = Incoming.C.create flow in
+          (* read something *)
+          Incoming.C.read_some ~len:5 ic
+          >>= function
+          | Ok `Eof -> failwith "test_proxy_passthrough: read_some returned Eof"
+          | Error _ -> failwith "test_proxy_passthrough: read_some returned Error"
+          | Ok (`Data buf) ->
+            let txt = Cstruct.to_string buf in
+            Alcotest.check Alcotest.string "message" "hello" txt;
+            let response = "there" in
+            (* write something *)
+            Incoming.C.write_string ic response 0 (String.length response);
+            Incoming.C.flush ic
+            >>= function
+            | Error _ -> failwith "test_proxy_passthrough: flush returned error"
+            | Ok ()   ->
+              Lwt.wakeup_later forwarded_u ();
+              Lwt.return_unit
+        ) (fun server ->
+          let json =
+            Ezjsonm.from_string (" { \"http\": \"127.0.0.1:" ^
+                                (string_of_int server.Server.port) ^ "\" }")
+          in
+          Slirp_stack.Slirp_stack.Debug.update_http_json json ()
+          >>= function
+          | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
+          | Ok () ->
+            let open Slirp_stack in
+            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+            >>= function
+            | Error _ ->
+              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              failwith "test_proxy_passthrough: connect failed"
+            | Ok flow ->
+              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              let oc = Outgoing.C.create flow in
+              let request = "hello" in
+              Outgoing.C.write_string oc request 0 (String.length request);
+              Outgoing.C.flush oc
+              >>= function
+              | Error _ -> failwith "test_proxy_passthrough: client flush returned error"
+              | Ok ()   ->
+                Outgoing.C.read_some ~len:5 oc
+                >>= function
+                | Ok `Eof -> failwith "test_proxy_passthrough: client read_some returned Eof"
+                | Error _ -> failwith "test_proxy_passthrough: client read_some returned Error"
+                | Ok (`Data buf) ->
+                  let txt = Cstruct.to_string buf in
+                  Alcotest.check Alcotest.string "message" "there" txt;
+                  Lwt.pick [
+                    (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () ->
+                    `Timeout);
+                    (forwarded >>= fun x -> Lwt.return (`Result x))
+                  ]
+        )
+      >|= function
+      | `Timeout  -> failwith "HTTP proxy failed"
+      | `Result x -> x
+    )
+  end
 
 let test_http_connect () =
   let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
@@ -387,13 +427,13 @@ let test_http_connect () =
             | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
             | Ok () ->
               let open Slirp_stack in
-              Client.TCPV4.create_connection (Client.tcpv4 stack.t) (Ipaddr.V4.localhost, 3128)
+              Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
               >>= function
               | Error _ ->
-                Log.err (fun f -> f "Failed to connect to localhost:3128");
+                Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
                 failwith "test_proxy_connect: connect failed"
               | Ok flow ->
-                Log.info (fun f -> f "Connected to localhost:80");
+                Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
                 let oc = Outgoing.C.create flow in
                 let request =
                   let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
@@ -440,13 +480,13 @@ let test_http_connect () =
     Host.Main.run begin
       Slirp_stack.with_stack ~pcap:"test_http_proxy_connect_fail.pcap" (fun _ stack ->
         let open Slirp_stack in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (Ipaddr.V4.localhost, 3128)
+        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
         >>= function
         | Error _ ->
-          Log.err (fun f -> f "Failed to connect to localhost:3128");
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
           failwith "test_proxy_connect_fail: connect failed"
         | Ok flow ->
-          Log.info (fun f -> f "Connected to localhost:80");
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
           let request =
             let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
@@ -475,13 +515,13 @@ let test_http_connect () =
     Host.Main.run begin
       Slirp_stack.with_stack ~pcap:"test_http_proxy_get_dns.pcap" (fun _ stack ->
         let open Slirp_stack in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (Ipaddr.V4.localhost, 3128)
+        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
         >>= function
         | Error _ ->
-          Log.err (fun f -> f "Failed to connect to localhost:3128");
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
           failwith "test_proxy_get_dns: connect failed"
         | Ok flow ->
-          Log.info (fun f -> f "Connected to localhost:80");
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
           let host = "does.not.exist.recoil.org" in
           let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ()) in
@@ -506,13 +546,13 @@ let test_http_connect () =
     Host.Main.run begin
       Slirp_stack.with_stack ~pcap:"test_http_proxy_get.pcap" (fun _ stack ->
         let open Slirp_stack in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (Ipaddr.V4.localhost, 3128)
+        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
         >>= function
         | Error _ ->
-          Log.err (fun f -> f "Failed to connect to localhost:3128");
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
           failwith "test_proxy_get: connect failed"
         | Ok flow ->
-          Log.info (fun f -> f "Connected to localhost:80");
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
           let host = "dave.recoil.org" in
           let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ()) in
