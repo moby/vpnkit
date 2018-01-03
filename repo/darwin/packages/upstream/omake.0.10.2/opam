@@ -1,0 +1,31 @@
+opam-version: "1.2"
+name: "omake"
+maintainer: "Gerd Stolpmann <gerd@gerd-stolpmann.de>"
+authors: [
+  "Aleksey Nogin"
+  "Jason Hickey"
+  "Gerd Stolpmann"
+]
+
+license: "GPL2"
+dev-repo: "https://github.com/ocaml-omake/omake.git"
+homepage: "http://projects.camlcity.org/projects/omake.html"
+bug-reports: "https://github.com/ocaml-omake/issues"
+
+build: [
+  ["./configure" "-prefix" "%{prefix}%"]
+  [make]
+]
+
+install: [
+  [make "install"]
+]
+
+remove: [
+  [ "rm" "-f" "%{prefix}%/bin/omake" ]
+  [ "rm" "-f" "%{prefix}%/bin/osh" ]
+  [ "rm" "-rf" "%{prefix}%/lib/omake" ]
+]
+
+depends: ["ocamlfind"]
+available: [ ocaml-version >= "4.02.3" & ocaml-version < "4.06.0"]

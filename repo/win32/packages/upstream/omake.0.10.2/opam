@@ -1,0 +1,37 @@
+opam-version: "1.2"
+name: "omake"
+maintainer: "Gerd Stolpmann <gerd@gerd-stolpmann.de>"
+authors: [
+  "Aleksey Nogin"
+  "Jason Hickey"
+  "Gerd Stolpmann"
+]
+
+license: "GPL2"
+dev-repo: "https://github.com/ocaml-omake/omake.git"
+homepage: "http://projects.camlcity.org/projects/omake.html"
+bug-reports: "https://github.com/ocaml-omake/issues"
+
+build: [
+  ["ocamlfind" "ocamlopt" "-linkpkg" "-package" "str,cygwinpath" "ohelper.ml" "-o" "omake-mmtranslate.exe"] { os = "win32" }
+  ["install" "-m" "0755" "omake-mmtranslate.exe" "%{bin}%/omake-mmtranslate.exe"] { os = "win32" }
+  ["%{prefix}%/bin/ocaml" "configure.ml" "-prefix" "%{prefix}%"]
+  ["%{prefix}%/bin/ocaml" "build.ml"]
+]
+
+install: [
+  ["%{prefix}%/bin/ocaml" "build.ml" "-install"]
+]
+
+remove: [
+  ["rm" "-rf" "%{bin}%/osh"]
+  ["rm" "-rf" "%{bin}%/omake"]
+  ["rm" "-rf" "%{bin}%/omake-mmtranslate"] { os = "win32" }
+  ["rm" "-rf" "%{lib}%/omake"]
+]
+depends: [
+ "ocamlfind"
+ "cygwinpath" { build }
+]
+available: [ ocaml-version >= "4.02.3" & ocaml-version < "4.06.0"]
+patches: "omake-0.10.2.patch" {os = "win32"}
