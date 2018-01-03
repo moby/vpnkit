@@ -339,7 +339,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main
       socket_url port_control_url introspection_url diagnostics_url
-      max_connections vsock_path db_path db_branch dns http hosts host_names
+      max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
       listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
       dhcp_json_path mtu log_destination
@@ -358,6 +358,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     end;
 
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
+    let gateway_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," gateway_names in
+
     let dns_path, resolver = match dns with
     | None -> None, Configuration.default_resolver
     | Some file -> Some file, `Upstream in
@@ -372,6 +374,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections;
       port_max_idle_time;
       host_names;
+      gateway_names;
       dns = Configuration.no_dns_servers;
       dns_path;
       http_intercept_path = http;
@@ -528,7 +531,15 @@ let host_names =
       "Comma-separated list of DNS names to map to the Host's virtual IP"
       ["host-names"]
   in
-  Arg.(value & opt string "vpnkit.host" doc)
+  Arg.(value & opt string "host.internal" doc)
+
+let gateway_names =
+  let doc =
+    Arg.info ~doc:
+      "Comma-separated list of DNS names to map to the gateway's virtual IP"
+      ["gateway-names"]
+  in
+  Arg.(value & opt string "gateway.internal" doc)
 
 let listen_backlog =
   let doc = "Specify a maximum listen(2) backlog. If no override is specified \
@@ -619,7 +630,7 @@ let command =
   Term.(pure main
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
-        $ host_names $ listen_backlog $ port_max_idle_time $ debug
+        $ host_names $ gateway_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man

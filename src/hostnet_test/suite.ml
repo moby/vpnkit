@@ -28,12 +28,12 @@ let test_dhcp_query () =
   in
   run ~pcap:"test_dhcp_query.pcap" t
 
-let set_dns_policy ?host_names use_host =
+let set_dns_policy ?builtin_names use_host =
   Mclock.connect () >|= fun clock ->
   Dns_policy.remove ~priority:3;
   Dns_policy.add ~priority:3
     ~config:(if use_host then `Host else Dns_policy.google_dns);
-  Slirp_stack.Debug.update_dns ?host_names clock
+  Slirp_stack.Debug.update_dns ?builtin_names clock
 
 let test_dns_query server use_host () =
   let t _ stack =
@@ -51,7 +51,7 @@ let test_dns_query server use_host () =
 let test_builtin_dns_query server use_host () =
   let name = "experimental.host.name.localhost" in
   let t _ stack =
-    set_dns_policy ~host_names:[ Dns.Name.of_string name ] use_host
+    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, Ipaddr.V4 (Ipaddr.V4.localhost) ] use_host
     >>= fun () ->
     let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver name >>= function

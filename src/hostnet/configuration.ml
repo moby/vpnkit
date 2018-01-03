@@ -52,10 +52,11 @@ type t = {
   http_intercept_path: string option;
   port_max_idle_time: int;
   host_names: Dns.Name.t list;
+  gateway_names: Dns.Name.t list;
 }
 
 let to_string t =
-  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; host_ip = %s; lowest_ip = %s; highest_ip = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; host_ip = %s; lowest_ip = %s; highest_ip = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s; gateway_name = %s"
     (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
     (match t.dns_path with None -> "None" | Some x -> x)
@@ -74,6 +75,7 @@ let to_string t =
     (match t.http_intercept_path with None -> "None" | Some x -> x)
     (string_of_int t.port_max_idle_time)
     (String.concat ", " (List.map Dns.Name.to_string t.host_names))
+    (String.concat ", " (List.map Dns.Name.to_string t.gateway_names))
 
 let no_dns_servers =
   Dns_forward.Config.({ servers = Server.Set.empty; search = []; assume_offline_after_drops = None })
@@ -90,6 +92,8 @@ let default_port_max_idle_time = 300
 (* random MAC from https://www.hellion.org.uk/cgi-bin/randmac.pl *)
 let default_server_macaddr = Macaddr.of_string_exn "F6:16:36:BC:F9:C6"
 let default_host_names = [ Dns.Name.of_string "vpnkit.host" ]
+let default_gateway_names = [ Dns.Name.of_string "gateway.internal" ]
+
 let default_resolver = `Host
 
 let default = {
@@ -111,6 +115,7 @@ let default = {
   http_intercept_path = None;
   port_max_idle_time = default_port_max_idle_time;
   host_names = default_host_names;
+  gateway_names = default_gateway_names;
 }
 
 module Parse = struct

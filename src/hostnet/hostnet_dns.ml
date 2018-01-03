@@ -135,16 +135,31 @@ let try_etc_hosts =
     end
   | _ -> None
 
-let try_builtins local_ip host_names question =
+let try_builtins builtin_names question =
   let open Dns.Packet in
-  match local_ip, question with
-  | Ipaddr.V4 local_ip, { q_class = Q_IN; q_type = (Q_A|Q_AAAA); q_name; _ }
-    when List.mem q_name host_names ->
-    Log.info (fun f ->
-        f "DNS: %s is a builtin: %a" (Dns.Name.to_string q_name)
-          Ipaddr.V4.pp_hum local_ip);
-    Some [ { name = q_name; cls = RR_IN; flush = false; ttl = 0l;
-             rdata = A local_ip } ]
+  match question with
+  | { q_class = Q_IN; q_type = (Q_A|Q_AAAA); q_name; _ } ->
+    let bindings = List.filter (fun (name, _) -> name = q_name) builtin_names in
+    let ipv4_rrs =
+      List.fold_left (fun acc (_, ip) ->
+        match ip with
+        | Ipaddr.V4 ipv4 -> { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = A ipv4 } :: acc
+        | _ -> acc
+      ) [] bindings in
+    let ipv6_rrs =
+      List.fold_left (fun acc (_, ip) ->
+        match ip with
+        | Ipaddr.V6 ipv6 -> { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA ipv6 } :: acc
+        | _ -> acc
+      ) [] bindings in
+    let rrs = if question.q_type = Q_A then ipv4_rrs else ipv6_rrs in
+    if rrs = [] then None else begin
+      Log.info (fun f ->
+        f "DNS: %s is a builtin: %s" (Dns.Name.to_string q_name)
+          (String.concat "; " (List.map (fun rr -> Dns.Packet.rr_to_string rr) rrs))
+      );
+      Some rrs
+    end
   | _ -> None
 
 module Make
@@ -191,7 +206,7 @@ struct
 
   type t = {
     local_ip: Ipaddr.t;
-    host_names: Dns.Name.t list;
+    builtin_names: (Dns.Name.t * Ipaddr.t) list;
     resolver: resolver;
   }
 
@@ -271,13 +286,13 @@ struct
     | None ->
       Random.int bound
 
-  let create ~local_address ~host_names =
+  let create ~local_address ~builtin_names =
     let local_ip = local_address.Dns_forward.Config.Address.ip in
     Log.info (fun f ->
-      let prefix = match host_names with
-        | [] -> "No DNS names"
-        | _ -> Printf.sprintf "DNS names [ %s ]" (String.concat ", " @@ List.map Dns.Name.to_string host_names) in
-      f "%s will map to local IP %s" prefix (Ipaddr.to_string local_ip));
+      let suffix = match builtin_names with
+        | [] -> "no builtin DNS names; everything will be forwarded"
+        | _ -> Printf.sprintf "builtin DNS names [ %s ]" (String.concat ", " @@ List.map (fun (name, ip) -> Dns.Name.to_string name ^ " -> " ^ (Ipaddr.to_string ip)) builtin_names) in
+      f "DNS server configured with %s" suffix);
     fun clock -> function
     | `Upstream config ->
       let open Dns_forward.Config.Address in
@@ -300,11 +315,11 @@ struct
       >>= fun dns_udp_resolver ->
       Dns_tcp_resolver.create ~gen_transaction_id ~message_cb config clock
       >>= fun dns_tcp_resolver ->
-      Lwt.return { local_ip; host_names;
+      Lwt.return { local_ip; builtin_names;
                    resolver = Upstream { dns_tcp_resolver; dns_udp_resolver } }
     | `Host ->
       Log.info (fun f -> f "Will use the host's DNS resolver");
-      Lwt.return { local_ip; host_names; resolver = Host }
+      Lwt.return { local_ip; builtin_names; resolver = Host }
 
   let answer t is_tcp buf =
     let open Dns.Packet in
@@ -327,7 +342,7 @@ struct
         | Some answers ->
           Lwt.return (Ok (marshal @@ reply answers))
         | None ->
-          match try_builtins t.local_ip t.host_names question with
+          match try_builtins t.builtin_names question with
           | Some answers ->
             Lwt.return (Ok (marshal @@ reply answers))
           | None ->

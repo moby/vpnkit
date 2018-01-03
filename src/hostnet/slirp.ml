@@ -109,8 +109,8 @@ struct
   module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Clock)(Host.Time)
   module Icmp_nat = Hostnet_icmp.Make(Host.Sockets)(Clock)(Host.Time)
   
-  let dns_forwarder ~local_address ~host_names clock =
-    Dns_forwarder.create ~local_address ~host_names clock (Dns_policy.config ())
+  let dns_forwarder ~local_address ~builtin_names clock =
+    Dns_forwarder.create ~local_address ~builtin_names clock (Dns_policy.config ())
 
   (* Global variable containing the global DNS configuration *)
   let dns =
@@ -118,7 +118,7 @@ struct
     let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
     ref (
       Clock.connect () >>= fun clock ->
-      dns_forwarder ~local_address ~host_names:[] clock
+      dns_forwarder ~local_address ~builtin_names:[] clock
     )
 
   (* Global variable containing the global HTTP proxy configuration *)
@@ -837,12 +837,12 @@ struct
     let get_nat_table_size t = Udp_nat.get_nat_table_size t.udp_nat
 
     let update_dns
-        ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(host_names = []) clock
+        ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(builtin_names = []) clock
       =
       let local_address =
         { Dns_forward.Config.Address.ip = local_ip; port = 0 }
       in
-      dns := dns_forwarder ~local_address ~host_names clock
+      dns := dns_forwarder ~local_address ~builtin_names clock
 
     let update_http ?http:http_config ?https ?exclude () =
       Http_forwarder.create ?http:http_config ?https ?exclude ()
@@ -1176,7 +1176,10 @@ struct
     let local_address =
       { Dns_forward.Config.Address.ip = Ipaddr.V4 local_ip; port = 0 }
     in
-    dns := dns_forwarder ~local_address ~host_names:c.Configuration.host_names clock
+    let builtin_names =
+      (List.map (fun name -> name, Ipaddr.V4 c.Configuration.gateway_ip) c.Configuration.gateway_names)
+      @ (List.map (fun name -> name, Ipaddr.V4 c.Configuration.host_ip) c.Configuration.host_names) in
+    dns := dns_forwarder ~local_address ~builtin_names clock
 
   let update_dhcp c =
     Log.info (fun f ->
