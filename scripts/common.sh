@@ -37,8 +37,6 @@ opam install $(ls -1 ${OPAM_REPO}/packages/upstream) -y
 OPAMVERBOSE=1 opam install --deps-only -t vpnkit -y
 
 OPAMVERBOSE=1 make
-# One test requires 1026 file descriptors
-ulimit -n 1500
 OPAMVERBOSE=1 make test
 OPAMVERBOSE=1 make artefacts
 OPAMVERBOSE=1 make OSS-LICENSES
