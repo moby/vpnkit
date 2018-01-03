@@ -41,6 +41,7 @@ type t = {
   domain: string option;
   allowed_bind_addresses: Ipaddr.V4.t list;
   gateway_ip: Ipaddr.V4.t;
+  host_ip: Ipaddr.V4.t;
   (* TODO: remove this from the record since it is not constant across all clients *)
   lowest_ip: Ipaddr.V4.t;
   highest_ip: Ipaddr.V4.t;
@@ -54,7 +55,7 @@ type t = {
 }
 
 let to_string t =
-  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; lowest_ip = %s; highest_ip = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; host_ip = %s; lowest_ip = %s; highest_ip = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s"
     (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
     (match t.dns_path with None -> "None" | Some x -> x)
@@ -63,6 +64,7 @@ let to_string t =
     (match t.domain with None -> "None" | Some x -> x)
     (String.concat ", " (List.map Ipaddr.V4.to_string t.allowed_bind_addresses))
     (Ipaddr.V4.to_string t.gateway_ip)
+    (Ipaddr.V4.to_string t.host_ip)
     (Ipaddr.V4.to_string t.lowest_ip)
     (Ipaddr.V4.to_string t.highest_ip)
     (match t.dhcp_json_path with None -> "None" | Some x -> x)
@@ -76,8 +78,9 @@ let to_string t =
 let no_dns_servers =
   Dns_forward.Config.({ servers = Server.Set.empty; search = []; assume_offline_after_drops = None })
 
-let default_lowest_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
+let default_lowest_ip = Ipaddr.V4.of_string_exn "192.168.65.3"
 let default_gateway_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
+let default_host_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
 let default_highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
 (* The default MTU is limited by the maximum message size on a Hyper-V
    socket. On currently available windows versions, we need to stay
@@ -98,6 +101,7 @@ let default = {
   domain = None;
   allowed_bind_addresses = [];
   gateway_ip = default_gateway_ip;
+  host_ip = default_host_ip;
   lowest_ip = default_lowest_ip;
   highest_ip = default_highest_ip;
   dhcp_json_path = None;

@@ -441,16 +441,103 @@ struct
 
   let ok () = Ok ()
 
-  module Local = struct
+  module Localhost = struct
     type t = {
       clock: Clock.t;
       endpoint: Endpoint.t;
       udp_nat: Udp_nat.t;
       dns_ips: Ipaddr.V4.t list;
     }
-    (** Represents the local machine including NTP and DNS servers *)
+    (** Proxies connections to services on localhost on the host *)
 
     (** Handle IPv4 datagrams by proxying them to a remote system *)
+    let input_ipv4 t ipv4 = match ipv4 with
+
+    (* Respond to ICMP *)
+    | Ipv4 { raw; payload = Icmp _; _ } ->
+      let none ~src:_ ~dst:_ _ = Lwt.return_unit in
+      let default ~proto ~src ~dst buf = match proto with
+      | 1 (* ICMP *) ->
+        Stack_icmpv4.input t.endpoint.Endpoint.icmpv4 ~src ~dst buf
+      | _ ->
+        Lwt.return_unit in
+      Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
+      >|= ok
+
+    (* UDP to localhost *)
+    | Ipv4 { src; dst; ihl; dnf; raw; ttl;
+             payload = Udp { src = src_port; dst = dst_port; len;
+                             payload = Payload payload; _ }; _ } ->
+      let description =
+        Fmt.strf "%a:%d -> %a:%d" Ipaddr.V4.pp_hum src src_port Ipaddr.V4.pp_hum
+          dst dst_port
+      in
+      if Cstruct.len payload < len then begin
+        Log.err (fun f -> f "%s: dropping because reported len %d actual len %d"
+                    description len (Cstruct.len payload));
+        Lwt.return (Ok ())
+      end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
+        Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port
+          ~dst_port ~ihl raw
+        >|= lift_ipv4_error
+      end else begin
+        (* [1] For UDP to our local address, rewrite the destination
+           to localhost.  This is the inverse of the rewrite
+           below[2] *)
+        let datagram =
+          { Hostnet_udp.src = Ipaddr.V4 src, src_port;
+            dst = Ipaddr.(V4 V4.localhost), dst_port; payload }
+        in
+        Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
+        >|= ok
+      end
+
+    (* TCP to local ports *)
+    | Ipv4 { src; dst;
+             payload = Tcp { src = src_port; dst = dst_port; syn; raw;
+                             payload = Payload _; _ }; _ } ->
+      let id =
+        Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
+      in
+      Endpoint.input_tcp t.endpoint ~id ~syn
+        (Ipaddr.V4 Ipaddr.V4.localhost, dst_port) raw
+      >|= ok
+    | _ ->
+      Lwt.return (Ok ())
+
+    let create clock endpoint udp_nat dns_ips =
+      let tcp_stack = { clock; endpoint; udp_nat; dns_ips } in
+      let open Lwt.Infix in
+      (* Wire up the listeners to receive future packets: *)
+      Switch.Port.listen endpoint.Endpoint.netif
+        (fun buf ->
+           let open Frame in
+           match parse [ buf ] with
+           | Ok (Ethernet { payload = Ipv4 ipv4; _ }) ->
+             Endpoint.touch endpoint;
+             (input_ipv4 tcp_stack (Ipv4 ipv4) >|= function
+               | Ok ()   -> ()
+               | Error e ->
+                 Log.err (fun l ->
+                     l "error while reading IPv4 input: %a" pp_error e))
+           | _ ->
+             Lwt.return_unit
+        )
+      >|= function
+      | Ok ()         -> Ok tcp_stack
+      | Error _ as e -> e
+
+  end
+
+  module Gateway = struct
+    type t = {
+      clock: Clock.t;
+      endpoint: Endpoint.t;
+      udp_nat: Udp_nat.t;
+      dns_ips: Ipaddr.V4.t list;
+    }
+    (** Services offered by vpnkit to the internal network *)
+
     let input_ipv4 t ipv4 = match ipv4 with
 
     (* Respond to ICMP *)
@@ -501,54 +588,22 @@ struct
       Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
       >|= ok
 
-    (* UDP to any other port: localhost *)
-    | Ipv4 { src; dst; ihl; dnf; raw; ttl;
-             payload = Udp { src = src_port; dst = dst_port; len;
-                             payload = Payload payload; _ }; _ } ->
-      let description =
-        Fmt.strf "%a:%d -> %a:%d" Ipaddr.V4.pp_hum src src_port Ipaddr.V4.pp_hum
-          dst dst_port
-      in
-      if Cstruct.len payload < len then begin
-        Log.err (fun f -> f "%s: dropping because reported len %d actual len %d"
-                    description len (Cstruct.len payload));
-        Lwt.return (Ok ())
-      end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
-        Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port
-          ~dst_port ~ihl raw
-        >|= lift_ipv4_error
-      end else begin
-        (* [1] For UDP to our local address, rewrite the destination
-           to localhost.  This is the inverse of the rewrite
-           below[2] *)
-        let datagram =
-          { Hostnet_udp.src = Ipaddr.V4 src, src_port;
-            dst = Ipaddr.(V4 V4.localhost), dst_port; payload }
-        in
-        Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
-        >|= ok
-      end
-
-    (* TCP to local ports *)
+    (* HTTP proxy *)
     | Ipv4 { src; dst;
              payload = Tcp { src = src_port; dst = dst_port; syn; raw;
                              payload = Payload _; _ }; _ } ->
       let id =
         Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
       in
-      (* local HTTP proxy *)
-      let callback = match !http with
-      | None -> None
-      | Some http -> Http_forwarder.explicit_proxy_handler ~dst:(dst, dst_port) ~t:http
-      in
-      begin match callback with
-      | None ->
-        Endpoint.input_tcp t.endpoint ~id ~syn
-          (Ipaddr.V4 Ipaddr.V4.localhost, dst_port) raw
-        >|= ok
-      | Some cb ->
-        Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
-        >|= ok
+      begin match !http with
+      | None -> Lwt.return (Ok ())
+      | Some http ->
+        begin match Http_forwarder.explicit_proxy_handler ~dst:(dst, dst_port) ~t:http with
+        | None -> Lwt.return (Ok ())
+        | Some cb ->
+          Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
+          >|= ok
+        end
       end
     | _ ->
       Lwt.return (Ok ())
@@ -862,12 +917,10 @@ struct
     let local_arp_table = [
       c.Configuration.lowest_ip, client_macaddr;
       c.Configuration.gateway_ip, c.Configuration.server_macaddr;
+      c.Configuration.host_ip, c.Configuration.server_macaddr;
     ] in
     Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
-
-    (* Listen on local IPs *)
-    let local_ips = [ c.Configuration.gateway_ip ] in
 
     let dhcp = Dhcp.make ~configuration:c clock switch in
 
@@ -915,7 +968,7 @@ struct
          virtual IP. This is the inverse of the rewrite above[1] *)
       let src =
         if Ipaddr.V4.compare src Ipaddr.V4.localhost = 0
-        then c.Configuration.gateway_ip
+        then c.Configuration.host_ip
         else src in
       begin
         find_endpoint src >>= function
@@ -1027,13 +1080,13 @@ struct
         | Ok (Ethernet { payload = Ipv4 ({ dst; _ } as ipv4 ); _ }) ->
           (* For any new IP destination, create a stack to proxy for
              the remote system *)
-          if List.mem dst local_ips then begin
+          if dst = c.Configuration.gateway_ip then begin
             begin
               let open Lwt_result.Infix in
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
-                  f "creating local TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
-              Local.create clock endpoint udp_nat local_ips
+                  f "creating gateway TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
+              Gateway.create clock endpoint udp_nat [ c.Configuration.gateway_ip ]
             end >>= function
             | Error e ->
               Log.err (fun f ->
@@ -1041,7 +1094,25 @@ struct
               Lwt.return_unit
             | Ok tcp_stack ->
               (* inject the ethernet frame into the new stack *)
-              Local.input_ipv4 tcp_stack (Ipv4 ipv4) >|= function
+              Gateway.input_ipv4 tcp_stack (Ipv4 ipv4) >|= function
+              | Ok ()   -> ()
+              | Error e ->
+                Log.err (fun f -> f "failed to read TCP/IP input: %a" pp_error e);
+          end else if dst = c.Configuration.host_ip then begin
+            begin
+              let open Lwt_result.Infix in
+              find_endpoint dst >>= fun endpoint ->
+              Log.debug (fun f ->
+                  f "creating localhost TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
+              Localhost.create clock endpoint udp_nat [ c.Configuration.host_ip ]
+            end >>= function
+            | Error e ->
+              Log.err (fun f ->
+                  f "Failed to create a TCP/IP stack: %a" Switch.Port.pp_error e);
+              Lwt.return_unit
+            | Ok tcp_stack ->
+              (* inject the ethernet frame into the new stack *)
+              Localhost.input_ipv4 tcp_stack (Ipv4 ipv4) >|= function
               | Ok ()   -> ()
               | Error e ->
                 Log.err (fun f -> f "failed to read TCP/IP input: %a" pp_error e);
@@ -1245,7 +1316,11 @@ struct
     Log.info (fun f -> f "Configuration %s" (Configuration.to_string c));
     let global_arp_table : arp_table = {
       mutex = Lwt_mutex.create();
-      table = [c.Configuration.gateway_ip, c.Configuration.server_macaddr];
+      table = [
+        c.Configuration.gateway_ip, c.Configuration.server_macaddr;
+        c.Configuration.host_ip,    c.Configuration.server_macaddr;
+      ];
+
     } in
     let client_uuids : uuid_table = {
       mutex = Lwt_mutex.create();
