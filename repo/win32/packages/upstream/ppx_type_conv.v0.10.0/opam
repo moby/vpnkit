@@ -1,0 +1,19 @@
+opam-version: "1.2"
+maintainer: "opensource@janestreet.com"
+authors: ["Jane Street Group, LLC <opensource@janestreet.com>"]
+homepage: "https://github.com/janestreet/ppx_type_conv"
+bug-reports: "https://github.com/janestreet/ppx_type_conv/issues"
+dev-repo: "git+https://github.com/janestreet/ppx_type_conv.git"
+license: "Apache-2.0"
+build: [
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+depends: [
+  "ppx_core"                {>= "v0.10" & < "v0.11"}
+  "ppx_driver"              {>= "v0.10" & < "v0.11"}
+  "ppx_metaquot"            {>= "v0.10" & < "v0.11"}
+  "jbuilder"                {build & >= "1.0+beta12"}
+  "ocaml-migrate-parsetree" {>= "0.4"}
+  "ppx_derivers"
+]
+available: [ ocaml-version >= "4.04.1" ]

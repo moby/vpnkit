@@ -1,6 +1,0 @@
-Decode and encode tar formatted data
-
-tar-format is a simple library to read and write tar formatted data with an emphasis on
-streaming.
-
-This is pure OCaml code, no C bindings.
