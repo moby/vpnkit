@@ -339,9 +339,9 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main
       socket_url port_control_url introspection_url diagnostics_url
-      max_connections vsock_path db_path db_branch dns http hosts host_names
+      max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
       listen_backlog port_max_idle_time debug
-      server_macaddr domain allowed_bind_addresses gateway_ip lowest_ip highest_ip
+      server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
       dhcp_json_path mtu log_destination
     =
     let level =
@@ -358,12 +358,15 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     end;
 
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
+    let gateway_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," gateway_names in
+
     let dns_path, resolver = match dns with
     | None -> None, Configuration.default_resolver
     | Some file -> Some file, `Upstream in
     let server_macaddr = Macaddr.of_string_exn server_macaddr in
     let allowed_bind_addresses = Configuration.Parse.ipv4_list [] allowed_bind_addresses in
     let gateway_ip = Ipaddr.V4.of_string_exn gateway_ip in
+    let host_ip = Ipaddr.V4.of_string_exn host_ip in
     let lowest_ip = Ipaddr.V4.of_string_exn lowest_ip in
     let highest_ip = Ipaddr.V4.of_string_exn highest_ip in
     let configuration = {
@@ -371,6 +374,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections;
       port_max_idle_time;
       host_names;
+      gateway_names;
       dns = Configuration.no_dns_servers;
       dns_path;
       http_intercept_path = http;
@@ -379,6 +383,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       domain;
       allowed_bind_addresses;
       gateway_ip;
+      host_ip;
       lowest_ip;
       highest_ip;
       dhcp_json_path;
@@ -526,7 +531,15 @@ let host_names =
       "Comma-separated list of DNS names to map to the Host's virtual IP"
       ["host-names"]
   in
-  Arg.(value & opt string "vpnkit.host" doc)
+  Arg.(value & opt string "host.internal" doc)
+
+let gateway_names =
+  let doc =
+    Arg.info ~doc:
+      "Comma-separated list of DNS names to map to the gateway's virtual IP"
+      ["gateway-names"]
+  in
+  Arg.(value & opt string "gateway.internal" doc)
 
 let listen_backlog =
   let doc = "Specify a maximum listen(2) backlog. If no override is specified \
@@ -566,6 +579,14 @@ let gateway_ip =
       [ "gateway-ip" ]
   in
   Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_gateway_ip) doc)
+
+let host_ip =
+  let doc =
+    Arg.info ~doc:
+      "IP address which represents the host. Connections to this IP will be forwarded to localhost on the host."
+      [ "host-ip" ]
+  in
+  Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_host_ip) doc)
 
 let lowest_ip =
   let doc =
@@ -609,8 +630,8 @@ let command =
   Term.(pure main
         $ socket $ port_control_path $ introspection_path $ diagnostics_path
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
-        $ host_names $ listen_backlog $ port_max_idle_time $ debug
-        $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip
+        $ host_names $ gateway_names $ listen_backlog $ port_max_idle_time $ debug
+        $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 

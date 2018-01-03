@@ -46,7 +46,7 @@ sig
     val get_nat_table_size: connection -> int
     (** Return the number of active NAT table entries *)
 
-    val update_dns: ?local_ip:Ipaddr.t -> ?host_names:Dns.Name.t list ->
+    val update_dns: ?local_ip:Ipaddr.t -> ?builtin_names:(Dns.Name.t * Ipaddr.t) list ->
       Clock.t -> unit
     (** Update the DNS forwarder following a configuration change *)
 

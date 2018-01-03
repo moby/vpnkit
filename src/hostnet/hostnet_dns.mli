@@ -26,7 +26,7 @@ sig
 
   val create:
     local_address:Dns_forward.Config.Address.t ->
-    host_names:Dns.Name.t list ->
+    builtin_names:(Dns.Name.t * Ipaddr.t) list ->
     Clock.t -> Config.t -> t Lwt.t
   (** Create a DNS forwarding instance based on the given
       configuration, either [`Upstream config]: send DNS requests to

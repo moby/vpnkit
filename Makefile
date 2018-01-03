@@ -42,7 +42,8 @@ vpnkit.exe:
 .PHONY: test
 test:
 	jbuilder build --dev src/hostnet_test/main.exe
-	./_build/default/src/hostnet_test/main.exe
+	# One test requires 1026 file descriptors
+	ulimit -n 1500 && ./_build/default/src/hostnet_test/main.exe
 
 .PHONY: OSS-LICENSES
 OSS-LICENSES:

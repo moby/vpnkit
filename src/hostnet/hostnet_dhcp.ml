@@ -46,7 +46,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
        resolved in the future *)
     let low_ip, high_ip =
       let open Ipaddr.V4 in
-      let all_static_ips = c.Configuration.gateway_ip :: c.Configuration.lowest_ip :: c.Configuration.extra_dns in
+      let all_static_ips = [ c.Configuration.gateway_ip; c.Configuration.lowest_ip ] in
       let highest = maximum_ip all_static_ips in
       let i32 = to_int32 highest in
       of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
@@ -73,7 +73,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
         | _, _ -> Configuration.default_domain in
       let options = [
         Dhcp_wire.Routers [ c.Configuration.gateway_ip ];
-        Dhcp_wire.Dns_servers (c.Configuration.gateway_ip :: c.Configuration.extra_dns);
+        Dhcp_wire.Dns_servers [ c.Configuration.gateway_ip ];
         Dhcp_wire.Ntp_servers [ c.Configuration.gateway_ip ];
         Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
         Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix);
