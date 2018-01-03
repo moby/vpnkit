@@ -134,17 +134,11 @@ module DNS = Dns_resolver_mirage.Make(Host.Time)(Client)
 
 let primary_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
 
-let extra_dns_ip = List.map Ipaddr.V4.of_string_exn [
-    "192.168.65.3"; "192.168.65.4"; "192.168.65.5"; "192.168.65.6";
-    "192.168.65.7"; "192.168.65.8"; "192.168.65.9"; "192.168.65.10";
-  ]
-
 let preferred_ip1 = Ipaddr.V4.of_string_exn "192.168.65.250"
 
 let config =
   let configuration = {
     Configuration.default with
-    extra_dns = extra_dns_ip;
     domain = Some "local";
   } in
   Mclock.connect () >>= fun clock ->

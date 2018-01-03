@@ -862,12 +862,12 @@ struct
     let local_arp_table = [
       c.Configuration.lowest_ip, client_macaddr;
       c.Configuration.gateway_ip, c.Configuration.server_macaddr;
-    ] @ (List.map (fun ip -> ip, c.Configuration.server_macaddr) c.Configuration.extra_dns) in
+    ] in
     Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
 
     (* Listen on local IPs *)
-    let local_ips = c.Configuration.gateway_ip :: c.Configuration.extra_dns in
+    let local_ips = [ c.Configuration.gateway_ip ] in
 
     let dhcp = Dhcp.make ~configuration:c clock switch in
 
@@ -1305,15 +1305,6 @@ struct
     Active_config.map (Configuration.Parse.ipv4 Configuration.default_highest_ip) string_highest_ips
     >>= fun highest_ips ->
     on_change highest_ips (fun highest_ip -> update (fun c -> { c with highest_ip }));
-    let extra_dns_ips_path = driver @ [ "slirp"; "extra_dns" ] in
-    Config.string config ~default:""
-      extra_dns_ips_path
-    >>= fun string_extra_dns_ips ->
-    Active_config.map
-      (fun x -> Lwt.return @@ Configuration.Parse.ipv4_list (List.map Ipaddr.V4.of_string_exn Configuration.default_extra_dns) x)
-      string_extra_dns_ips
-    >>= fun extra_dns_ips ->
-    on_change extra_dns_ips (fun extra_dns -> update (fun c -> { c with extra_dns }));
     let resolver_path = driver @ [ "slirp"; "resolver" ] in
     Config.string_option config resolver_path
     >>= fun string_resolver_settings ->

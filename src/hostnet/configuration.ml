@@ -44,7 +44,6 @@ type t = {
   (* TODO: remove this from the record since it is not constant across all clients *)
   lowest_ip: Ipaddr.V4.t;
   highest_ip: Ipaddr.V4.t;
-  extra_dns: Ipaddr.V4.t list;
   dhcp_json_path: string option;
   dhcp_configuration: Dhcp_configuration.t option;
   mtu: int;
@@ -55,7 +54,7 @@ type t = {
 }
 
 let to_string t =
-  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; lowest_ip = %s; highest_ip = %s; extra_dns = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; lowest_ip = %s; highest_ip = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s"
     (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
     (match t.dns_path with None -> "None" | Some x -> x)
@@ -66,7 +65,6 @@ let to_string t =
     (Ipaddr.V4.to_string t.gateway_ip)
     (Ipaddr.V4.to_string t.lowest_ip)
     (Ipaddr.V4.to_string t.highest_ip)
-    (String.concat ", " (List.map Ipaddr.V4.to_string t.extra_dns))
     (match t.dhcp_json_path with None -> "None" | Some x -> x)
     (match t.dhcp_configuration with None -> "None" | Some x -> Dhcp_configuration.to_string x)
     t.mtu
@@ -81,7 +79,6 @@ let no_dns_servers =
 let default_lowest_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
 let default_gateway_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
 let default_highest_ip = Ipaddr.V4.of_string_exn "192.168.65.254"
-let default_extra_dns = []
 (* The default MTU is limited by the maximum message size on a Hyper-V
    socket. On currently available windows versions, we need to stay
    below 8192 bytes *)
@@ -103,7 +100,6 @@ let default = {
   gateway_ip = default_gateway_ip;
   lowest_ip = default_lowest_ip;
   highest_ip = default_highest_ip;
-  extra_dns = default_extra_dns;
   dhcp_json_path = None;
   dhcp_configuration = None;
   mtu = default_mtu;
