@@ -1,0 +1,23 @@
+opam-version: "1.2"
+maintainer:   "dave@recoil.org"
+authors:      [ "Dave Scott" "Thomas Gazagnaire" "David Allsopp" ]
+tags:         ["org:xapi-project" "org:mirage"]
+homepage:     "https://github.com/mirage/ocaml-tar"
+bug-reports:  "https://github.com/mirage/ocaml-tar/issues"
+dev-repo:     "https://github.com/mirage/ocaml-tar.git"
+doc:          "https://mirage.github.io/ocaml-tar/"
+
+build: [
+  ["jbuilder" "subst" "-p" name "--name" name] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+
+depends: [
+  "jbuilder"          {build & >="1.0+beta7"}
+  "ppx_tools"         {build}
+  "ppx_cstruct"       {build}
+  "cstruct"           {>= "1.9.0"}
+  "re"
+  "result"
+]
+available: [ ocaml-version >= "4.03.0" ]

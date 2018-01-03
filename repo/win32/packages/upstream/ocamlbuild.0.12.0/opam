@@ -1,0 +1,47 @@
+opam-version: "1.2"
+maintainer: "Gabriel Scherer <gabriel.scherer@gmail.com>"
+authors: ["Nicolas Pouillard" "Berke Durak"]
+homepage: "https://github.com/ocaml/ocamlbuild/"
+bug-reports: "https://github.com/ocaml/ocamlbuild/issues"
+license: "LGPL-2 with OCaml linking exception"
+doc: "https://github.com/ocaml/ocamlbuild/blob/master/manual/manual.adoc"
+dev-repo: "https://github.com/ocaml/ocamlbuild.git"
+build: [
+  [make "-f" "configure.make" "all"
+    "OCAMLBUILD_PREFIX=%{prefix}%"
+    "OCAMLBUILD_BINDIR=%{bin}%"
+    "OCAMLBUILD_LIBDIR=%{lib}%"
+    "OCAMLBUILD_MANDIR=%{man}%"
+    "OCAML_NATIVE=%{ocaml-native}%"
+    "OCAML_NATIVE_TOOLS=%{ocaml-native}%"]  { os != "win32" }
+  [make "check-if-preinstalled" "all" "opam-install"]  { os != "win32" }
+  [make "-f" "configure.make" "Makefile.config" "src/ocamlbuild_config.ml"
+    "OCAMLBUILD_PREFIX=%{prefix}%"
+    "OCAMLBUILD_BINDIR=%{bin}%"
+    "OCAMLBUILD_LIBDIR=%{lib}%/ocaml"
+    "OCAMLBUILD_MANDIR=%{man}%"
+    "OCAML_NATIVE=%{ocaml-native}%"
+    "OCAML_NATIVE_TOOLS=%{ocaml-native}%"] { os = "win32" }
+  [make "all"] { os = "win32" }
+]
+
+# this is an ugly workaround because oasis had the old standard
+# location hardcoded in its source code (windows only) and in dozens
+# of existing setup.ml files
+install: [
+  [make "install"] { os = "win32" }
+  ["mkdir" "-p" "%{lib}%/ocamlbuild"] { os = "win32" }
+  ["install" "-m" "0644" "META" "%{lib}%/ocamlbuild"] { os = "win32" }
+]
+remove: [
+  ["rm" "-f" "%{bin}%/ocamlbuild.byte.exe" "%{bin}%/ocamlbuild.exe" "%{bin}%/ocamlbuild.native.exe"] { os = "win32" }
+  ["rm" "-rf" "%{lib}%/ocaml/ocamlbuild"] { os = "win32" }
+  ["rm" "-rf" "%{lib}%/ocamlbuild"] { os = "win32" }
+  ["rm" "-f" "%{man}%/man1/ocamlbuild.1"] { os = "win32" }
+]
+conflicts: [
+  "base-ocamlbuild"
+  "ocamlfind" {< "1.6.2"}
+]
+available: [ocaml-version >= "4.03"]
+patches: "ocamlbuild-0.12.0.patch" {os = "win32"}

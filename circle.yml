@@ -7,7 +7,7 @@ machine:
     MACOSX_DEPLOYMENT_TARGET: "10.10"
     CUSTOM_OPAM: "1"
     OPAM_REPO: repo/darwin
-    OPAM_COMP: "4.03.0"
+    OPAM_COMP: "4.06.0"
 general:
   artifacts:
   - vpnkit.tgz

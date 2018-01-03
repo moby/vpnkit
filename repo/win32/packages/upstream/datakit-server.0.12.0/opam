@@ -1,0 +1,21 @@
+opam-version: "1.2"
+maintainer:   "thomas@gazagnaire.org"
+authors:      ["Thomas Leonard" "Magnus Skjegstad"
+               "David Scott" "Thomas Gazagnaire"]
+license:      "Apache"
+homepage:     "https://github.com/moby/datakit"
+bug-reports:  "https://github.com/moby/datakit/issues"
+dev-repo:     "https://github.com/moby/datakit.git"
+doc:          "https://docker.github.io/datakit/"
+
+build: ["jbuilder" "build" "-p" name "-j" jobs]
+
+depends: [
+  "jbuilder" {build & >= "1.0+beta10"}
+  "astring"
+  "logs"
+  "rresult"
+  "fmt"
+  "lwt"     {>= "3.0.0"}
+  "cstruct" {>= "2.2.0"}
+]

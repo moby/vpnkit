@@ -2,7 +2,7 @@
 
 set -ex
 
-OPAM_SWITCH=${OPAM_SWITCH:-4.03.0}
+OPAM_SWITCH=${OPAM_SWITCH:-4.06.0}
 OPAM_REPO=${OPAM_REPO:-https://github.com/ocaml/opam-repository.git}
 OPAM_OS=${OPAM_OS:-darwin}
 

@@ -1,0 +1,26 @@
+From 6de006e6f4864a585b085f840660383fa354f9bf Mon Sep 17 00:00:00 2001
+From: Anton Bachin <antonbachin@yahoo.com>
+Date: Wed, 20 Dec 2017 12:17:40 -0600
+Subject: [PATCH] threads: drop explicit check for -thread/-vmthread
+
+---
+ site-lib-src/threads/META.in | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/site-lib-src/threads/META.in b/site-lib-src/threads/META.in
+index b42f3dd..fe2d986 100644
+--- a/site-lib-src/threads/META.in
++++ b/site-lib-src/threads/META.in
+@@ -9,9 +9,6 @@ dnl This file is input of the m4 macro processor.
+ 
+ `browse_interfaces = "'interfaces`"'
+ 
+-`error(-mt) = "Missing -thread or -vmthread switch"'
+-`error(-mt_vm,-mt_posix) = "Missing -thread or -vmthread switch"'
+-
+ `package "vm" ('
+ `  # --- Bytecode-only threads:'
+ `  requires = "unix"'
+-- 
+2.12.2
+
