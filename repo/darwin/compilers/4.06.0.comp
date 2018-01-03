@@ -7,8 +7,8 @@ build: [
   ] { os != "openbsd" & os  != "freebsd" & os  != "darwin" }
   ["./configure"
     "-prefix" prefix "-with-debug-runtime"
-    "-cc" "cc -O2 -pipe"
-    "-aspp" "cc -O2 -pipe -c"
+    "-cc" "cc"
+    "-aspp" "cc -c"
   ] { os  = "openbsd" | os  = "freebsd" | os  = "darwin" }
   [make "world"]
   [make "world.opt"]
