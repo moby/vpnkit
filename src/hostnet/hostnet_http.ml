@@ -571,7 +571,7 @@ module Make
                 (* The absolute URI used by the proxy should be converted back into
                    a relative URI and a Host: header *)
                 let req = { req with
-                  Cohttp.Request.headers = Cohttp.Header.add req.Cohttp.Request.headers "host" host;
+                  Cohttp.Request.headers = Cohttp.Header.replace req.Cohttp.Request.headers "host" host;
                   resource = Uri.path_and_query uri
                 } in
                 Log.debug (fun f -> f "%s: sending %s"
