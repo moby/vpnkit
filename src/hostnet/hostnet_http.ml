@@ -282,10 +282,22 @@ module Make
                     (Cohttp.Response.sexp_of_t res)));
       let reader = Outgoing.Response.make_body_reader res outgoing in
       Incoming.Response.write ~flush:true (fun writer ->
-          match Incoming.Response.has_body res with
-          | `Yes     -> proxy_body_response ~reader ~writer
-          | `No      -> Lwt.return_unit
-          | `Unknown ->
+          match Cohttp.Request.meth req, Incoming.Response.has_body res with
+          | `HEAD, `Yes ->
+            (* Bug in cohttp.1.0.2: according to Section 9.4 of RFC2616
+               https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
+               > The HEAD method is identical to GET except that the server
+               > MUST NOT return a message-body in the response.
+            *)
+            Log.debug (fun f -> f "%s: HEAD requests MUST NOT have response bodies" (description false));
+            Lwt.return_unit
+          | _, `Yes     ->
+            Log.info (fun f -> f "%s: proxying body" (description false));
+            proxy_body_response ~reader ~writer
+          | _, `No      ->
+            Log.info (fun f -> f "%s: no body to proxy" (description false));
+            Lwt.return_unit
+          | _, `Unknown ->
             Log.warn (fun f ->
                 f "Response.has_body returned `Unknown: not sure \
                     what to do");
