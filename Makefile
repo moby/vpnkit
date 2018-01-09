@@ -23,7 +23,7 @@ endif
 
 all: $(OPAMROOT) $(BINARIES)
 
-$(REPO_ROOT)/_build/opam:
+$(OPAMROOT):
 	OPAMROOT=$(OPAMROOT) OPAM_COMP=$(OPAM_COMP) OPAM_REPO=$(OPAM_REPO) ./scripts/depends.sh
 
 .PHONY: install
