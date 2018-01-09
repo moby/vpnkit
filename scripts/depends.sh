@@ -3,6 +3,37 @@ set -ex
 
 # Set up the exact set of dependant packages
 
+case "$(uname -s)" in
+  CYGWIN*)
+
+    ### From ocaml-ci-scripts
+
+    # default setttings
+    SWITCH="${OPAM_COMP}"
+    OPAM_URL='https://dl.dropboxusercontent.com/s/b2q2vjau7if1c1b/opam64.tar.xz'
+    OPAM_ARCH=opam64
+
+    if [ "$PROCESSOR_ARCHITECTURE" != "AMD64" ] && \
+           [ "$PROCESSOR_ARCHITEW6432" != "AMD64" ]; then
+        OPAM_URL='https://dl.dropboxusercontent.com/s/eo4igttab8ipyle/opam32.tar.xz'
+        OPAM_ARCH=opam32
+    fi
+
+    curl -fsSL -o "${OPAM_ARCH}.tar.xz" "${OPAM_URL}"
+    tar -xf "${OPAM_ARCH}.tar.xz"
+    "${OPAM_ARCH}/install.sh"
+
+    PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin:${PATH}"
+    export PATH
+
+    ### Custom
+
+    export REPO_ROOT=$(git rev-parse --show-toplevel)
+    export OPAM_REPO=$(cygpath.exe -w "${REPO_ROOT}/repo/win32")
+    export OPAMROOT=$(cygpath.exe -w "${REPO_ROOT}/_build/opam")
+  ;;
+esac
+
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
 if [ -z "${OPAMROOT}" ]; then
