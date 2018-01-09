@@ -571,7 +571,66 @@ let test_http_connect () =
         )
     end
 
+  let test_http_proxy_headers () =
+    Host.Main.run begin
+      let forwarded, forwarded_u = Lwt.task () in
+      Slirp_stack.with_stack ~pcap:"test_http_proxy_headers.pcap" (fun _ stack ->
+        with_server (fun flow ->
+            let ic = Incoming.C.create flow in
+            Incoming.Request.read ic >>= function
+            | `Eof ->
+              Log.err (fun f -> f "Failed to request");
+              failwith "Failed to read request"
+            | `Invalid x ->
+              Log.err (fun f -> f "Failed to parse request: %s" x);
+              failwith ("Failed to parse request: " ^ x)
+            | `Ok req ->
+              (* parse the response *)
+              Lwt.wakeup_later forwarded_u req;
+              Lwt.return_unit
+          ) (fun server ->
+            let host = "127.0.0.1" in
+            let port = server.Server.port in
+            let open Slirp_stack in
+            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+            >>= function
+            | Error _ ->
+              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              failwith "test_proxy_get: connect failed"
+            | Ok flow ->
+              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              let oc = Outgoing.C.create flow in
+              let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ~port ()) in
+              Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
+              >>= fun () ->
+              forwarded
+              >>= fun result ->
+              Log.info (fun f ->
+              f "original was: %s"
+                (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
+              Log.info (fun f ->
+                  f "proxied  was: %s"
+                    (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t result)));
+              Alcotest.check Alcotest.string "method"
+                (Cohttp.Code.string_of_method request.Cohttp.Request.meth)
+                (Cohttp.Code.string_of_method result.Cohttp.Request.meth);
+              Alcotest.check Alcotest.string "version"
+                (Cohttp.Code.string_of_version request.Cohttp.Request.version)
+                (Cohttp.Code.string_of_version result.Cohttp.Request.version);
+              Alcotest.check Alcotest.(option string) "URI.host"
+                (Cohttp.Request.uri request |> Uri.host)
+                (Cohttp.Request.uri result |> Uri.host);
+              (* FIXME: check whether the port should be included in the header or not *)
+              Alcotest.check Alcotest.int "number of host headers"
+                (Cohttp.Header.to_list request.Cohttp.Request.headers |> List.filter (fun (x, _) -> x = "host") |> List.length)
+                (Cohttp.Header.to_list result.Cohttp.Request.headers |> List.filter (fun (x, _) -> x = "host") |> List.length);
+              Lwt.return_unit
+            )
+        )
+    end
+
 let tests = [
+
   "HTTP: interception",
   [ "", `Quick, test_interception ];
 
@@ -589,6 +648,9 @@ let tests = [
 
   "HTTP proxy: GET to good host",
   [ "check that HTTP GET succeeds normally", `Quick, test_http_proxy_get ];
+
+  "HTTP proxy: GET has good headers",
+  [ "check that HTTP GET headers are correct", `Quick, test_http_proxy_headers ];
 
   "HTTP: URI",
   [ "check that relative URIs are rewritten", `Quick, test_uri_relative ];
