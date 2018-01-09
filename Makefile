@@ -49,12 +49,12 @@ vpnkit.tgz: vpnkit.exe
 
 .PHONY: vpnkit.exe
 vpnkit.exe: $(OPAMROOT)
-	opam config --root $(OPAMROOT) exec -- jbuilder build --dev src/bin/main.exe
+	opam config --root $(OPAMROOT) --switch $(OPAM_COMP) exec -- sh -c 'jbuilder build --dev src/bin/main.exe'
 	cp _build/default/src/bin/main.exe vpnkit.exe
 
 .PHONY: test
 test: $(OPAMROOT)
-	opam config --root $(OPAMROOT) exec -- jbuilder build --dev src/hostnet_test/main.exe
+	opam config --root $(OPAMROOT) --switch $(OPAM_COMP) exec -- sh -c 'jbuilder build --dev src/hostnet_test/main.exe'
 	# One test requires 1026 file descriptors
 	ulimit -n 1500 && ./_build/default/src/hostnet_test/main.exe
 
