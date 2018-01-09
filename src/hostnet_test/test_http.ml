@@ -629,6 +629,55 @@ let test_http_connect () =
         )
     end
 
+  let test_http_proxy_head () =
+    Host.Main.run begin
+      Slirp_stack.with_stack ~pcap:"test_http_proxy_head.pcap" (fun _ stack ->
+        let open Slirp_stack in
+        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+        >>= function
+        | Error _ ->
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          failwith "test_proxy_head: connect failed"
+        | Ok flow ->
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          let oc = Outgoing.C.create flow in
+          let host = "dave.recoil.org" in
+          let request = Cohttp.Request.make ~meth:`HEAD (Uri.make ~host ()) in
+          Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
+          >>= fun () ->
+          Outgoing.Response.read oc
+          >>= function
+          | `Eof ->
+            failwith "test_proxy_head: EOF on HTTP HEAD"
+          | `Invalid x ->
+            failwith ("test_proxy_head: Invalid HTTP response: " ^ x)
+          | `Ok res ->
+            if res.Cohttp.Response.status <> `OK
+            then failwith "test_proxy_head: HTTP HEAD failed unexpectedly";
+            (* Now try another request to see if the channel still works *)
+            let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ()) in
+            Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
+            >>= fun () ->
+            let t =
+              Outgoing.Response.read oc
+              >>= function
+              | `Eof ->
+                failwith "test_proxy_head: EOF on HTTP GET after HEAD"
+              | `Invalid x ->
+                failwith ("test_proxy_head: Invalid HTTP response: " ^ x)
+              | `Ok res ->
+                if res.Cohttp.Response.status <> `OK
+                then failwith "test_proxy_head: HTTP GET after HEAD failed unexpectedly";
+                Lwt.return `Ok in
+            Lwt.pick [
+              (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () -> `Timeout);
+              t
+            ] >>= function
+            | `Timeout -> failwith "test_proxy_head timed out"
+            | `Ok -> Lwt.return_unit
+        )
+    end
+
 let tests = [
 
   "HTTP: interception",
@@ -666,4 +715,7 @@ let tests = [
 
   "HTTP: CONNECT",
   [ "check that HTTP CONNECT works for HTTPS", `Quick, test_http_connect ];
+
+  "HTTP: HEAD",
+  [ "check that HTTP HEAD doesn't block the connection", `Quick, test_http_proxy_head ];
 ]
