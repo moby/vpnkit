@@ -472,12 +472,12 @@ module Make
 
   let fetch_direct ~flow incoming =
     Incoming.Request.read incoming >>= function
-    | `Eof -> Lwt.return_unit
+    | `Eof -> Lwt.return false
     | `Invalid x ->
       Log.warn (fun f ->
           f "HTTP proxy failed to parse HTTP request: %s"
             x);
-      Lwt.return_unit
+      Lwt.return false
     | `Ok req ->
       let uri = Cohttp.Request.uri req in
       let meth = Cohttp.Request.meth req in
@@ -496,6 +496,8 @@ module Make
             "The HTTP request must contain an absolute URI e.g. http://github.com/moby/vpnkit"
           )
         ) res incoming
+        >>= fun () ->
+        Lwt.return false
       | Some host ->
         resolve_ip host
         >>= function
@@ -512,6 +514,8 @@ module Make
               (Printf.sprintf "The hostname %s could not be resolved." host)
             )
           ) res incoming
+          >>= fun () ->
+          Lwt.return false
         | Ok ipv4 ->
           let address = ipv4, port in
           let description outgoing =
@@ -538,6 +542,8 @@ module Make
                 (Printf.sprintf "The proxy could not connect to %s" (string_of_address address))
               )
             ) res incoming
+            >>= fun () ->
+            Lwt.return false
           | Ok remote ->
             Lwt.finalize  (fun () ->
               Log.info (fun f ->
@@ -551,21 +557,31 @@ module Make
                 begin Incoming.C.flush incoming >>= function
                 | Error _ ->
                   Log.err (fun f -> f "%s: failed to return 200 OK" (description false));
-                  Lwt.return_unit
+                  Lwt.return false
                 | Ok () ->
                   Lwt.join [
                     a_t flow ~incoming ~outgoing;
                     b_t remote ~incoming ~outgoing
                   ]
+                  >>= fun () ->
+                  Log.debug (fun f -> f "%s: HTTP CONNECT complete" (description false));
+                  Lwt.return false
                 end
               | _ ->
                 (* The absolute URI used by the proxy should be converted back into
                    a relative URI and a Host: header *)
                 let req = { req with
-                  Cohttp.Request.headers = Cohttp.Header.add req.Cohttp.Request.headers "host" host;
+                  Cohttp.Request.headers = Cohttp.Header.replace req.Cohttp.Request.headers "host" host;
                   resource = Uri.path_and_query uri
                 } in
+                Log.debug (fun f -> f "%s: sending %s"
+                  (description false)
+                  (Sexplib.Sexp.to_string_hum
+                   (Cohttp.Request.sexp_of_t req))
+                );
                 proxy_request ~description ~incoming ~outgoing ~req
+                >>= fun () ->
+                Lwt.return true
             ) (fun () -> Socket.Stream.Tcp.close remote)
           end
     end
@@ -577,7 +593,15 @@ module Make
       let f flow =
         Lwt.finalize (fun () ->
             let incoming = Incoming.C.create flow in
-            let rec loop () = fetch_direct ~flow incoming >>= loop in
+            let rec loop () =
+              fetch_direct ~flow incoming
+              >>= function
+              | true ->
+                (* keep the connection open, read more requests *)
+                loop ()
+              | false ->
+                Log.debug (fun f -> f "HTTP session complete, closing connection");
+                Lwt.return_unit in
             loop ()
           ) (fun () -> Tcp.close flow)
       in
