@@ -1,5 +1,12 @@
 REPO_ROOT=$(shell git rev-parse --show-toplevel)
 OPAMROOT?=$(REPO_ROOT)/_build/opam
+ifeq ($(OS),Windows_NT)
+  OPAM_COMP?=4.06.0+mingw64c
+  OPAM_REPO?=repo/win32
+else
+  OPAM_COMP?=4.06.0
+  OPAM_REPO?=repo/darwin
+endif
 
 COMMIT_ID=$(shell git rev-parse HEAD)
 LICENSEDIRS=$(REPO_ROOT)/repo/licenses
@@ -13,7 +20,10 @@ else
 	ARTEFACTS += vpnkit.tgz
 endif
 
-all: $(BINARIES)
+all: $(OPAMROOT) $(BINARIES)
+
+$(REPO_ROOT)/_build/opam:
+	OPAMROOT=$(OPAMROOT) OPAM_COMP=$(OPAM_COMP) OPAM_REPO=$(OPAM_REPO) ./scripts/depends.sh
 
 .PHONY: install
 install: $(BINARIES)
@@ -37,13 +47,13 @@ vpnkit.tgz: vpnkit.exe
 	tar -C _build/root -cvzf vpnkit.tgz Contents
 
 .PHONY: vpnkit.exe
-vpnkit.exe:
-	jbuilder build --dev src/bin/main.exe
+vpnkit.exe: $(OPAMROOT)
+	opam config --root $(OPAMROOT) exec -- jbuilder build --dev src/bin/main.exe
 	cp _build/default/src/bin/main.exe vpnkit.exe
 
 .PHONY: test
-test:
-	jbuilder build --dev src/hostnet_test/main.exe
+test: $(OPAMROOT)
+	opam config --root $(OPAMROOT) exec -- jbuilder build --dev src/hostnet_test/main.exe
 	# One test requires 1026 file descriptors
 	ulimit -n 1500 && ./_build/default/src/hostnet_test/main.exe
 
@@ -60,7 +70,6 @@ COMMIT:
 
 .PHONY: clean
 clean:
-	jbuilder clean
 	rm -rf _build
 	rm -f vpnkit.exe
 	rm -f vpnkit.tgz
