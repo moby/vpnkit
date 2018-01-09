@@ -1,7 +1,38 @@
 #!/usr/bin/env sh
 set -ex
 
-# Common setup for both Appveyor and Circle CI
+# Set up the exact set of dependant packages
+
+case "$(uname -s)" in
+  CYGWIN*)
+
+    ### From ocaml-ci-scripts
+
+    # default setttings
+    SWITCH="${OPAM_COMP}"
+    OPAM_URL='https://dl.dropboxusercontent.com/s/b2q2vjau7if1c1b/opam64.tar.xz'
+    OPAM_ARCH=opam64
+
+    if [ "$PROCESSOR_ARCHITECTURE" != "AMD64" ] && \
+           [ "$PROCESSOR_ARCHITEW6432" != "AMD64" ]; then
+        OPAM_URL='https://dl.dropboxusercontent.com/s/eo4igttab8ipyle/opam32.tar.xz'
+        OPAM_ARCH=opam32
+    fi
+
+    curl -fsSL -o "${OPAM_ARCH}.tar.xz" "${OPAM_URL}"
+    tar -xf "${OPAM_ARCH}.tar.xz"
+    "${OPAM_ARCH}/install.sh"
+
+    PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin:${PATH}"
+    export PATH
+
+    ### Custom
+
+    export REPO_ROOT=$(git rev-parse --show-toplevel)
+    export OPAM_REPO=$(cygpath.exe -w "${REPO_ROOT}/repo/win32")
+    export OPAMROOT=$(cygpath.exe -w "${REPO_ROOT}/_build/opam")
+  ;;
+esac
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
@@ -41,9 +72,3 @@ OPAMVERBOSE=1 opam install tcpip -t
 
 opam install $(ls -1 ${OPAM_REPO}/packages/upstream) -y
 OPAMVERBOSE=1 opam install --deps-only -t vpnkit -y
-
-OPAMVERBOSE=1 make
-OPAMVERBOSE=1 make test
-OPAMVERBOSE=1 make artefacts
-OPAMVERBOSE=1 make OSS-LICENSES
-OPAMVERBOSE=1 make COMMIT

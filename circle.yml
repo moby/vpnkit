@@ -8,6 +8,7 @@ machine:
     CUSTOM_OPAM: "1"
     OPAM_REPO: repo/darwin
     OPAM_COMP: "4.06.0"
+    OPAMVERBOSE: 1
 general:
   artifacts:
   - vpnkit.tgz
@@ -16,7 +17,10 @@ general:
 dependencies:
   override:
   - brew install wget opam dylibbundler pkg-config
-  - scripts/common.sh
+  - make
+  - make artefacts
+  - make OSS-LICENSES
+  - make COMMIT
 test:
   override:
-  - echo Tests were run as part of the build
+  - make test
