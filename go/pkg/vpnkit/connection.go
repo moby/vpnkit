@@ -18,5 +18,10 @@ func NewConnection(ctx context.Context, path string) (*Connection, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Connection{client}, nil
+	return NewConnectionForClient(client), nil
+}
+
+// NewConnectionForClient returns a connection using given client
+func NewConnectionForClient(client *datakit.Client) *Connection {
+	return &Connection{ client}
 }
