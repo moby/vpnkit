@@ -1,4 +1,6 @@
 REPO_ROOT=$(shell git rev-parse --show-toplevel)
+OPAMROOT?=$(REPO_ROOT)/_build/opam
+
 COMMIT_ID=$(shell git rev-parse HEAD)
 LICENSEDIRS=$(REPO_ROOT)/repo/licenses
 BINDIR?=$(shell pwd)
