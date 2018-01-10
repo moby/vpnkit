@@ -620,10 +620,9 @@ let test_http_connect () =
               Alcotest.check Alcotest.(option string) "URI.host"
                 (Cohttp.Request.uri request |> Uri.host)
                 (Cohttp.Request.uri result |> Uri.host);
-              (* FIXME: check whether the port should be included in the header or not *)
-              Alcotest.check Alcotest.int "number of host headers"
-                (Cohttp.Header.to_list request.Cohttp.Request.headers |> List.filter (fun (x, _) -> x = "host") |> List.length)
-                (Cohttp.Header.to_list result.Cohttp.Request.headers |> List.filter (fun (x, _) -> x = "host") |> List.length);
+              Alcotest.check Alcotest.(list string) "host headers"
+                (Cohttp.Header.to_list request.Cohttp.Request.headers |> List.filter (fun (x, _) -> x = "host") |> List.map snd)
+                (Cohttp.Header.to_list result.Cohttp.Request.headers |> List.filter (fun (x, _) -> x = "host") |> List.map snd);
               Lwt.return_unit
             )
         )
