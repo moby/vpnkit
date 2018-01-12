@@ -417,9 +417,15 @@ module Make
             in
             Log.info (fun f -> f "%s: CONNECT" (description true));
             let connect =
-              let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
-              let resource = Fmt.strf "%s:%d" (Ipaddr.V4.to_string dst) 443 in
-              { connect with Cohttp.Request.resource }
+              let host = Ipaddr.V4.to_string dst in
+              let port = 443 in
+              let uri = Uri.make ~host ~port () in
+              let empty_headers = Cohttp.Header.init () in
+              let headers = match Uri.userinfo proxy with
+                | None -> empty_headers
+                | Some s -> Cohttp.Header.add empty_headers "Proxy-Authorization" ("Basic " ^ (B64.encode s)) in
+              let request = Cohttp.Request.make ~meth:`CONNECT ~headers uri in
+              { request with Cohttp.Request.resource = host ^ ":" ^ (string_of_int port) }
             in
             Socket.Stream.Tcp.connect address >>= function
             | Error _ ->
