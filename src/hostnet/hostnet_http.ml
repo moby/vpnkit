@@ -108,13 +108,17 @@ module Make
     (Dns_resolver: Sig.DNS)
 = struct
 
-  type address = Ipaddr.t * int
+  type proxy = Uri.t
+
+  let string_of_proxy = Uri.to_string
+  let proxy_of_string = Uri.of_string
+
 
   let string_of_address (ip, port) = Fmt.strf "%s:%d" (Ipaddr.to_string ip) port
 
   type t = {
-    http: address option;
-    https: address option;
+    http: proxy option;
+    https: proxy option;
     exclude: Exclude.t;
   }
 
@@ -136,39 +140,15 @@ module Make
       find_ip rrs
     | Some x -> Lwt.return (Ok x)
 
-  let parse_host_port x =
-    (* host:port or [host]:port *)
-    let parse_port port =
-      match int_of_string port with
-      | x -> Lwt.return (Ok x)
-      | exception _ -> errorf "Failed to parse port: %s" port
-    in
-    (* Is it a URL? *)
-    let uri = Uri.of_string x in
-    match Uri.host uri, Uri.port uri with
-    | Some host, Some port ->
-      let open Lwt_result.Infix in
-      resolve_ip host >|= fun ip ->
-      Some (ip, port)
-    | _, _ ->
-      match String.cuts ~sep:":" x with
-      | [] -> errorf "Failed to find a :port in %s" x
-      | [host; port] ->
-        let open Lwt_result.Infix in
-        resolve_ip host >>= fun ip ->
-        parse_port port >|= fun port ->
-        Some (ip, port)
-      | _ -> errorf "Failed to parse proxy address: %s" x
-
   let to_json t =
     let open Ezjsonm in
     let http = match t.http with
     | None   -> []
-    | Some x -> [ "http",  string @@ string_of_address x ]
+    | Some x -> [ "http",  string @@ string_of_proxy x ]
     in
     let https = match t.https with
     | None   -> []
-    | Some x -> [ "https", string @@ string_of_address x ]
+    | Some x -> [ "https", string @@ string_of_proxy x ]
     in
     let exclude = [ "exclude", string @@ Exclude.to_string t.exclude ] in
     dict (http @ https @ exclude)
@@ -187,29 +167,15 @@ module Make
       try Exclude.of_string @@ get_string @@ find j [ "exclude" ]
       with Not_found -> Exclude.none
     in
-    let open Lwt_result.Infix in
-    (match http with
-    | None -> Lwt.return (Ok None)
-    | Some x -> parse_host_port x)
-    >>= fun http ->
-    (match https with
-    | None -> Lwt.return (Ok None)
-    | Some x -> parse_host_port x)
-    >>= fun https ->
+    let http = match http with None -> None | Some x -> Some (proxy_of_string x) in
+    let https = match https with None -> None | Some x -> Some (proxy_of_string x) in
     Lwt.return (Ok { http; https; exclude })
 
   let to_string t = Ezjsonm.to_string ~minify:false @@ to_json t
 
   let create ?http ?https ?exclude:_ () =
-    let open Lwt_result.Infix in
-    ( match http with
-    | None -> Lwt.return (Ok None)
-    | Some http -> parse_host_port http )
-    >>= fun http ->
-    ( match https with
-    | None -> Lwt.return (Ok None)
-    | Some https -> parse_host_port https )
-    >>= fun https ->
+    let http = match http with None -> None | Some x -> Some (proxy_of_string x) in
+    let https = match https with None -> None | Some x -> Some (proxy_of_string x) in
     (* FIXME: parse excludes *)
     let exclude = [] in
     let t = { http; https; exclude } in
@@ -321,37 +287,53 @@ module Make
         match Uri.scheme original with
         | None -> Uri.with_scheme original (Some "http")
         | Some _ -> original in
-      let address =
+      (
         if Exclude.matches dst (Some req) t.exclude
-        then Ipaddr.V4 dst, 80 (* direct connection *)
-        else h
-      in
-      (* Log the request to the console *)
-      let description outgoing =
-        Printf.sprintf "%s:80 %s %s:%d Host:%s"
-          (Ipaddr.V4.to_string dst)
-          (if outgoing then "-->" else "<--")
-          (Ipaddr.to_string @@ fst address)
-          (snd address)
-          (match Uri.host uri with Some x -> x | None -> "(unknown host)")
-      in
-      Log.info (fun f ->
-          f "%s: %s %s"
-            (description true)
-            (Cohttp.(Code.string_of_method (Cohttp.Request.meth req)))
-            (Uri.path uri));
-      Socket.Stream.Tcp.connect address >>= function
-      | Error _ ->
-        Log.err (fun f ->
-            f "Failed to connect to %s" (string_of_address address));
-        Lwt.return_unit
-      | Ok remote ->
-        (* Make the resource a full URI *)
-        let req = { req with Cohttp.Request.resource = Uri.to_string uri } in
-        Lwt.finalize (fun () ->
-            let outgoing = Outgoing.C.create remote in
-            proxy_request ~description ~incoming ~outgoing ~req
-        ) (fun () -> Socket.Stream.Tcp.close remote)
+        then Lwt.return (Ok (Ipaddr.V4 dst, 80)) (* direct connection *)
+        else begin match Uri.host h, Uri.port h with
+        | None, _ ->
+          Lwt.return (Error (`Msg ("HTTP proxy URI does not include a hostname: " ^ (Uri.to_string h))))
+        | _, None ->
+          Lwt.return (Error (`Msg ("HTTP proxy URI does not include a port: " ^ (Uri.to_string h))))
+        | Some host, Some port ->
+          resolve_ip host
+          >>= function
+          | Error e -> Lwt.return (Error e)
+          | Ok ip -> Lwt.return (Ok (ip, port))
+        end
+      ) >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string h) m);
+        Lwt.return_unit (* FIXME: should force a close *)
+      | Ok address ->
+        begin
+          (* Log the request to the console *)
+          let description outgoing =
+            Printf.sprintf "%s:80 %s %s:%d Host:%s"
+              (Ipaddr.V4.to_string dst)
+              (if outgoing then "-->" else "<--")
+              (Ipaddr.to_string @@ fst address)
+              (snd address)
+              (match Uri.host uri with Some x -> x | None -> "(unknown host)")
+          in
+          Log.info (fun f ->
+              f "%s: %s %s"
+                (description true)
+                (Cohttp.(Code.string_of_method (Cohttp.Request.meth req)))
+                (Uri.path uri));
+          Socket.Stream.Tcp.connect address >>= function
+          | Error _ ->
+            Log.err (fun f ->
+                f "Failed to connect to %s" (string_of_address address));
+            Lwt.return_unit
+          | Ok remote ->
+            (* Make the resource a full URI *)
+            let req = { req with Cohttp.Request.resource = Uri.to_string uri } in
+            Lwt.finalize (fun () ->
+                let outgoing = Outgoing.C.create remote in
+                proxy_request ~description ~incoming ~outgoing ~req
+            ) (fun () -> Socket.Stream.Tcp.close remote)
+        end
 
   let http ~dst ~t h =
     let listeners _port =
@@ -407,10 +389,26 @@ module Make
     in
     loop ()
 
-  let https ~dst ((ip, port) as address) =
+  let https ~dst proxy =
     let listeners _port =
       Log.debug (fun f -> f "HTTPS TCP handshake complete");
       let f flow =
+        (
+          match Uri.host proxy, Uri.port proxy with
+          | None, _ ->
+            Lwt.return (Error (`Msg ("HTTP proxy URI does not include a hostname: " ^ (Uri.to_string proxy))))
+          | _, None ->
+            Lwt.return (Error (`Msg ("HTTP proxy URI does not include a port: " ^ (Uri.to_string proxy))))
+          | Some host, Some port ->
+            resolve_ip host
+            >>= function
+            | Error e -> Lwt.return (Error e)
+            | Ok ip -> Lwt.return (Ok (ip, port))
+      ) >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string proxy) m);
+        Lwt.return_unit
+      | Ok ((ip, port) as address) ->
         Lwt.finalize (fun () ->
             let host = Ipaddr.V4.to_string dst in
             let description outgoing =
@@ -612,9 +610,25 @@ module Make
     in
     Lwt.return listeners
 
-  let tcp ~dst:(original_ip, original_port) ((ip, port) as address) =
+  let tcp ~dst:(original_ip, original_port) proxy =
     let listeners _port =
       let f flow =
+        (
+          match Uri.host proxy, Uri.port proxy with
+          | None, _ ->
+            Lwt.return (Error (`Msg ("HTTP proxy URI does not include a hostname: " ^ (Uri.to_string proxy))))
+          | _, None ->
+            Lwt.return (Error (`Msg ("HTTP proxy URI does not include a port: " ^ (Uri.to_string proxy))))
+          | Some host, Some port ->
+            resolve_ip host
+            >>= function
+            | Error e -> Lwt.return (Error e)
+            | Ok ip -> Lwt.return (Ok (ip, port))
+      ) >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string proxy) m);
+        Lwt.return_unit
+      | Ok ((ip, port) as address) ->
         Lwt.finalize (fun () ->
             let description =
               Fmt.strf "%s:%d %s %s:%d" (Ipaddr.V4.to_string original_ip) original_port

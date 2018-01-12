@@ -134,7 +134,7 @@ let intercept ~pcap ?(port = 80) request =
             Lwt.return_unit
         ) (fun server ->
           let json =
-            Ezjsonm.from_string (" { \"http\": \"127.0.0.1:" ^
+            Ezjsonm.from_string (" { \"http\": \"http://127.0.0.1:" ^
                                  (string_of_int server.Server.port) ^ "\" }")
           in
           Slirp_stack.Slirp_stack.Debug.update_http_json json ()
@@ -292,7 +292,7 @@ let test_proxy_passthrough () =
               Lwt.return_unit
         ) (fun server ->
           let json =
-            Ezjsonm.from_string (" { \"http\": \"127.0.0.1:" ^
+            Ezjsonm.from_string (" { \"http\": \"http://127.0.0.1:" ^
                                 (string_of_int server.Server.port) ^ "\" }")
           in
           Slirp_stack.Slirp_stack.Debug.update_http_json json ()
@@ -371,7 +371,7 @@ let test_http_connect () =
                 | Ok ()   -> ()
           ) (fun server ->
             Slirp_stack.Slirp_stack.Debug.update_http
-              ~https:("127.0.0.1:" ^ (string_of_int server.Server.port)) ()
+              ~https:("http://127.0.0.1:" ^ (string_of_int server.Server.port)) ()
             >>= function
             | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
             | Ok () ->
