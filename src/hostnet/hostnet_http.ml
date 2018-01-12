@@ -389,7 +389,7 @@ module Make
     in
     loop ()
 
-  let https ~dst proxy =
+  let transparent_https ~dst proxy =
     let listeners _port =
       Log.debug (fun f -> f "HTTPS TCP handshake complete");
       let f flow =
@@ -660,7 +660,7 @@ module Make
     | 443, _, Some h ->
       if Exclude.matches ip None t.exclude
       then None
-      else Some (https ~dst:ip h)
+      else Some (transparent_https ~dst:ip h)
     | _, _, _ -> None
 
   let explicit_proxy_handler ~dst:(ip, port) ~t =
