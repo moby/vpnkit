@@ -143,6 +143,12 @@ struct
     | Ethernet { payload = Ipv4 { payload = Icmp _; _ }; _ } -> true
     | _ -> false
 
+  let is_http_proxy = let open Frame in function
+    | Ethernet { payload = Ipv4 { payload = Tcp { src = (3128 | 3129); _ }; _ }; _ }
+    | Ethernet { payload = Ipv4 { payload = Tcp { dst = (3128 | 3129); _ }; _ }; _ } ->
+      true
+    | _ -> false
+
   let string_of_id id =
     let src = Stack_tcp_wire.src id in
     let src_port = Stack_tcp_wire.src_port id in
@@ -910,6 +916,8 @@ struct
     (* Capture 8KiB of ICMP traffic *)
     Netif.add_match ~t:interface ~name:"icmp.pcap" ~limit:(8 * kib)
       ~snaplen:1500 ~predicate:is_icmp;
+    Netif.add_match ~t:interface ~name:"http_proxy.pcap" ~limit:(1024 * kib)
+      ~snaplen:1500 ~predicate:is_http_proxy;
     or_failwith "Switch.connect" (Switch.connect interface)
     >>= fun switch ->
 
