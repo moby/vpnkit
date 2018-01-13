@@ -570,8 +570,11 @@ module Make
               | _ ->
                 (* The absolute URI used by the proxy should be converted back into
                    a relative URI and a Host: header *)
+                (* https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.23 says that the port
+                   number must be included if it's not 80. *)
+                let host_and_port = host ^ (match Uri.port uri with None -> "" | Some port -> ":" ^ (string_of_int port)) in
                 let req = { req with
-                  Cohttp.Request.headers = Cohttp.Header.replace req.Cohttp.Request.headers "host" host;
+                  Cohttp.Request.headers = Cohttp.Header.replace req.Cohttp.Request.headers "host" host_and_port;
                   resource = Uri.path_and_query uri
                 } in
                 Log.debug (fun f -> f "%s: sending %s"
