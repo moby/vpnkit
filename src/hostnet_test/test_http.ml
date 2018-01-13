@@ -116,7 +116,7 @@ let send_http_request stack (ip, port) request =
     Log.err (fun f -> f "Failed to connect to %s:80" (Ipaddr.V4.to_string ip));
     failwith "http_fetch"
 
-let intercept ~pcap ?(port = 80) request =
+let intercept ~pcap ?(port = 80) proxy request =
   let forwarded, forwarded_u = Lwt.task () in
   Slirp_stack.with_stack ~pcap (fun _ stack ->
       with_server (fun flow ->
@@ -134,7 +134,7 @@ let intercept ~pcap ?(port = 80) request =
             Lwt.return_unit
         ) (fun server ->
           let json =
-            Ezjsonm.from_string (" { \"http\": \"http://127.0.0.1:" ^
+            Ezjsonm.from_string (" { \"http\": \"" ^ proxy ^ ":" ^
                                  (string_of_int server.Server.port) ^ "\" }")
           in
           Slirp_stack.Slirp_stack.Debug.update_http_json json ()
@@ -156,13 +156,13 @@ let intercept ~pcap ?(port = 80) request =
     )
 
 (* Test that HTTP interception works at all *)
-let test_interception () =
+let test_interception proxy () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_interception.pcap" request >>= fun result ->
+    intercept ~pcap:"test_interception.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -179,13 +179,13 @@ let test_interception () =
   end
 
 (* Test that a relative URI becomes absolute *)
-let test_uri_relative () =
+let test_uri_relative proxy () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_uri_relative.pcap" request >>= fun result ->
+    intercept ~pcap:"test_uri_relative.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -200,13 +200,13 @@ let test_uri_relative () =
 
 (* Test that an absolute URI is preserved. This is expected when the
    client explicitly uses us as a proxy rather than being transparent. *)
-let test_uri_absolute () =
+let test_uri_absolute proxy () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
         (Uri.make ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_uri_absolute.pcap" request >>= fun result ->
+    intercept ~pcap:"test_uri_absolute.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -220,7 +220,7 @@ let test_uri_absolute () =
   end
 
 (* Verify that a custom X- header is preserved *)
-let test_x_header_preserved () =
+let test_x_header_preserved proxy () =
   Host.Main.run begin
     let headers =
       Cohttp.Header.add (Cohttp.Header.init ()) "X-dave-is-cool" "true"
@@ -229,7 +229,7 @@ let test_x_header_preserved () =
       Cohttp.Request.make ~headers
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_x_header_preserved.pcap" request >>= fun result ->
+    intercept ~pcap:"test_x_header_preserved.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -244,7 +244,7 @@ let test_x_header_preserved () =
 
 (* Verify that the user-agent is preserved. In particular we don't want our
    http library to leak here. *)
-let test_user_agent_preserved () =
+let test_user_agent_preserved proxy () =
   Host.Main.run begin
     let headers =
       Cohttp.Header.add (Cohttp.Header.init ()) "user-agent" "whatever"
@@ -253,7 +253,7 @@ let test_user_agent_preserved () =
       Cohttp.Request.make ~headers
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_user_agent_preserved.pcap" request >>= fun result ->
+    intercept ~pcap:"test_user_agent_preserved.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -266,7 +266,7 @@ let test_user_agent_preserved () =
   end
 
 (* Verify that authorizations are preserved *)
-let test_authorization_preserved () =
+let test_authorization_preserved proxy () =
   Host.Main.run begin
     let headers =
       Cohttp.Header.add (Cohttp.Header.init ()) "authorization" "basic foobar"
@@ -275,7 +275,7 @@ let test_authorization_preserved () =
       Cohttp.Request.make ~headers
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_authorization_preserved.pcap" request >>= fun result ->
+    intercept ~pcap:"test_authorization_preserved.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -720,7 +720,7 @@ let proxy_urls = [
 let tests = [
 
   "HTTP: interception",
-  [ "", `Quick, test_interception ];
+  [ "", `Quick, test_interception "http://127.0.0.1" ];
 
   "HTTP proxy: pass-through to upstream",
   [ "check that requests are passed through to upstream proxies", `Quick, test_proxy_passthrough ];
@@ -740,25 +740,25 @@ let tests = [
   "HTTP proxy: GET has good headers",
   [ "check that HTTP GET headers are correct", `Quick, test_http_proxy_headers ];
 
+] @ (List.concat @@ List.map (fun proxy -> [
   "HTTP: URI",
-  [ "check that relative URIs are rewritten", `Quick, test_uri_relative ];
+  [ "check that relative URIs are rewritten", `Quick, test_uri_relative proxy ];
 
   "HTTP: absolute URI",
-  [ "check that absolute URIs from proxies are preserved", `Quick, test_uri_absolute ];
+  [ "check that absolute URIs from proxies are preserved", `Quick, test_uri_absolute proxy ];
 
   "HTTP: custom header",
-  ["check that custom headers are preserved", `Quick, test_x_header_preserved];
+  ["check that custom headers are preserved", `Quick, test_x_header_preserved proxy ];
 
   "HTTP: user-agent",
-  [ "check that user-agent is preserved", `Quick, test_user_agent_preserved ];
+  [ "check that user-agent is preserved", `Quick, test_user_agent_preserved proxy ];
 
   "HTTP: authorization",
-  [ "check that authorization is preserved", `Quick, test_authorization_preserved ];
+  [ "check that authorization is preserved", `Quick, test_authorization_preserved proxy ];
 
-] @ (List.map (fun proxy ->
   "HTTP: CONNECT " ^ proxy,
   [ "check that HTTP CONNECT works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect (Uri.of_string proxy) ]
-) proxy_urls) @ [
+]) proxy_urls) @ [
   "HTTP: HEAD",
   [ "check that HTTP HEAD doesn't block the connection", `Quick, test_http_proxy_head ];
 ]
