@@ -690,6 +690,11 @@ let test_http_connect proxy () =
         )
     end
 
+let proxy_urls = [
+  "http://127.0.0.1";
+  "http://user:password@127.0.0.1";
+]
+
 let tests = [
 
   "HTTP: interception",
@@ -728,10 +733,7 @@ let tests = [
 ] @ (List.map (fun proxy ->
   "HTTP: CONNECT " ^ proxy,
   [ "check that HTTP CONNECT works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect (Uri.of_string proxy) ]
-) [
-  "http://127.0.0.1";
-  "http://user:password@127.0.0.1";
-]) @ [
+) proxy_urls) @ [
   "HTTP: HEAD",
   [ "check that HTTP HEAD doesn't block the connection", `Quick, test_http_proxy_head ];
 ]
