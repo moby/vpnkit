@@ -651,7 +651,14 @@ module Make
 
   let explicit_proxy_handler ~dst:(ip, port) ~t =
     match port, t.http, t.https with
+    (* If we have an upstream HTTP proxy then proxy port 3128 at the TCP level *)
     | 3128, Some h, _ -> Some (tcp ~dst:(ip, port) h)
+    (* If we have no upstream HTTP proxy then act as a proxy ourselves *)
     | 3128, None, _ -> Some (proxy ())
+    (* If we have an upstream HTTPS proxy then proxy port 3129 at the TCP level *)
+    | 3129, _, Some h -> Some (tcp ~dst:(ip, port) h)
+    (* If we have no upstream HTTPS proxy then act as a proxy ourselves *)
+    | 3129, _, None -> Some (proxy ())
+    (* For other ports, refuse the connection *)
     | _, _, _ -> None
 end
