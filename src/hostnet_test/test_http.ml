@@ -287,6 +287,40 @@ let test_authorization_preserved proxy () =
     Lwt.return ()
   end
 
+(* Verify that necessary proxy authorizations are present *)
+let test_proxy_authorization proxy () =
+  Host.Main.run begin
+    let headers =
+      Cohttp.Header.add (Cohttp.Header.init ()) "authorization" "basic foobar"
+    in
+    let request =
+      Cohttp.Request.make ~headers
+        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+    in
+    intercept ~pcap:"test_proxy_authorization.pcap" proxy request >>= fun result ->
+    Log.info (fun f ->
+        f "original was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
+    Log.info (fun f ->
+        f "proxied  was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t result)));
+    (* If the proxy uses auth, then there has to be a Proxy-Authorization
+       header. If theres no auth, there should be no header. *)
+    let proxy_authorization = "proxy-authorization" in
+    let proxy = Uri.of_string proxy in
+    begin match Uri.user proxy, Uri.password proxy with
+    | Some username, Some password ->
+      Alcotest.check Alcotest.(list string) proxy_authorization
+        (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+        [ "Basic " ^ (B64.encode (username ^ ":" ^ password)) ]
+    | _, _ ->
+      Alcotest.check Alcotest.(list string) proxy_authorization
+        (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+        [ ]
+    end;
+    Lwt.return ()
+  end
+
 let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
 
 let test_proxy_passthrough () =
@@ -755,6 +789,9 @@ let tests = [
 
   "HTTP: authorization",
   [ "check that authorization is preserved", `Quick, test_authorization_preserved proxy ];
+
+  "HTTP: proxy-authorization",
+  [ "check that proxy-authorization is present", `Quick, test_proxy_authorization proxy ];
 
   "HTTP: CONNECT " ^ proxy,
   [ "check that HTTP CONNECT works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect (Uri.of_string proxy) ]
