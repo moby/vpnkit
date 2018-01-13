@@ -333,7 +333,7 @@ let test_proxy_passthrough () =
     )
   end
 
-let test_http_connect () =
+let test_http_connect proxy () =
   let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
   Host.Main.run begin
     Slirp_stack.with_stack ~pcap:"test_http_connect.pcap" (fun _ stack ->
@@ -358,6 +358,19 @@ let test_http_connect () =
                 (Some (Ipaddr.V4.to_string test_dst_ip)) (Uri.host uri);
               Alcotest.check Alcotest.(option int) "port" (Some 443)
                 (Uri.port uri);
+              (* If the proxy uses auth, then there has to be a Proxy-Authorization
+                 header. If theres no auth, there should be no header. *)
+              let proxy_authorization = "proxy-authorization" in
+              begin match Uri.user proxy, Uri.password proxy with
+              | Some username, Some password ->
+                Alcotest.check Alcotest.(list string) proxy_authorization
+                  (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                  [ "Basic " ^ (B64.encode (username ^ ":" ^ password)) ]
+              | _, _ ->
+                Alcotest.check Alcotest.(list string) proxy_authorization
+                  (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                  [ ]
+              end;
               (* Unfortunately cohttp always adds transfer-encoding: chunked
                  so we write the header ourselves *)
               Incoming.C.write_line ic "HTTP/1.0 200 OK\r";
@@ -371,7 +384,7 @@ let test_http_connect () =
                 | Ok ()   -> ()
           ) (fun server ->
             Slirp_stack.Slirp_stack.Debug.update_http
-              ~https:("http://127.0.0.1:" ^ (string_of_int server.Server.port)) ()
+              ~https:(Uri.(to_string @@ with_port proxy (Some server.Server.port))) ()
             >>= function
             | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
             | Ok () ->
@@ -712,9 +725,13 @@ let tests = [
   "HTTP: user-agent",
   [ "check that user-agent is preserved", `Quick, test_user_agent_preserved ];
 
-  "HTTP: CONNECT",
-  [ "check that HTTP CONNECT works for HTTPS", `Quick, test_http_connect ];
-
+] @ (List.map (fun proxy ->
+  "HTTP: CONNECT " ^ proxy,
+  [ "check that HTTP CONNECT works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect (Uri.of_string proxy) ]
+) [
+  "http://127.0.0.1";
+  "http://user:password@127.0.0.1";
+]) @ [
   "HTTP: HEAD",
   [ "check that HTTP HEAD doesn't block the connection", `Quick, test_http_proxy_head ];
 ]
