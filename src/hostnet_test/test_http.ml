@@ -265,6 +265,28 @@ let test_user_agent_preserved () =
     Lwt.return ()
   end
 
+(* Verify that authorizations are preserved *)
+let test_authorization_preserved () =
+  Host.Main.run begin
+    let headers =
+      Cohttp.Header.add (Cohttp.Header.init ()) "authorization" "basic foobar"
+    in
+    let request =
+      Cohttp.Request.make ~headers
+        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+    in
+    intercept ~pcap:"test_authorization_preserved.pcap" request >>= fun result ->
+    Log.info (fun f ->
+        f "original was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
+    Log.info (fun f ->
+        f "proxied  was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t result)));
+    Alcotest.check Alcotest.(option string) "authorization" (Some "basic foobar")
+      (Cohttp.Header.get result.Cohttp.Request.headers "authorization");
+    Lwt.return ()
+  end
+
 let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
 
 let test_proxy_passthrough () =
@@ -729,6 +751,9 @@ let tests = [
 
   "HTTP: user-agent",
   [ "check that user-agent is preserved", `Quick, test_user_agent_preserved ];
+
+  "HTTP: authorization",
+  [ "check that authorization is preserved", `Quick, test_authorization_preserved ];
 
 ] @ (List.map (fun proxy ->
   "HTTP: CONNECT " ^ proxy,
