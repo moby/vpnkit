@@ -335,7 +335,7 @@ module Make
             ) (fun () -> Socket.Stream.Tcp.close remote)
         end
 
-  let http ~dst ~t h =
+  let transparent_http ~dst ~t h =
     let listeners _port =
       Log.debug (fun f -> f "HTTP TCP handshake complete");
       let f flow =
@@ -662,7 +662,7 @@ module Make
 
   let transparent_proxy_handler ~dst:(ip, port) ~t =
     match port, t.http, t.https with
-    | 80, Some h, _ -> Some (http ~dst:ip ~t h)
+    | 80, Some h, _ -> Some (transparent_http ~dst:ip ~t h)
     | 443, _, Some h ->
       if Exclude.matches ip None t.exclude
       then None
