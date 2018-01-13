@@ -270,7 +270,7 @@ module Make
             Lwt.return_unit
         ) res incoming
 
-  let proxy_one ~dst ~t h incoming =
+  let transparent_proxy_http_one ~dst ~t proxy incoming =
     Incoming.Request.read incoming >>= function
     | `Eof -> Lwt.return_unit
     | `Invalid x ->
@@ -290,11 +290,11 @@ module Make
       (
         if Exclude.matches dst (Some req) t.exclude
         then Lwt.return (Ok (Ipaddr.V4 dst, 80)) (* direct connection *)
-        else begin match Uri.host h, Uri.port h with
+        else begin match Uri.host proxy, Uri.port proxy with
         | None, _ ->
-          Lwt.return (Error (`Msg ("HTTP proxy URI does not include a hostname: " ^ (Uri.to_string h))))
+          Lwt.return (Error (`Msg ("HTTP proxy URI does not include a hostname: " ^ (Uri.to_string proxy))))
         | _, None ->
-          Lwt.return (Error (`Msg ("HTTP proxy URI does not include a port: " ^ (Uri.to_string h))))
+          Lwt.return (Error (`Msg ("HTTP proxy URI does not include a port: " ^ (Uri.to_string proxy))))
         | Some host, Some port ->
           resolve_ip host
           >>= function
@@ -303,7 +303,7 @@ module Make
         end
       ) >>= function
       | Error (`Msg m) ->
-        Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string h) m);
+        Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string proxy) m);
         Lwt.return_unit (* FIXME: should force a close *)
       | Ok address ->
         begin
@@ -327,8 +327,15 @@ module Make
                 f "Failed to connect to %s" (string_of_address address));
             Lwt.return_unit
           | Ok remote ->
+            (* Consider the proxy-authorization header: we must erase any existing
+               one and add one of our own, if necessary. *)
+            let proxy_authorization = "Proxy-Authorization" in
+            let headers = Cohttp.Header.remove req.Cohttp.Request.headers proxy_authorization in
+            let headers = match Uri.userinfo proxy with
+              | None -> headers
+              | Some s -> Cohttp.Header.add headers proxy_authorization ("Basic " ^ (B64.encode s)) in
             (* Make the resource a full URI *)
-            let req = { req with Cohttp.Request.resource = Uri.to_string uri } in
+            let req = { req with Cohttp.Request.resource = Uri.to_string uri; headers } in
             Lwt.finalize (fun () ->
                 let outgoing = Outgoing.C.create remote in
                 proxy_request ~description ~incoming ~outgoing ~req
@@ -341,7 +348,7 @@ module Make
       let f flow =
         Lwt.finalize (fun () ->
             let incoming = Incoming.C.create flow in
-            let rec loop () = proxy_one ~dst ~t h incoming >>= loop in
+            let rec loop () = transparent_proxy_http_one ~dst ~t h incoming >>= loop in
             loop ()
           ) (fun () -> Tcp.close flow)
       in
