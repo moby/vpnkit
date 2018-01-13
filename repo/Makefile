@@ -1,5 +1,5 @@
 # The exact list is `ls packages/local` + $PKGS
-PKGS = alcotest depext
+PKGS = alcotest depext merlin
 
 .PHONY: commit update-win update-osx
 
