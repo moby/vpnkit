@@ -18,7 +18,7 @@ module Exclude = struct
       type t = Any | String of string
 
       let of_string = function
-      | "*" -> Any
+      | "*" | "" -> Any
       | x -> String x
 
       let to_string = function
