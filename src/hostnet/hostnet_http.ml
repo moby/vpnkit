@@ -346,92 +346,6 @@ module Make
       | None -> headers
       | Some s -> Cohttp.Header.add headers proxy_authorization ("Basic " ^ (B64.encode s))
 
-  let transparent_proxy_http_one ~dst ~t ~flow proxy incoming req =
-      (* An HTTP request will have a missing scheme so we fill it in.
-         An HTTP proxy request will have a scheme already so we keep it.
-         An HTTPS proxy request will be a CONNECT host:port *)
-      let uri =
-        let original = Cohttp.Request.uri req in
-        match Uri.scheme original with
-        | None -> Uri.with_scheme original (Some "http")
-        | Some _ -> original in
-      (
-        if Exclude.matches dst (Some req) t.exclude
-        then Lwt.return (Ok (Ipaddr.V4 dst, 80)) (* direct connection *)
-        else begin match Uri.host proxy, Uri.port proxy with
-        | None, _ ->
-          Lwt.return (Error (`Msg ("HTTP proxy URI does not include a hostname: " ^ (Uri.to_string proxy))))
-        | _, None ->
-          Lwt.return (Error (`Msg ("HTTP proxy URI does not include a port: " ^ (Uri.to_string proxy))))
-        | Some host, Some port ->
-          resolve_ip host
-          >>= function
-          | Error e -> Lwt.return (Error e)
-          | Ok ip -> Lwt.return (Ok (ip, port))
-        end
-      ) >>= function
-      | Error (`Msg m) ->
-        Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string proxy) m);
-        Lwt.return false
-      | Ok address ->
-        begin
-          (* Log the request to the console *)
-          let description outgoing =
-            Printf.sprintf "%s:80 %s %s:%d Host:%s"
-              (Ipaddr.V4.to_string dst)
-              (if outgoing then "-->" else "<--")
-              (Ipaddr.to_string @@ fst address)
-              (snd address)
-              (match Uri.host uri with Some x -> x | None -> "(unknown host)")
-          in
-          Log.info (fun f ->
-              f "%s: %s %s"
-                (description true)
-                (Cohttp.(Code.string_of_method (Cohttp.Request.meth req)))
-                (Uri.path uri));
-          Socket.Stream.Tcp.connect address >>= function
-          | Error _ ->
-            Log.err (fun f ->
-                f "Failed to connect to %s" (string_of_address address));
-            Lwt.return false
-          | Ok remote ->
-            (* Consider the proxy-authorization header: we must erase any existing
-               one and add one of our own, if necessary. *)
-            let headers = add_proxy_authorization proxy req.Cohttp.Request.headers in
-            (* Make the resource a full URI *)
-            let req = { req with Cohttp.Request.resource = Uri.to_string uri; headers } in
-            Lwt.finalize (fun () ->
-                let outgoing = Outgoing.C.create remote in
-                proxy_request ~description ~incoming ~outgoing ~flow ~remote ~req
-            ) (fun () -> Socket.Stream.Tcp.close remote)
-        end
-
-  let transparent_http ~dst ~t h =
-    let listeners _port =
-      Log.debug (fun f -> f "HTTP TCP handshake complete");
-      let f flow =
-        Lwt.finalize (fun () ->
-          let incoming = Incoming.C.create flow in
-          Incoming.Request.read incoming >>= function
-          | `Eof -> Lwt.return_unit
-          | `Invalid x ->
-            Log.warn (fun f ->
-                f "Failed to parse HTTP request on port %a:80: %s"
-                  Ipaddr.V4.pp_hum dst x);
-            Lwt.return_unit
-          | `Ok req ->
-            let rec loop () =
-              transparent_proxy_http_one ~dst ~t ~flow h incoming req
-              >>= function
-              | true -> loop ()
-              | false -> Lwt.return_unit in
-            loop ()
-          ) (fun () -> Tcp.close flow)
-      in
-      Some f
-    in
-    Lwt.return listeners
-
   let address_of_proxy proxy =
     match Uri.host proxy, Uri.port proxy with
     | None, _ ->
@@ -703,13 +617,52 @@ module Make
     in
     Lwt.return listeners
 
+  let transparent_http ~dst proxy exclude =
+    let listeners _port =
+      Log.debug (fun f -> f "HTTP TCP handshake complete");
+      let f flow =
+        Lwt.finalize (fun () ->
+          let incoming = Incoming.C.create flow in
+          let rec loop () =
+            Incoming.Request.read incoming >>= function
+            | `Eof -> Lwt.return_unit
+            | `Invalid x ->
+              Log.warn (fun f ->
+                  f "Failed to parse HTTP request on port %a:80: %s"
+                    Ipaddr.V4.pp_hum dst x);
+              Lwt.return_unit
+            | `Ok req ->
+              (* If there is no Host: header or host in the URI then add a
+                 Host: header with the destination IP address -- this is not perfect
+                 but better than nothing and the majority of people will supply a Host:
+                 header these days because otherwise virtual hosts don't work *)
+              let req =
+                match get_host req with
+                | Error `Missing_host_header ->
+                  { req with Cohttp.Request.headers = Cohttp.Header.replace req.headers "host" (Ipaddr.V4.to_string dst) }
+                | Ok _ -> req in
+              fetch ~flow (Some proxy) exclude incoming req
+              >>= function
+              | true ->
+                (* keep the connection open, read more requests *)
+                loop ()
+              | false ->
+                Log.debug (fun f -> f "HTTP session complete, closing connection");
+                Lwt.return_unit in
+            loop ()
+          ) (fun () -> Tcp.close flow)
+      in
+      Some f
+    in
+    Lwt.return listeners
+
   let transparent_proxy_handler ~dst:(ip, port) ~t =
     match port, t.http, t.https with
-    | 80, Some h, _ -> Some (transparent_http ~dst:ip ~t h)
-    | 443, _, Some h ->
+    | 80, Some proxy, _ -> Some (transparent_http ~dst:ip proxy t.exclude)
+    | 443, _, Some proxy ->
       if Exclude.matches ip None t.exclude
       then None
-      else Some (transparent_https ~dst:ip h)
+      else Some (transparent_https ~dst:ip proxy)
     | _, _, _ -> None
 
   let explicit_proxy_handler ~dst:(_, port) ~t =
