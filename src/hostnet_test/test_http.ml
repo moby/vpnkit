@@ -729,7 +729,7 @@ let tests = [
   [ "check that authorization is preserved", `Quick, test_authorization_preserved proxy ];
 
   "HTTP: proxy-authorization",
-  [ "check that proxy-authorization is present", `Quick, test_proxy_authorization proxy ];
+  [ "check that proxy-authorization is present when proxy = " ^ proxy, `Quick, test_proxy_authorization proxy ];
 
   "HTTP: CONNECT " ^ proxy,
   [ "check that HTTP CONNECT works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect (Uri.of_string proxy) ]
