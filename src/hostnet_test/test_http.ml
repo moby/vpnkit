@@ -330,72 +330,6 @@ let test_proxy_authorization proxy () =
 
 let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
 
-let test_proxy_passthrough () =
-  let forwarded, forwarded_u = Lwt.task () in
-  Host.Main.run begin
-  Slirp_stack.with_stack ~pcap:"test_proxy_passthrough.pcap" (fun _ stack ->
-      with_server (fun flow ->
-          let ic = Incoming.C.create flow in
-          (* read something *)
-          Incoming.C.read_some ~len:5 ic
-          >>= function
-          | Ok `Eof -> failwith "test_proxy_passthrough: read_some returned Eof"
-          | Error _ -> failwith "test_proxy_passthrough: read_some returned Error"
-          | Ok (`Data buf) ->
-            let txt = Cstruct.to_string buf in
-            Alcotest.check Alcotest.string "message" "hello" txt;
-            let response = "there" in
-            (* write something *)
-            Incoming.C.write_string ic response 0 (String.length response);
-            Incoming.C.flush ic
-            >>= function
-            | Error _ -> failwith "test_proxy_passthrough: flush returned error"
-            | Ok ()   ->
-              Lwt.wakeup_later forwarded_u ();
-              Lwt.return_unit
-        ) (fun server ->
-          let json =
-            Ezjsonm.from_string (" { \"http\": \"http://127.0.0.1:" ^
-                                (string_of_int server.Server.port) ^ "\" }")
-          in
-          Slirp_stack.Slirp_stack.Debug.update_http_json json ()
-          >>= function
-          | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
-          | Ok () ->
-            let open Slirp_stack in
-            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
-            >>= function
-            | Error _ ->
-              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
-              failwith "test_proxy_passthrough: connect failed"
-            | Ok flow ->
-              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
-              let oc = Outgoing.C.create flow in
-              let request = "hello" in
-              Outgoing.C.write_string oc request 0 (String.length request);
-              Outgoing.C.flush oc
-              >>= function
-              | Error _ -> failwith "test_proxy_passthrough: client flush returned error"
-              | Ok ()   ->
-                Outgoing.C.read_some ~len:5 oc
-                >>= function
-                | Ok `Eof -> failwith "test_proxy_passthrough: client read_some returned Eof"
-                | Error _ -> failwith "test_proxy_passthrough: client read_some returned Error"
-                | Ok (`Data buf) ->
-                  let txt = Cstruct.to_string buf in
-                  Alcotest.check Alcotest.string "message" "there" txt;
-                  Lwt.pick [
-                    (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () ->
-                    `Timeout);
-                    (forwarded >>= fun x -> Lwt.return (`Result x))
-                  ]
-        )
-      >|= function
-      | `Timeout  -> failwith "HTTP proxy failed"
-      | `Result x -> x
-    )
-  end
-
 let test_http_connect proxy () =
   let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
   Host.Main.run begin
@@ -762,9 +696,6 @@ let tests = [
 
   "HTTP: interception",
   [ "", `Quick, test_interception "http://127.0.0.1" ];
-
-  "HTTP proxy: pass-through to upstream",
-  [ "check that requests are passed through to upstream proxies", `Quick, test_proxy_passthrough ];
 
   "HTTP proxy: CONNECT",
   [ "check that HTTP CONNECT requests through the proxy", `Quick, test_http_proxy_connect ];
