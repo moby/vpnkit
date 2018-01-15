@@ -175,6 +175,13 @@ let test_interception proxy () =
     Alcotest.check Alcotest.string "version"
       (Cohttp.Code.string_of_version request.Cohttp.Request.version)
       (Cohttp.Code.string_of_version result.Cohttp.Request.version);
+    (* a request to a proxy must have an absolute URI *)
+    Alcotest.check Alcotest.string "uri"
+      "http://dave.recoil.org:80/"
+      result.Cohttp.Request.resource;
+    Alcotest.check Alcotest.(list(pair string string)) "headers"
+      (Cohttp.Header.to_list request.Cohttp.Request.headers)
+      (Cohttp.Header.to_list result.Cohttp.Request.headers);
     Lwt.return ()
   end
 
