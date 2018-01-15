@@ -5,8 +5,9 @@ module Exclude: sig
   val of_string: string -> t
   val to_string: t -> string
 
-  val matches: Ipaddr.V4.t -> Cohttp.Request.t option -> t -> bool
-  (** If true, the given request should bypass the proxy *)
+  val matches: ?ip:Ipaddr.V4.t -> host:string -> t -> bool
+  (** True if the request should bypass the proxy. [ip] is the destination
+      IP address (if known) and host is the Host: from the URI or header. *)
 end
 
 module Make
