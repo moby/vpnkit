@@ -38,6 +38,14 @@ module Exclude = struct
     assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1")
               req exclude)
 
+  let test_domain_dot_match () =
+    let exclude = Hostnet_http.Exclude.of_string ".mit.edu" in
+    let req =
+      Some (Cohttp.Request.make (Uri.of_string "http://dave.mit.edu/"))
+    in
+    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1")
+              req exclude)
+
   let test_domain_no_match () =
     let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
     let req =
@@ -67,6 +75,7 @@ module Exclude = struct
     "HTTP: no_proxy domain match", [ "", `Quick, test_domain_match ];
     "HTTP: no_proxy domain no match", [ "", `Quick, test_domain_no_match ];
     "HTTP: no_proxy domain star match", [ "", `Quick, test_domain_star_match ];
+    "HTTP: no_proxy domain dot match", [ "", `Quick, test_domain_dot_match ];
     "HTTP: no_proxy list", [ "", `Quick, test_list ];
   ]
 end
