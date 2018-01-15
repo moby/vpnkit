@@ -50,24 +50,21 @@ module Exclude = struct
     | CIDR prefix -> Ipaddr.V4.Prefix.mem ip prefix
     | _ -> false
 
-    let matches_host req = function
+    let matches_host host = function
     | CIDR _ -> false
     | Subdomain domains ->
-      let h = req.Cohttp.Request.headers in
-      begin match Cohttp.Header.get h "host" with
-      | Some host ->
-        let bits = Astring.String.cuts ~sep:"." host in
-        (* does 'bits' match 'domains' *)
-        let rec loop bits domains = match bits, domains with
-        | _, [] -> true
-        | [], _ :: _ -> false
-        | b :: bs, d :: ds -> Element.matches b d && loop bs ds in
-        loop (List.rev bits) (List.rev domains)
-      | None -> false
-      end
+      let bits = Astring.String.cuts ~sep:"." host in
+      (* does 'bits' match 'domains' *)
+      let rec loop bits domains = match bits, domains with
+      | _, [] -> true
+      | [], _ :: _ -> false
+      | b :: bs, d :: ds -> Element.matches b d && loop bs ds in
+      loop (List.rev bits) (List.rev domains)
 
-    let matches dst req exclude =
-      matches_ip dst exclude || (match req with None -> false | Some host -> matches_host host exclude)
+    let matches ?ip ~host exclude =
+      (match ip with None -> false | Some ip -> matches_ip ip exclude)
+      ||
+      (matches_host host exclude)
   end
 
   type t = One.t list
@@ -85,11 +82,8 @@ module Exclude = struct
 
   let to_string t = String.concat ~sep:" " @@ (List.map One.to_string t)
 
-  let matches_host req t =
-    List.fold_left (||) false (List.map (One.matches_host req) t)
-
-  let matches dst req t =
-    List.fold_left (||) false (List.map (One.matches dst req) t)
+  let matches ?ip ~host t =
+    List.fold_left (||) false (List.map (One.matches ?ip ~host) t)
 
 end
 
@@ -367,7 +361,6 @@ module Make
     ) res incoming
 
   let transparent_https ~dst proxy =
-    (* FIXME: proxy excludes for this *)
     let listeners _port =
       Log.debug (fun f -> f "HTTPS TCP handshake complete");
       let f flow =
@@ -484,7 +477,7 @@ module Make
         | None -> Some ((host, port), `Origin)
         (* If a proxy is configured it depends on whether the request matches the excludes *)
         | Some proxy ->
-          if Exclude.matches_host req exclude
+          if Exclude.matches ~host exclude
           then Some ((host, port), `Origin)
           else Some (proxy, `Proxy) in
       begin match hostport_and_ty with
@@ -660,7 +653,7 @@ module Make
     match port, t.http, t.https with
     | 80, Some proxy, _ -> Some (transparent_http ~dst:ip proxy t.exclude)
     | 443, _, Some proxy ->
-      if Exclude.matches ip None t.exclude
+      if Exclude.matches ~ip ~host:(Ipaddr.V4.to_string ip) t.exclude
       then None
       else Some (transparent_https ~dst:ip proxy)
     | _, _, _ -> None
