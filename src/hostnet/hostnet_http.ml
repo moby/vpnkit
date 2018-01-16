@@ -2,7 +2,7 @@ open Lwt.Infix
 open Astring
 
 let src =
-  let src = Logs.Src.create "http" ~doc:"Transparently proxy HTTP" in
+  let src = Logs.Src.create "http" ~doc:"HTTP proxy" in
   Logs.Src.set_level src (Some Logs.Info);
   src
 
