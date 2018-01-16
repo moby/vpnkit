@@ -416,6 +416,104 @@ let test_http_connect_tunnel proxy () =
       )
   end
 
+  let test_http_connect_forward proxy () =
+    (* Run a proxy, send an HTTP CONNECT to it, check the forwarded request *)
+    let proxy_port = ref 0 in
+    Host.Main.run begin
+      Slirp_stack.with_stack ~pcap:"test_http_connect_forward.pcap" (fun _ stack ->
+          with_server (fun flow ->
+              let ic = Incoming.C.create flow in
+              Incoming.Request.read ic >>= function
+              | `Eof ->
+                Log.err (fun f -> f "Failed to request");
+                failwith "Failed to read request"
+              | `Invalid x ->
+                Log.err (fun f -> f "Failed to parse request: %s" x);
+                failwith ("Failed to parse request: " ^ x)
+              | `Ok req ->
+                Log.info (fun f ->
+                    f "received: %s"
+                      (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t req)));
+                Alcotest.check Alcotest.string "method"
+                  (Cohttp.Code.string_of_method `CONNECT)
+                  (Cohttp.Code.string_of_method req.Cohttp.Request.meth);
+                Printf.fprintf stderr "Headers =\n  %s\n%!" (String.concat "\n  " (List.map (fun (k, v) -> k ^ ": " ^ v) (Cohttp.Header.to_list req.Cohttp.Request.headers)));
+                Alcotest.check Alcotest.(option string) "host"
+                  (Some ("localhost:" ^ (string_of_int !proxy_port)))
+                  (Cohttp.Header.get req.Cohttp.Request.headers "host");
+                Alcotest.check Alcotest.string "resource"
+                  ("localhost:" ^ (string_of_int !proxy_port))
+                  req.Cohttp.Request.resource;
+                (* If the proxy uses auth, then there has to be a Proxy-Authorization
+                   header. If theres no auth, there should be no header. *)
+                let proxy_authorization = "proxy-authorization" in
+                begin match Uri.user proxy, Uri.password proxy with
+                | Some username, Some password ->
+                  Alcotest.check Alcotest.(list string) proxy_authorization
+                    [ "Basic " ^ (B64.encode (username ^ ":" ^ password)) ]
+                    (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                | _, _ ->
+                  Alcotest.check Alcotest.(list string) proxy_authorization
+                    [ ]
+                    (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                end;
+                (* Unfortunately cohttp always adds transfer-encoding: chunked
+                   so we write the header ourselves *)
+                Incoming.C.write_line ic "HTTP/1.0 200 OK\r";
+                Incoming.C.write_line ic "\r";
+                Incoming.C.flush ic >>= function
+                | Error e -> err_flush e
+                | Ok ()   ->
+                  Incoming.C.write_line ic "hello";
+                  Incoming.C.flush ic >|= function
+                  | Error e -> err_flush e
+                  | Ok ()   -> ()
+            ) (fun server ->
+              proxy_port := server.Server.port;
+              Slirp_stack.Slirp_stack.Debug.update_http
+                ~https:(Uri.(to_string @@ with_port proxy (Some server.Server.port))) ()
+              >>= function
+              | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
+              | Ok () ->
+                let open Slirp_stack in
+                Client.TCPV4.create_connection (Client.tcpv4 stack.t)
+                  (primary_dns_ip, 3129)
+                >>= function
+                | Error _ ->
+                  Log.err (fun f ->
+                      f "TCPV4.create_connection %s:%d failed"
+                        (Ipaddr.V4.to_string primary_dns_ip) 3129);
+                  failwith "TCPV4.create_connection"
+                | Ok flow ->
+                  let oc = Outgoing.C.create flow in
+                  let request =
+                    let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
+                    let resource = Fmt.strf "localhost:%d" server.Server.port in
+                    let headers = Cohttp.Header.replace connect.Cohttp.Request.headers "host" resource in
+                    { connect with Cohttp.Request.resource; headers }
+                  in
+                  Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
+                  >>= fun () ->
+                  Outgoing.Response.read oc
+                  >>= function
+                  | `Eof ->
+                    failwith "test_http_connect_forward: EOF on HTTP CONNECT"
+                  | `Invalid x ->
+                    failwith ("test_http_connect_forward: Invalid HTTP response: " ^ x)
+                  | `Ok res ->
+                    if res.Cohttp.Response.status <> `OK
+                    then failwith "test_http_connect_forward: HTTP CONNECT failed";
+                    Outgoing.C.read_some ~len:5 oc >>= function
+                    | Error e -> Fmt.kstrf failwith "%a" Outgoing.C.pp_error e
+                    | Ok `Eof -> failwith "EOF"
+                    | Ok (`Data buf) ->
+                      let txt = Cstruct.to_string buf in
+                      Alcotest.check Alcotest.string "message" "hello" txt;
+                      Lwt.return_unit
+            )
+      )
+    end
+
   let test_http_proxy_connect () =
     let forwarded, forwarded_u = Lwt.task () in
     Host.Main.run begin
@@ -741,8 +839,12 @@ let tests = [
   [ "check that proxy-authorization is present when proxy = " ^ proxy, `Quick, test_proxy_authorization proxy ];
 
   "HTTP: CONNECT tunnel though " ^ proxy,
-  [ "check that HTTP CONNECT tunnelling works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect_tunnel (Uri.of_string proxy) ]
-]) proxy_urls) @ [
+  [ "check that HTTP CONNECT tunnelling works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect_tunnel (Uri.of_string proxy) ];
+
+  "HTTP: CONNECT forwarded to " ^ proxy,
+  [ "check that HTTP CONNECT are forwarded correctly to proxy " ^ proxy, `Quick, test_http_connect_forward (Uri.of_string proxy) ];
+
+  ]) proxy_urls) @ [
   "HTTP: HEAD",
   [ "check that HTTP HEAD doesn't block the connection", `Quick, test_http_proxy_head ];
 ]
