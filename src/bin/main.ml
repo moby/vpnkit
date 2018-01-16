@@ -233,7 +233,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main_t
       configuration
-      socket_url port_control_url introspection_url diagnostics_url
+      socket_url port_control_urls introspection_url diagnostics_url
       vsock_path db_path db_branch hosts
       listen_backlog
     =
@@ -262,11 +262,14 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       ()
     in
 
-    Lwt.async (fun () ->
-        log_exception_continue "Starting the 9P port control filesystem" (fun () ->
-            start_port_forwarding port_control_url configuration.Configuration.max_connections vsock_path
+    List.iter
+      (fun url ->
+        Lwt.async (fun () ->
+            log_exception_continue ("Starting the 9P port control filesystem on " ^ url) (fun () ->
+                start_port_forwarding url configuration.Configuration.max_connections vsock_path
+              )
           )
-      );
+      ) port_control_urls;
 
     Mclock.connect () >>= fun clock ->
     let vnet_switch = Vnet.create () in
@@ -338,7 +341,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       wait_forever
 
   let main
-      socket_url port_control_url introspection_url diagnostics_url
+      socket_url port_control_urls introspection_url diagnostics_url
       max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
       listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
@@ -395,7 +398,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       | Some socket_url ->
     try
       Host.Main.run
-        (main_t configuration socket_url port_control_url introspection_url diagnostics_url
+        (main_t configuration socket_url port_control_urls introspection_url diagnostics_url
           vsock_path db_path db_branch hosts
           listen_backlog);
     with e ->
@@ -415,7 +418,7 @@ let socket =
   in
   Arg.(value & opt (some string) None doc)
 
-let port_control_path =
+let port_control_urls =
   let doc =
     Arg.info ~doc:
       "The address on the host for the 9P filesystem needed to control host \
@@ -427,7 +430,7 @@ let port_control_path =
        incoming connections."
       [ "port" ]
   in
-  Arg.(value & opt string "" doc)
+  Arg.(value & opt_all string [] doc)
 
 let introspection_path =
   let doc =
@@ -628,7 +631,7 @@ let command =
          flows via userspace sockets"]
   in
   Term.(pure main
-        $ socket $ port_control_path $ introspection_path $ diagnostics_path
+        $ socket $ port_control_urls $ introspection_path $ diagnostics_path
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ gateway_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
