@@ -364,61 +364,62 @@ module Make
     let listeners _port =
       Log.debug (fun f -> f "HTTPS TCP handshake complete");
       let f flow =
-        address_of_proxy proxy
-        >>= function
-      | Error (`Msg m) ->
-        Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string proxy) m);
-        Lwt.return_unit
-      | Ok ((ip, port) as address) ->
-        Lwt.finalize (fun () ->
-            let host = Ipaddr.V4.to_string dst in
-            let description outgoing =
-              Fmt.strf "%s:443 %s %s:%d" host
-                (if outgoing then "-->" else "<--") (Ipaddr.to_string ip) port
-            in
-            Log.info (fun f -> f "%s: CONNECT" (description true));
-            let connect =
-              let host = Ipaddr.V4.to_string dst in
-              let port = 443 in
-              let uri = Uri.make ~host ~port () in
-              let headers = add_proxy_authorization proxy (Cohttp.Header.init ()) in
-              let request = Cohttp.Request.make ~meth:`CONNECT ~headers uri in
-              { request with Cohttp.Request.resource = host ^ ":" ^ (string_of_int port) }
-            in
-            Socket.Stream.Tcp.connect address >>= function
-            | Error _ ->
-              Log.err (fun f ->
-                  f "Failed to connect to %s" (string_of_address address));
+        Lwt.finalize
+          (fun () ->
+            address_of_proxy proxy
+            >>= function
+            | Error (`Msg m) ->
+              Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string proxy) m);
               Lwt.return_unit
-            | Ok remote ->
-              let outgoing = Outgoing.C.create remote in
-              Lwt.finalize  (fun () ->
-                  Outgoing.Request.write ~flush:true (fun _ -> Lwt.return_unit)
-                    connect outgoing
-                  >>= fun () ->
-                  Outgoing.Response.read outgoing >>= function
-                  | `Eof ->
-                    Log.warn (fun f ->
-                        f "EOF from %s" (string_of_address address));
-                    Lwt.return_unit
-                  | `Invalid x ->
-                    Log.warn (fun f ->
-                        f "Failed to parse HTTP response on port %s: %s"
-                          (string_of_address address) x);
-                    Lwt.return_unit
-                  | `Ok res ->
-                    Log.info (fun f ->
-                        let open Cohttp.Response in
-                        f "%s: %s %s"
-                          (description false)
-                          (Cohttp.Code.string_of_version res.version)
-                          (Cohttp.Code.string_of_status res.status));
-                    Log.debug (fun f ->
-                        f "%s" (Sexplib.Sexp.to_string_hum
-                                  (Cohttp.Response.sexp_of_t res)));
-                    let incoming = Incoming.C.create flow in
-                    proxy_bytes ~incoming ~outgoing ~flow ~remote
-                ) (fun () -> Socket.Stream.Tcp.close remote)
+            | Ok ((ip, port) as address) ->
+              let host = Ipaddr.V4.to_string dst in
+              let description outgoing =
+                Fmt.strf "%s:443 %s %s:%d" host
+                  (if outgoing then "-->" else "<--") (Ipaddr.to_string ip) port
+              in
+              Log.info (fun f -> f "%s: CONNECT" (description true));
+              let connect =
+                let host = Ipaddr.V4.to_string dst in
+                let port = 443 in
+                let uri = Uri.make ~host ~port () in
+                let headers = add_proxy_authorization proxy (Cohttp.Header.init ()) in
+                let request = Cohttp.Request.make ~meth:`CONNECT ~headers uri in
+                { request with Cohttp.Request.resource = host ^ ":" ^ (string_of_int port) }
+              in
+              Socket.Stream.Tcp.connect address >>= function
+              | Error _ ->
+                Log.err (fun f ->
+                    f "Failed to connect to %s" (string_of_address address));
+                Lwt.return_unit
+              | Ok remote ->
+                let outgoing = Outgoing.C.create remote in
+                Lwt.finalize  (fun () ->
+                    Outgoing.Request.write ~flush:true (fun _ -> Lwt.return_unit)
+                      connect outgoing
+                    >>= fun () ->
+                    Outgoing.Response.read outgoing >>= function
+                    | `Eof ->
+                      Log.warn (fun f ->
+                          f "EOF from %s" (string_of_address address));
+                      Lwt.return_unit
+                    | `Invalid x ->
+                      Log.warn (fun f ->
+                          f "Failed to parse HTTP response on port %s: %s"
+                            (string_of_address address) x);
+                      Lwt.return_unit
+                    | `Ok res ->
+                      Log.info (fun f ->
+                          let open Cohttp.Response in
+                          f "%s: %s %s"
+                            (description false)
+                            (Cohttp.Code.string_of_version res.version)
+                            (Cohttp.Code.string_of_status res.status));
+                      Log.debug (fun f ->
+                          f "%s" (Sexplib.Sexp.to_string_hum
+                                    (Cohttp.Response.sexp_of_t res)));
+                      let incoming = Incoming.C.create flow in
+                      proxy_bytes ~incoming ~outgoing ~flow ~remote
+                  ) (fun () -> Socket.Stream.Tcp.close remote)
           ) (fun () -> Tcp.close flow)
       in Some f
     in
