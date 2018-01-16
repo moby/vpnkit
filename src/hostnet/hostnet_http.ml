@@ -111,8 +111,31 @@ module Make
   type proxy = Uri.t
 
   let string_of_proxy = Uri.to_string
-  let proxy_of_string = Uri.of_string
 
+  (* Support both http://user:pass@host:port/ and host:port *)
+  let proxy_of_string x =
+    (* Is it a URL? *)
+    let uri = Uri.of_string x in
+    match Uri.host uri, Uri.port uri with
+    | Some _, Some _ -> Some uri
+    | _, _ ->
+      begin match String.cuts ~sep:":" x with
+      | [] ->
+        Log.err (fun f -> f "Failed to parse HTTP(S) proxy as URI or host:port: %s" x);
+        None
+      | [host; port] ->
+        begin
+          try
+            let port = int_of_string port in
+            Some (Uri.make ~scheme:"http" ~host ~port ())
+          with Failure _ ->
+            Log.err (fun f -> f "Failed to parse HTTP(S) proxy as URI or host:port: %s" x);
+            None
+        end
+      | _ ->
+        Log.err (fun f -> f "Failed to parse HTTP(S) proxy as URI or host:port: %s" x);
+        None
+      end
 
   let string_of_address (ip, port) = Fmt.strf "%s:%d" (Ipaddr.to_string ip) port
 
@@ -167,15 +190,15 @@ module Make
       try Exclude.of_string @@ get_string @@ find j [ "exclude" ]
       with Not_found -> Exclude.none
     in
-    let http = match http with None -> None | Some x -> Some (proxy_of_string x) in
-    let https = match https with None -> None | Some x -> Some (proxy_of_string x) in
+    let http = match http with None -> None | Some x -> proxy_of_string x in
+    let https = match https with None -> None | Some x -> proxy_of_string x in
     Lwt.return (Ok { http; https; exclude })
 
   let to_string t = Ezjsonm.to_string ~minify:false @@ to_json t
 
   let create ?http ?https ?exclude:_ () =
-    let http = match http with None -> None | Some x -> Some (proxy_of_string x) in
-    let https = match https with None -> None | Some x -> Some (proxy_of_string x) in
+    let http = match http with None -> None | Some x -> proxy_of_string x in
+    let https = match https with None -> None | Some x -> proxy_of_string x in
     (* FIXME: parse excludes *)
     let exclude = [] in
     let t = { http; https; exclude } in
