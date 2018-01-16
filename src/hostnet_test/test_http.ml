@@ -11,55 +11,57 @@ module Exclude = struct
 
   let test_cidr_match () =
     let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
-    let req = Some (Cohttp.Request.make (Uri.of_string "http://localhost")) in
-    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1")
-              req exclude)
+    assert (Hostnet_http.Exclude.matches ~ip:(Ipaddr.V4.of_string_exn "10.0.0.1") ~host:"localhost" exclude)
 
   let test_cidr_no_match () =
     let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
-    let req = Some (Cohttp.Request.make (Uri.of_string "http://localhost")) in
     assert (not(Hostnet_http.Exclude.matches
-                  (Ipaddr.V4.of_string_exn "192.168.0.1")
-                  req exclude))
+                  ~ip:(Ipaddr.V4.of_string_exn "192.168.0.1")
+                  ~host:"localhost"
+                  exclude))
 
   let test_domain_match () =
     let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
-    let req =
-      Some (Cohttp.Request.make (Uri.of_string "http://dave.mit.edu/"))
-    in
-    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1")
-              req exclude)
+    assert (Hostnet_http.Exclude.matches
+                  ~ip:(Ipaddr.V4.of_string_exn "10.0.0.1")
+                  ~host:"dave.mit.edu"
+                  exclude)
 
   let test_domain_star_match () =
     let exclude = Hostnet_http.Exclude.of_string "*.mit.edu" in
-    let req =
-      Some (Cohttp.Request.make (Uri.of_string "http://dave.mit.edu/"))
-    in
-    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1")
-              req exclude)
+    assert (Hostnet_http.Exclude.matches
+                  ~ip:(Ipaddr.V4.of_string_exn "10.0.0.1")
+                  ~host:"dave.mit.edu"
+                  exclude)
+
+  let test_domain_dot_match () =
+    let exclude = Hostnet_http.Exclude.of_string ".mit.edu" in
+    assert (Hostnet_http.Exclude.matches
+                  ~ip:(Ipaddr.V4.of_string_exn "10.0.0.1")
+                  ~host:"dave.mit.edu"
+                  exclude)
 
   let test_domain_no_match () =
     let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
-    let req =
-      Some (Cohttp.Request.make (Uri.of_string "http://dave.recoil.org/"))
-    in
     assert (not(Hostnet_http.Exclude.matches
-                  (Ipaddr.V4.of_string_exn "10.0.0.1")
-                  req exclude))
+                  ~ip:(Ipaddr.V4.of_string_exn "10.0.0.1")
+                  ~host:"dave.recoil.org"
+                  exclude))
 
   let test_list () =
     let exclude = Hostnet_http.Exclude.of_string "*.local, 169.254.0.0/16" in
-    let req = Some (Cohttp.Request.make (Uri.of_string "http://dave.local/")) in
-    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "10.0.0.1")
-              req exclude);
-    let req' =
-      Some (Cohttp.Request.make (Uri.of_string "http://dave.recoil.org/"))
-    in
-    assert (Hostnet_http.Exclude.matches (Ipaddr.V4.of_string_exn "169.254.0.1")
-              req' exclude);
+    assert (Hostnet_http.Exclude.matches
+                  ~ip:(Ipaddr.V4.of_string_exn "10.0.0.1")
+                  ~host:"dave.local"
+                  exclude);
+    assert (Hostnet_http.Exclude.matches
+                  ~ip:(Ipaddr.V4.of_string_exn "169.254.0.1")
+                  ~host:"dave.recoil.org"
+                  exclude);
     assert (not(Hostnet_http.Exclude.matches
-                  (Ipaddr.V4.of_string_exn "10.0.0.1")
-                  req' exclude))
+                  ~ip:(Ipaddr.V4.of_string_exn "10.0.0.1")
+                  ~host:"dave.recoil.org"
+                  exclude))
 
   let tests = [
     "HTTP: no_proxy CIDR match", [ "", `Quick, test_cidr_match ];
@@ -67,6 +69,7 @@ module Exclude = struct
     "HTTP: no_proxy domain match", [ "", `Quick, test_domain_match ];
     "HTTP: no_proxy domain no match", [ "", `Quick, test_domain_no_match ];
     "HTTP: no_proxy domain star match", [ "", `Quick, test_domain_star_match ];
+    "HTTP: no_proxy domain dot match", [ "", `Quick, test_domain_dot_match ];
     "HTTP: no_proxy list", [ "", `Quick, test_list ];
   ]
 end
@@ -116,7 +119,7 @@ let send_http_request stack (ip, port) request =
     Log.err (fun f -> f "Failed to connect to %s:80" (Ipaddr.V4.to_string ip));
     failwith "http_fetch"
 
-let intercept ~pcap ?(port = 80) request =
+let intercept ~pcap ?(port = 80) proxy request =
   let forwarded, forwarded_u = Lwt.task () in
   Slirp_stack.with_stack ~pcap (fun _ stack ->
       with_server (fun flow ->
@@ -134,7 +137,7 @@ let intercept ~pcap ?(port = 80) request =
             Lwt.return_unit
         ) (fun server ->
           let json =
-            Ezjsonm.from_string (" { \"http\": \"127.0.0.1:" ^
+            Ezjsonm.from_string (" { \"http\": \"" ^ proxy ^ ":" ^
                                  (string_of_int server.Server.port) ^ "\" }")
           in
           Slirp_stack.Slirp_stack.Debug.update_http_json json ()
@@ -156,13 +159,13 @@ let intercept ~pcap ?(port = 80) request =
     )
 
 (* Test that HTTP interception works at all *)
-let test_interception () =
+let test_interception proxy () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_interception.pcap" request >>= fun result ->
+    intercept ~pcap:"test_interception.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -175,17 +178,24 @@ let test_interception () =
     Alcotest.check Alcotest.string "version"
       (Cohttp.Code.string_of_version request.Cohttp.Request.version)
       (Cohttp.Code.string_of_version result.Cohttp.Request.version);
+    (* a request to a proxy must have an absolute URI *)
+    Alcotest.check Alcotest.string "uri"
+      "http://dave.recoil.org:80/"
+      result.Cohttp.Request.resource;
+    Alcotest.check Alcotest.(list(pair string string)) "headers"
+      (Cohttp.Header.to_list request.Cohttp.Request.headers)
+      (Cohttp.Header.to_list result.Cohttp.Request.headers);
     Lwt.return ()
   end
 
 (* Test that a relative URI becomes absolute *)
-let test_uri_relative () =
+let test_uri_relative proxy () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_uri_relative.pcap" request >>= fun result ->
+    intercept ~pcap:"test_uri_relative.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -200,13 +210,13 @@ let test_uri_relative () =
 
 (* Test that an absolute URI is preserved. This is expected when the
    client explicitly uses us as a proxy rather than being transparent. *)
-let test_uri_absolute () =
+let test_uri_absolute proxy () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
         (Uri.make ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_uri_absolute.pcap" request >>= fun result ->
+    intercept ~pcap:"test_uri_absolute.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -220,7 +230,7 @@ let test_uri_absolute () =
   end
 
 (* Verify that a custom X- header is preserved *)
-let test_x_header_preserved () =
+let test_x_header_preserved proxy () =
   Host.Main.run begin
     let headers =
       Cohttp.Header.add (Cohttp.Header.init ()) "X-dave-is-cool" "true"
@@ -229,7 +239,7 @@ let test_x_header_preserved () =
       Cohttp.Request.make ~headers
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_x_header_preserved.pcap" request >>= fun result ->
+    intercept ~pcap:"test_x_header_preserved.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -244,7 +254,7 @@ let test_x_header_preserved () =
 
 (* Verify that the user-agent is preserved. In particular we don't want our
    http library to leak here. *)
-let test_user_agent_preserved () =
+let test_user_agent_preserved proxy () =
   Host.Main.run begin
     let headers =
       Cohttp.Header.add (Cohttp.Header.init ()) "user-agent" "whatever"
@@ -253,7 +263,7 @@ let test_user_agent_preserved () =
       Cohttp.Request.make ~headers
         (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
     in
-    intercept ~pcap:"test_user_agent_preserved.pcap" request >>= fun result ->
+    intercept ~pcap:"test_user_agent_preserved.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
         f "original was: %s"
           (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
@@ -265,75 +275,65 @@ let test_user_agent_preserved () =
     Lwt.return ()
   end
 
-let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
-
-let test_proxy_passthrough () =
-  let forwarded, forwarded_u = Lwt.task () in
+(* Verify that authorizations are preserved *)
+let test_authorization_preserved proxy () =
   Host.Main.run begin
-  Slirp_stack.with_stack ~pcap:"test_proxy_passthrough.pcap" (fun _ stack ->
-      with_server (fun flow ->
-          let ic = Incoming.C.create flow in
-          (* read something *)
-          Incoming.C.read_some ~len:5 ic
-          >>= function
-          | Ok `Eof -> failwith "test_proxy_passthrough: read_some returned Eof"
-          | Error _ -> failwith "test_proxy_passthrough: read_some returned Error"
-          | Ok (`Data buf) ->
-            let txt = Cstruct.to_string buf in
-            Alcotest.check Alcotest.string "message" "hello" txt;
-            let response = "there" in
-            (* write something *)
-            Incoming.C.write_string ic response 0 (String.length response);
-            Incoming.C.flush ic
-            >>= function
-            | Error _ -> failwith "test_proxy_passthrough: flush returned error"
-            | Ok ()   ->
-              Lwt.wakeup_later forwarded_u ();
-              Lwt.return_unit
-        ) (fun server ->
-          let json =
-            Ezjsonm.from_string (" { \"http\": \"127.0.0.1:" ^
-                                (string_of_int server.Server.port) ^ "\" }")
-          in
-          Slirp_stack.Slirp_stack.Debug.update_http_json json ()
-          >>= function
-          | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
-          | Ok () ->
-            let open Slirp_stack in
-            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
-            >>= function
-            | Error _ ->
-              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
-              failwith "test_proxy_passthrough: connect failed"
-            | Ok flow ->
-              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
-              let oc = Outgoing.C.create flow in
-              let request = "hello" in
-              Outgoing.C.write_string oc request 0 (String.length request);
-              Outgoing.C.flush oc
-              >>= function
-              | Error _ -> failwith "test_proxy_passthrough: client flush returned error"
-              | Ok ()   ->
-                Outgoing.C.read_some ~len:5 oc
-                >>= function
-                | Ok `Eof -> failwith "test_proxy_passthrough: client read_some returned Eof"
-                | Error _ -> failwith "test_proxy_passthrough: client read_some returned Error"
-                | Ok (`Data buf) ->
-                  let txt = Cstruct.to_string buf in
-                  Alcotest.check Alcotest.string "message" "there" txt;
-                  Lwt.pick [
-                    (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () ->
-                    `Timeout);
-                    (forwarded >>= fun x -> Lwt.return (`Result x))
-                  ]
-        )
-      >|= function
-      | `Timeout  -> failwith "HTTP proxy failed"
-      | `Result x -> x
-    )
+    let headers =
+      Cohttp.Header.add (Cohttp.Header.init ()) "authorization" "basic foobar"
+    in
+    let request =
+      Cohttp.Request.make ~headers
+        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+    in
+    intercept ~pcap:"test_authorization_preserved.pcap" proxy request >>= fun result ->
+    Log.info (fun f ->
+        f "original was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
+    Log.info (fun f ->
+        f "proxied  was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t result)));
+    Alcotest.check Alcotest.(option string) "authorization" (Some "basic foobar")
+      (Cohttp.Header.get result.Cohttp.Request.headers "authorization");
+    Lwt.return ()
   end
 
-let test_http_connect () =
+(* Verify that necessary proxy authorizations are present *)
+let test_proxy_authorization proxy () =
+  Host.Main.run begin
+    let headers =
+      Cohttp.Header.add (Cohttp.Header.init ()) "authorization" "basic foobar"
+    in
+    let request =
+      Cohttp.Request.make ~headers
+        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+    in
+    intercept ~pcap:"test_proxy_authorization.pcap" proxy request >>= fun result ->
+    Log.info (fun f ->
+        f "original was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
+    Log.info (fun f ->
+        f "proxied  was: %s"
+          (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t result)));
+    (* If the proxy uses auth, then there has to be a Proxy-Authorization
+       header. If theres no auth, there should be no header. *)
+    let proxy_authorization = "proxy-authorization" in
+    let proxy = Uri.of_string proxy in
+    begin match Uri.user proxy, Uri.password proxy with
+    | Some username, Some password ->
+      Alcotest.check Alcotest.(list string) proxy_authorization
+        (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+        [ "Basic " ^ (B64.encode (username ^ ":" ^ password)) ]
+    | _, _ ->
+      Alcotest.check Alcotest.(list string) proxy_authorization
+        (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+        [ ]
+    end;
+    Lwt.return ()
+  end
+
+let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
+
+let test_http_connect_tunnel proxy () =
   let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
   Host.Main.run begin
     Slirp_stack.with_stack ~pcap:"test_http_connect.pcap" (fun _ stack ->
@@ -358,6 +358,25 @@ let test_http_connect () =
                 (Some (Ipaddr.V4.to_string test_dst_ip)) (Uri.host uri);
               Alcotest.check Alcotest.(option int) "port" (Some 443)
                 (Uri.port uri);
+              Alcotest.check Alcotest.(option string) "host"
+                (Some (Ipaddr.V4.to_string test_dst_ip ^ ":443"))
+                (Cohttp.Header.get req.Cohttp.Request.headers "host");
+              Alcotest.check Alcotest.string "resource"
+                (Ipaddr.V4.to_string test_dst_ip ^ ":443")
+                req.Cohttp.Request.resource;
+              (* If the proxy uses auth, then there has to be a Proxy-Authorization
+                 header. If theres no auth, there should be no header. *)
+              let proxy_authorization = "proxy-authorization" in
+              begin match Uri.user proxy, Uri.password proxy with
+              | Some username, Some password ->
+                Alcotest.check Alcotest.(list string) proxy_authorization
+                  (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                  [ "Basic " ^ (B64.encode (username ^ ":" ^ password)) ]
+              | _, _ ->
+                Alcotest.check Alcotest.(list string) proxy_authorization
+                  (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                  [ ]
+              end;
               (* Unfortunately cohttp always adds transfer-encoding: chunked
                  so we write the header ourselves *)
               Incoming.C.write_line ic "HTTP/1.0 200 OK\r";
@@ -371,7 +390,7 @@ let test_http_connect () =
                 | Ok ()   -> ()
           ) (fun server ->
             Slirp_stack.Slirp_stack.Debug.update_http
-              ~https:("127.0.0.1:" ^ (string_of_int server.Server.port)) ()
+              ~https:(Uri.(to_string @@ with_port proxy (Some server.Server.port))) ()
             >>= function
             | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
             | Ok () ->
@@ -396,6 +415,104 @@ let test_http_connect () =
           )
       )
   end
+
+  let test_http_connect_forward proxy () =
+    (* Run a proxy, send an HTTP CONNECT to it, check the forwarded request *)
+    let proxy_port = ref 0 in
+    Host.Main.run begin
+      Slirp_stack.with_stack ~pcap:"test_http_connect_forward.pcap" (fun _ stack ->
+          with_server (fun flow ->
+              let ic = Incoming.C.create flow in
+              Incoming.Request.read ic >>= function
+              | `Eof ->
+                Log.err (fun f -> f "Failed to request");
+                failwith "Failed to read request"
+              | `Invalid x ->
+                Log.err (fun f -> f "Failed to parse request: %s" x);
+                failwith ("Failed to parse request: " ^ x)
+              | `Ok req ->
+                Log.info (fun f ->
+                    f "received: %s"
+                      (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t req)));
+                Alcotest.check Alcotest.string "method"
+                  (Cohttp.Code.string_of_method `CONNECT)
+                  (Cohttp.Code.string_of_method req.Cohttp.Request.meth);
+                Printf.fprintf stderr "Headers =\n  %s\n%!" (String.concat "\n  " (List.map (fun (k, v) -> k ^ ": " ^ v) (Cohttp.Header.to_list req.Cohttp.Request.headers)));
+                Alcotest.check Alcotest.(option string) "host"
+                  (Some ("localhost:" ^ (string_of_int !proxy_port)))
+                  (Cohttp.Header.get req.Cohttp.Request.headers "host");
+                Alcotest.check Alcotest.string "resource"
+                  ("localhost:" ^ (string_of_int !proxy_port))
+                  req.Cohttp.Request.resource;
+                (* If the proxy uses auth, then there has to be a Proxy-Authorization
+                   header. If theres no auth, there should be no header. *)
+                let proxy_authorization = "proxy-authorization" in
+                begin match Uri.user proxy, Uri.password proxy with
+                | Some username, Some password ->
+                  Alcotest.check Alcotest.(list string) proxy_authorization
+                    [ "Basic " ^ (B64.encode (username ^ ":" ^ password)) ]
+                    (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                | _, _ ->
+                  Alcotest.check Alcotest.(list string) proxy_authorization
+                    [ ]
+                    (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                end;
+                (* Unfortunately cohttp always adds transfer-encoding: chunked
+                   so we write the header ourselves *)
+                Incoming.C.write_line ic "HTTP/1.0 200 OK\r";
+                Incoming.C.write_line ic "\r";
+                Incoming.C.flush ic >>= function
+                | Error e -> err_flush e
+                | Ok ()   ->
+                  Incoming.C.write_line ic "hello";
+                  Incoming.C.flush ic >|= function
+                  | Error e -> err_flush e
+                  | Ok ()   -> ()
+            ) (fun server ->
+              proxy_port := server.Server.port;
+              Slirp_stack.Slirp_stack.Debug.update_http
+                ~https:(Uri.(to_string @@ with_port proxy (Some server.Server.port))) ()
+              >>= function
+              | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
+              | Ok () ->
+                let open Slirp_stack in
+                Client.TCPV4.create_connection (Client.tcpv4 stack.t)
+                  (primary_dns_ip, 3129)
+                >>= function
+                | Error _ ->
+                  Log.err (fun f ->
+                      f "TCPV4.create_connection %s:%d failed"
+                        (Ipaddr.V4.to_string primary_dns_ip) 3129);
+                  failwith "TCPV4.create_connection"
+                | Ok flow ->
+                  let oc = Outgoing.C.create flow in
+                  let request =
+                    let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
+                    let resource = Fmt.strf "localhost:%d" server.Server.port in
+                    let headers = Cohttp.Header.replace connect.Cohttp.Request.headers "host" resource in
+                    { connect with Cohttp.Request.resource; headers }
+                  in
+                  Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
+                  >>= fun () ->
+                  Outgoing.Response.read oc
+                  >>= function
+                  | `Eof ->
+                    failwith "test_http_connect_forward: EOF on HTTP CONNECT"
+                  | `Invalid x ->
+                    failwith ("test_http_connect_forward: Invalid HTTP response: " ^ x)
+                  | `Ok res ->
+                    if res.Cohttp.Response.status <> `OK
+                    then failwith "test_http_connect_forward: HTTP CONNECT failed";
+                    Outgoing.C.read_some ~len:5 oc >>= function
+                    | Error e -> Fmt.kstrf failwith "%a" Outgoing.C.pp_error e
+                    | Ok `Eof -> failwith "EOF"
+                    | Ok (`Data buf) ->
+                      let txt = Cstruct.to_string buf in
+                      Alcotest.check Alcotest.string "message" "hello" txt;
+                      Lwt.return_unit
+            )
+      )
+    end
 
   let test_http_proxy_connect () =
     let forwarded, forwarded_u = Lwt.task () in
@@ -677,13 +794,15 @@ let test_http_connect () =
         )
     end
 
+let proxy_urls = [
+  "http://127.0.0.1";
+  "http://user:password@127.0.0.1";
+]
+
 let tests = [
 
   "HTTP: interception",
-  [ "", `Quick, test_interception ];
-
-  "HTTP proxy: pass-through to upstream",
-  [ "check that requests are passed through to upstream proxies", `Quick, test_proxy_passthrough ];
+  [ "", `Quick, test_interception "http://127.0.0.1" ];
 
   "HTTP proxy: CONNECT",
   [ "check that HTTP CONNECT requests through the proxy", `Quick, test_http_proxy_connect ];
@@ -700,21 +819,32 @@ let tests = [
   "HTTP proxy: GET has good headers",
   [ "check that HTTP GET headers are correct", `Quick, test_http_proxy_headers ];
 
+] @ (List.concat @@ List.map (fun proxy -> [
   "HTTP: URI",
-  [ "check that relative URIs are rewritten", `Quick, test_uri_relative ];
+  [ "check that relative URIs are rewritten", `Quick, test_uri_relative proxy ];
 
   "HTTP: absolute URI",
-  [ "check that absolute URIs from proxies are preserved", `Quick, test_uri_absolute ];
+  [ "check that absolute URIs from proxies are preserved", `Quick, test_uri_absolute proxy ];
 
   "HTTP: custom header",
-  ["check that custom headers are preserved", `Quick, test_x_header_preserved];
+  ["check that custom headers are preserved", `Quick, test_x_header_preserved proxy ];
 
   "HTTP: user-agent",
-  [ "check that user-agent is preserved", `Quick, test_user_agent_preserved ];
+  [ "check that user-agent is preserved", `Quick, test_user_agent_preserved proxy ];
 
-  "HTTP: CONNECT",
-  [ "check that HTTP CONNECT works for HTTPS", `Quick, test_http_connect ];
+  "HTTP: authorization",
+  [ "check that authorization is preserved", `Quick, test_authorization_preserved proxy ];
 
+  "HTTP: proxy-authorization",
+  [ "check that proxy-authorization is present when proxy = " ^ proxy, `Quick, test_proxy_authorization proxy ];
+
+  "HTTP: CONNECT tunnel though " ^ proxy,
+  [ "check that HTTP CONNECT tunnelling works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect_tunnel (Uri.of_string proxy) ];
+
+  "HTTP: CONNECT forwarded to " ^ proxy,
+  [ "check that HTTP CONNECT are forwarded correctly to proxy " ^ proxy, `Quick, test_http_connect_forward (Uri.of_string proxy) ];
+
+  ]) proxy_urls) @ [
   "HTTP: HEAD",
   [ "check that HTTP HEAD doesn't block the connection", `Quick, test_http_proxy_head ];
 ]
