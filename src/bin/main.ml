@@ -233,7 +233,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main_t
       configuration
-      socket_url port_control_url introspection_url diagnostics_url
+      socket_url port_control_urls introspection_urls diagnostics_urls
       vsock_path db_path db_branch hosts
       listen_backlog
     =
@@ -262,11 +262,14 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       ()
     in
 
-    Lwt.async (fun () ->
-        log_exception_continue "Starting the 9P port control filesystem" (fun () ->
-            start_port_forwarding port_control_url configuration.Configuration.max_connections vsock_path
+    List.iter
+      (fun url ->
+        Lwt.async (fun () ->
+            log_exception_continue ("Starting the 9P port control filesystem on " ^ url) (fun () ->
+                start_port_forwarding url configuration.Configuration.max_connections vsock_path
+              )
           )
-      );
+      ) port_control_urls;
 
     Mclock.connect () >>= fun clock ->
     let vnet_switch = Vnet.create () in
@@ -306,8 +309,12 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           let conn = HV.connect fd in
           Slirp_stack.connect stack_config conn >>= fun stack ->
           Log.info (fun f -> f "TCP/IP stack connected");
-          start_introspection introspection_url (Slirp_stack.filesystem stack);
-          start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
+          List.iter (fun url ->
+            start_introspection url (Slirp_stack.filesystem stack)
+          ) introspection_urls;
+          List.iter (fun url ->
+            start_diagnostics url @@ Slirp_stack.diagnostics stack
+          ) diagnostics_urls;
           Slirp_stack.after_disconnect stack >|= fun () ->
           Log.info (fun f -> f "TCP/IP stack disconnected"))
 
@@ -329,8 +336,12 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       Host.Sockets.Stream.Unix.listen server (fun conn ->
           Slirp_stack.connect stack_config conn >>= fun stack ->
           Log.info (fun f -> f "TCP/IP stack connected");
-          start_introspection introspection_url (Slirp_stack.filesystem stack);
-          start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
+          List.iter (fun url ->
+            start_introspection url (Slirp_stack.filesystem stack);
+          ) introspection_urls;
+          List.iter (fun url ->
+            start_diagnostics url @@ Slirp_stack.diagnostics stack
+          ) diagnostics_urls;
           Slirp_stack.after_disconnect stack >|= fun () ->
           Log.info (fun f -> f "TCP/IP stack disconnected")
         );
@@ -338,7 +349,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       wait_forever
 
   let main
-      socket_url port_control_url introspection_url diagnostics_url
+      socket_url port_control_urls introspection_urls diagnostics_urls
       max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
       listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
@@ -395,7 +406,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       | Some socket_url ->
     try
       Host.Main.run
-        (main_t configuration socket_url port_control_url introspection_url diagnostics_url
+        (main_t configuration socket_url port_control_urls introspection_urls diagnostics_urls
           vsock_path db_path db_branch hosts
           listen_backlog);
     with e ->
@@ -415,7 +426,7 @@ let socket =
   in
   Arg.(value & opt (some string) None doc)
 
-let port_control_path =
+let port_control_urls =
   let doc =
     Arg.info ~doc:
       "The address on the host for the 9P filesystem needed to control host \
@@ -427,9 +438,9 @@ let port_control_path =
        incoming connections."
       [ "port" ]
   in
-  Arg.(value & opt string "" doc)
+  Arg.(value & opt_all string [] doc)
 
-let introspection_path =
+let introspection_urls =
   let doc =
     Arg.info ~doc:
       "The address on the host on which to serve a 9P filesystem which exposes \
@@ -441,9 +452,9 @@ let introspection_path =
        \\\\\\\\.\\\\pipe\\\\introspection to listen on a Windows named pipe"
       [ "introspection" ]
   in
-  Arg.(value & opt string "" doc)
+  Arg.(value & opt_all string [] doc)
 
-let diagnostics_path =
+let diagnostics_urls =
   let doc =
     Arg.info ~doc:
       "The address on the host on which to serve a .tar file containing \
@@ -454,7 +465,7 @@ let diagnostics_path =
        \\\\\\\\.\\\\pipe\\\\diagnostics to listen on a Windows named pipe"
       [ "diagnostics" ]
   in
-  Arg.(value & opt string "" doc)
+  Arg.(value & opt_all string [] doc)
 
 let max_connections =
   let doc =
@@ -628,7 +639,7 @@ let command =
          flows via userspace sockets"]
   in
   Term.(pure main
-        $ socket $ port_control_path $ introspection_path $ diagnostics_path
+        $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ gateway_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
