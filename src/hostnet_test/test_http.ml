@@ -333,7 +333,7 @@ let test_proxy_authorization proxy () =
 
 let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
 
-let test_http_connect proxy () =
+let test_http_connect_tunnel proxy () =
   let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
   Host.Main.run begin
     Slirp_stack.with_stack ~pcap:"test_http_connect.pcap" (fun _ stack ->
@@ -740,8 +740,8 @@ let tests = [
   "HTTP: proxy-authorization",
   [ "check that proxy-authorization is present when proxy = " ^ proxy, `Quick, test_proxy_authorization proxy ];
 
-  "HTTP: CONNECT " ^ proxy,
-  [ "check that HTTP CONNECT works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect (Uri.of_string proxy) ]
+  "HTTP: CONNECT tunnel though " ^ proxy,
+  [ "check that HTTP CONNECT tunnelling works for HTTPS with proxy " ^ proxy, `Quick, test_http_connect_tunnel (Uri.of_string proxy) ]
 ]) proxy_urls) @ [
   "HTTP: HEAD",
   [ "check that HTTP HEAD doesn't block the connection", `Quick, test_http_proxy_head ];
