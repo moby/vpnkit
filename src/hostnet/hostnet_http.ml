@@ -588,9 +588,10 @@ module Make
             let headers = match proxy with
               | None -> headers
               | Some proxy -> add_proxy_authorization proxy headers in
-            let resource = match ty with
-              | `Origin -> Uri.path_and_query uri
-              | `Proxy -> Uri.with_scheme (Uri.with_host (Uri.with_port uri (Some port)) (Some host)) (Some "http") |> Uri.to_string in
+            let resource = match ty, Cohttp.Request.meth req with
+              | `Origin, _ -> Uri.path_and_query uri
+              | `Proxy, `CONNECT -> host_and_port
+              | `Proxy, _ -> Uri.with_scheme (Uri.with_host (Uri.with_port uri (Some port)) (Some host)) (Some "http") |> Uri.to_string in
             let req = { req with Cohttp.Request.headers; resource } in
             Log.debug (fun f -> f "%s: sending %s"
               (description false)
