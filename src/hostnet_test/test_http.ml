@@ -358,6 +358,12 @@ let test_http_connect proxy () =
                 (Some (Ipaddr.V4.to_string test_dst_ip)) (Uri.host uri);
               Alcotest.check Alcotest.(option int) "port" (Some 443)
                 (Uri.port uri);
+              Alcotest.check Alcotest.(option string) "host"
+                (Some (Ipaddr.V4.to_string test_dst_ip ^ ":443"))
+                (Cohttp.Header.get req.Cohttp.Request.headers "host");
+              Alcotest.check Alcotest.string "resource"
+                (Ipaddr.V4.to_string test_dst_ip ^ ":443")
+                req.Cohttp.Request.resource;
               (* If the proxy uses auth, then there has to be a Proxy-Authorization
                  header. If theres no auth, there should be no header. *)
               let proxy_authorization = "proxy-authorization" in
