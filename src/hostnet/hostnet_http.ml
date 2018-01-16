@@ -360,7 +360,7 @@ module Make
         (error_html "ERROR: connection refused" msg)
     ) res incoming
 
-  let transparent_https ~dst proxy =
+  let tunnel_https_over_connect ~dst proxy =
     let listeners _port =
       Log.debug (fun f -> f "HTTPS TCP handshake complete");
       let f flow =
@@ -656,7 +656,7 @@ module Make
     | 443, _, Some proxy ->
       if Exclude.matches ~ip ~host:(Ipaddr.V4.to_string ip) t.exclude
       then None
-      else Some (transparent_https ~dst:ip proxy)
+      else Some (tunnel_https_over_connect ~dst:ip proxy)
     | _, _, _ -> None
 
   let explicit_proxy_handler ~dst:(_, port) ~t =
