@@ -233,7 +233,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main_t
       configuration
-      socket_url port_control_urls introspection_urls diagnostics_url
+      socket_url port_control_urls introspection_urls diagnostics_urls
       vsock_path db_path db_branch hosts
       listen_backlog
     =
@@ -312,7 +312,9 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           List.iter (fun url ->
             start_introspection url (Slirp_stack.filesystem stack)
           ) introspection_urls;
-          start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
+          List.iter (fun url ->
+            start_diagnostics url @@ Slirp_stack.diagnostics stack
+          ) diagnostics_urls;
           Slirp_stack.after_disconnect stack >|= fun () ->
           Log.info (fun f -> f "TCP/IP stack disconnected"))
 
@@ -337,7 +339,9 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           List.iter (fun url ->
             start_introspection url (Slirp_stack.filesystem stack);
           ) introspection_urls;
-          start_diagnostics diagnostics_url @@ Slirp_stack.diagnostics stack;
+          List.iter (fun url ->
+            start_diagnostics url @@ Slirp_stack.diagnostics stack
+          ) diagnostics_urls;
           Slirp_stack.after_disconnect stack >|= fun () ->
           Log.info (fun f -> f "TCP/IP stack disconnected")
         );
@@ -345,7 +349,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       wait_forever
 
   let main
-      socket_url port_control_urls introspection_urls diagnostics_url
+      socket_url port_control_urls introspection_urls diagnostics_urls
       max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
       listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
@@ -402,7 +406,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       | Some socket_url ->
     try
       Host.Main.run
-        (main_t configuration socket_url port_control_urls introspection_urls diagnostics_url
+        (main_t configuration socket_url port_control_urls introspection_urls diagnostics_urls
           vsock_path db_path db_branch hosts
           listen_backlog);
     with e ->
@@ -450,7 +454,7 @@ let introspection_urls =
   in
   Arg.(value & opt_all string [] doc)
 
-let diagnostics_path =
+let diagnostics_urls =
   let doc =
     Arg.info ~doc:
       "The address on the host on which to serve a .tar file containing \
@@ -461,7 +465,7 @@ let diagnostics_path =
        \\\\\\\\.\\\\pipe\\\\diagnostics to listen on a Windows named pipe"
       [ "diagnostics" ]
   in
-  Arg.(value & opt string "" doc)
+  Arg.(value & opt_all string [] doc)
 
 let max_connections =
   let doc =
@@ -635,7 +639,7 @@ let command =
          flows via userspace sockets"]
   in
   Term.(pure main
-        $ socket $ port_control_urls $ introspection_urls $ diagnostics_path
+        $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ gateway_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
