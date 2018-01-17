@@ -33,25 +33,32 @@ module Exclude = struct
     type t =
       | Subdomain of Element.t list
       | CIDR of Ipaddr.V4.Prefix.t
+      | IP of Ipaddr.V4.t
 
     let of_string s =
       match Ipaddr.V4.Prefix.of_string s with
       | None ->
-        let bits = Astring.String.cuts ~sep:"." s in
-        Subdomain (List.map Element.of_string bits)
+        begin match Ipaddr.V4.of_string s with
+        | None ->
+          let bits = Astring.String.cuts ~sep:"." s in
+          Subdomain (List.map Element.of_string bits)
+        | Some ip -> IP ip
+        end
       | Some prefix -> CIDR prefix
 
     let to_string = function
     | Subdomain x ->
       "Subdomain " ^ String.concat ~sep:"." @@ List.map Element.to_string x
     | CIDR prefix -> "CIDR " ^ Ipaddr.V4.Prefix.to_string prefix
+    | IP ip -> "IP " ^ Ipaddr.V4.to_string ip
 
     let matches_ip ip = function
     | CIDR prefix -> Ipaddr.V4.Prefix.mem ip prefix
+    | IP ip' -> Ipaddr.V4.compare ip ip' = 0
     | _ -> false
 
     let matches_host host = function
-    | CIDR _ -> false
+    | CIDR _ | IP _ -> false
     | Subdomain domains ->
       let bits = Astring.String.cuts ~sep:"." host in
       (* does 'bits' match 'domains' *)
