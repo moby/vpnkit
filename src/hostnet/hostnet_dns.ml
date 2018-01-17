@@ -140,27 +140,38 @@ let try_builtins builtin_names question =
   match question with
   | { q_class = Q_IN; q_type = (Q_A|Q_AAAA); q_name; _ } ->
     let bindings = List.filter (fun (name, _) -> name = q_name) builtin_names in
-    let ipv4_rrs =
-      List.fold_left (fun acc (_, ip) ->
-        match ip with
-        | Ipaddr.V4 ipv4 -> { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = A ipv4 } :: acc
-        | _ -> acc
-      ) [] bindings in
-    let ipv6_rrs =
-      List.fold_left (fun acc (_, ip) ->
-        match ip with
-        | Ipaddr.V6 ipv6 -> { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA ipv6 } :: acc
-        | _ -> acc
-      ) [] bindings in
-    let rrs = if question.q_type = Q_A then ipv4_rrs else ipv6_rrs in
-    if rrs = [] then None else begin
-      Log.info (fun f ->
-        f "DNS: %s is a builtin: %s" (Dns.Name.to_string q_name)
-          (String.concat "; " (List.map (fun rr -> Dns.Packet.rr_to_string rr) rrs))
-      );
-      Some rrs
+    if bindings = []
+    then `Dont_know
+    else begin
+      let ipv4_rrs =
+        List.fold_left (fun acc (_, ip) ->
+          match ip with
+          | Ipaddr.V4 ipv4 -> { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = A ipv4 } :: acc
+          | _ -> acc
+        ) [] bindings in
+      let ipv6_rrs =
+        List.fold_left (fun acc (_, ip) ->
+          match ip with
+          | Ipaddr.V6 ipv6 -> { name = q_name; cls = RR_IN; flush = false; ttl = 0l; rdata = AAAA ipv6 } :: acc
+          | _ -> acc
+        ) [] bindings in
+      let rrs = if question.q_type = Q_A then ipv4_rrs else ipv6_rrs in
+      if rrs = [] then begin
+        Log.info (fun f ->
+          f "DNS: %s is a builtin but there are no resource records for %s"
+            (Dns.Name.to_string q_name)
+            (if question.q_type = Q_A then "IPv4" else "IPv6")
+        );
+        `Does_not_exist (* we've claimed the name but maybe don't have an AAAA record *)
+      end else begin
+        Log.info (fun f ->
+          f "DNS: %s is a builtin: %s" (Dns.Name.to_string q_name)
+            (String.concat "; " (List.map (fun rr -> Dns.Packet.rr_to_string rr) rrs))
+        );
+        `Answers rrs
+      end
     end
-  | _ -> None
+  | _ -> `Dont_know
 
 module Make
     (Ip: Mirage_protocols_lwt.IPV4)
@@ -337,15 +348,29 @@ struct
         let authorities = [] and additionals = [] in
         { Dns.Packet.id; detail; questions; answers; authorities; additionals }
       in
+      let nxdomain =
+        let id = request.id in
+        let detail =
+          { request.detail with Dns.Packet.qr = Dns.Packet.Response;
+                                ra = true; rcode = Dns.Packet.NXDomain
+          } in
+        let questions = request.questions in
+        let authorities = [] and additionals = [] and answers = []
+        in
+        { Dns.Packet.id; detail; questions; answers; authorities;
+          additionals }
+      in
       begin
         match try_etc_hosts question with
         | Some answers ->
           Lwt.return (Ok (marshal @@ reply answers))
         | None ->
           match try_builtins t.builtin_names question with
-          | Some answers ->
+          | `Does_not_exist ->
+            Lwt.return (Ok (marshal nxdomain))
+          | `Answers answers ->
             Lwt.return (Ok (marshal @@ reply answers))
-          | None ->
+          | `Dont_know ->
             match is_tcp, t.resolver with
             | true, Upstream { dns_tcp_resolver; _ } ->
               Dns_tcp_resolver.answer buf dns_tcp_resolver
@@ -355,18 +380,6 @@ struct
               D.resolve question
               >>= function
               | [] ->
-                let nxdomain =
-                  let id = request.id in
-                  let detail =
-                    { request.detail with Dns.Packet.qr = Dns.Packet.Response;
-                                          ra = true; rcode = Dns.Packet.NXDomain
-                    } in
-                  let questions = request.questions in
-                  let authorities = [] and additionals = [] and answers = []
-                  in
-                  { Dns.Packet.id; detail; questions; answers; authorities;
-                    additionals }
-                in
                 Lwt.return (Ok (marshal nxdomain))
               | answers ->
                 Lwt.return (Ok (marshal @@ reply answers))
