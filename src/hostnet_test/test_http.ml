@@ -9,6 +9,10 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Exclude = struct
 
+  let test_ip_match () =
+    let exclude = Hostnet_http.Exclude.of_string "10.0.0.1" in
+    assert (Hostnet_http.Exclude.matches ~ip:(Ipaddr.V4.of_string_exn "10.0.0.1") ~host:"localhost" exclude)
+
   let test_cidr_match () =
     let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
     assert (Hostnet_http.Exclude.matches ~ip:(Ipaddr.V4.of_string_exn "10.0.0.1") ~host:"localhost" exclude)
@@ -64,6 +68,7 @@ module Exclude = struct
                   exclude))
 
   let tests = [
+    "HTTP: no_proxy IP match", [ "", `Quick, test_ip_match ];
     "HTTP: no_proxy CIDR match", [ "", `Quick, test_cidr_match ];
     "HTTP: no_proxy CIDR no match", [ "", `Quick, test_cidr_no_match ];
     "HTTP: no_proxy domain match", [ "", `Quick, test_domain_match ];
