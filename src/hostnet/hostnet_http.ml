@@ -33,25 +33,32 @@ module Exclude = struct
     type t =
       | Subdomain of Element.t list
       | CIDR of Ipaddr.V4.Prefix.t
+      | IP of Ipaddr.V4.t
 
     let of_string s =
       match Ipaddr.V4.Prefix.of_string s with
       | None ->
-        let bits = Astring.String.cuts ~sep:"." s in
-        Subdomain (List.map Element.of_string bits)
+        begin match Ipaddr.V4.of_string s with
+        | None ->
+          let bits = Astring.String.cuts ~sep:"." s in
+          Subdomain (List.map Element.of_string bits)
+        | Some ip -> IP ip
+        end
       | Some prefix -> CIDR prefix
 
     let to_string = function
     | Subdomain x ->
       "Subdomain " ^ String.concat ~sep:"." @@ List.map Element.to_string x
     | CIDR prefix -> "CIDR " ^ Ipaddr.V4.Prefix.to_string prefix
+    | IP ip -> "IP " ^ Ipaddr.V4.to_string ip
 
     let matches_ip ip = function
     | CIDR prefix -> Ipaddr.V4.Prefix.mem ip prefix
+    | IP ip' -> Ipaddr.V4.compare ip ip' = 0
     | _ -> false
 
     let matches_host host = function
-    | CIDR _ -> false
+    | CIDR _ | IP _ -> false
     | Subdomain domains ->
       let bits = Astring.String.cuts ~sep:"." host in
       (* does 'bits' match 'domains' *)
@@ -61,10 +68,10 @@ module Exclude = struct
       | b :: bs, d :: ds -> Element.matches b d && loop bs ds in
       loop (List.rev bits) (List.rev domains)
 
-    let matches ?ip ~host exclude =
-      (match ip with None -> false | Some ip -> matches_ip ip exclude)
-      ||
-      (matches_host host exclude)
+    let matches thing exclude =
+      match Ipaddr.V4.of_string thing with
+      | None -> matches_host thing exclude
+      | Some ip -> matches_ip ip exclude
   end
 
   type t = One.t list
@@ -82,8 +89,8 @@ module Exclude = struct
 
   let to_string t = String.concat ~sep:" " @@ (List.map One.to_string t)
 
-  let matches ?ip ~host t =
-    List.fold_left (||) false (List.map (One.matches ?ip ~host) t)
+  let matches thing t =
+    List.fold_left (||) false (List.map (One.matches thing) t)
 
 end
 
@@ -501,7 +508,7 @@ module Make
         | None -> Some ((host, port), `Origin)
         (* If a proxy is configured it depends on whether the request matches the excludes *)
         | Some proxy ->
-          if Exclude.matches ~host exclude
+          if Exclude.matches host exclude
           then Some ((host, port), `Origin)
           else Some (proxy, `Proxy) in
       begin match hostport_and_ty with
@@ -678,7 +685,7 @@ module Make
     match port, t.http, t.https with
     | 80, Some proxy, _ -> Some (transparent_http ~dst:ip proxy t.exclude)
     | 443, _, Some proxy ->
-      if Exclude.matches ~ip ~host:(Ipaddr.V4.to_string ip) t.exclude
+      if Exclude.matches (Ipaddr.V4.to_string ip) t.exclude
       then None
       else Some (tunnel_https_over_connect ~dst:ip proxy)
     | _, _, _ -> None
