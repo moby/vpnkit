@@ -5,9 +5,9 @@ module Exclude: sig
   val of_string: string -> t
   val to_string: t -> string
 
-  val matches: ?ip:Ipaddr.V4.t -> host:string -> t -> bool
-  (** True if the request should bypass the proxy. [ip] is the destination
-      IP address (if known) and host is the Host: from the URI or header. *)
+  val matches: string -> t -> bool
+  (** [matches host_or_ip excludes] is true if [host_or_ip] matches
+      the excludes rules and should bypass the proxy. *)
 end
 
 module Make
