@@ -4,20 +4,24 @@ ORG?=vpnkit
 IMAGE=vpnkit-forwarder
 DEPS_FORWARDER:=$(wildcard cmd/vpnkit-forwarder/*.go)
 DEPS_IPTABLES:=$(wildcard cmd/vpnkit-iptables-wrapper/*.go)
+DEPS_KUBE_FORWARDER:=$(wildcard cmd/kube-vpnkit-forwarder/*.go)
 DEPS:=$(DEPS_IPTABLES) $(DEPS_FORWARDER)
 HASH?=$(shell git ls-tree HEAD -- ../$(notdir $(CURDIR)) | awk '{print $$3}')
 
 # This may fail when cross compiling as virtsock requires cgo
-all: build/vpnkit-iptables-wrapper.linux build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux
+all: build/vpnkit-iptables-wrapper.linux build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux build/kube-vpnkit-forwarder.linux
 
 # Build in linux container
-build-in-container: build-forwarder-in-container build-expose-port-in-container
+build-in-container: build-forwarder-in-container build-expose-port-in-container build-kube-forwarder-in-container
 
 build-forwarder-in-container: $(DEPS_FORWARDER)
 	docker build -t $(ORG)/vpnkit-forwarder:$(HASH) -f Dockerfile .
 
 build-expose-port-in-container: $(DEPS)
 	docker build -t $(ORG)/vpnkit-expose-port:$(HASH) -f Dockerfile.expose-port .
+
+build-kube-forwarder-in-container: $(DEPS_KUBE_FORWARDER)
+	docker build -t $(ORG)/kube-vpnkit-forwarder:$(HASH) -f Dockerfile.kube-forwarder .
 
 build/vpnkit-forwarder.linux: $(DEPS_FORWARDER)
 	GOOS=linux GOARCH=amd64 \
@@ -26,6 +30,11 @@ build/vpnkit-forwarder.linux: $(DEPS_FORWARDER)
 
 build/vpnkit-expose-port.linux: build/vpnkit-forwarder.linux
 	cp -v build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux
+
+build/kube-vpnkit-forwarder.linux: $(DEPS_KUBE_FORWARDER)
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+	go build -o $@ --ldflags '-s -w' --buildmode pie \
+	$(DEPS_KUBE_FORWARDER)
 
 build/vpnkit-iptables-wrapper.linux: $(DEPS_IPTABLES)
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \

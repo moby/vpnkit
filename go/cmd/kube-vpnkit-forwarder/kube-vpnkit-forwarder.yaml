@@ -4,16 +4,16 @@ items:
   - apiVersion: v1
     kind: ServiceAccount
     metadata:
-      name: vpnkit-expose-port-controller
+      name: kube-vpnkit-forwarder
       namespace: kube-system
       labels:
-        name: vpnkit-expose-port-controller
+        name: kube-vpnkit-forwarder
   - apiVersion: rbac.authorization.k8s.io/v1beta1
     kind: ClusterRole
     metadata:
-      name: vpnkit-expose-port-controller
+      name: kube-vpnkit-forwarder
       labels:
-        name: vpnkit-expose-port-controller
+        name: kube-vpnkit-forwarder
     rules:
       - apiGroups: [ v1 ]
         resources: [ services ]
@@ -21,43 +21,43 @@ items:
   - apiVersion: rbac.authorization.k8s.io/v1beta1
     kind: ClusterRoleBinding
     metadata:
-      name: vpnkit-expose-port-controller
+      name: kube-vpnkit-forwarder
       namespace: kube-system
       labels:
-        name: vpnkit-expose-port-controller
+        name: kube-vpnkit-forwarder
     roleRef:
       kind: ClusterRole
-      name: vpnkit-expose-port-controller
+      name: kube-vpnkit-forwarder
       apiGroup: rbac.authorization.k8s.io
     subjects:
       - kind: ServiceAccount
-        name: vpnkit-expose-port-controller
+        name: kube-vpnkit-forwarder
         namespace: kube-system
   - apiVersion: apps/v1beta2
     kind: DaemonSet
     metadata:
-      name: vpnkit-expose-port-controller
+      name: kube-vpnkit-forwarder
       namespace: kube-system
       labels:
-        name: vpnkit-expose-port-controller
+        name: kube-vpnkit-forwarder
     spec:
       selector:
         matchLabels:
-          name: vpnkit-expose-port-controller
+          name: kube-vpnkit-forwarder
       updateStrategy:
         type: RollingUpdate
       template:
         metadata:
           labels:
-            name: vpnkit-expose-port-controller
+            name: kube-vpnkit-forwarder
         spec:
-          serviceAccount: vpnkit-expose-port-controller
+          serviceAccount: kube-vpnkit-forwarder
           tolerations:
             - effect: NoSchedule
               operator: Exists
           containers:
             - name: app
-              image: 'linuxkitprojects/kubernetes-vpnkit-expose-port-controller:current'
+              image: 'vpnkit/kube-vpnkit-forwarder:current'
               imagePullPolicy: IfNotPresent
               volumeMounts:
               - mountPath: /port
