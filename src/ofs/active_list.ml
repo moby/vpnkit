@@ -39,10 +39,7 @@ module type Instance = sig
 
   val description_of_format: string
 
-  type context
-  (** The context in which a [t] is [start]ed, for example a TCP/IP stack *)
-
-  val start: clock -> context Var.t -> t -> (t, [ `Msg of string ]) result Lwt.t
+  val start: clock -> t -> (t, [ `Msg of string ]) result Lwt.t
 
   val stop: t -> unit Lwt.t
 
@@ -56,15 +53,11 @@ module Make (Instance: Instance) = struct
   open Protocol_9p
 
   type t = {
-    mutable context: Instance.context Var.t;
     clock: Instance.clock;
   }
 
   let make clock =
-    let context = Var.create () in
-    { context; clock }
-
-  let set_context { context; _ } x = Var.fill context x
+    { clock }
 
   (* We manage a list of named entries *)
   type entry = {
@@ -345,7 +338,7 @@ The directory will be deleted and replaced with a file of the same name.
         end else begin match Instance.of_string @@ Cstruct.to_string data with
         | Ok f ->
           let open Lwt.Infix in
-          begin Instance.start connection.t.clock connection.t.context f >>=
+          begin Instance.start connection.t.clock f >>=
             function
             | Ok f' -> (* local_port is resolved *)
               entry.instance <- Some f';
