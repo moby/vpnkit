@@ -179,6 +179,19 @@ let hvsock_addr_of_uri ~default_serviceid uri =
                Host.Sockets.Stream.Unix.listen s flow_cb;
                Lwt.return_unit))
 
+  module type Forwarder = sig
+    include Protocol_9p.Filesystem.S
+    val make: Mclock.t -> t
+  end
+
+  (* Create one instance of the Active_list functor per-process. The list of
+     current port forwards is stored in a map inside the module (not in the
+     `type t` returned from `make`) *)
+  let port_forwarder =
+      if Sys.os_type = "Unix"
+        then (module Active_list.Make(Forward_unix) : Forwarder)
+        else (module Active_list.Make(Forward_hvsock) : Forwarder)
+
   let start_port_forwarding port_control_url max_connections vsock_path =
     Log.info (fun f ->
         f "Starting port forwarding server on port_control_url:\"%s\" vsock_path:\"%s\""
@@ -194,10 +207,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     Host.Sockets.set_max_connections max_connections;
     let uri = Uri.of_string port_control_url in
     Mclock.connect () >>= fun clock ->
+    let module Ports = (val port_forwarder: Forwarder) in
+    let fs = Ports.make clock in
+
     match Uri.scheme uri with
     | Some "hyperv-connect" ->
-      let module Ports = Active_list.Make(Forward_hvsock) in
-      let fs = Ports.make clock in
       let module Server = Protocol_9p.Server.Make(Log9P)(HV)(Ports) in
       let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid uri in
       Connect_hvsock.set_port_forward_addr sockaddr;
@@ -209,8 +223,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
             Lwt.return ()
           | Ok server -> Server.after_disconnect server)
     | _ ->
-      let module Ports = Active_list.Make(Forward_unix) in
-      let fs = Ports.make clock in
       let module Server =
         Protocol_9p.Server.Make(Log9P)(Host.Sockets.Stream.Unix)(Ports)
       in
