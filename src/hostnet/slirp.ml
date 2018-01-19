@@ -541,6 +541,7 @@ struct
       endpoint: Endpoint.t;
       udp_nat: Udp_nat.t;
       dns_ips: Ipaddr.V4.t list;
+      localhost_names: Dns.Name.t list;
     }
     (** Services offered by vpnkit to the internal network *)
 
@@ -604,7 +605,7 @@ struct
       begin match !http with
       | None -> Lwt.return (Ok ())
       | Some http ->
-        begin match Http_forwarder.explicit_proxy_handler ~dst:(dst, dst_port) ~t:http with
+        begin match Http_forwarder.explicit_proxy_handler ~localhost_names:t.localhost_names ~dst:(dst, dst_port) ~t:http with
         | None -> Lwt.return (Ok ())
         | Some cb ->
           Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
@@ -614,8 +615,8 @@ struct
     | _ ->
       Lwt.return (Ok ())
 
-    let create clock endpoint udp_nat dns_ips =
-      let tcp_stack = { clock; endpoint; udp_nat; dns_ips } in
+    let create clock endpoint udp_nat dns_ips localhost_names =
+      let tcp_stack = { clock; endpoint; udp_nat; dns_ips; localhost_names } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -1094,7 +1095,7 @@ struct
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
                   f "creating gateway TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
-              Gateway.create clock endpoint udp_nat [ c.Configuration.gateway_ip ]
+              Gateway.create clock endpoint udp_nat [ c.Configuration.gateway_ip ] c.Configuration.host_names
             end >>= function
             | Error e ->
               Log.err (fun f ->
