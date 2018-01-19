@@ -90,7 +90,6 @@ module PortsServer = struct
   let with_server f =
     Mclock.connect () >>= fun clock ->
     let ports = Ports.make clock in
-    Ports.set_context ports "";
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
     >>= fun server ->
     let _, port = Host.Sockets.Stream.Tcp.getsockname server in

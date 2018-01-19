@@ -27,9 +27,9 @@ func main() {
 		log.Fatal(err)
 	}
 	outIP := net.ParseIP(*hostIP)
-	outPort := int16(*hostPort)
+	outPort := uint16(*hostPort)
 	inIP := net.ParseIP(*containerIP)
-	inPort := int16(*containerPort)
+	inPort := uint16(*containerPort)
 	p := vpnkit.NewPort(c, *proto, outIP, outPort, inIP, inPort)
 	if err = p.Expose(context.Background()); err != nil {
 		log.Fatal(err)

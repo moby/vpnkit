@@ -80,7 +80,6 @@ struct
   let get_key t = t.local
 
   type clock = Clock.t
-  type context = string
 
   let to_string t =
     Fmt.strf "%s:%s" (Port.to_string t.local) (Port.to_string t.remote_port)
@@ -136,9 +135,8 @@ struct
 
   module Proxy = Mirage_flow_lwt.Proxy(Clock)(Connector)(Socket.Stream.Tcp)
 
-  let start_tcp_proxy clock description vsock_path_var remote_port server =
+  let start_tcp_proxy clock description remote_port server =
     Socket.Stream.Tcp.listen server (fun local ->
-        Active_list.Var.read vsock_path_var >>= fun _vsock_path ->
         Connector.connect () >>= fun remote ->
         Lwt.finalize (fun () ->
             write_forwarding_header description remote remote_port
@@ -174,14 +172,13 @@ struct
     | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Connector.pp_write_error e
     | Ok ()         -> Lwt.return ()
 
-  let start_udp_proxy description vsock_path_var remote_port server =
+  let start_udp_proxy description remote_port server =
     let from_internet_buffer = Cstruct.create Constants.max_udp_length in
     (* We write to the internet using the from_vsock_buffer *)
     let from_vsock_buffer =
       Cstruct.create (Constants.max_udp_length + max_vsock_header_length)
     in
     let handle fd =
-      Active_list.Var.read vsock_path_var >>= fun _vsock_path ->
       (* Construct the vsock header in a separate buffer but write the payload
          directly from the from_internet_buffer *)
       let write_header_buffer = Cstruct.create max_vsock_header_length in
@@ -309,7 +306,7 @@ struct
         log_exception_continue "udp handle" (fun () -> handle server));
     Lwt.return ()
 
-  let start state vsock_path_var t =
+  let start state t =
     match t.local with
     | `Tcp (local_ip, local_port)  ->
       let description =
@@ -327,7 +324,7 @@ struct
               `Tcp (local_ip, port)
             | _ ->
               t.local );
-          start_tcp_proxy state (to_string t) vsock_path_var t.remote_port server
+          start_tcp_proxy state (to_string t) t.remote_port server
           >|= fun () ->
           Ok t
         ) (function
@@ -353,7 +350,7 @@ struct
           Socket.Datagram.Udp.bind ~description (local_ip, local_port)
           >>= fun server ->
           t.server <- Some (`Udp server);
-          start_udp_proxy (to_string t) vsock_path_var t.remote_port server
+          start_udp_proxy (to_string t) t.remote_port server
           >|= fun () ->
           Ok t
         ) (function
