@@ -198,7 +198,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     | Some "hyperv-connect" ->
       let module Ports = Active_list.Make(Forward_hvsock) in
       let fs = Ports.make clock in
-      Ports.set_context fs "";
       let module Server = Protocol_9p.Server.Make(Log9P)(HV)(Ports) in
       let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid uri in
       Connect_hvsock.set_port_forward_addr sockaddr;
@@ -212,7 +211,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     | _ ->
       let module Ports = Active_list.Make(Forward_unix) in
       let fs = Ports.make clock in
-      Ports.set_context fs vsock_path;
       let module Server =
         Protocol_9p.Server.Make(Log9P)(Host.Sockets.Stream.Unix)(Ports)
       in
