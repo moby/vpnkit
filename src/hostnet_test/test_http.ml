@@ -745,6 +745,64 @@ let test_http_connect_tunnel proxy () =
         )
     end
 
+  let test_http_proxy_localhost () =
+    Host.Main.run begin
+      let forwarded, forwarded_u = Lwt.task () in
+      Slirp_stack.with_stack ~pcap:"test_http_proxy_localhost.pcap" (fun _ stack ->
+        with_server (fun flow ->
+            let ic = Incoming.C.create flow in
+            Incoming.Request.read ic >>= function
+            | `Eof ->
+              Log.err (fun f -> f "Failed to request");
+              failwith "Failed to read request"
+            | `Invalid x ->
+              Log.err (fun f -> f "Failed to parse request: %s" x);
+              failwith ("Failed to parse request: " ^ x)
+            | `Ok req ->
+              (* parse the response *)
+              Lwt.wakeup_later forwarded_u req;
+              Lwt.return_unit
+          ) (fun server ->
+            let host = "vpnkit.host" in
+            let port = server.Server.port in
+            let open Slirp_stack in
+            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+            >>= function
+            | Error _ ->
+              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              failwith "test_proxy_get: connect failed"
+            | Ok flow ->
+              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              let oc = Outgoing.C.create flow in
+              let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ~port ()) in
+              Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
+              >>= fun () ->
+              forwarded
+              >>= fun result ->
+              Log.info (fun f ->
+              f "original was: %s"
+                (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
+              Log.info (fun f ->
+                  f "proxied  was: %s"
+                    (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t result)));
+              Alcotest.check Alcotest.string "method"
+                (Cohttp.Code.string_of_method request.Cohttp.Request.meth)
+                (Cohttp.Code.string_of_method result.Cohttp.Request.meth);
+              Alcotest.check Alcotest.string "version"
+                (Cohttp.Code.string_of_version request.Cohttp.Request.version)
+                (Cohttp.Code.string_of_version result.Cohttp.Request.version);
+              Alcotest.check Alcotest.(option string) "URI.host"
+                (Cohttp.Request.uri request |> Uri.host)
+                (Cohttp.Request.uri result |> Uri.host);
+              Alcotest.check Alcotest.(list string) "host headers"
+                (Cohttp.Header.to_list request.Cohttp.Request.headers |> List.filter (fun (x, _) -> x = "host") |> List.map snd)
+                (Cohttp.Header.to_list result.Cohttp.Request.headers |> List.filter (fun (x, _) -> x = "host") |> List.map snd);
+              Lwt.return_unit
+            )
+        )
+    end
+
+
   let test_http_proxy_head () =
     Host.Main.run begin
       Slirp_stack.with_stack ~pcap:"test_http_proxy_head.pcap" (fun _ stack ->
@@ -818,6 +876,9 @@ let tests = [
 
   "HTTP proxy: GET has good headers",
   [ "check that HTTP GET headers are correct", `Quick, test_http_proxy_headers ];
+
+  "HTTP proxy: GET to localhost works",
+  [ "check that HTTP GET to localhost", `Quick, test_http_proxy_localhost ];
 
 ] @ (List.concat @@ List.map (fun proxy -> [
   "HTTP: URI",
