@@ -87,20 +87,53 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           Log.err (fun f -> f "Failed to call Stream.Unix.bind \"%s\": %s" path (Printexc.to_string e));
           Lwt.return (Error (`Msg  "Failed to bind to Unix domain socket"))
         )
+
+  let hvsock_create () =
+    let rec loop () =
+      match HV.Hvsock.create () with
+      | x -> Lwt.return x
+      | exception e ->
+        Log.err (fun f -> f "Caught %s while creating Hyper-V socket" (Printexc.to_string e));
+        Host.Time.sleep_ns (Duration.of_sec 1)
+        >>= fun () ->
+        loop () in
+    loop ()
+
+  let hvsock_listen sockaddr callback =
+    Log.info (fun f ->
+      f "Listening on %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
+        sockaddr.Hvsock.serviceid);
+    let rec aux () =
+      hvsock_create ()
+      >>= fun socket ->
+      Lwt.catch (fun () ->
+        HV.Hvsock.listen socket 5;
+        let rec accept_forever () =
+          HV.Hvsock.accept socket
+          >>= fun (t, clientaddr) ->
+          Log.info (fun f -> f "Accepted connection from %s:%s "
+            (Hvsock.string_of_vmid clientaddr.Hvsock.vmid)
+            clientaddr.Hvsock.serviceid);
+          Lwt.async (fun () -> callback t);
+          accept_forever () in
+        accept_forever ()
+      ) (fun e ->
+          Log.warn (fun f -> f "Caught %s while listening on %s:%s"
+            (Printexc.to_string e)
+            (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
+            sockaddr.Hvsock.serviceid);
+          log_exception_continue "HV.Hvsock.close" (fun () -> HV.Hvsock.close socket)
+      )
+      >>= fun () ->
+      aux () in
+    aux ()
+
   let hvsock_connect_forever url sockaddr callback =
     Log.info (fun f ->
         f "Connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
           sockaddr.Hvsock.serviceid);
     let rec aux () =
-      let rec create () =
-        match HV.Hvsock.create () with
-        | x -> Lwt.return x
-        | exception e ->
-          Log.err (fun f -> f "Caught %s while creating Hyper-V socket" (Printexc.to_string e));
-          Host.Time.sleep_ns (Duration.of_sec 1)
-          >>= fun () ->
-          create () in
-      create ()
+      hvsock_create ()
       >>= fun socket ->
       Lwt.catch (fun () ->
           HV.Hvsock.connect ~timeout_ms:300 socket sockaddr >>= fun () ->
@@ -211,17 +244,20 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let fs = Ports.make clock in
 
     match Uri.scheme uri with
-    | Some "hyperv-connect" ->
+    | Some ("hyperv-connect" | "hyperv-listen") ->
       let module Server = Protocol_9p.Server.Make(Log9P)(HV)(Ports) in
       let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid uri in
       Connect_hvsock.set_port_forward_addr sockaddr;
-      hvsock_connect_forever port_control_url sockaddr (fun fd ->
-          let flow = HV.connect fd in
-          Server.connect fs flow () >>= function
-          | Error (`Msg m) ->
-            Log.err (fun f -> f "Failed to establish 9P connection: %s" m);
-            Lwt.return ()
-          | Ok server -> Server.after_disconnect server)
+      let callback fd =
+        let flow = HV.connect fd in
+        Server.connect fs flow () >>= function
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to establish 9P connection: %s" m);
+          Lwt.return ()
+        | Ok server -> Server.after_disconnect server in
+      if Uri.scheme uri = Some "hyperv-connect"
+      then hvsock_connect_forever port_control_url sockaddr callback
+      else hvsock_listen sockaddr callback
     | _ ->
       let module Server =
         Protocol_9p.Server.Make(Log9P)(Host.Sockets.Stream.Unix)(Ports)
@@ -302,7 +338,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let uri = Uri.of_string socket_url in
 
     match Uri.scheme uri with
-    | Some "hyperv-connect" ->
+    | Some ("hyperv-connect"|"hyperv-listen") ->
       let module Slirp_stack =
         Slirp.Make(Config)(Vmnet.Make(HV))(Dns_policy)
           (Mclock)(Stdlibrandom)(Vnet)
@@ -315,19 +351,21 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
       | None -> Slirp_stack.create_static clock vnet_switch configuration
       ) >>= fun stack_config ->
-      hvsock_connect_forever socket_url sockaddr (fun fd ->
-          let conn = HV.connect fd in
-          Slirp_stack.connect stack_config conn >>= fun stack ->
-          Log.info (fun f -> f "TCP/IP stack connected");
-          List.iter (fun url ->
-            start_introspection url (Slirp_stack.filesystem stack)
-          ) introspection_urls;
-          List.iter (fun url ->
-            start_diagnostics url @@ Slirp_stack.diagnostics stack
-          ) diagnostics_urls;
-          Slirp_stack.after_disconnect stack >|= fun () ->
-          Log.info (fun f -> f "TCP/IP stack disconnected"))
-
+      let callback fd =
+        let conn = HV.connect fd in
+        Slirp_stack.connect stack_config conn >>= fun stack ->
+        Log.info (fun f -> f "TCP/IP stack connected");
+        List.iter (fun url ->
+          start_introspection url (Slirp_stack.filesystem stack)
+        ) introspection_urls;
+        List.iter (fun url ->
+          start_diagnostics url @@ Slirp_stack.diagnostics stack
+        ) diagnostics_urls;
+        Slirp_stack.after_disconnect stack >|= fun () ->
+        Log.info (fun f -> f "TCP/IP stack disconnected") in
+      if Uri.scheme uri = Some "hyperv-connect"
+      then hvsock_connect_forever socket_url sockaddr callback
+      else hvsock_listen sockaddr callback
     | _ ->
       let module Slirp_stack =
         Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
@@ -430,6 +468,9 @@ let socket =
        include:  hyperv-connect://vmid/serviceid to connect to a specific \
        Hyper-V 'serviceid' on VM 'vmid'; hyperv-connect://vmid to connect to \
        the default Hyper-V 'serviceid' on  VM 'vmid'; \
+       hyperv-listen://vmid/serviceid to accept incoming Hyper-V connections \
+       on `serviceid` and `vmid`; hyperv-listen://vmid to accept connections \
+       to the default Hyper-V `serviceid` on VM `vmid`; \
        /var/tmp/com.docker.slirp.socket to listen on a Unix domain socket for \
        incoming connections."
       [ "ethernet" ]
@@ -444,6 +485,9 @@ let port_control_urls =
        hyperv-connect://vmid/serviceid to connect to a specific Hyper-V \
        'serviceid' on VM 'vmid'; hyperv-connect://vmid to connect to the \
        default Hyper-V 'serviceid' on VM 'vmid'; \
+       hyperv-listen://vmid/serviceid to accept incoming Hyper-V connections \
+       on `serviceid` and `vmid`; hyperv-listen://vmid to accept connections \
+       to the default Hyper-V `serviceid` on VM `vmid`; \
        /var/tmp/com.docker.port.socket to listen on a Unix domain socket for \
        incoming connections."
       [ "port" ]
