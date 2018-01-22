@@ -483,7 +483,7 @@ module Make
       let port = match Uri.port uri with None -> 80 | Some p -> p in
       Ok (host, port)
 
-  let route ?(localhost_names=[]) proxy exclude req =
+  let route ?(localhost_names=[]) ?(localhost_ips=[]) proxy exclude req =
     match get_host req with
     | Error x -> Lwt.return (Error x)
     | Ok (host, port) ->
@@ -526,6 +526,10 @@ module Make
         | Error (`Msg m) ->
           Lwt.return (Error (`Msg m))
         | Ok next_hop_ip ->
+          let next_hop_ip =
+            if List.mem next_hop_ip localhost_ips
+            then Ipaddr.(V4 V4.localhost)
+            else next_hop_ip in
           let description outgoing =
             Printf.sprintf "HTTP proxy %s %s:%d Host:%s:%d (%s)"
               (if outgoing then "-->" else "<--") (Ipaddr.to_string next_hop_ip) next_hop_port host port
@@ -533,10 +537,10 @@ module Make
           Lwt.return (Ok { next_hop_address = (next_hop_ip, next_hop_port); host; port; description; ty })
       end
 
-  let fetch ?localhost_names ~flow proxy exclude incoming req =
+  let fetch ?localhost_names ?localhost_ips ~flow proxy exclude incoming req =
     let uri = Cohttp.Request.uri req in
     let meth = Cohttp.Request.meth req in
-    route ?localhost_names proxy exclude req
+    route ?localhost_names ?localhost_ips proxy exclude req
     >>= function
     | Error `Missing_host_header ->
       send_error `Bad_request incoming "HTTP proxy"
@@ -616,7 +620,7 @@ module Make
   (* A regular, non-transparent HTTP proxy implementation.
      If [proxy] is [None] then requests will be sent to origin servers;
      otherwise they will be sent to the upstream proxy. *)
-  let explicit_proxy ~localhost_names proxy exclude () =
+  let explicit_proxy ~localhost_names ~localhost_ips proxy exclude () =
     let listeners _port =
       Log.debug (fun f -> f "HTTP TCP handshake complete");
       let f flow =
@@ -631,7 +635,7 @@ module Make
                       x);
                 Lwt.return_unit
               | `Ok req ->
-                fetch ~localhost_names ~flow proxy exclude incoming req
+                fetch ~localhost_names ~localhost_ips ~flow proxy exclude incoming req
                 >>= function
                 | true ->
                   (* keep the connection open, read more requests *)
@@ -694,10 +698,10 @@ module Make
       else Some (tunnel_https_over_connect ~dst:ip proxy)
     | _, _, _ -> None
 
-  let explicit_proxy_handler ~localhost_names ~dst:(_, port) ~t =
+  let explicit_proxy_handler ~localhost_names ~localhost_ips ~dst:(_, port) ~t =
     match port, t.http, t.https with
     | 3128, proxy, _
-    | 3129, _, proxy -> Some (explicit_proxy ~localhost_names proxy t.exclude ())
+    | 3129, _, proxy -> Some (explicit_proxy ~localhost_names ~localhost_ips proxy t.exclude ())
     (* For other ports, refuse the connection *)
     | _, _, _ -> None
 end

@@ -745,7 +745,7 @@ let test_http_connect_tunnel proxy () =
         )
     end
 
-  let test_http_proxy_localhost () =
+  let test_http_proxy_localhost host_or_ip () =
     Host.Main.run begin
       let forwarded, forwarded_u = Lwt.task () in
       Slirp_stack.with_stack ~pcap:"test_http_proxy_localhost.pcap" (fun _ stack ->
@@ -763,7 +763,7 @@ let test_http_connect_tunnel proxy () =
               Lwt.wakeup_later forwarded_u req;
               Lwt.return_unit
           ) (fun server ->
-            let host = "vpnkit.host" in
+            let host = host_or_ip in
             let port = server.Server.port in
             let open Slirp_stack in
             Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
@@ -877,8 +877,12 @@ let tests = [
   "HTTP proxy: GET has good headers",
   [ "check that HTTP GET headers are correct", `Quick, test_http_proxy_headers ];
 
+  "HTTP proxy: GET to localhost",
+  [ "check that HTTP GET to localhost via hostname", `Quick, test_http_proxy_localhost "vpnkit.host" ];
+
   "HTTP proxy: GET to localhost works",
-  [ "check that HTTP GET to localhost", `Quick, test_http_proxy_localhost ];
+  [ "check that HTTP GET to localhost via IP", `Quick, test_http_proxy_localhost (Ipaddr.V4.to_string Slirp_stack.localhost_ip) ];
+
 
 ] @ (List.concat @@ List.map (fun proxy -> [
   "HTTP: URI",
