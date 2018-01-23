@@ -134,6 +134,8 @@ module DNS = Dns_resolver_mirage.Make(Host.Time)(Client)
 
 let primary_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
 
+let localhost_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
+
 let preferred_ip1 = Ipaddr.V4.of_string_exn "192.168.65.250"
 
 let config =
