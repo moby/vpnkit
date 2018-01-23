@@ -558,7 +558,7 @@ let listen_backlog =
 
 let port_max_idle_time =
   let doc = "Idle time to wait before timing out and disconnecting switch ports." in
-  Arg.(value & opt int 30 & info [ "port-max-idle-time" ] ~doc)
+  Arg.(value & opt int Configuration.default_port_max_idle_time & info [ "port-max-idle-time" ] ~doc)
 
 let debug =
   let doc = "Verbose debug logging to stdout" in
