@@ -9,7 +9,6 @@ else
   OPAMROOT?=$(REPO_ROOT)/_build/opam
 endif
 
-COMMIT_ID=$(shell git rev-parse HEAD)
 LICENSEDIRS=$(REPO_ROOT)/repo/licenses
 BINDIR?=$(shell pwd)
 
@@ -58,19 +57,25 @@ test: $(OPAMROOT)
 	# One test requires 1026 file descriptors
 	ulimit -n 1500 && ./_build/default/src/hostnet_test/main.exe
 
+# Published as a artifact.
 .PHONY: OSS-LICENSES
 OSS-LICENSES:
-	mkdir -p $(LICENSEDIRS)
-	cd $(LICENSEDIRS) && \
+	@echo "  GEN     " $@
+	@mkdir -p $(LICENSEDIRS)
+	@cd $(LICENSEDIRS) && \
 	  $(OPAMFLAGS) $(REPO_ROOT)/repo/opam-licenses.sh vpnkit
-	$(REPO_ROOT)/repo/list-licenses.sh $(LICENSEDIRS) > OSS-LICENSES
+	@$(REPO_ROOT)/repo/list-licenses.sh $(LICENSEDIRS) > $@.tmp
+	@mv $@.tmp $@
 
+# Published as a artifact.
 .PHONY: COMMIT
 COMMIT:
-	@echo $(COMMIT_ID) > COMMIT
+	@echo "  GEN     " $@
+	@git rev-parse HEAD > $@.tmp
+	@mv $@.tmp $@
 
 .PHONY: clean
-clean:
+clean:	
 	rm -rf _build
 	rm -f vpnkit.exe
 	rm -f vpnkit.tgz
