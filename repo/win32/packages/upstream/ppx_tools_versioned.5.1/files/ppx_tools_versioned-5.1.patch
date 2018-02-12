@@ -1,0 +1,33 @@
+--- ./Makefile
++++ ./Makefile
+@@ -22,9 +22,10 @@
+ VERSIONS = 402 403 404 405 406
+ 
+ # Files
+-METAQUOTS= $(foreach version,$(VERSIONS),ppx_metaquot_$(version))
++METAQUOTS= $(foreach version,$(VERSIONS),ppx_metaquot_$(version)$(EXE))
++METAQUOTS_E= $(foreach version,$(VERSIONS),ppx_metaquot_$(version))
+ METAQUOTS_OBJECTS= $(foreach version,$(VERSIONS), \
+-									 		$(foreach metaquot,$(METAQUOTS),$(metaquot).cmo))
++									 		$(foreach metaquot,$(METAQUOTS_E),$(metaquot).cmo))
+ OBJECTS=$(foreach version,$(VERSIONS), \
+ 					 $(foreach module,$(MODULES), $(module)_$(version).cmo))
+ ALL_OBJECTS=$(OBJECTS) $(METAQUOTS_OBJECTS)
+@@ -63,7 +64,7 @@
+ INSTALL = META \
+ 	$(wildcard ppx_tools_versioned.*) \
+ 	$(ALL_OBJECTS:.cmo=.cmi) \
+-	$(wildcard $(ALL_OBJECTS:.cmo=.o) $(ALL_OBJECTS:.cmo=.cmx)) \
++	$(wildcard $(ALL_OBJECTS:.cmo=$(EXT_OBJ)) $(ALL_OBJECTS:.cmo=.cmx)) \
+ 	$(wildcard $(ALL_OBJECTS:.cmo=.cmt) $(ALL_OBJECTS:.cmo=.cmti)) \
+ 	$(wildcard $(METAQUOTS_OBJECTS)) $(METAQUOTS) 
+ 
+@@ -92,7 +93,7 @@
+ 
+ # Metaquot
+ 
+-ppx_metaquot_%: ppx_tools_versioned.cmxa ast_lifter_%.cmx ppx_metaquot_%.cmx ppx_metaquot_run.cmx
++ppx_metaquot_%$(EXE): ppx_tools_versioned.cmxa ast_lifter_%.cmx ppx_metaquot_%.cmx ppx_metaquot_run.cmx
+ 	$(OCAMLOPT) -o $@ $(COMPFLAGS) -linkpkg $^
+ 
+ .PHONY: depend

@@ -55,3 +55,4 @@ See https://github.com/OCamlPro/opam-user-setup
   "
     {success & !user-setup:installed}
 ]
+patches: "merlin-3.0.5.patch" {os = "win32"}
