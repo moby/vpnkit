@@ -21,6 +21,8 @@ dependencies:
   - make artefacts
   - make OSS-LICENSES
   - make COMMIT
+  cache_directories:
+    - _build/opam
 test:
   override:
   - make test

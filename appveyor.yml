@@ -16,6 +16,9 @@ environment:
   OPAMVERBOSE: 1
   BINDIR: 'C:\projects\vpnkit'
 
+cache:
+  - _build\opam -> repo\win32
+
 install:
   - cmd: git config core.symlinks true
   - cmd: git reset --hard
