@@ -1189,7 +1189,10 @@ struct
     in
     let builtin_names =
       (List.map (fun name -> name, Ipaddr.V4 c.Configuration.gateway_ip) c.Configuration.gateway_names)
-      @ (List.map (fun name -> name, Ipaddr.V4 c.Configuration.host_ip) c.Configuration.host_names) in
+      @ (List.map (fun name -> name, Ipaddr.V4 c.Configuration.host_ip) c.Configuration.host_names)
+      (* FIXME: what to do if there are multiple VMs? *)
+      @ (List.map (fun name -> name, Ipaddr.V4 c.Configuration.lowest_ip) c.Configuration.vm_names) in
+
     dns := dns_forwarder ~local_address ~builtin_names clock
 
   let update_dhcp c =

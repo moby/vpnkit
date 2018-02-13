@@ -399,7 +399,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let main
       socket_url port_control_urls introspection_urls diagnostics_urls
       max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
-      listen_backlog port_max_idle_time debug
+      vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
       dhcp_json_path mtu log_destination
     =
@@ -418,6 +418,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
     let gateway_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," gateway_names in
+    let vm_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," vm_names in
 
     let dns_path, resolver = match dns with
     | None -> None, Configuration.default_resolver
@@ -434,6 +435,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       port_max_idle_time;
       host_names;
       gateway_names;
+      vm_names;
       dns = Configuration.no_dns_servers;
       dns_path;
       http_intercept_path = http;
@@ -606,6 +608,14 @@ let gateway_names =
   in
   Arg.(value & opt string "gateway.internal" doc)
 
+let vm_names =
+  let doc =
+    Arg.info ~doc:
+      "Comma-separated list of DNS names to map to the VM's virtual IP"
+      [ "vm-names" ]
+  in
+  Arg.(value & opt string "vm.internal" doc)
+
 let listen_backlog =
   let doc = "Specify a maximum listen(2) backlog. If no override is specified \
              then we will use SOMAXCONN." in
@@ -695,7 +705,7 @@ let command =
   Term.(pure main
         $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
-        $ host_names $ gateway_names $ listen_backlog $ port_max_idle_time $ debug
+        $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
