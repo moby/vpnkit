@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
 
 	vpnkit "github.com/moby/vpnkit/go/pkg/vpnkit"
 )
@@ -13,7 +12,7 @@ import (
 // List currently exposed ports
 
 func main() {
-	path := flag.String("vpnkit", os.Getenv("HOME")+"/Library/Containers/com.docker.docker/Data/s51", "path to vpnkit's control socket")
+	path := flag.String("vpnkit", "", "path to vpnkit's control socket")
 	flag.Parse()
 
 	c, err := vpnkit.NewConnection(context.Background(), *path)
