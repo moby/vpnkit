@@ -1,1 +1,65 @@
-../../../../../vpnkit.opam
+opam-version: "1.2"
+maintainer: "David Scott <dave.scott@docker.com>"
+authors: [
+  "Anil Madhavapeddy <anil@recoil.org>"
+  "David Scott <dave.scott@docker.com>"
+  "David Sheets <dsheets@docker.com>"
+  "Gaetan de Villele <gdevillele@gmail.com>"
+  "Ian Campbell <ian.campbell@docker.com>"
+  "Magnus Skjegstad <magnus@skjegstad.com>"
+  "Mindy Preston <mindy.preston@docker.com>"
+  "Sebastiaan van Stijn <github@gone.nl>"
+  "Thomas Gazagnaire <thomas@gazagnaire.com>"
+  "Thomas Leonard <thomas.leonard@docker.com>"
+]
+homepage:     "https://github.com/moby/vpnkit"
+bug-reports:  "https://github.com/moby/vpnkit/issues"
+dev-repo:     "https://github.com/moby/vpnkit.git"
+doc:          "https://moby.github.io/vpnkit/"
+
+build: [
+  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+
+depends: [
+  "jbuilder" {build & >="1.0+beta10"}
+  "alcotest"   {test}
+  "result"
+  "tar" {>= "0.8.0"}
+  "ipaddr"
+  "lwt" {>= "2.7.0"}
+  "uwt" {>= "0.0.4"}
+  "tcpip" {>= "3.3.0"}
+  "dns" {>= "0.19.1"}
+  "dns-lwt"
+  "dnssd" {>= "0.2"}
+  "dns-forward" {>= "0.10.0"}
+  "cstruct-lwt" {>= "3.0.0"}
+  "datakit-server" {>= "0.11.0"}
+  "datakit-server-9p" {>= "0.11.0"}
+  "hashcons" {>= "1.0.1"}
+  "pcap-format" {>= "0.4.0"}
+  "cmdliner"
+  "charrua-core" {>= "0.9"}
+  "charrua-client-mirage" {test}
+  "hvsock" {>= "1.0.1"}
+  "asl"
+  "win-eventlog"
+  "fd-send-recv" {>= "1.0.3"}
+  "logs"
+  "fmt"
+  "astring"
+  "mirage-flow-lwt" {>= "1.4.0"}
+  "mirage-time-lwt" {>= "1.1.0"}
+  "mirage-protocols" {>= "1.1.0"}
+  "mirage-channel" {>= "3.0.1"}
+  "cohttp-lwt" {>= "0.99.0"}
+  "mirage-dns"
+  "protocol-9p" {>= "0.11.3"}
+  "mirage-vnetif" {>= "0.4.0"}
+  "uuidm"
+  "ezjsonm"
+  "stringext" {= "1.4.3"}
+  "mirage-clock-unix"
+]

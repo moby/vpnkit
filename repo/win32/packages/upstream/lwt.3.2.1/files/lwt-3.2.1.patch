@@ -1,0 +1,19 @@
+--- ./src/unix/config/discover.ml
++++ ./src/unix/config/discover.ml
+@@ -360,6 +360,16 @@
+     (String.concat " " (List.map (sprintf "-cclib %s") lib))
+     (Filename.quote !log_file))
+ 
++let compile opt_lib stub_file =
++  match !system with
++  | "win32" | "win64" ->
++     let orig_dir = Sys.getcwd () in
++     Sys.chdir (Filename.get_temp_dir_name ());
++     let res = compile opt_lib stub_file in
++     Sys.chdir orig_dir;
++     res
++  | _ -> compile opt_lib stub_file
++
+ let safe_remove file_name =
+   if !debug then
+     dprintf "DEBUG: Not removing %s\n" file_name

@@ -1,0 +1,47 @@
+--- ./src/frontend/ocamlmerlin.c
++++ ./src/frontend/ocamlmerlin.c
+@@ -526,7 +526,7 @@
+     user[0] = '\0';
+   // @@DRA Need to use Windows API functions to get meaningful values for st_dev and st_ino
+   snprintf(eventname, PATHSZ,
+-      "ocamlmerlin_%s_%lx_%llx",
++      "ocamlmerlin_%s_%lx_%I64x",
+       user,
+       info.dwVolumeSerialNumber,
+       ((__int64)info.nFileIndexHigh) << 32 | ((__int64)info.nFileIndexLow));
+--- ./src/utils/sexp.ml
++++ ./src/utils/sexp.ml
+@@ -21,9 +21,7 @@
+   let extra_chars = ref 0 in
+   for i = 0 to len - 1 do
+     match str.[i] with
+-    | '"' -> incr extra_chars
+-    | c when Char.code c < 32 || Char.code c > 128 ->
+-      extra_chars := !extra_chars + 3
++    | '\\' | '"' -> incr extra_chars
+     | _ -> ()
+   done;
+   let buf = Buffer.create (len + !extra_chars + 2) in
+@@ -32,19 +30,10 @@
+     Buffer.add_string buf str
+   ) else (
+     for i = 0 to len - 1 do
+-      match str.[i] with
+-      | '"' ->
++      let c = str.[i] in
++      if c = '"' || c = '\\' then
+         Buffer.add_char buf '\\';
+-        Buffer.add_char buf '"'
+-      | c when Char.code c < 32 || Char.code c > 128 ->
+-        Buffer.add_char buf '\\';
+-        Buffer.add_char buf 'x';
+-        let c = Char.code c in
+-        Buffer.add_char buf (hex_char ((c lsr 4) land 15));
+-        Buffer.add_char buf (hex_char (c land 15));
+-        if (i < len - 1) && is_hex str.[i+1] then
+-          (Buffer.add_char buf '\\'; Buffer.add_char buf ' ')
+-      | c -> Buffer.add_char buf c
++      Buffer.add_char buf c
+     done;
+   );
+   Buffer.add_char buf '"';

@@ -16,12 +16,12 @@ dev-repo: "https://github.com/ocaml/num.git"
 build: [
   [make]
 ]
-install: [make "install"]
-remove: [make "uninstall"]
+install: [make "install" {!preinstalled} "findlib-install" {preinstalled} ]
+remove: [make "uninstall" {!preinstalled} "findlib-uninstall" {preinstalled} ]
 
 depends: [
   "ocamlfind" {build & >= "1.7.3"}
 ]
 conflicts: [ "base-num" ]
 available: [ ocaml-version >= "4.06.0" ]
-
+patches: [ "findlib-install.patch" ]

@@ -18,3 +18,4 @@ depends: [
   "jbuilder" {build & >= "1.0+beta10"}
 ]
 available: ocaml-version >= "4.02.0"
+patches: "ocaml-migrate-parsetree-1.0.7.patch" {os = "win32"}
