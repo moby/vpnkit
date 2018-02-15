@@ -15,9 +15,10 @@ build: [
 
 depends: [
   "jbuilder" {build & >="1.0+beta9"}
-  "mirage-device" {>= "1.0.0"}
-  "mirage-protocols" {>= "1.0.0"}
-  "fmt"
+  "mirage-stack" {>= "1.0.0"}
+  "ipaddr"
+  "lwt"
+  "cstruct" {>= "2.4.0"}
 ]
 
-available: [ ocaml-version >= "4.03.0" ]
+available: [ ocaml-version >= "4.04.2"]
