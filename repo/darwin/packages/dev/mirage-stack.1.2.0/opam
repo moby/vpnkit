@@ -20,4 +20,4 @@ depends: [
   "fmt"
 ]
 
-available: [ ocaml-version >= "4.03.0" ]
+available: [ ocaml-version >= "4.04.2" ]
