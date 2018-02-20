@@ -13,7 +13,8 @@ LICENSEDIRS=$(REPO_ROOT)/repo/licenses
 BINDIR?=$(shell pwd)
 
 BINARIES := vpnkit.exe
-ARTEFACTS :=
+
+ARTEFACTS = COMMIT OSS-LICENSES
 ifeq ($(OS),Windows_NT)
 	ARTEFACTS += vpnkit.exe
 else
@@ -35,6 +36,7 @@ uninstall:
 		rm -f $$BINARY ; \
 	done
 
+.PHONY: artefacts
 artefacts: $(ARTEFACTS)
 
 vpnkit.tgz: vpnkit.exe
@@ -54,10 +56,10 @@ vpnkit.exe: $(OPAMROOT)
 .PHONY: test
 test: $(OPAMROOT)
 	opam config --root $(OPAMROOT) --switch $(OPAM_COMP) exec -- sh -c 'jbuilder build --dev src/hostnet_test/main.exe'
-	# One test requires 1026 file descriptors
+# One test requires 1026 file descriptors
 	ulimit -n 1500 && ./_build/default/src/hostnet_test/main.exe
 
-# Published as a artifact.
+# Published as an artifact.
 .PHONY: OSS-LICENSES
 OSS-LICENSES:
 	@echo "  GEN     " $@
@@ -67,7 +69,7 @@ OSS-LICENSES:
 	@$(REPO_ROOT)/repo/list-licenses.sh $(LICENSEDIRS) > $@.tmp
 	@mv $@.tmp $@
 
-# Published as a artifact.
+# Published as an artifact.
 .PHONY: COMMIT
 COMMIT:
 	@echo "  GEN     " $@
