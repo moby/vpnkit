@@ -9,6 +9,11 @@
    ))
    (preprocess  no_preprocessing)))
 
+(rule
+  ((targets (version.ml))
+   (deps    (version.ml.in ../../Makefile))
+   (action  (chdir ${ROOT} (run make src/bin/version.ml)))))
+
 (install
  ((section bin)
   (package vpnkit)
