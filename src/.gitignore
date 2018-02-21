@@ -1,5 +1,6 @@
 bin/depends.ml
 bin/depends.tmp
+bin/version.ml
 _tags
 configure
 hostnet/META

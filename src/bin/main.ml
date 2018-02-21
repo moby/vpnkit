@@ -291,7 +291,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore
     with Invalid_argument _ -> ());
     Log.info (fun f ->
-        f "Version %%VERSION%% from %%VCS_COMMIT_ID%%"
+        f "Version is %s" Version.git
     );
 
     Log.info (fun f -> f "System SOMAXCONN is %d" !Utils.somaxconn);
