@@ -656,7 +656,7 @@ module Make
     in
     Lwt.return listeners
 
-  let transparent_http ~dst proxy exclude =
+  let transparent_http ~dst ~localhost_names ~localhost_ips proxy exclude =
     let listeners _port =
       Log.debug (fun f -> f "HTTP TCP handshake complete");
       let process flow =
@@ -680,7 +680,7 @@ module Make
                 | Error `Missing_host_header ->
                   { req with Cohttp.Request.headers = Cohttp.Header.replace req.headers "host" (Ipaddr.V4.to_string dst) }
                 | Ok _ -> req in
-              fetch ~flow (Some proxy) exclude incoming req
+              fetch ~localhost_names ~localhost_ips ~flow (Some proxy) exclude incoming req
               >>= function
               | true ->
                 (* keep the connection open, read more requests *)
@@ -694,9 +694,9 @@ module Make
     in
     Lwt.return listeners
 
-  let transparent_proxy_handler ~dst:(ip, port) ~t =
+  let transparent_proxy_handler ~localhost_names ~localhost_ips ~dst:(ip, port) ~t =
     match port, t.http, t.https with
-    | 80, Some proxy, _ -> Some (transparent_http ~dst:ip proxy t.exclude)
+    | 80, Some proxy, _ -> Some (transparent_http ~dst:ip ~localhost_names ~localhost_ips proxy t.exclude)
     | 443, _, Some proxy ->
       if Exclude.matches (Ipaddr.V4.to_string ip) t.exclude
       then None
