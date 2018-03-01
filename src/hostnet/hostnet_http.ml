@@ -330,6 +330,8 @@ module Make
       Log.debug (fun f ->
           f "%s" (Sexplib.Sexp.to_string_hum
                     (Cohttp.Response.sexp_of_t res)));
+      let res_headers = res.Cohttp.Response.headers in
+      let connection_close = Cohttp.Header.get res_headers "connection" = Some "close" in
       match Cohttp.Request.meth req, Cohttp.Response.status res with
       | `CONNECT, `OK ->
         (* Write the response and then switch to proxying the bytes *)
@@ -360,6 +362,10 @@ module Make
             | _, `No      ->
               Log.info (fun f -> f "%s: no body to proxy" (description false));
               Lwt.return_unit
+            | _, `Unknown when connection_close ->
+              (* There may be a body between here and the EOF *)
+              Log.info (fun f -> f "%s: proxying until EOF" (description false));
+              proxy_body_response ~reader ~writer
             | _, `Unknown ->
               Log.warn (fun f ->
                   f "Response.has_body returned `Unknown: not sure \
@@ -367,7 +373,7 @@ module Make
               Lwt.return_unit
           ) res incoming
         >>= fun () ->
-        Lwt.return true
+        Lwt.return (not connection_close)
 
   let add_proxy_authorization proxy headers =
     let proxy_authorization = "Proxy-Authorization" in
