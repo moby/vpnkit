@@ -376,17 +376,26 @@ module Make
       | None -> headers
       | Some s -> Cohttp.Header.add headers proxy_authorization ("Basic " ^ (B64.encode s))
 
-  let address_of_proxy proxy =
+  let address_of_proxy ~localhost_names ~localhost_ips proxy =
     match Uri.host proxy, Uri.port proxy with
     | None, _ ->
       Lwt.return (Error (`Msg ("HTTP proxy URI does not include a hostname: " ^ (Uri.to_string proxy))))
     | _, None ->
       Lwt.return (Error (`Msg ("HTTP proxy URI does not include a port: " ^ (Uri.to_string proxy))))
     | Some host, Some port ->
+      let host =
+        if List.mem (Dns.Name.of_string host) localhost_names
+        then "localhost"
+        else host in
       resolve_ip host
       >>= function
       | Error e -> Lwt.return (Error e)
-      | Ok ip -> Lwt.return (Ok (ip, port))
+      | Ok ip ->
+        let ip =
+          if List.mem ip localhost_ips
+          then Ipaddr.(V4 V4.localhost)
+          else ip in
+        Lwt.return (Ok (ip, port))
 
   let send_error status incoming description msg () =
     let res = Cohttp.Response.make ~version:`HTTP_1_1 ~status () in
@@ -396,13 +405,13 @@ module Make
         (error_html "ERROR: connection refused" msg)
     ) res incoming
 
-  let tunnel_https_over_connect ~dst proxy =
+  let tunnel_https_over_connect ~localhost_names ~localhost_ips ~dst proxy =
     let listeners _port =
       Log.debug (fun f -> f "HTTPS TCP handshake complete");
       let process flow =
         Lwt.finalize
           (fun () ->
-            address_of_proxy proxy
+            address_of_proxy ~localhost_names ~localhost_ips proxy
             >>= function
             | Error (`Msg m) ->
               Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string proxy) m);
@@ -656,7 +665,7 @@ module Make
     in
     Lwt.return listeners
 
-  let transparent_http ~dst proxy exclude =
+  let transparent_http ~dst ~localhost_names ~localhost_ips proxy exclude =
     let listeners _port =
       Log.debug (fun f -> f "HTTP TCP handshake complete");
       let process flow =
@@ -680,7 +689,7 @@ module Make
                 | Error `Missing_host_header ->
                   { req with Cohttp.Request.headers = Cohttp.Header.replace req.headers "host" (Ipaddr.V4.to_string dst) }
                 | Ok _ -> req in
-              fetch ~flow (Some proxy) exclude incoming req
+              fetch ~localhost_names ~localhost_ips ~flow (Some proxy) exclude incoming req
               >>= function
               | true ->
                 (* keep the connection open, read more requests *)
@@ -694,13 +703,13 @@ module Make
     in
     Lwt.return listeners
 
-  let transparent_proxy_handler ~dst:(ip, port) ~t =
+  let transparent_proxy_handler ~localhost_names ~localhost_ips ~dst:(ip, port) ~t =
     match port, t.http, t.https with
-    | 80, Some proxy, _ -> Some (transparent_http ~dst:ip proxy t.exclude)
+    | 80, Some proxy, _ -> Some (transparent_http ~dst:ip ~localhost_names ~localhost_ips proxy t.exclude)
     | 443, _, Some proxy ->
       if Exclude.matches (Ipaddr.V4.to_string ip) t.exclude
       then None
-      else Some (tunnel_https_over_connect ~dst:ip proxy)
+      else Some (tunnel_https_over_connect ~localhost_names ~localhost_ips ~dst:ip proxy)
     | _, _, _ -> None
 
   let explicit_proxy_handler ~localhost_names ~localhost_ips ~dst:(_, port) ~t =

@@ -651,6 +651,8 @@ struct
       endpoint:        Endpoint.t;
       udp_nat:         Udp_nat.t;
       icmp_nat:        Icmp_nat.t option;
+      localhost_names: Dns.Name.t list;
+      localhost_ips:   Ipaddr.t list;
     }
     (** Represents a remote system by proxying data to and from sockets *)
 
@@ -680,7 +682,7 @@ struct
       in
       let callback = match !http with
       | None -> None
-      | Some http -> Http_forwarder.transparent_proxy_handler ~dst:(local_ip, local_port) ~t:http
+      | Some http -> Http_forwarder.transparent_proxy_handler ~localhost_names:t.localhost_names ~localhost_ips:t.localhost_ips ~dst:(local_ip, local_port) ~t:http
       in
       begin match callback with
       | None ->
@@ -715,8 +717,8 @@ struct
 
     | _ -> Lwt_result.return ()
 
-    let create endpoint udp_nat icmp_nat =
-      let tcp_stack = { endpoint; udp_nat; icmp_nat } in
+    let create endpoint udp_nat icmp_nat localhost_names localhost_ips =
+      let tcp_stack = { endpoint; udp_nat; icmp_nat; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -1139,6 +1141,7 @@ struct
               Log.debug (fun f ->
                   f "create remote TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
               Remote.create endpoint udp_nat icmp_nat
+                c.Configuration.host_names [ Ipaddr.V4 c.Configuration.host_ip ]
             end >>= function
             | Error e ->
               Log.err (fun f ->
