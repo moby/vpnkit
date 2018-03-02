@@ -213,11 +213,10 @@ module Make
 
   let to_string t = Ezjsonm.to_string ~minify:false @@ to_json t
 
-  let create ?http ?https ?exclude:_ ?(transparent_http_ports=[ 80 ]) ?(transparent_https_ports=[ 443 ]) () =
+  let create ?http ?https ?exclude ?(transparent_http_ports=[ 80 ]) ?(transparent_https_ports=[ 443 ]) () =
     let http = match http with None -> None | Some x -> proxy_of_string x in
     let https = match https with None -> None | Some x -> proxy_of_string x in
-    (* FIXME: parse excludes *)
-    let exclude = [] in
+    let exclude = match exclude with None -> [] | Some x -> Exclude.of_string x in
     let t = { http; https; exclude; transparent_http_ports; transparent_https_ports } in
     Log.info (fun f -> f "HTTP proxy settings changed to: %s" (to_string t));
     Lwt.return (Ok t)
