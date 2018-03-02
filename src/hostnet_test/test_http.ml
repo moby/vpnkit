@@ -852,6 +852,70 @@ let test_http_connect_tunnel proxy () =
         )
     end
 
+  let test_transparent_http_proxy_exclude () =
+    Host.Main.run begin
+      let forwarded, forwarded_u = Lwt.task () in
+      Slirp_stack.with_stack ~pcap:"test_transparent_http_proxy_exclude.pcap" (fun _ stack ->
+        (* Start a web server (not a proxy) *)
+        with_server (fun flow ->
+          let ic = Incoming.C.create flow in
+          Incoming.Request.read ic >>= function
+          | `Eof ->
+            Log.err (fun f -> f "Failed to request");
+            failwith "Failed to read request"
+          | `Invalid x ->
+            Log.err (fun f -> f "Failed to parse request: %s" x);
+            failwith ("Failed to parse request: " ^ x)
+          | `Ok req ->
+            (* parse the response *)
+            Lwt.wakeup_later forwarded_u req;
+            Lwt.return_unit
+        ) (fun server ->
+          let host = "127.0.0.1" in
+          let port = server.Server.port in
+          Log.info (fun f -> f "HTTP server is on %s:%d" host port);
+          let open Slirp_stack in
+          Slirp_stack.Debug.update_http
+            ~exclude:"localhost"
+            ~http:(Printf.sprintf "http://localhost:%d" (port + 1))
+            ~transparent_http_ports:[port]
+            ()
+          >>= function
+          | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
+          | Ok () ->
+            (* Create a regular HTTP connection, this should be caught by the transparent
+               proxy *)
+            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (Ipaddr.V4.of_string_exn host, port)
+            >>= function
+            | Error _ ->
+              Log.err (fun f -> f "Failed to connect to %s:%d" host port);
+              failwith "test_transparent_http_proxy_exclude: connect failed"
+            | Ok flow ->
+              Log.info (fun f -> f "Connected to %s:%d" host port);
+              let oc = Outgoing.C.create flow in
+              let host = "localhost" in
+              (* Add Host: localhost so the request should bypass the proxy *)
+              let headers =
+                Cohttp.Header.add (Cohttp.Header.init ()) "Host" ("localhost:" ^ (string_of_int port))
+              in
+              let request = Cohttp.Request.make ~meth:`GET ~headers (Uri.make ~host ()) in
+              Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
+              >>= fun () ->
+              Lwt.pick [
+                  (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () -> `Timeout);
+                  forwarded >|= fun request ->
+                  Log.info (fun f ->
+                    f "Successfully received: %s"
+                      (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t request)));
+                    `Ok
+                ] >>= function
+              | `Timeout -> failwith "test_transparent_http_proxy_exclude timed out"
+              | `Ok -> Lwt.return_unit
+        )
+      )
+    end
+
+
 let proxy_urls = [
   "http://127.0.0.1";
   "http://user:password@127.0.0.1";
@@ -883,6 +947,8 @@ let tests = [
   "HTTP proxy: GET to localhost works",
   [ "check that HTTP GET to localhost via IP", `Quick, test_http_proxy_localhost (Ipaddr.V4.to_string Slirp_stack.localhost_ip) ];
 
+  "HTTP proxy: transparent proxy respects excludes",
+  [ "check that the transparent proxy will inspect and respect the Host: header", `Quick, test_transparent_http_proxy_exclude ];
 
 ] @ (List.concat @@ List.map (fun proxy -> [
   "HTTP: URI",
