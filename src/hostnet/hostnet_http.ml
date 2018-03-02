@@ -150,6 +150,8 @@ module Make
     http: proxy option;
     https: proxy option;
     exclude: Exclude.t;
+    transparent_http_ports: int list;
+    transparent_https_ports: int list;
   }
 
   let resolve_ip name_or_ip =
@@ -181,7 +183,9 @@ module Make
     | Some x -> [ "https", string @@ string_of_proxy x ]
     in
     let exclude = [ "exclude", string @@ Exclude.to_string t.exclude ] in
-    dict (http @ https @ exclude)
+    let transparent_http_ports = [ "transparent_http_ports", list int t.transparent_http_ports ] in
+    let transparent_https_ports = [ "transparent_https_ports", list int t.transparent_https_ports ] in
+    dict (http @ https @ exclude @ transparent_http_ports @ transparent_https_ports)
 
   let of_json j =
     let open Ezjsonm in
@@ -197,18 +201,24 @@ module Make
       try Exclude.of_string @@ get_string @@ find j [ "exclude" ]
       with Not_found -> Exclude.none
     in
+    let transparent_http_ports =
+      try get_list get_int @@ find j [ "transparent_http_ports" ]
+      with Not_found -> [ 80 ] in
+    let transparent_https_ports =
+      try get_list get_int @@ find j [ "transparent_https_ports" ]
+      with Not_found -> [ 443 ] in
     let http = match http with None -> None | Some x -> proxy_of_string x in
     let https = match https with None -> None | Some x -> proxy_of_string x in
-    Lwt.return (Ok { http; https; exclude })
+    Lwt.return (Ok { http; https; exclude; transparent_http_ports; transparent_https_ports })
 
   let to_string t = Ezjsonm.to_string ~minify:false @@ to_json t
 
-  let create ?http ?https ?exclude:_ () =
+  let create ?http ?https ?exclude:_ ?(transparent_http_ports=[ 80 ]) ?(transparent_https_ports=[ 443 ]) () =
     let http = match http with None -> None | Some x -> proxy_of_string x in
     let https = match https with None -> None | Some x -> proxy_of_string x in
     (* FIXME: parse excludes *)
     let exclude = [] in
-    let t = { http; https; exclude } in
+    let t = { http; https; exclude; transparent_http_ports; transparent_https_ports } in
     Log.info (fun f -> f "HTTP proxy settings changed to: %s" (to_string t));
     Lwt.return (Ok t)
 
@@ -710,13 +720,13 @@ module Make
     Lwt.return listeners
 
   let transparent_proxy_handler ~localhost_names ~localhost_ips ~dst:(ip, port) ~t =
-    match port, t.http, t.https with
-    | 80, Some proxy, _ -> Some (transparent_http ~dst:ip ~localhost_names ~localhost_ips proxy t.exclude)
-    | 443, _, Some proxy ->
+    match t.http, t.https with
+    | Some proxy, _ when List.mem port t.transparent_http_ports -> Some (transparent_http ~dst:ip ~localhost_names ~localhost_ips proxy t.exclude)
+    | _, Some proxy when List.mem port t.transparent_https_ports ->
       if Exclude.matches (Ipaddr.V4.to_string ip) t.exclude
       then None
       else Some (tunnel_https_over_connect ~localhost_names ~localhost_ips ~dst:ip proxy)
-    | _, _, _ -> None
+    | _, _ -> None
 
   let explicit_proxy_handler ~localhost_names ~localhost_ips ~dst:(_, port) ~t =
     match port, t.http, t.https with

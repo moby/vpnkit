@@ -859,8 +859,8 @@ struct
       in
       dns := dns_forwarder ~local_address ~builtin_names clock
 
-    let update_http ?http:http_config ?https ?exclude () =
-      Http_forwarder.create ?http:http_config ?https ?exclude ()
+    let update_http ?http:http_config ?https ?exclude ?transparent_http_ports ?transparent_https_ports () =
+      Http_forwarder.create ?http:http_config ?https ?exclude ?transparent_http_ports ?transparent_https_ports ()
       >>= function
       | Error e -> Lwt.return (Error e)
       | Ok h ->

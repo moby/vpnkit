@@ -23,7 +23,9 @@ sig
 
   val to_string: t -> string
 
-  val create: ?http:string -> ?https:string -> ?exclude:string -> unit ->
+  val create: ?http:string -> ?https:string -> ?exclude:string
+    -> ?transparent_http_ports:int list -> ?transparent_https_ports:int list
+    -> unit ->
     (t, [`Msg of string]) result Lwt.t
   (** Create a transparent HTTP forwarding instance which forwards
       HTTP to the proxy [http], HTTPS to the proxy [https] or connects

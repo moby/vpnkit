@@ -50,8 +50,9 @@ sig
       Clock.t -> unit
     (** Update the DNS forwarder following a configuration change *)
 
-    val update_http: ?http:string -> ?https:string -> ?exclude:string ->
-      unit -> (unit, [`Msg of string]) result Lwt.t
+    val update_http: ?http:string -> ?https:string -> ?exclude:string
+      -> ?transparent_http_ports:int list -> ?transparent_https_ports:int list
+      -> unit -> (unit, [`Msg of string]) result Lwt.t
     (** Update the HTTP forwarder following a configuration change *)
 
     val update_http_json: Ezjsonm.value ->
