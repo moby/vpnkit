@@ -745,6 +745,90 @@ let test_http_connect_tunnel proxy () =
         )
     end
 
+  let test_connection_close () =
+    let body = "Hello\n" in
+    Host.Main.run begin
+    Slirp_stack.with_stack ~pcap:"test_connection_close.pcap" (fun _ stack ->
+        with_server (fun flow ->
+            let ic = Incoming.C.create flow in
+            Incoming.Request.read ic >>= function
+            | `Eof ->
+              Log.err (fun f -> f "Failed to request");
+              failwith "Failed to read request"
+            | `Invalid x ->
+              Log.err (fun f -> f "Failed to parse request: %s" x);
+              failwith ("Failed to parse request: " ^ x)
+            | `Ok _ ->
+              let response = "HTTP/1.0 200 OK\r\nConnection:close\r\n\r\n" ^ body in
+              Incoming.C.write_string ic response 0 (String.length response);
+              Incoming.C.flush ic
+              >>= function
+              | Error _ -> failwith "test_connection_close: flush returned error"
+              | Ok ()   ->
+                (* Connection will be closed here *)
+                Lwt.return_unit
+          ) (fun origin_server ->
+            let host = "127.0.0.1" in
+            let port = origin_server.Server.port in
+            Log.info (fun f -> f "HTTP origin server is on %s:%d" host port);
+            let open Slirp_stack in
+            (* Disable the proxy so the builtin proxy will have to fetch from the origin server *)
+            Slirp_stack.Debug.update_http ()
+            >>= function
+            | Error (`Msg m) -> failwith ("Failed to disable HTTP proxy: " ^ m)
+            | Ok () ->
+              (* Connect to the builtin HTTP Proxy *)
+              Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+              >>= function
+              | Error _ ->
+                Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+                failwith "test_connection_close: connect failed"
+              | Ok flow ->
+                Log.info (fun f -> f "Connected to %a:3128" Ipaddr.V4.pp_hum primary_dns_ip);
+                let oc = Outgoing.C.create flow in
+                let request =
+                  let uri = Uri.make ~scheme:"http" ~host:"localhost" ~port () in
+                  Cohttp.Request.make ~meth:`GET uri
+                in
+                Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
+                >>= fun () ->
+                let response =
+                  Outgoing.Response.read oc
+                  >>= function
+                  | `Eof ->
+                    failwith "test_connection_close: EOF on HTTP GET"
+                  | `Invalid x ->
+                    failwith ("test_connection_close: Invalid HTTP response: " ^ x)
+                  | `Ok res ->
+                    if res.Cohttp.Response.status <> `OK
+                    then failwith "test_connection_close: HTTP GET failed";
+                    let reader = Outgoing.Response.make_body_reader res oc in
+                    let buf = Buffer.create 100 in
+                    let rec loop () =
+                      let open Cohttp.Transfer in
+                      Outgoing.Response.read_body_chunk reader >>= function
+                      | Done          -> Lwt.return_unit
+                      | Final_chunk x -> Buffer.add_string buf x; Lwt.return_unit
+                      | Chunk x       ->
+                        Buffer.add_string buf x;
+                        loop () in
+                    loop ()
+                    >>= fun () ->
+                    let txt = Buffer.contents buf in
+                    Alcotest.check Alcotest.string "body" body txt;
+                    Lwt.return (`Result ()) in
+                  Lwt.pick [
+                    (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () ->
+                    `Timeout);
+                    response;
+                  ]
+          )
+        >|= function
+        | `Timeout  -> failwith "HTTP interception failed"
+        | `Result () -> ()
+      )
+    end
+
   let test_http_proxy_localhost host_or_ip () =
     Host.Main.run begin
       let forwarded, forwarded_u = Lwt.task () in
@@ -949,6 +1033,9 @@ let tests = [
 
   "HTTP proxy: transparent proxy respects excludes",
   [ "check that the transparent proxy will inspect and respect the Host: header", `Quick, test_transparent_http_proxy_exclude ];
+
+  "HTTP proxy: respect connection: close",
+  [ "check that the transparent proxy will respect connection: close headers from origin servers", `Quick, test_connection_close ];
 
 ] @ (List.map (fun name ->
     "HTTP proxy: GET to localhost",
