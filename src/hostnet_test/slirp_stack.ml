@@ -138,10 +138,13 @@ let localhost_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
 
 let preferred_ip1 = Ipaddr.V4.of_string_exn "192.168.65.250"
 
+let names_for_localhost = List.map Dns.Name.of_string [ "name1.for.localhost"; "name2.for.localhost" ]
+
 let config =
   let configuration = {
     Configuration.default with
     domain = Some "local";
+    host_names = names_for_localhost;
   } in
   Mclock.connect () >>= fun clock ->
   let vnet = Vnet.create () in

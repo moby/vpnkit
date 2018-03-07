@@ -919,7 +919,10 @@ let test_http_connect_tunnel proxy () =
 let proxy_urls = [
   "http://127.0.0.1";
   "http://user:password@127.0.0.1";
-]
+  "http://localhost";
+] @ (List.map (fun name ->
+  Printf.sprintf "http://%s" (Dns.Name.to_string name)
+) Slirp_stack.names_for_localhost)
 
 let tests = [
 
@@ -941,16 +944,18 @@ let tests = [
   "HTTP proxy: GET has good headers",
   [ "check that HTTP GET headers are correct", `Quick, test_http_proxy_headers ];
 
-  "HTTP proxy: GET to localhost",
-  [ "check that HTTP GET to localhost via hostname", `Quick, test_http_proxy_localhost "vpnkit.host" ];
-
   "HTTP proxy: GET to localhost works",
   [ "check that HTTP GET to localhost via IP", `Quick, test_http_proxy_localhost (Ipaddr.V4.to_string Slirp_stack.localhost_ip) ];
 
   "HTTP proxy: transparent proxy respects excludes",
   [ "check that the transparent proxy will inspect and respect the Host: header", `Quick, test_transparent_http_proxy_exclude ];
 
-] @ (List.concat @@ List.map (fun proxy -> [
+] @ (List.map (fun name ->
+    "HTTP proxy: GET to localhost",
+    [ "check that HTTP GET to localhost via hostname", `Quick, test_http_proxy_localhost (Dns.Name.to_string name) ]
+  ) Slirp_stack.names_for_localhost
+) @ (List.concat @@ List.map (fun proxy -> [
+
   "HTTP: URI",
   [ "check that relative URIs are rewritten", `Quick, test_uri_relative proxy ];
 
