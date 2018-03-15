@@ -110,9 +110,6 @@ let try_etc_hosts =
       with
       | None -> None
       | Some v4 ->
-        Log.info (fun f ->
-            f "DNS: %s is %a in in /etc/hosts" (Dns.Name.to_string q_name)
-              Ipaddr.V4.pp_hum v4);
         Some [ { name = q_name; cls = RR_IN;
                  flush = false; ttl = 0l; rdata = A v4 } ]
     end
@@ -127,9 +124,6 @@ let try_etc_hosts =
       with
       | None -> None
       | Some v6 ->
-        Log.info (fun f ->
-            f "DNS: %s is %a in in /etc/hosts" (Dns.Name.to_string q_name)
-              Ipaddr.V6.pp_hum v6);
         Some [ { name = q_name; cls = RR_IN; flush = false; ttl = 0l;
                  rdata = AAAA v6 } ]
     end
