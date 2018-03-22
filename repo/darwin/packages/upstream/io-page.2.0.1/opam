@@ -18,6 +18,7 @@ build: [
 depends: [
   "jbuilder"  {build & >="1.0+beta9"}
   "configurator" {build}
+  "base-bytes"
   "cstruct" {>= "2.0.0"}
 ]
 available: [ocaml-version >= "4.03.0"]

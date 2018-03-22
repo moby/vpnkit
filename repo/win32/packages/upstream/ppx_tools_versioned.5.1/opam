@@ -14,7 +14,7 @@ install: [make "install"]
 remove: ["ocamlfind" "remove" "ppx_tools_versioned"]
 depends: [
   "ocamlfind" {>= "1.5.0"}
-  "ocaml-migrate-parsetree" {>= "0.4"}
+  "ocaml-migrate-parsetree" {>= "1.0.7"}
 ]
 available: [ocaml-version >= "4.02.0"]
 patches: "ppx_tools_versioned-5.1.patch" {os = "win32"}

@@ -17,7 +17,7 @@ build-test: [
 
 depends: [
   "conf-which" {build}
-  "jbuilder" {build}
+  "jbuilder" {build & >= "1.0+beta7"}
   "easy-format"
 ]
 
