@@ -555,7 +555,7 @@ void usage(char *name)
 	printf("\t[--message-size <bytes>] [--buffer-size <bytes>]\n");
 	printf("\t[--listen | --connect]\n\n");
 	printf("where\n");
-	printf("\t--daemonize: run as a background daemon\n");
+	printf("\t--daemon: run as a background daemon\n");
 	printf("\t--nofork: don't run handlers in subprocesses\n");
 	printf("\t--tap <name>: create a tap device with the given name\n");
 	printf("\t  (defaults to eth1)\n");
