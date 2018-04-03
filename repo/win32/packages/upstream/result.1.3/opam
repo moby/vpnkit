@@ -6,4 +6,4 @@ dev-repo: "https://github.com/janestreet/result.git"
 bug-reports: "https://github.com/janestreet/result/issues"
 license: "BSD3"
 build: [["jbuilder" "build" "-p" name "-j" jobs]]
-depends: ["jbuilder" {>= "1.0+beta11"}]
+depends: ["jbuilder" {build & >= "1.0+beta11"}]

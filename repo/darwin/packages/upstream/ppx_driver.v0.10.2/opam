@@ -10,6 +10,6 @@ depends: [
   "ppx_core" {>= "v0.10" & < "v0.11"}
   "ppx_optcomp" {>= "v0.10" & < "v0.11"}
   "jbuilder" {build & >= "1.0+beta12"}
-  "ocaml-migrate-parsetree" {>= "0.4"}
+  "ocaml-migrate-parsetree" {>= "1.0"}
 ]
 available: [ocaml-version >= "4.04.1"]
