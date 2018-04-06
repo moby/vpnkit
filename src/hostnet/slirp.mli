@@ -12,6 +12,7 @@ module Make
        include Mirage_clock_lwt.MCLOCK
        val connect: unit -> t Lwt.t
      end)
+    (PClock: Mirage_clock_lwt.PCLOCK)
     (Random: Mirage_random.C)
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) :
 sig
@@ -19,10 +20,10 @@ sig
   type stack
   (** A TCP/IP stack which may talk to multiple ethernet clients *)
 
-  val create_static: Clock.t -> Vnet.t -> Configuration.t -> stack Lwt.t
+  val create_static: Clock.t -> PClock.t -> Vnet.t -> Configuration.t -> stack Lwt.t
   (** Initialise a TCP/IP stack, with a static configuration *)
 
-  val create_from_active_config: Clock.t -> Vnet.t -> Configuration.t -> Config.t -> stack Lwt.t
+  val create_from_active_config: Clock.t -> PClock.t -> Vnet.t -> Configuration.t -> Config.t -> stack Lwt.t
   (** Initialise a TCP/IP stack, allowing the dynamic Config.t to override
       the static Configuration.t *)
 

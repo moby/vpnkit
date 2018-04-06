@@ -66,7 +66,7 @@ module VMNET = Vmnet.Make(Host.Sockets.Stream.Tcp)
 module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 module Vnet = Basic_backend.Make
 module Slirp_stack =
-  Slirp.Make(Config)(VMNET)(Dns_policy)(Mclock)(Stdlibrandom)(Vnet)
+  Slirp.Make(Config)(VMNET)(Dns_policy)(Mclock)(Pclock)(Stdlibrandom)(Vnet)
 
 module Client = struct
   module Netif = VMNET
@@ -147,8 +147,9 @@ let config =
     host_names = names_for_localhost;
   } in
   Mclock.connect () >>= fun clock ->
+  Pclock.connect () >>= fun pclock ->
   let vnet = Vnet.create () in
-  Slirp_stack.create_static clock vnet configuration
+  Slirp_stack.create_static clock pclock vnet configuration
 
 (* This is a hacky way to get a hancle to the server side of the stack. *)
 let slirp_stack = ref None
