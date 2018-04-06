@@ -58,6 +58,7 @@ module Make
        include Mirage_clock_lwt.MCLOCK
        val connect: unit -> t Lwt.t
      end)
+    (PClock: Mirage_clock_lwt.PCLOCK)
     (Random: Mirage_random.C)
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) =
 struct
@@ -69,6 +70,7 @@ struct
     client_uuids: uuid_table;
     vnet_switch: Vnet.t;
     clock: Clock.t;
+    pclock: PClock.t;
   }
 
   module Filteredif = Filter.Make(Vmnet)
@@ -105,6 +107,8 @@ struct
       (Host.Time)(Clock)(Recorder)
   module Http_forwarder =
     Hostnet_http.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)
+  module Ntp_server =
+    Ntp_server.Make(Stack_ipv4)(Stack_udp)(PClock)
 
   module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Clock)(Host.Time)
   module Icmp_nat = Hostnet_icmp.Make(Host.Sockets)(Clock)(Host.Time)
@@ -543,6 +547,7 @@ struct
   module Gateway = struct
     type t = {
       clock: Clock.t;
+      pclock: PClock.t;
       endpoint: Endpoint.t;
       udp_nat: Udp_nat.t;
       dns_ips: Ipaddr.V4.t list;
@@ -586,20 +591,13 @@ struct
         ) raw
       >|= ok
 
-    (* UDP to port 123: localhost NTP *)
-    | Ipv4 { src; ttl;
+    (* UDP on port 123 -> Simple NTP implementation *)
+    | Ipv4 { src; dst;
              payload = Udp { src = src_port; dst = 123;
                              payload = Payload payload; _ }; _ } ->
-      let localhost = Ipaddr.V4.localhost in
-      Log.debug (fun f ->
-          f "UDP/123 request from port %d -- sending it to %a:%d" src_port
-            Ipaddr.V4.pp_hum localhost 123);
-      let datagram =
-        { Hostnet_udp.src = Ipaddr.V4 src, src_port;
-          dst = Ipaddr.V4 localhost, 123; payload }
-      in
-      Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
-      >|= ok
+      let udp = t.endpoint.Endpoint.udp4 in
+      Ntp_server.handle_udp ~clock:t.pclock ~udp ~src ~dst ~src_port payload
+      >|= lift_udp_error
 
     (* HTTP proxy *)
     | Ipv4 { src; dst;
@@ -621,8 +619,8 @@ struct
     | _ ->
       Lwt.return (Ok ())
 
-    let create clock endpoint udp_nat dns_ips localhost_names localhost_ips =
-      let tcp_stack = { clock; endpoint; udp_nat; dns_ips; localhost_names; localhost_ips } in
+    let create clock pclock endpoint udp_nat dns_ips localhost_names localhost_ips =
+      let tcp_stack = { clock; pclock; endpoint; udp_nat; dns_ips; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -903,7 +901,7 @@ struct
     end
 
   let connect x vnet_switch vnet_client_id client_macaddr
-      c (global_arp_table:arp_table) clock
+      c (global_arp_table:arp_table) clock pclock
     =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
@@ -1103,7 +1101,7 @@ struct
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
                   f "creating gateway TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
-              Gateway.create clock endpoint udp_nat [ c.Configuration.gateway_ip ]
+              Gateway.create clock pclock endpoint udp_nat [ c.Configuration.gateway_ip ]
                 c.Configuration.host_names [ Ipaddr.V4 c.Configuration.host_ip ]
             end >>= function
             | Error e ->
@@ -1231,7 +1229,7 @@ struct
         );
         Lwt.return_unit
 
-  let create_common clock vnet_switch c =
+  let create_common clock pclock vnet_switch c =
     (* If a `dns_path` is provided then watch it for updates *)
     let read_dns_file path =
       Log.info (fun f -> f "Reading DNS configuration from %s" path);
@@ -1357,17 +1355,18 @@ struct
       client_uuids;
       vnet_switch;
       clock;
+      pclock;
     } in
     Lwt.return t
 
-  let create_static clock vnet_switch c =
+  let create_static clock pclock vnet_switch c =
     update_http c
     >>= fun () ->
     update_dns c clock
     >>= fun () ->
-    create_common clock vnet_switch c
+    create_common clock pclock vnet_switch c
 
-  let create_from_active_config clock vnet_switch static_configuration config =
+  let create_from_active_config clock pclock vnet_switch static_configuration config =
     let c = ref static_configuration in
     let update f =
       let c' = f (!c) in
@@ -1456,7 +1455,7 @@ struct
     >>= fun port_max_idle_times ->
     on_change port_max_idle_times (fun port_max_idle_time -> update (fun c -> { c with port_max_idle_time }));
 
-    create_common clock vnet_switch (!c)
+    create_common clock pclock vnet_switch (!c)
 
   let connect_client_by_uuid_ip t (uuid:Uuidm.t) (preferred_ip:Ipaddr.V4.t option) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
@@ -1556,22 +1555,22 @@ struct
         Lwt.return (Hashtbl.find t.client_uuids.table uuid)
       )
 
-  let connect t client =
+  let connect stack client =
     Log.debug (fun f -> f "accepted vmnet connection");
     begin
       or_failwith "vmnet" @@
       Vmnet.of_fd
-        ~connect_client_fn:(connect_client_by_uuid_ip t)
-        ~server_macaddr:t.configuration.Configuration.server_macaddr
-        ~mtu:t.configuration.Configuration.mtu client
+        ~connect_client_fn:(connect_client_by_uuid_ip stack)
+        ~server_macaddr:stack.configuration.Configuration.server_macaddr
+        ~mtu:stack.configuration.Configuration.mtu client
       >>= fun x ->
       let client_macaddr = Vmnet.get_client_macaddr x in
       let client_uuid = Vmnet.get_client_uuid x in
-      get_client_ip_id t client_uuid
+      get_client_ip_id stack client_uuid
       >>= fun (client_ip, vnet_client_id) ->
-      connect x t.vnet_switch vnet_client_id
-        client_macaddr { t.configuration with lowest_ip = client_ip }
-        t.global_arp_table t.clock
+      connect x stack.vnet_switch vnet_client_id
+        client_macaddr { stack.configuration with lowest_ip = client_ip }
+        stack.global_arp_table stack.clock stack.pclock
     end
 
 end
