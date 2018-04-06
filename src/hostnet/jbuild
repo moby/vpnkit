@@ -12,5 +12,6 @@
     mirage-protocols-lwt duration mirage-time-lwt mirage-clock-lwt
     mirage-random tcpip.unix
    ))
+   (preprocess (pps (ppx_cstruct)))
    (c_names (stubs_utils))
    (wrapped false)))
