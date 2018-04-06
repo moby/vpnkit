@@ -105,6 +105,8 @@ struct
       (Host.Time)(Clock)(Recorder)
   module Http_forwarder =
     Hostnet_http.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)
+  module Ntp_server =
+    Ntp_server.Make(Stack_ipv4)(Stack_udp)(Clock)
 
   module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Clock)(Host.Time)
   module Icmp_nat = Hostnet_icmp.Make(Host.Sockets)(Clock)(Host.Time)
@@ -586,20 +588,13 @@ struct
         ) raw
       >|= ok
 
-    (* UDP to port 123: localhost NTP *)
-    | Ipv4 { src; ttl;
+    (* UDP on port 123 -> Simple NTP implementation *)
+    | Ipv4 { src; dst;
              payload = Udp { src = src_port; dst = 123;
                              payload = Payload payload; _ }; _ } ->
-      let localhost = Ipaddr.V4.localhost in
-      Log.debug (fun f ->
-          f "UDP/123 request from port %d -- sending it to %a:%d" src_port
-            Ipaddr.V4.pp_hum localhost 123);
-      let datagram =
-        { Hostnet_udp.src = Ipaddr.V4 src, src_port;
-          dst = Ipaddr.V4 localhost, 123; payload }
-      in
-      Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
-      >|= ok
+      let udp = t.endpoint.Endpoint.udp4 in
+      Ntp_server.handle_udp ~udp ~src ~dst ~src_port payload
+      >|= lift_udp_error
 
     (* HTTP proxy *)
     | Ipv4 { src; dst;
