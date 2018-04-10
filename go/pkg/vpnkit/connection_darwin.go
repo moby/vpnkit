@@ -2,6 +2,7 @@ package vpnkit
 
 import (
 	"context"
+	"os"
 
 	datakit "github.com/moby/datakit/api/go-datakit"
 )
