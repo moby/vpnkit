@@ -497,7 +497,9 @@ struct
            below[2] *)
         let datagram =
           { Hostnet_udp.src = Ipaddr.V4 src, src_port;
-            dst = Ipaddr.(V4 V4.localhost), dst_port; payload }
+            dst = Ipaddr.(V4 V4.localhost), dst_port;
+            intercept = Ipaddr.(V4 V4.localhost), dst_port;
+            payload }
         in
         Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
         >|= ok
@@ -548,6 +550,7 @@ struct
       dns_ips: Ipaddr.V4.t list;
       localhost_names: Dns.Name.t list;
       localhost_ips: Ipaddr.t list;
+      udpv4_forwards: (int * (Ipaddr.V4.t * int)) list;
     }
     (** Services offered by vpnkit to the internal network *)
 
@@ -562,6 +565,20 @@ struct
       | _ ->
         Lwt.return_unit in
       Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
+      >|= ok
+
+    (* UDP to forwarded elsewhere *)
+    | Ipv4 { src; dst; ttl;
+             payload = Udp { src = src_port; dst = dst_port;
+                             payload = Payload payload; _ }; _ } when List.mem_assoc dst_port t.udpv4_forwards ->
+      let intercept_ipv4, intercept_port = List.assoc dst_port t.udpv4_forwards in
+      let datagram =
+      { Hostnet_udp.src = Ipaddr.V4 src, src_port;
+        dst = Ipaddr.V4 dst, dst_port;
+        intercept = Ipaddr.V4 intercept_ipv4, intercept_port; payload }
+      in
+      (* Need to use a different UDP NAT with a different reply IP address *)
+      Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
       >|= ok
 
     (* UDP on port 53 -> DNS forwarder *)
@@ -618,11 +635,12 @@ struct
           >|= ok
         end
       end
+
     | _ ->
       Lwt.return (Ok ())
 
-    let create clock endpoint udp_nat dns_ips localhost_names localhost_ips =
-      let tcp_stack = { clock; endpoint; udp_nat; dns_ips; localhost_names; localhost_ips } in
+    let create clock endpoint udp_nat dns_ips localhost_names localhost_ips udpv4_forwards =
+      let tcp_stack = { clock; endpoint; udp_nat; dns_ips; localhost_names; localhost_ips; udpv4_forwards } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -709,7 +727,9 @@ struct
       end else begin
         let datagram =
           { Hostnet_udp.src = Ipaddr.V4 src, src_port;
-            dst = Ipaddr.V4 dst, dst_port; payload }
+            dst = Ipaddr.V4 dst, dst_port;
+            intercept = Ipaddr.V4 dst, dst_port;
+            payload }
         in
         Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
         >|= ok
@@ -980,7 +1000,7 @@ struct
     (* Send a UDP datagram *)
     let send_reply = function
     | { Hostnet_udp.src = Ipaddr.V4 src, src_port;
-        dst = Ipaddr.V4 dst, dst_port; payload } ->
+        dst = Ipaddr.V4 dst, dst_port; payload; _ } ->
       (* [2] If the source address is localhost on the Mac, rewrite it to the
          virtual IP. This is the inverse of the rewrite above[1] *)
       let src =
@@ -1103,8 +1123,34 @@ struct
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
                   f "creating gateway TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
+              (* The default Udp_nat instance doesn't work for us because
+                 - in send_reply the address `localhost` is rewritten to the host address.
+                   We need the gateway's address to be used.
+                 - the remote port number is exposed to the container service;
+                   we would like to use the listening port instead *)
+              let udp_nat = Udp_nat.create ~preserve_remote_port:false clock in
+              let send_reply =
+                let open Lwt.Infix in
+                function
+                | { Hostnet_udp.dst = Ipaddr.V6 ipv6, _; _ } ->
+                  Log.err (fun f -> f "Failed to write an IPv6 UDP datagram to: %a" Ipaddr.V6.pp_hum ipv6);
+                  Lwt.return_unit
+                | { Hostnet_udp.src = _, src_port; dst = Ipaddr.V4 dst, dst_port; payload; _ } ->
+                  begin find_endpoint c.Configuration.gateway_ip
+                  >>= function
+                  | Error (`Msg m) ->
+                    Log.err (fun f -> f "%s" m);
+                    Lwt.return_unit
+                  | Ok endpoint ->
+                    Stack_udp.write ~src_port ~dst ~dst_port endpoint.Endpoint.udp4 payload
+                    >|= function
+                    | Error e -> Log.err (fun f -> f "Failed to write an IPv4 packet: %a" Stack_udp.pp_error e)
+                    | Ok () -> ()
+                  end in
+              Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
               Gateway.create clock endpoint udp_nat [ c.Configuration.gateway_ip ]
                 c.Configuration.host_names [ Ipaddr.V4 c.Configuration.host_ip ]
+                c.Configuration.udpv4_forwards
             end >>= function
             | Error e ->
               Log.err (fun f ->

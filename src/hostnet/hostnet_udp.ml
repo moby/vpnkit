@@ -14,6 +14,7 @@ type address = Ipaddr.t * int
 type datagram = {
   src: address;
   dst: address;
+  intercept: address;
   payload: Cstruct.t;
 }
 
@@ -49,6 +50,7 @@ struct
     background_gc_t: unit Lwt.t;
     table: (address, flow) Hashtbl.t; (* src -> flow *)
     mutable send_reply: (datagram -> unit Lwt.t) option;
+    preserve_remote_port: bool;
   }
 
   let set_send_reply ~t ~send_reply = t.send_reply <- Some send_reply
@@ -86,11 +88,11 @@ struct
     in
     loop ()
 
-  let create ?(max_idle_time = Duration.(of_sec 60)) clock =
+  let create ?(max_idle_time = Duration.(of_sec 60)) ?(preserve_remote_port=true) clock =
     let table = Hashtbl.create 7 in
     let background_gc_t = start_background_gc clock table max_idle_time in
     let send_reply = None in
-    { clock; max_idle_time; background_gc_t; table; send_reply }
+    { clock; max_idle_time; background_gc_t; table; send_reply; preserve_remote_port }
 
   let description { src = src, src_port; dst = dst, dst_port; _ } =
     Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp_hum src src_port Ipaddr.pp_hum
@@ -100,14 +102,23 @@ struct
     Lwt.catch (fun () ->
         Udp.recvfrom server buf
         >>= fun (n, from) ->
-        (* The from address should be the true external address so the
+        (* In the default configuration with preserve_remote_port=true,
+           the from address should be the true external address so the
            client behind the NAT can tell different peers apart.  It
            is not necessarily the same as the original external
            address that we created the rule for -- it's possible for a
            client to send data to a rendezvous server, which then
            communicates the NAT IP and port to other peers who can
-           then communicate with the client behind the NAT. *)
-        let reply = { src = from; dst = d.src; payload = Cstruct.sub buf 0 n } in
+           then communicate with the client behind the NAT.
+
+           If preserve_remote_port=false then we reply with the original
+           port number, as if we were a UDP proxy. Note the IP address is
+           set by the `send_reply` function. *)
+        let reply = { d with
+          src = if t.preserve_remote_port then from else d.dst;
+          dst = d.src;
+          payload = Cstruct.sub buf 0 n
+        } in
         ( match t.send_reply with
         | Some fn -> fn reply
         | None -> Lwt.return_unit )
@@ -162,7 +173,7 @@ struct
     | None -> Lwt.return ()
     | Some flow ->
       Lwt.catch (fun () ->
-          Udp.sendto flow.server datagram.dst ~ttl datagram.payload >|= fun () ->
+          Udp.sendto flow.server datagram.intercept ~ttl datagram.payload >|= fun () ->
           flow.last_use <- Clock.elapsed_ns t.clock;
         ) (fun e ->
           Log.err (fun f ->
