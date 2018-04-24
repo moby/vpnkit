@@ -1,0 +1,32 @@
+version: 2
+jobs:
+  build:
+    macos:
+      xcode: "9.0"
+    environment:
+      OPAMYES: "1"
+      OPAMJOBS: "2"
+      MACOSX_DEPLOYMENT_TARGET: "10.10"
+      CUSTOM_OPAM: "1"
+      OPAM_REPO: repo/darwin
+      OPAM_COMP: "4.06.0"
+      OPAMVERBOSE: 1
+      TERM: vt100
+    steps:
+      - checkout
+      - run: brew unlink python # remove files in /usr/local/bin
+      - run: brew install wget opam pkg-config dylibbundler
+      - run: make
+      - run: make artefacts
+      - run: make test
+      - store_artifacts:
+          path: vpnkit.tgz
+      - store_artifacts:
+          path: COMMIT
+      - store_artifacts:
+          path: OSS-LICENSES
+workflows:
+  version: 2
+  build-test-vpnkit:
+    jobs:
+      - build
