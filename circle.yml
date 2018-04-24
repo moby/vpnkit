@@ -16,6 +16,7 @@ general:
   - OSS-LICENSES
 dependencies:
   override:
+  - brew unlink python # remove files in /usr/local/bin
   - brew install wget opam dylibbundler pkg-config
   - make
   - make artefacts
