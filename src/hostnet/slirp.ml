@@ -603,21 +603,6 @@ struct
         ) raw
       >|= ok
 
-    (* UDP to port 123: localhost NTP *)
-    | Ipv4 { src; ttl;
-             payload = Udp { src = src_port; dst = 123;
-                             payload = Payload payload; _ }; _ } ->
-      let localhost = Ipaddr.V4.localhost in
-      Log.debug (fun f ->
-          f "UDP/123 request from port %d -- sending it to %a:%d" src_port
-            Ipaddr.V4.pp_hum localhost 123);
-      let datagram =
-        { Hostnet_udp.src = Ipaddr.V4 src, src_port;
-          dst = Ipaddr.V4 localhost, 123; payload }
-      in
-      Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
-      >|= ok
-
     (* HTTP proxy *)
     | Ipv4 { src; dst;
              payload = Tcp { src = src_port; dst = dst_port; syn; raw;
