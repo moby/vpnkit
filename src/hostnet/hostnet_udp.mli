@@ -6,8 +6,9 @@
 type address = Ipaddr.t * int
 
 type datagram = {
-  src: address;
-  dst: address;
+  src: address; (** origin of the packet from the guest *)
+  dst: address; (** expected destination of the packet from the guest *)
+  intercept: address; (** address we will really send the packet to, pretending to be `dst` *)
   payload: Cstruct.t;
 }
 (** A UDP datagram *)
@@ -23,9 +24,11 @@ sig
   type t
   (** A UDP NAT implementation *)
 
-  val create: ?max_idle_time:int64 -> Clock.t -> t
+  val create: ?max_idle_time:int64 -> ?preserve_remote_port:bool -> Clock.t -> t
   (** Create a UDP NAT implementation which will keep "NAT rules" alive until
-      they become idle for the given [?max_idle_time] *)
+      they become idle for the given [?max_idle_time].
+      If [~preserve_remote_port] is set then reply traffic will come from the
+      remote source port, otherwise it will come from the NAT port. *)
 
   val set_send_reply: t:t -> send_reply:(datagram -> unit Lwt.t) -> unit
   (** Register a reply callback which will be used to send datagrams to the

@@ -401,7 +401,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
-      dhcp_json_path mtu log_destination
+      dhcp_json_path mtu udpv4_forwards log_destination
     =
     let level =
       let env_debug =
@@ -429,6 +429,16 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let host_ip = Ipaddr.V4.of_string_exn host_ip in
     let lowest_ip = Ipaddr.V4.of_string_exn lowest_ip in
     let highest_ip = Ipaddr.V4.of_string_exn highest_ip in
+    let udpv4_forwards =
+      List.map (fun x -> match Stringext.split ~on:':' x with
+        | [ local_port; remote_ip; remote_port ] ->
+          let local_port = int_of_string local_port in
+          let remote_ip = Ipaddr.V4.of_string_exn remote_ip in
+          let remote_port = int_of_string remote_port in
+          local_port, (remote_ip, remote_port)
+        | _ ->
+          failwith "Failed to parse UDPv4 forwards: expected <local-port>:<remote IP>:<remote port>"
+      ) (Stringext.split ~on:',' udpv4_forwards) in
     let configuration = {
       Configuration.default with
       max_connections;
@@ -449,6 +459,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       highest_ip;
       dhcp_json_path;
       mtu;
+      udpv4_forwards;
     } in
     match socket_url with
       | None ->
@@ -695,6 +706,15 @@ let mtu =
   in
   Arg.(value & opt int Configuration.default_mtu doc)
 
+let udpv4_forwards =
+  let doc =
+    Arg.info ~doc:
+      "Configure UDPv4 forwards from the gateway address to remote systems.
+       The argument is a comma-separated list of <local port>:<remote IPv4>:<remote port>"
+       [ "udpv4-forwards" ]
+  in
+  Arg.(value & opt string "" doc)
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -707,7 +727,7 @@ let command =
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
-        $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ Logging.log_destination),
+        $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
