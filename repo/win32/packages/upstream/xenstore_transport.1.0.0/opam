@@ -1,0 +1,37 @@
+opam-version: "1.2"
+authors: [
+  "Christian Lindig"
+  "David Scott"
+  "Euan Harris"
+  "John Else"
+  "Jon Ludlam"
+  "Jonathan Davies"
+  "Marcello Seri"
+  "Si Beaumont"
+  "Thomas Sanders"
+  "Vincent Bernardoff"
+]
+maintainer: "dave@recoil.org"
+homepage:    "http://github.com/djs55/ocaml-xenstore-clients"
+bug-reports: "http://github.com/djs55/ocaml-xenstore-clients/issues"
+dev-repo:    "http://github.com/djs55/ocaml-xenstore-clients.git"
+doc:         "http://djs55.github.io/ocaml-xenstore-clients"
+license:     "LGPL"
+
+tags: [
+  "org:mirage"
+  "org:xapi-project"
+]
+build: [
+  [ "jbuilder" "subst"] {pinned}
+  [ "jbuilder" "build" "-p" name "-j" jobs ]
+]
+
+depends: [
+  "ocamlfind" {build}
+  "jbuilder"  {build & >="1.0+beta9"}
+  "lwt"
+  "xenstore" {>= "2.0.0"}
+]
+
+available: [ ocaml-version >= "4.04.0" ]

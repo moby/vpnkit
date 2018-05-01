@@ -1,0 +1,27 @@
+opam-version: "1.2"
+authors: ["David Kaloper Meršinjak <david@numm.org>"]
+maintainer: "David Kaloper Meršinjak <david@numm.org>"
+homepage: "https://github.com/mirleft/ocaml-asn1-combinators"
+doc: "https://mirleft.github.io/ocaml-asn1-combinators/doc"
+license: "ISC"
+dev-repo: "https://github.com/mirleft/ocaml-asn1-combinators.git"
+bug-reports: "https://github.com/mirleft/ocaml-asn1-combinators/issues"
+tags: [ "org:mirage" ]
+available: [ ocaml-version >= "4.02.0" ]
+build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "false" ]
+build-test: [
+  [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "true" ]
+  [ "ocaml" "pkg/pkg.ml" "test" ]
+]
+depends: [
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "topkg" {build}
+  "result"
+  "cstruct"
+  "zarith"
+  "ptime"
+  "ounit" {test}
+]
+depopts: []
+conflicts: [ "cstruct" {< "1.6.0"} ]

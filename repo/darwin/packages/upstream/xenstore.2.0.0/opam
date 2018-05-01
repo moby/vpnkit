@@ -1,0 +1,30 @@
+opam-version: "1.2"
+maintainer:   "dave@recoil.org"
+authors:      [
+  "Vincent Hanquez"
+  "Thomas Gazagnaire"
+  "Dave Scott"
+  "Anil Madhavapeddy"
+  "Vincent Bernardoff"
+]
+homepage:     "https://github.com/mirage/ocaml-xenstore"
+bug-reports:  "https://github.com/mirage/ocaml-xenstore/issues"
+dev-repo:     "https://github.com/mirage/ocaml-xenstore.git"
+doc:          "https://mirage.github.io/ocaml-xenstore"
+
+build: [
+  ["jbuilder" "subst" "-p" name "--name" name] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+
+build-test: ["jbuilder" "runtest" "-p" name]
+
+depends: [
+  "jbuilder"  {build & >="1.0+beta9"}
+  "cstruct" {>= "3.2.0"}
+  "ppx_cstruct" {build}
+  "ppx_tools" {build}
+  "lwt"
+  "ounit" {test}
+]
+available: [ ocaml-version >= "4.04.0" ]
