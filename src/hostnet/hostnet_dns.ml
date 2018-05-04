@@ -151,14 +151,14 @@ let try_builtins builtin_names question =
         ) [] bindings in
       let rrs = if question.q_type = Q_A then ipv4_rrs else ipv6_rrs in
       if rrs = [] then begin
-        Log.info (fun f ->
+        Log.debug (fun f ->
           f "DNS: %s is a builtin but there are no resource records for %s"
             (Dns.Name.to_string q_name)
             (if question.q_type = Q_A then "IPv4" else "IPv6")
         );
         `Does_not_exist (* we've claimed the name but maybe don't have an AAAA record *)
       end else begin
-        Log.info (fun f ->
+        Log.debug (fun f ->
           f "DNS: %s is a builtin: %s" (Dns.Name.to_string q_name)
             (String.concat "; " (List.map (fun rr -> Dns.Packet.rr_to_string rr) rrs))
         );

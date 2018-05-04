@@ -149,7 +149,7 @@ module Make
             Icmpv4_wire.set_icmpv4_csum raw (Tcpip_checksum.ones_complement raw);
             try_to_send ~src ~dst:(fst flow.virt) ~payload:raw
           end else begin
-            Log.info (fun f ->
+            Log.debug (fun f ->
               f "ICMP dropping (%a, %d) %a"
               Ipaddr.V4.pp_hum src id Cstruct.hexdump_pp raw);
             Lwt.return_true
@@ -173,7 +173,7 @@ module Make
             Icmpv4_wire.set_icmpv4_csum icmp_buffer (Tcpip_checksum.ones_complement icmp_buffer);
             try_to_send ~src:src' ~dst:(fst flow.virt) ~payload:icmp_buffer
           end else begin
-            Log.info (fun f -> f "Dropping TTL exceeded src' = %a dst' = %a; src = %a; dst = %a; id = %d"
+            Log.debug (fun f -> f "Dropping TTL exceeded src' = %a dst' = %a; src = %a; dst = %a; id = %d"
               Ipaddr.V4.pp_hum src'
               Ipaddr.V4.pp_hum dst'
               Ipaddr.V4.pp_hum src
@@ -196,10 +196,10 @@ module Make
               Icmpv4_wire.set_icmpv4_csum icmp_buffer (Tcpip_checksum.ones_complement icmp_buffer);
               try_to_send ~src:src' ~dst:internal_src ~payload:icmp_buffer
             | _, _ ->
-              Log.info (fun f -> f "Dropping TTL exceeded from internal IPv6 address");
+              Log.debug (fun f -> f "Dropping TTL exceeded from internal IPv6 address");
               Lwt.return_true
           end else begin
-            Log.info (fun f -> f "Dropping TTL exceeded src' = %a dst' = %a; src = %a:%d; dst = %a:%d"
+            Log.debug (fun f -> f "Dropping TTL exceeded src' = %a dst' = %a; src = %a:%d; dst = %a:%d"
               Ipaddr.V4.pp_hum src'
               Ipaddr.V4.pp_hum dst'
               Ipaddr.V4.pp_hum src src_port
@@ -212,12 +212,12 @@ module Make
           Lwt.return_true
         | Ok { payload = Frame.Icmp { icmp = Frame.Time_exceeded { ipv4 = Ok { src; dst; payload = Frame.Tcp { src = src_port; dst = dst_port; _ }; _ }; _ }; _ }; _ } ->
           (* TODO: implement for TCP *)
-          Log.info (fun f -> f "Dropping TTL exceeeded for TCP %a:%d -> %a%d"
+          Log.debug (fun f -> f "Dropping TTL exceeeded for TCP %a:%d -> %a%d"
             Ipaddr.V4.pp_hum src src_port Ipaddr.V4.pp_hum dst dst_port
           );
           Lwt.return_true
         | Ok { payload = Frame.Icmp { icmp = Frame.Time_exceeded _; _ }; _ } ->
-          Log.info (fun f -> f "Dropping TTL exceeded for non-ICMP/UDP/TCP");
+          Log.debug (fun f -> f "Dropping TTL exceeded for non-ICMP/UDP/TCP");
           Lwt.return_true
         | Ok { payload = Frame.Icmp { icmp = Frame.Unknown_icmp { ty } ; _ }; _ } ->
           Log.err (fun f -> f "Failed to forward unexpected ICMP datagram with type %d" ty);
@@ -241,7 +241,7 @@ module Make
     start_receiver t
 
   let input ~t ~datagram:{src; dst; ty; code; id; seq; payload} ~ttl () =
-    Log.info (fun f ->
+    Log.debug (fun f ->
       f "ICMP received %a -> %a ttl=%d ty=%d code=%d id=%d seq=%d payload len %d"
         Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum dst
         ttl ty code id seq (Cstruct.len payload));
