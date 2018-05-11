@@ -739,7 +739,7 @@ let command =
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards
         $ gc_compact $ Logging.log_destination),
-  Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
+  Term.info (Filename.basename Sys.argv.(0)) ~version:Version.git ~doc ~man
 
 let () =
   Printexc.record_backtrace true;
