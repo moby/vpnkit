@@ -359,7 +359,13 @@ module Make
               f "%s" (Sexplib.Sexp.to_string_hum
                         (Cohttp.Response.sexp_of_t res)));
           let res_headers = res.Cohttp.Response.headers in
-          let connection_close = Cohttp.Header.get res_headers "connection" = Some "close" in
+          let connection_close =
+            (* HTTP 1.0 defaults to Connection: close *)
+            match res.Cohttp.Response.version, Cohttp.Header.get res_headers "connection" with
+            | _, Some "keep-alive" -> false
+            | _, Some "close" -> true
+            | `HTTP_1_0, _ -> true
+            | _, _ -> false in
           match Cohttp.Request.meth req, Cohttp.Response.status res with
           | `CONNECT, `OK ->
             (* Write the response and then switch to proxying the bytes *)

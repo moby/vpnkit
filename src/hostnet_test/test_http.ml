@@ -745,7 +745,7 @@ let test_http_connect_tunnel proxy () =
         )
     end
 
-  let test_connection_close () =
+  let test_connection_close explicit_close () =
     let body = "Hello\n" in
     Host.Main.run begin
     Slirp_stack.with_stack ~pcap:"test_connection_close.pcap" (fun _ stack ->
@@ -759,7 +759,10 @@ let test_http_connect_tunnel proxy () =
               Log.err (fun f -> f "Failed to parse request: %s" x);
               failwith ("Failed to parse request: " ^ x)
             | `Ok _ ->
-              let response = "HTTP/1.0 200 OK\r\nConnection:close\r\n\r\n" ^ body in
+              let response =
+                if explicit_close
+                then "HTTP/1.0 200 OK\r\nConnection:close\r\n\r\n" ^ body
+                else "HTTP/1.0 200 OK\r\n\r\n" ^ body in
               Incoming.C.write_string ic response 0 (String.length response);
               Incoming.C.flush ic
               >>= function
@@ -1035,7 +1038,10 @@ let tests = [
   [ "check that the transparent proxy will inspect and respect the Host: header", `Quick, test_transparent_http_proxy_exclude ];
 
   "HTTP proxy: respect connection: close",
-  [ "check that the transparent proxy will respect connection: close headers from origin servers", `Quick, test_connection_close ];
+  [ "check that the transparent proxy will respect connection: close headers from origin servers", `Quick, test_connection_close true ];
+
+  "HTTP proxy: respect HTTP/1.0 implicit connection: close",
+  [ "check that the transparent proxy will respect HTTP/1.0 implicit connection: close headers from origin servers", `Quick, test_connection_close true ];
 
 ] @ (List.map (fun name ->
     "HTTP proxy: GET to localhost",
