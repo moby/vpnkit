@@ -1241,3 +1241,35 @@ module Fn = struct
   let destroy _ = ()
   let fn = Uwt_preemptive.detach
 end
+
+let compact () =
+  let start = Unix.gettimeofday () in
+  Gc.compact();
+  let stats = Gc.stat () in
+  let time = Unix.gettimeofday () -. start in
+
+  Log.info (fun f -> f
+    "Gc.compact took %.1f seconds. Heap has heap_words=%d live_words=%d free_words=%d top_heap_words=%d stack_size=%d"
+    time stats.Gc.heap_words stats.Gc.live_words stats.Gc.free_words stats.Gc.top_heap_words stats.Gc.stack_size
+  )
+
+let start_background_gc config =
+  let () = match config with
+  | None ->
+    Log.info (fun f -> f "No periodic Gc.compact enabled")
+  | Some s ->
+    let rec loop () =
+      Time.sleep_ns (Duration.of_sec s)
+      >>= fun () ->
+      compact ();
+      loop () in
+    Lwt.async loop
+  in
+  if Sys.os_type = "Unix" then begin
+    (* This fails with EINVAL on Windows *)
+    let (_: Uwt.Signal.t) = Uwt.Signal.start_exn Sys.sigusr1 ~cb:(fun _t _signal ->
+        Log.info (fun f -> f "Received SIGUSR1");
+        compact ()
+    ) in
+    ()
+  end
