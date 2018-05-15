@@ -30,6 +30,8 @@ let () =
               )
     );
 
+  Host.start_background_gc None;
+
   List.iter
     (fun (test, cases) ->
        Printf.fprintf stderr "\n**** Starting test %s\n%!" test;
