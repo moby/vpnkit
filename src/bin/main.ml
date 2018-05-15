@@ -277,11 +277,22 @@ let hvsock_addr_of_uri ~default_serviceid uri =
             Server.after_disconnect server);
         Lwt.return_unit
 
+  let compact () =
+    let start = Unix.gettimeofday () in
+    Gc.compact();
+    let stats = Gc.stat () in
+    let time = Unix.gettimeofday () -. start in
+
+    Log.info (fun f -> f
+      "Gc.compact took %.1f seconds. Heap has heap_words=%d live_words=%d free_words=%d top_heap_words=%d stack_size=%d"
+      time stats.Gc.heap_words stats.Gc.live_words stats.Gc.free_words stats.Gc.top_heap_words stats.Gc.stack_size
+    )
+
   let main_t
       configuration
       socket_url port_control_urls introspection_urls diagnostics_urls
       vsock_path db_path db_branch hosts
-      listen_backlog
+      listen_backlog gc_compact
     =
     Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
     (* This will always succeed on Mac but will raise Illegal_argument
@@ -300,6 +311,22 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     Log.info (fun f -> f "Will use a listen backlog of %d" !Utils.somaxconn);
 
     Printexc.record_backtrace true;
+
+    let () = match gc_compact with
+    | None ->
+      Log.info (fun f -> f "No periodic Gc.compact enabled")
+    | Some s ->
+      let rec loop () =
+        Host.Time.sleep_ns (Duration.of_sec s)
+        >>= fun () ->
+        compact ();
+        loop () in
+      Lwt.async loop
+    in
+    let (_: Uwt.Signal.t) = Uwt.Signal.start_exn Sys.sigusr1 ~cb:(fun _t _signal ->
+        Log.info (fun f -> f "Received SIGUSR1");
+        compact ()
+    ) in
 
     let () = match HostsFile.watch ~path:hosts () with
     | Ok _       -> ()
@@ -401,7 +428,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
-      dhcp_json_path mtu udpv4_forwards log_destination
+      dhcp_json_path mtu udpv4_forwards gc_compact log_destination
     =
     let level =
       let env_debug =
@@ -469,7 +496,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       Host.Main.run
         (main_t configuration socket_url port_control_urls introspection_urls diagnostics_urls
           vsock_path db_path db_branch hosts
-          listen_backlog);
+          listen_backlog gc_compact);
     with e ->
       Log.err (fun f -> f "Host.Main.run caught exception %s: %s" (Printexc.to_string e) (Printexc.get_backtrace ()))
 open Cmdliner
@@ -715,6 +742,14 @@ let udpv4_forwards =
   in
   Arg.(value & opt string "" doc)
 
+let gc_compact =
+  let doc =
+    Arg.info ~doc:
+      "Seconds between heap compactions"
+      [ "gc-compact-interval" ]
+  in
+  Arg.(value & opt (some int) None doc)
+
 let command =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
@@ -727,7 +762,8 @@ let command =
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
-        $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ Logging.log_destination),
+        $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards
+        $ gc_compact $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:"%%VERSION%%" ~doc ~man
 
 let () =
