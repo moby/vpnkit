@@ -889,6 +889,142 @@ let test_http_connect_tunnel proxy () =
         )
     end
 
+  let test_http_proxy_chunked () =
+    Host.Main.run begin
+      let results, results_u = Lwt.task () in
+      let payloads = ref [] in
+      Slirp_stack.with_stack ~pcap:"test_http_proxy_chunked.pcap" (fun _ stack ->
+        with_server (fun flow ->
+          (* Expect 3 requests: one chunked, one fixed and one using EOF *)
+          (* Note the proxy sets connection: close on external requests *)
+          let ic = Incoming.C.create flow in
+          let read_one () =
+            Incoming.Request.read ic >>= function
+            | `Eof ->
+              Log.err (fun f -> f "EOF reading request");
+              failwith "EOF reading request"
+            | `Invalid x ->
+              Log.err (fun f -> f "Failed to parse request: %s" x);
+              failwith ("Failed to parse request: " ^ x)
+            | `Ok req ->
+              Log.info (fun f -> f "HTTP server received %s" (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t req)));
+              let reader = Incoming.Request.make_body_reader req ic in
+              let rec read_body acc =
+                Incoming.Request.read_body_chunk reader >>= function
+                | Done          ->
+                  Log.info (fun f -> f "Chunk done");
+                Lwt.return acc
+                | Final_chunk x ->
+                  Log.info (fun f -> f "Final_chunk '%s'" x);
+                  Lwt.return (acc ^ x)
+                | Chunk x       ->
+                Log.info (fun f -> f "Chunk [%s]" (String.escaped x));
+                 read_body (acc ^ x) in
+              Lwt.catch
+                (fun () ->
+                  Log.info (fun f -> f "HTTP server reading request body");
+                  read_body ""
+                )
+                (fun e -> Log.err (fun f -> f "read_body caught %s" (Printexc.to_string e)); Lwt.fail e)
+              in
+          let write_ok () =
+            Log.info (fun f -> f "HTTP server responding with 200 OK");
+            let headers =
+              let h = Cohttp.Header.init () in
+              Cohttp.Header.add_list h [
+                "content-length", "0";
+                "connection", "keep-alive";
+              ] in
+            let response = Cohttp.Response.make ~flush:true ~headers ~status:`OK () in
+            Incoming.Response.write ~flush:true (fun _writer -> Lwt.return_unit) response ic in
+          read_one ()
+          >>= fun one ->
+          payloads := one :: !payloads;
+          if List.length !payloads = 2 then Lwt.wakeup_later results_u (List.rev !payloads);
+          Log.info (fun f -> f "got: %s" (String.escaped one));
+          write_ok ()
+        ) (fun server ->
+          Lwt.catch (fun () ->
+            let host = "localhost" in
+            let port = server.Server.port in
+            let open Slirp_stack in
+            let _with_connection f =
+              Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+              >>= function
+              | Error _ ->
+                Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+                failwith "test_proxy_get: connect failed"
+              | Ok flow ->
+                Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+                let oc = Outgoing.C.create flow in
+                Lwt.finalize
+                  (fun () -> f oc)
+                  (fun () -> Client.TCPV4.close flow) in
+            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+            >>= function
+            | Error _ ->
+              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              failwith "test_proxy_get: connect failed"
+            | Ok flow ->
+              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              let oc = Outgoing.C.create flow in
+              let read_ok () =
+                Outgoing.Response.read oc
+                >>= function
+                | `Ok res ->
+                  Log.info (fun f -> f "client received %s" (Sexplib.Sexp.to_string_hum @@ Cohttp.Response.sexp_of_t res));
+                  Lwt.return_unit
+                | _ -> failwith "Failed to read response to chunked request" in
+              let request = Cohttp.Request.make ~meth:`POST (Uri.make ~host ~port ()) in
+              let headers =
+                Cohttp.Header.(add_list @@ init ()) [
+                  "host", "localhost:" ^ (string_of_int port);
+                ] in
+              Log.info (fun f -> f "sending one");
+              Outgoing.Request.write ~flush:true
+                (fun _writer ->
+                  (* Example from https://en.wikipedia.org/wiki/Chunked_transfer_encoding *)
+                  let example = "4\r\nWiki\r\n5\r\npedia\r\nE\r\n in\r\n\r\nchunks.\r\n0\r\n\r\n" in
+                  let _example = "0\r\n\r\n" in
+                  Outgoing.C.write_string oc example 0 (String.length example);
+                  Outgoing.C.flush oc
+                  >>= fun _ ->
+                  Lwt.return_unit
+                ) { request with Cohttp.Request.headers = Cohttp.Header.add_list headers [
+                  "transfer-encoding", "chunked";
+                  "connection", "keep-alive" ] } oc
+              >>= fun () ->
+              read_ok ()
+              >>= fun () ->
+              Log.info (fun f -> f "sending two");
+
+              Outgoing.Request.write ~flush:true
+                (fun _writer ->
+                  Outgoing.C.write_string oc "hello" 0 5;
+                  Outgoing.C.flush oc
+                  >>= fun _ ->
+                  Lwt.return_unit
+                ) { request with Cohttp.Request.headers = Cohttp.Header.add_list headers [
+                  "content-length", "5";
+                  "connection", "keep-alive" ] } oc
+              >>= fun () ->
+              read_ok ()
+              >>= fun () ->
+              Client.TCPV4.close flow
+              >>= fun () ->
+              results
+              >>= fun result ->
+              let expected = [
+                "Wikipedia in\r\n\r\nchunks.";
+                "hello";
+              ] in
+              Alcotest.check Alcotest.(list string) "body" expected result;
+              Lwt.return_unit
+            ) (fun e -> Log.err (fun f -> f "HTTP client raised %s" (Printexc.to_string e)); Lwt.fail e)
+            )
+        )
+    end
+
 
   let test_http_proxy_head () =
     Host.Main.run begin
@@ -1042,6 +1178,9 @@ let tests = [
 
   "HTTP proxy: respect HTTP/1.0 implicit connection: close",
   [ "check that the transparent proxy will respect HTTP/1.0 implicit connection: close headers from origin servers", `Quick, test_connection_close true ];
+
+  "HTTP proxy: check transfer-encodings",
+  [ "check that the proxy understands transfer encodings", `Quick, test_http_proxy_chunked ];
 
 ] @ (List.map (fun name ->
     "HTTP proxy: GET to localhost",
