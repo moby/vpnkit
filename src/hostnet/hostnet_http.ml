@@ -244,16 +244,22 @@ module Make
         Log.warn (fun f -> f "Unexpected exeption %a in proxy" pp e);
       in
       let rec loop () =
-        (Outgoing.C.read_some outgoing >>= function
-          | Ok `Eof        -> Lwt.return false
-          | Error e        -> warn Outgoing.C.pp_error e; Lwt.return false
-          | Ok (`Data buf) ->
-            Incoming.C.write_buffer incoming buf;
-            Incoming.C.flush incoming >|= function
-            | Ok ()         -> true
-            | Error `Closed -> false
-            | Error e       -> warn Incoming.C.pp_write_error e; false
-        ) >>= fun continue ->
+        Lwt.catch
+          (fun () ->
+            Outgoing.C.read_some outgoing >>= function
+              | Ok `Eof        -> Lwt.return false
+              | Error e        -> warn Outgoing.C.pp_error e; Lwt.return false
+              | Ok (`Data buf) ->
+                Incoming.C.write_buffer incoming buf;
+                Incoming.C.flush incoming >|= function
+                | Ok ()         -> true
+                | Error `Closed -> false
+                | Error e       -> warn Incoming.C.pp_write_error e; false
+          ) (fun e ->
+            Log.warn (fun f -> f "a_t: caught unexpected exception: %s" (Printexc.to_string e));
+            Lwt.return false
+          )
+        >>= fun continue ->
         if continue then loop () else Tcp.close flow
       in
       loop () in
@@ -264,16 +270,22 @@ module Make
         Log.warn (fun f -> f "Unexpected exeption %a in proxy" pp e);
       in
       let rec loop () =
-        (Incoming.C.read_some incoming >>= function
-          | Ok `Eof        -> Lwt.return false
-          | Error e        -> warn Incoming.C.pp_error e; Lwt.return false
-          | Ok (`Data buf) ->
-            Outgoing.C.write_buffer outgoing buf;
-            Outgoing.C.flush outgoing >|= function
-            | Ok ()         -> true
-            | Error `Closed -> false
-            | Error e       -> warn Outgoing.C.pp_write_error e; false
-        ) >>= fun continue ->
+        Lwt.catch
+          (fun () ->
+            Incoming.C.read_some incoming >>= function
+              | Ok `Eof        -> Lwt.return false
+              | Error e        -> warn Incoming.C.pp_error e; Lwt.return false
+              | Ok (`Data buf) ->
+                Outgoing.C.write_buffer outgoing buf;
+                Outgoing.C.flush outgoing >|= function
+                | Ok ()         -> true
+                | Error `Closed -> false
+                | Error e       -> warn Outgoing.C.pp_write_error e; false
+          ) (fun e ->
+            Log.warn (fun f -> f "b_t: caught unexpected exception: %s" (Printexc.to_string e));
+            Lwt.return false
+          )
+        >>= fun continue ->
         if continue then loop () else Socket.Stream.Tcp.shutdown_write remote
       in
       loop () in
@@ -288,101 +300,112 @@ module Make
     probes = 10
   }
 
-  let rec proxy_body_request ~reader ~writer =
+  let rec proxy_body_request_exn ~reader ~writer =
     let open Cohttp.Transfer in
     Incoming.Request.read_body_chunk reader >>= function
     | Done          -> Lwt.return_unit
     | Final_chunk x -> Outgoing.Request.write_body writer x
     | Chunk x       ->
       Outgoing.Request.write_body writer x >>= fun () ->
-      proxy_body_request ~reader ~writer
+      proxy_body_request_exn ~reader ~writer
 
-  let rec proxy_body_response ~reader ~writer =
+  let rec proxy_body_response_exn ~reader ~writer =
     let open Cohttp.Transfer in
     Outgoing.Response.read_body_chunk reader  >>= function
     | Done          -> Lwt.return_unit
     | Final_chunk x -> Incoming.Response.write_body writer x
     | Chunk x       ->
       Incoming.Response.write_body writer x >>= fun () ->
-      proxy_body_response ~reader ~writer
+      proxy_body_response_exn ~reader ~writer
 
   (* Take a request and a pair (incoming, outgoing) of channels, send
-     the request to the outgoing channel and then proxy back any response. *)
+     the request to the outgoing channel and then proxy back any response.
+     This function can raise exceptions because Cohttp can raise exceptions. *)
   let proxy_request ~description ~incoming ~outgoing ~flow ~remote ~req =
-    let reader = Incoming.Request.make_body_reader req incoming in
-    Outgoing.Request.write ~flush:true (fun writer ->
-        match Incoming.Request.has_body req with
-        | `Yes     -> proxy_body_request ~reader ~writer
-        | `No      -> Lwt.return_unit
-        | `Unknown ->
-          Log.warn (fun f ->
-              f "Request.has_body returned `Unknown: not sure what \
-                  to do");
-          Lwt.return_unit
-      ) req outgoing
-    >>= fun () ->
-    Outgoing.Response.read outgoing >>= function
-    | `Eof ->
-      Log.warn (fun f -> f "%s: EOF" (description false));
-      Lwt.return false
-    | `Invalid x ->
-      Log.warn (fun f ->
-          f "%s: Failed to parse HTTP response: %s"
-            (description false) x);
-      Lwt.return false
-    | `Ok res ->
-      Log.info (fun f ->
-          f "%s: %s %s"
-            (description false)
-            (Cohttp.Code.string_of_version res.Cohttp.Response.version)
-            (Cohttp.Code.string_of_status res.Cohttp.Response.status));
-      Log.debug (fun f ->
-          f "%s" (Sexplib.Sexp.to_string_hum
-                    (Cohttp.Response.sexp_of_t res)));
-      let res_headers = res.Cohttp.Response.headers in
-      let connection_close = Cohttp.Header.get res_headers "connection" = Some "close" in
-      match Cohttp.Request.meth req, Cohttp.Response.status res with
-      | `CONNECT, `OK ->
-        (* Write the response and then switch to proxying the bytes *)
-        Incoming.Response.write ~flush:true (fun _writer -> Lwt.return_unit) res incoming
-        >>= fun () ->
-        proxy_bytes ~incoming ~outgoing ~flow ~remote
-        >>= fun () ->
-        Log.debug (fun f -> f "%s: HTTP CONNECT complete" (description false));
-        Lwt.return false
-      | _, _ ->
-        (* Otherwise stay in HTTP mode *)
-        let reader = Outgoing.Response.make_body_reader res outgoing in
-        Incoming.Response.write ~flush:true (fun writer ->
-            match Cohttp.Request.meth req, Incoming.Response.has_body res with
-            | `HEAD, `Yes ->
-              (* Bug in cohttp.1.0.2: according to Section 9.4 of RFC2616
-                https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
-                > The HEAD method is identical to GET except that the server
-                > MUST NOT return a message-body in the response.
-              *)
-              Log.debug (fun f -> f "%s: HEAD requests MUST NOT have response bodies" (description false));
-              Lwt.return_unit
-            | _, `Yes     ->
-              Log.info (fun f -> f "%s: proxying body" (description false));
-              proxy_body_response ~reader ~writer
-              >>= fun () ->
-              Lwt.return_unit
-            | _, `No      ->
-              Log.info (fun f -> f "%s: no body to proxy" (description false));
-              Lwt.return_unit
-            | _, `Unknown when connection_close ->
-              (* There may be a body between here and the EOF *)
-              Log.info (fun f -> f "%s: proxying until EOF" (description false));
-              proxy_body_response ~reader ~writer
-            | _, `Unknown ->
+    (* Cohttp can fail promises so we catch them here *)
+    Lwt.catch
+      (fun () ->
+        let reader = Incoming.Request.make_body_reader req incoming in
+        Log.info (fun f -> f "Outgoing.Request.write");
+        Outgoing.Request.write ~flush:true (fun writer ->
+            match Incoming.Request.has_body req with
+            | `Yes     -> proxy_body_request_exn ~reader ~writer
+            | `No      -> Lwt.return_unit
+            | `Unknown ->
               Log.warn (fun f ->
-                  f "Response.has_body returned `Unknown: not sure \
-                      what to do");
+                  f "Request.has_body returned `Unknown: not sure what \
+                      to do");
               Lwt.return_unit
-          ) res incoming
+          ) req outgoing
         >>= fun () ->
-        Lwt.return (not connection_close)
+        Log.info (fun f -> f "Outgoing.Response.read");
+
+        Outgoing.Response.read outgoing >>= function
+        | `Eof ->
+          Log.warn (fun f -> f "%s: EOF" (description false));
+          Lwt.return false
+        | `Invalid x ->
+          Log.warn (fun f ->
+              f "%s: Failed to parse HTTP response: %s"
+                (description false) x);
+          Lwt.return false
+        | `Ok res ->
+          Log.info (fun f ->
+              f "%s: %s %s"
+                (description false)
+                (Cohttp.Code.string_of_version res.Cohttp.Response.version)
+                (Cohttp.Code.string_of_status res.Cohttp.Response.status));
+          Log.debug (fun f ->
+              f "%s" (Sexplib.Sexp.to_string_hum
+                        (Cohttp.Response.sexp_of_t res)));
+          let res_headers = res.Cohttp.Response.headers in
+          let connection_close = Cohttp.Header.get res_headers "connection" = Some "close" in
+          match Cohttp.Request.meth req, Cohttp.Response.status res with
+          | `CONNECT, `OK ->
+            (* Write the response and then switch to proxying the bytes *)
+            Incoming.Response.write ~flush:true (fun _writer -> Lwt.return_unit) res incoming
+            >>= fun () ->
+            proxy_bytes ~incoming ~outgoing ~flow ~remote
+            >>= fun () ->
+            Log.debug (fun f -> f "%s: HTTP CONNECT complete" (description false));
+            Lwt.return false
+          | _, _ ->
+            (* Otherwise stay in HTTP mode *)
+            let reader = Outgoing.Response.make_body_reader res outgoing in
+            Incoming.Response.write ~flush:true (fun writer ->
+                match Cohttp.Request.meth req, Incoming.Response.has_body res with
+                | `HEAD, `Yes ->
+                  (* Bug in cohttp.1.0.2: according to Section 9.4 of RFC2616
+                    https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
+                    > The HEAD method is identical to GET except that the server
+                    > MUST NOT return a message-body in the response.
+                  *)
+                  Log.debug (fun f -> f "%s: HEAD requests MUST NOT have response bodies" (description false));
+                  Lwt.return_unit
+                | _, `Yes     ->
+                  Log.info (fun f -> f "%s: proxying body" (description false));
+                  proxy_body_response_exn ~reader ~writer
+                  >>= fun () ->
+                  Lwt.return_unit
+                | _, `No      ->
+                  Log.info (fun f -> f "%s: no body to proxy" (description false));
+                  Lwt.return_unit
+                | _, `Unknown when connection_close ->
+                  (* There may be a body between here and the EOF *)
+                  Log.info (fun f -> f "%s: proxying until EOF" (description false));
+                  proxy_body_response_exn ~reader ~writer
+                | _, `Unknown ->
+                  Log.warn (fun f ->
+                      f "Response.has_body returned `Unknown: not sure \
+                          what to do");
+                  Lwt.return_unit
+              ) res incoming
+            >>= fun () ->
+            Lwt.return (not connection_close)
+      ) (fun e ->
+        Log.warn (fun f -> f "proxy_request caught exception: %s" (Printexc.to_string e));
+        Lwt.return false
+      )
 
   let add_proxy_authorization proxy headers =
     let proxy_authorization = "Proxy-Authorization" in
