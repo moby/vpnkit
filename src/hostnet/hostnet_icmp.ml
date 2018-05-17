@@ -223,7 +223,7 @@ module Make
           Log.err (fun f -> f "Failed to forward unexpected ICMP datagram with type %d" ty);
           Lwt.return_true
         | Ok _ ->
-          Log.err (fun f -> f "Failed to forward unexpected IPv4 datagram");
+          Log.debug (fun f -> f "Failed to forward unexpected IPv4 datagram");
           Lwt.return_true
       ) (fun e ->
         Log.err (fun f ->
