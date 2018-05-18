@@ -110,7 +110,7 @@ let error_html title body =
 module Make
     (Ip: Mirage_protocols_lwt.IPV4)
     (Udp: Mirage_protocols_lwt.UDPV4)
-    (Tcp: Mirage_protocols_lwt.TCPV4)
+    (Tcp:Mirage_flow_lwt.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
 = struct
@@ -293,12 +293,6 @@ module Make
       a_t flow ~incoming ~outgoing;
       b_t remote ~incoming ~outgoing
     ]
-
-  let keepalive = Some {
-    Mirage_protocols.Keepalive.after = Duration.of_sec 1;
-    interval = Duration.of_sec 1;
-    probes = 10
-  }
 
   let rec proxy_body_request_exn ~reader ~writer =
     let open Cohttp.Transfer in
@@ -516,7 +510,7 @@ module Make
             Log.warn (fun f -> f "tunnel_https_over_connect caught exception: %s" (Printexc.to_string e));
             Lwt.return_unit
           )
-      in Some { Tcp.process; keepalive }
+      in Some process
     in
     Lwt.return listeners
 
@@ -717,7 +711,7 @@ module Make
             Lwt.return_unit
           )
       in
-      Some { Tcp.process; keepalive }
+      Some process
     in
     Lwt.return listeners
 
@@ -761,7 +755,7 @@ module Make
             Log.warn (fun f -> f "transparent_http caught exception: %s" (Printexc.to_string e));
             Lwt.return_unit
           )
-      in Some { Tcp.process; keepalive }
+      in Some process
     in
     Lwt.return listeners
 
