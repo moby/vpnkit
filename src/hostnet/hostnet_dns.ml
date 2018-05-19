@@ -400,7 +400,7 @@ struct
     (* FIXME: need to record the upstream request *)
     let listeners _ =
       Log.debug (fun f -> f "DNS TCP handshake complete");
-      let process flow =
+      let f flow =
         let packets = Dns_tcp_framing.connect flow in
         let rec loop () =
           Dns_tcp_framing.read packets >>= function
@@ -429,12 +429,7 @@ struct
           close
         ]
       in
-      let keepalive = Some {
-        Mirage_protocols.Keepalive.after = Duration.of_sec 1;
-        interval = Duration.of_sec 1;
-        probes = 10
-      } in
-      Some { Tcp.process; keepalive }
+      Some f
     in
     Lwt.return listeners
 

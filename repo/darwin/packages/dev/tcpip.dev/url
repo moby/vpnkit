@@ -1,1 +1,1 @@
-git: "git://github.com/djs55/mirage-tcpip.git#keepalive2-vpnkit"
+git: "https://github.com/djs55/mirage-tcpip.git#vpnkit"
