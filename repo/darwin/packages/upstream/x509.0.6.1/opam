@@ -1,0 +1,36 @@
+opam-version: "1.2"
+name:         "x509"
+homepage:     "https://github.com/mirleft/ocaml-x509"
+dev-repo:     "https://github.com/mirleft/ocaml-x509.git"
+bug-reports:  "https://github.com/mirleft/ocaml-x509/issues"
+doc:          "https://mirleft.github.io/ocaml-x509/doc"
+author:       [ "David Kaloper <david@numm.org>" "Hannes Mehnert <hannes@mehnert.org>" ]
+maintainer:   [ "Hannes Mehnert <hannes@mehnert.org>" "David Kaloper <david@numm.org>" ]
+license:      "BSD2"
+
+build: [
+  ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%"]
+]
+build-test: [
+  ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "true"]
+  ["ocaml" "pkg/pkg.ml" "test"]
+]
+
+depends: [
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "ppx_sexp_conv" {build & < "v0.11.0"}
+  "topkg" {build}
+  "result"
+  "cstruct" {>= "1.6.0"}
+  "sexplib"
+  "asn1-combinators" {>= "0.2.0"}
+  "ptime"
+  "nocrypto" {>= "0.5.3"}
+  "astring"
+  "ounit" {test}
+  "cstruct-unix" {test & >= "3.0.0"}
+]
+
+tags: [ "org:mirage" ]
+available: [ ocaml-version >= "4.02.2" ]

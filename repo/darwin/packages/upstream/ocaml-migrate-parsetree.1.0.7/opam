@@ -17,4 +17,4 @@ depends: [
   "ocamlfind" {build}
   "jbuilder" {build & >= "1.0+beta10"}
 ]
-available: ocaml-version >= "4.02.0"
+available: [ocaml-version >= "4.02.0" & ocaml-version < "4.07.0"]
