@@ -23,7 +23,7 @@ and t =
   | Icmp:     { ty: int; code: int; raw: Cstruct.t; icmp: icmp } -> t
   | Ipv4:     ipv4 -> t
   | Udp:      { src: int; dst: int; len: int; raw: Cstruct.t; payload: t } -> t
-  | Tcp:      { src: int; dst: int; syn: bool; raw: Cstruct.t; payload: t } -> t
+  | Tcp:      { src: int; dst: int; syn: bool; rst: bool; raw: Cstruct.t; payload: t } -> t
   | Payload:  Cstruct.t -> t
   | Unknown:  t
 
@@ -97,7 +97,8 @@ let rec ipv4 inner =
     let payload = Cstructs.shift         inner ((offres lsr 4) * 4)
                   |> Cstructs.to_cstruct in
     let syn = (flags land (1 lsl 1)) > 0 in
-    Ok (Tcp { src; dst; syn; raw = Cstructs.to_cstruct inner;
+    let rst = (flags land (1 lsl 2)) > 0 in
+    Ok (Tcp { src; dst; syn; rst; raw = Cstructs.to_cstruct inner;
               payload = Payload payload })
   | 17 ->
     let raw = Cstructs.to_cstruct inner in
