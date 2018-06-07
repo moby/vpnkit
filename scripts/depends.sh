@@ -71,4 +71,5 @@ OPAMVERBOSE=1 opam install --deps-only tcpip -y
 OPAMVERBOSE=1 opam install tcpip -t
 
 opam install $(ls -1 ${OPAM_REPO}/packages/upstream) -y
-OPAMVERBOSE=1 opam install --deps-only -t vpnkit -y
+OPAMVERBOSE=1 opam install alcotest charrua-client-mirage -y
+OPAMVERBOSE=1 opam install --deps-only vpnkit -y

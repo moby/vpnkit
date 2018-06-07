@@ -28,7 +28,7 @@ depends: [
   "mirage-random" {>= "1.0.0"}
   "mirage-clock-lwt" {>= "1.2.0"}
   "mirage-stack-lwt" {>= "1.0.0"}
-  "mirage-protocols" {>= "1.1.0"}
+  "mirage-protocols" {>= "1.1.0" & < "1.3.0"}
   "mirage-protocols-lwt" {>= "1.1.0"}
   "mirage-time-lwt" {>= "1.0.0"}
   "ipaddr" {>= "2.2.0"}

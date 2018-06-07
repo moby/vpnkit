@@ -1,0 +1,14 @@
+--- ./src/utils.ml
++++ ./src/utils.ml
+@@ -2,7 +2,10 @@
+ 
+ let with_output fn ~binary ~f =
+   match fn with
+-  | None | Some "-" -> f stdout
++  | None | Some "-" ->
++     if binary && Sys.win32 then
++       Stdio.Out_channel.set_binary_mode stdout true;
++     f stdout
+   | Some fn -> Out_channel.with_file fn ~binary ~f
+ ;;
+ 

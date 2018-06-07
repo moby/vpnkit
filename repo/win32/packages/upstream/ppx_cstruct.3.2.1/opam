@@ -16,7 +16,7 @@ build-test: [
   ["jbuilder" "runtest" "-p" name "-j" jobs]
 ]
 depends: [
-  "jbuilder" {build & >="1.0+beta7"}
+  "jbuilder" {build & >="1.0+beta9"}
   "cstruct"
   "ounit" {test}
   "ppx_tools_versioned" {>="5.0.1"}

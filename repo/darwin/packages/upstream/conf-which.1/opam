@@ -1,5 +1,5 @@
 opam-version: "1.2"
-maintainer: "Francois BERENGER <ligand@free.fr>"
+maintainer: "unixjunkie@sdf.org"
 homepage: "http://www.gnu.org/software/which/"
 authors: "Carlo Wood"
 bug-reports: "https://github.com/ocaml/opam-repository/issues"

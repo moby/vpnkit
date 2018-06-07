@@ -15,7 +15,7 @@ build: [
 depends: [
   "jbuilder"  {build & >="1.0+beta9"}
   "cstruct" {>= "3.0.0"}
-  "ppx_cstruct" {build}
+  "ppx_cstruct"
   "ocplib-endian"
   "lwt"
 ]

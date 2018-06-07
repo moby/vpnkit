@@ -16,7 +16,7 @@ and t =
   | Icmp:     { ty: int; code: int; raw: Cstruct.t; icmp: icmp } -> t
   | Ipv4:     ipv4 -> t
   | Udp:      { src: int; dst: int; len: int; raw: Cstruct.t; payload: t } -> t
-  | Tcp:      { src: int; dst: int; syn: bool; raw: Cstruct.t; payload: t } -> t
+  | Tcp:      { src: int; dst: int; syn: bool; rst: bool; raw: Cstruct.t; payload: t } -> t
   | Payload:  Cstruct.t -> t
   | Unknown:  t
 

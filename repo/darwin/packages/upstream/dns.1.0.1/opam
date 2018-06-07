@@ -21,7 +21,7 @@ depends: [
   "base-bytes"
   "jbuilder"         {build & >= "1.0+beta9"}
   "cstruct"          {>= "3.0.2"}
-  "ppx_cstruct"      {build}
+  "ppx_cstruct"
   "re"
   "ipaddr"           {>= "2.6.0"}
   "uri"              {>= "1.7.0"}

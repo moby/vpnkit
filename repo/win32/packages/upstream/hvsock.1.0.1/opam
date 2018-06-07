@@ -21,7 +21,7 @@ depends: [
   "base-bytes"
   "base-threads"
   "base-unix"
-  "lwt" {>= "2.4.7"}
+  "lwt" {>= "2.4.7" & < "4.0.0"}
   "logs"
   "fmt"
   "cmdliner"

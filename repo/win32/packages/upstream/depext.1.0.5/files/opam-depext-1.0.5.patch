@@ -223,8 +223,8 @@
 -  endif
 -  # The OCaml C header files use this flag:
 -  CFLAGS += -D__MINGW32__
-+  CC:= $(shell ocamlc -config | awk '/^bytecomp_c_compiler/ {for(i=2;i<=NF;i++) printf "%s " ,$$i}')
-+  AR:= $(shell ocamlc -config | awk '/^bytecomp_c_compiler/ {print $$2}' | sed 's|gcc|ar|g')
++  CC:= $(shell ocamlc -config | awk -F '[\t\r ]+' '/^bytecomp_c_compiler/ {for(i=2;i<=NF;i++) printf "%s " ,$$i}')
++  AR:= $(shell ocamlc -config | awk -F '[\t\r ]+' '/^bytecomp_c_compiler/ {print $$2}' | sed 's|gcc|ar|g')
  endif
  ifdef MSVC
    export MSVC

@@ -12,4 +12,4 @@ remove: [["ocamlfind" "remove" "ppx_tools"]]
 depends: [
   "ocamlfind" {>= "1.5.0"}
 ]
-available: [ ocaml-version >= "4.06.0" & ocaml-version < "4.07" ]
+available: [ ocaml-version >= "4.06.0" & ocaml-version < "4.08" ]
