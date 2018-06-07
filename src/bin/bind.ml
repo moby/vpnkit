@@ -90,7 +90,7 @@ module Make(Socket: Sig.SOCKETS) = struct
   (* This implementation is OSX-only *)
   let request_privileged_port local_ip local_port sock_stream =
     let open Lwt_result.Infix in
-    Socket.Stream.Unix.connect "/var/tmp/com.docker.vmnetd.socket"
+    Socket.Stream.Unix.connect "/var/run/com.docker.vmnetd.sock"
     >>= fun flow ->
     Lwt.finalize (fun () ->
         of_fd flow >>= fun c ->
