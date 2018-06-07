@@ -21,8 +21,8 @@ build-test: [
 
 depends: [
   "jbuilder" {build & >="1.0+beta7"}
-  "ppx_sexp_conv" {build}
-  "ppx_cstruct"   {build}
+  "ppx_sexp_conv"
+  "ppx_cstruct"
   "menhir"        {build}
   "cstruct"       {>= "3.0.1"}
   "sexplib"

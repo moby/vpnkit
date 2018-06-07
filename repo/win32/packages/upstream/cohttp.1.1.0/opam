@@ -26,8 +26,8 @@ depends: [
   "fieldslib"
   "sexplib"
   "ppx_type_conv" {build & >="v0.9.1"}
-  "ppx_fields_conv" {build & >="v0.9.0"}
-  "ppx_sexp_conv" {build & >="v0.9.0"}
+  "ppx_fields_conv" { >="v0.9.0"}
+  "ppx_sexp_conv" { >="v0.9.0"}
   "stringext"
   "base64" {>= "2.0.0"}
   "fmt" {test}

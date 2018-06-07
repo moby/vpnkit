@@ -14,8 +14,8 @@ build: [
 
 depends: [
   "jbuilder"          {build & >="1.0+beta7"}
-  "ppx_tools"         {build}
-  "ppx_cstruct"       {build}
+  "ppx_tools"
+  "ppx_cstruct"
   "cstruct"           {>= "1.9.0"}
   "re"
   "result"
