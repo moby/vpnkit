@@ -361,7 +361,7 @@ struct
           | Ok socket ->
             let tcp = Tcp.Flow.create id socket in
             let listeners port =
-              Log.info (fun f ->
+              Log.debug (fun f ->
                   f "%a:%d handshake complete" Ipaddr.pp_hum ip port);
               let f flow =
                 match tcp.Tcp.Flow.socket with
@@ -382,7 +382,7 @@ struct
                     | Ok (_l_stats, _r_stats) ->
                       Lwt.return_unit
                   ) (fun () ->
-                    Log.info (fun f -> f "%s proxy terminated" (Tcp.Flow.to_string tcp));
+                    Log.debug (fun f -> f "%s proxy terminated" (Tcp.Flow.to_string tcp));
                     close_flow t ~id `Fin
                   )
               in
