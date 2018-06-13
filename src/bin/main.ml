@@ -407,7 +407,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     =
     let level =
       let env_debug =
-        try ignore @@ Unix.getenv "DEBUG"; true
+        try ignore @@ Unix.getenv "VPNKIT_DEBUG"; true
         with Not_found -> false
       in
       if debug || env_debug then Some Logs.Debug else Some Logs.Info in
