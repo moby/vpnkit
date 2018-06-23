@@ -1,8 +1,12 @@
+// +build !windows
+
 package vpnkit
 
 import (
 	"context"
+	"errors"
 	"os"
+	"runtime"
 
 	datakit "github.com/moby/datakit/api/go-datakit"
 )
@@ -17,7 +21,12 @@ type Connection struct {
 // default system path will be used.
 func NewConnection(ctx context.Context, path string) (*Connection, error) {
 	if path == "" {
-		path = os.Getenv("HOME") + "/Library/Containers/com.docker.docker/Data/s51"
+		switch runtime.GOOS {
+		case "darwin":
+			path = os.Getenv("HOME") + "/Library/Containers/com.docker.docker/Data/s51"
+		default:
+			return nil, errors.New("path must be provided")
+		}
 	}
 	client, err := datakit.Dial(ctx, "unix", path)
 	if err != nil {
