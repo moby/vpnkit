@@ -1,0 +1,54 @@
+opam-version: "1.2"
+version: "4.1.0"
+maintainer: [
+  "Anton Bachin <antonbachin@yahoo.com>"
+  "Mauricio Fernandez <mfp@acm.org>"
+  "Simon Cruanes <simon.cruanes.2007@m4x.org>"
+]
+authors: [
+  "Jérôme Vouillon"
+  "Jérémie Dimino"
+]
+homepage: "https://github.com/ocsigen/lwt"
+doc: "https://ocsigen.org/lwt/manual/"
+bug-reports: "https://github.com/ocsigen/lwt/issues"
+license: "LGPL with OpenSSL linking exception"
+dev-repo: "https://github.com/ocsigen/lwt.git"
+
+build: [
+  [ "ocaml" "src/util/configure.ml" "-use-libev" "%{conf-libev:installed}%" ]
+  [ "jbuilder" "build" "-p" name "-j" jobs ]
+]
+
+depends: [
+  "cppo" {build & >= "1.1.0"}
+  "jbuilder" {build & >= "1.0+beta14"}
+  # We are only using ocamlfind during configuration of the Unix binding.
+  # However, ocamlfind also installs the "threads" package, and ocamlfind
+  # 1.7.3-1 is the first one whose threads package does not have incorrect error
+  # lines. See
+  #   https://github.com/ocaml/opam-repository/pull/11071#issuecomment-353131128
+  # If ocamlfind becomes no longer necessary for configuration of Lwt, this
+  # dependency should be converted to a conflict, and package jbuilder should be
+  # constrained such that it also includes the error lines fix.
+  "ocamlfind" {build & >= "1.7.3-1"}
+  # result is needed as long as Lwt still supports OCaml 4.02.
+  "result"
+]
+depopts: [
+  "base-threads"
+  "base-unix"
+  "conf-libev"
+]
+# In practice, Lwt requires OCaml >= 4.02.3, as that is a constraint of the
+# dependency jbuilder.
+available: [ocaml-version >= "4.02.0" & compiler != "4.02.1+BER"]
+
+messages: [
+  "For the PPX, please install package lwt_ppx"
+    {!lwt_ppx:installed}
+  "For the Camlp4 syntax, please install package lwt_camlp4"
+    {camlp4:installed & !lwt_camlp4:installed}
+  "For Lwt_log and Lwt_daemon, please install package lwt_log"
+    {!lwt_log:installed}
+]
