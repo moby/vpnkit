@@ -1,0 +1,14 @@
+--- ./src/migrate_parsetree_driver.ml
++++ ./src/migrate_parsetree_driver.ml
+@@ -349,7 +349,10 @@
+ 
+ let with_output output ~f =
+   match output with
+-  | None -> f stdout
++  | None ->
++      if Sys.win32 then
++        set_binary_mode_out stdout true;
++      f stdout
+   | Some fn -> with_file_out fn ~f
+ 
+ type output_mode =
