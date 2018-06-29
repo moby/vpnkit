@@ -1,0 +1,11 @@
+--- ./src/frontend/ocamlmerlin.c
++++ ./src/frontend/ocamlmerlin.c
+@@ -521,7 +521,7 @@
+     user[0] = '\0';
+   // @@DRA Need to use Windows API functions to get meaningful values for st_dev and st_ino
+   snprintf(eventname, PATHSZ,
+-      "ocamlmerlin_%s_%lx_%llx",
++      "ocamlmerlin_%s_%lx_%I64x",
+       user,
+       info.dwVolumeSerialNumber,
+       ((__int64)info.nFileIndexHigh) << 32 | ((__int64)info.nFileIndexLow));

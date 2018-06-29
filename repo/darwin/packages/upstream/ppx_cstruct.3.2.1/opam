@@ -17,7 +17,7 @@ build-test: [
 ]
 depends: [
   "jbuilder" {build & >="1.0+beta9"}
-  "cstruct"
+  "cstruct" {>= "3.1.1"}
   "ounit" {test}
   "ppx_tools_versioned" {>="5.0.1"}
   "ocaml-migrate-parsetree"

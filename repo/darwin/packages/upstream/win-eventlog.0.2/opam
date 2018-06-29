@@ -1,0 +1,23 @@
+opam-version: "1.2"
+name: "win-eventlog"
+maintainer: "dave@recoil.org"
+version: "0.2"
+authors: [ "David Scott" ]
+license: "ISC"
+homepage: "https://github.com/mirage/ocaml-win-eventlog"
+dev-repo: "https://github.com/mirage/ocaml-win-eventlog.git"
+bug-reports: "https://github.com/mirage/ocaml-win-eventlog/issues"
+
+build: [
+  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+build-test: [
+  ["jbuilder" "runtest" "-p" name "-j" jobs]
+]
+
+depends: [
+  "jbuilder"     {build & >="1.0+beta10"}
+  "result"
+  "logs"
+]

@@ -1,5 +1,0 @@
-Bindings for named pipes
-
-Named pipes are used on Windows for local (and remote) IPC. Where a Unix
-system would use a Unix domain socket, a Windows system will probably used
-a named pipe.
