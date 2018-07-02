@@ -67,12 +67,11 @@ test: $(OPAMROOT)
 # Published as an artifact.
 .PHONY: OSS-LICENSES
 OSS-LICENSES:
-	@echo "  GEN     " $@
-	@mkdir -p $(LICENSEDIRS)
-	@cd $(LICENSEDIRS) && \
-	  $(OPAMFLAGS) $(REPO_ROOT)/repo/opam-licenses.sh vpnkit
-	@$(REPO_ROOT)/repo/list-licenses.sh $(LICENSEDIRS) > $@.tmp
-	@mv $@.tmp $@
+	echo "  GEN     " $@
+	mkdir -p $(LICENSEDIRS)
+	opam config --root $(OPAMROOT) --switch $(OPAM_COMP) exec -- sh -c 'cd $(LICENSEDIRS) && $(REPO_ROOT)/repo/opam-licenses.sh vpnkit'
+	$(REPO_ROOT)/repo/list-licenses.sh $(LICENSEDIRS) > $@.tmp
+	mv $@.tmp $@
 
 # Published as an artifact.
 .PHONY: COMMIT
