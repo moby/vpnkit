@@ -214,10 +214,6 @@ module type VMNET = sig
     mtu:int ->
     fd -> (t, [`Msg of string]) result Lwt.t
 
-  val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
-
-  val stop_capture: t -> unit Lwt.t
-
   val get_client_uuid: t -> Uuidm.t
 
   val get_client_macaddr: t -> Macaddr.t
