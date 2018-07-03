@@ -959,7 +959,7 @@ struct
     let kib = 1024 in
     (* Capture 256 KiB of all traffic *)
     let all_traffic = Netif.add_match ~t:interface ~name:"all.pcap" ~limit:(256 * kib)
-      ~snaplen:1500 ~predicate:(fun _ -> true) in
+      ~snaplen:c.Configuration.pcap_snaplen ~predicate:(fun _ -> true) in
     (* Capture 256 KiB of DNS traffic *)
     let (_: Netif.rule) = Netif.add_match ~t:interface ~name:"dns.pcap" ~limit:(256 * kib)
       ~snaplen:1500 ~predicate:is_dns in

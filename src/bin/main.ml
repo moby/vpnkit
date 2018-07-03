@@ -405,7 +405,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       wait_forever
 
   let main
-      socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
+      socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls pcap_snaplen
       max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
@@ -468,6 +468,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       dhcp_json_path;
       mtu;
       udpv4_forwards;
+      pcap_snaplen;
     } in
     match socket_url with
       | None ->
@@ -554,6 +555,14 @@ let pcap_urls =
       [ "pcap" ]
   in
   Arg.(value & opt_all string [] doc)
+
+let pcap_snaplen =
+  let doc =
+    Arg.info ~doc:
+      "The maximum amount of network packet data to record, see --pcap <address>."
+      [ "pcap-snaplen" ]
+  in
+  Arg.(value & opt int Configuration.default_pcap_snaplen doc)
 
 let max_connections =
   let doc =
@@ -752,7 +761,7 @@ let command =
          flows via userspace sockets"]
   in
   Term.(pure main
-        $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls $ pcap_urls
+        $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls $ pcap_urls $ pcap_snaplen
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
