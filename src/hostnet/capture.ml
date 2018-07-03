@@ -26,6 +26,7 @@ module Make(Input: Sig.VMNET) = struct
   | Error e -> Fmt.kstrf (fun s -> Error (`Unknown s)) "%a" Input.pp_error e
 
   type packet = {
+    id: int; (* unique id *)
     len: int;
     orig_len: int;
     time: float;
@@ -37,8 +38,12 @@ module Make(Input: Sig.VMNET) = struct
     snaplen: int;
     limit: int;
     packets: packet Queue.t;
+    packets_c: unit Lwt_condition.t;
     mutable nr_bytes: int;
   }
+
+  let initial_packet_id = 0
+  let next_packet_id = ref initial_packet_id
 
   let push rule bufs =
     let orig_len = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
@@ -49,13 +54,67 @@ module Make(Input: Sig.VMNET) = struct
     in
     let len = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
     let time = Unix.gettimeofday () in
-    let packet = { len; orig_len; time; bufs } in
+    let id = !next_packet_id in
+    incr next_packet_id;
+    let packet = { id; len; orig_len; time; bufs } in
     Queue.push packet rule.packets;
+    Lwt_condition.broadcast rule.packets_c ();
     rule.nr_bytes <- rule.nr_bytes + len;
     while rule.nr_bytes > rule.limit do
       let to_drop = Queue.pop rule.packets in
       rule.nr_bytes <- rule.nr_bytes - to_drop.len;
     done
+
+  let write_file_header file_header_buf rule =
+    let open Pcap.LE in
+    set_pcap_header_magic_number file_header_buf Pcap.magic_number;
+    set_pcap_header_version_major file_header_buf Pcap.major_version;
+    set_pcap_header_version_minor file_header_buf Pcap.minor_version;
+    set_pcap_header_thiszone file_header_buf 0l;
+    set_pcap_header_sigfigs file_header_buf 4l;
+    set_pcap_header_snaplen file_header_buf (Int32.of_int rule.snaplen);
+    set_pcap_header_network file_header_buf
+      (Pcap.Network.to_int32 Pcap.Network.Ethernet)
+
+  let frame_header frame_header_buf p =
+    let secs = Int32.of_float p.time in
+    let usecs = Int32.of_float (1e6 *. (p.time -. (floor p.time))) in
+    let open Pcap.LE in
+    set_pcap_packet_ts_sec frame_header_buf secs;
+    set_pcap_packet_ts_usec frame_header_buf usecs;
+    set_pcap_packet_incl_len frame_header_buf @@ Int32.of_int p.len;
+    set_pcap_packet_orig_len frame_header_buf @@ Int32.of_int p.orig_len;
+    frame_header_buf
+
+  let to_pcap rule =
+    let file_header_buf = Cstruct.create Pcap.LE.sizeof_pcap_header in
+    write_file_header file_header_buf rule;
+    let header = Lwt_stream.of_list [ [ file_header_buf ] ] in
+    let last_seen_packet_id = ref (initial_packet_id - 1) in
+    let body () =
+      let rec wait () =
+        let new_packets =
+          Queue.fold
+            (fun acc p ->
+              if p.id > !last_seen_packet_id
+              then p :: acc
+              else acc
+            ) [] rule.packets |> List.rev in
+        if new_packets = [] then begin
+          Lwt_condition.wait rule.packets_c
+          >>= fun () ->
+          wait ()
+        end else Lwt.return new_packets in
+      wait ()
+      >>= fun new_packets ->
+      (* We could note the number of dropped packets here *)
+      last_seen_packet_id := List.fold_left max !last_seen_packet_id (List.map (fun p -> p.id) new_packets);
+      let marshalled_packets = List.map (fun p ->
+          let header = frame_header (Cstruct.create Pcap.sizeof_pcap_packet) p in
+          header :: p.bufs
+      ) new_packets in
+      Lwt.return (Some (List.concat marshalled_packets)) in
+    Lwt_stream.(append header (from body))
 
   let pcap rule =
     let stat () =
@@ -65,26 +124,9 @@ module Make(Input: Sig.VMNET) = struct
     let chmod _perm = Vfs.error "chmod" in
 
     let file_header_buf = Cstruct.create Pcap.LE.sizeof_pcap_header in
-    let open Pcap.LE in
-    set_pcap_header_magic_number file_header_buf Pcap.magic_number;
-    set_pcap_header_version_major file_header_buf Pcap.major_version;
-    set_pcap_header_version_minor file_header_buf Pcap.minor_version;
-    set_pcap_header_thiszone file_header_buf 0l;
-    set_pcap_header_sigfigs file_header_buf 4l;
-    set_pcap_header_snaplen file_header_buf (Int32.of_int rule.snaplen);
-    set_pcap_header_network file_header_buf
-      (Pcap.Network.to_int32 Pcap.Network.Ethernet);
+    write_file_header file_header_buf rule;
 
     let frame_header_buf = Cstruct.create Pcap.sizeof_pcap_packet in
-    let frame_header p =
-      let secs = Int32.of_float p.time in
-      let usecs = Int32.of_float (1e6 *. (p.time -. (floor p.time))) in
-      let open Pcap.LE in
-      set_pcap_packet_ts_sec frame_header_buf secs;
-      set_pcap_packet_ts_usec frame_header_buf usecs;
-      set_pcap_packet_incl_len frame_header_buf @@ Int32.of_int p.len;
-      set_pcap_packet_orig_len frame_header_buf @@ Int32.of_int p.orig_len;
-      frame_header_buf in
 
     let open_ () =
       (* Capture a copy of the packet queue and synthesize a (lazily-marshalled)
@@ -93,7 +135,7 @@ module Make(Input: Sig.VMNET) = struct
         let hdr = 0, fun () -> file_header_buf in
         let offset = Cstruct.len file_header_buf in
         let _, packets = Queue.fold (fun (offset, acc) pkt ->
-            let packet_hdr = offset, fun () -> frame_header pkt in
+            let packet_hdr = offset, fun () -> frame_header frame_header_buf pkt in
             let offset = offset + (Cstruct.len frame_header_buf) in
             (* assemble packet bodies reversed, in a reversed list of packets *)
             let offset, packet_bodies = List.fold_left (fun (offset, acc) buf ->
@@ -153,9 +195,11 @@ module Make(Input: Sig.VMNET) = struct
 
   let add_match ~t ~name ~limit ~snaplen ~predicate =
     let packets = Queue.create () in
+    let packets_c = Lwt_condition.create () in
     let nr_bytes = 0 in
-    let rule = { predicate; limit; snaplen; packets; nr_bytes } in
-    Hashtbl.replace t.rules name rule
+    let rule = { predicate; limit; snaplen; packets; packets_c; nr_bytes } in
+    Hashtbl.replace t.rules name rule;
+    rule
 
   let bad_pcap = "bad.pcap"
 
@@ -165,8 +209,8 @@ module Make(Input: Sig.VMNET) = struct
     let t = { input; rules; stats } in
     (* Add a special capture rule for packets for which there is an error
        processing the packet captures. Ideally there should be no matches! *)
-    add_match ~t ~name:bad_pcap ~limit:1048576 ~snaplen:1500
-      ~predicate:(fun _ -> false);
+    let (_: rule) = add_match ~t ~name:bad_pcap ~limit:1048576 ~snaplen:1500
+      ~predicate:(fun _ -> false) in
     t
 
   let filesystem t =

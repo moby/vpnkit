@@ -448,6 +448,7 @@ struct
     endpoints_m: Lwt_mutex.t;
     udp_nat: Udp_nat.t;
     icmp_nat: Icmp_nat.t option;
+    all_traffic: Netif.rule;
   }
 
   let after_disconnect t = t.after_disconnect
@@ -784,6 +785,26 @@ struct
          ]
       )
 
+  let pcap t flow =
+    let module C = Mirage_channel_lwt.Make(Host.Sockets.Stream.Unix) in
+    let c = C.create flow in
+    let stream = Netif.to_pcap t.all_traffic in
+    let rec loop () =
+      Lwt_stream.get stream
+      >>= function
+      | None ->
+        Lwt.return_unit
+      | Some bufs ->
+        List.iter (C.write_buffer c) bufs;
+        C.flush c
+        >>= function
+        | Ok ()   -> loop ()
+        | Error e ->
+          Log.err (fun l ->
+            l "error while writing pcap dump: %a" C.pp_write_error e);
+          Lwt.return_unit in
+    loop ()
+
   let diagnostics t flow =
     let module C = Mirage_channel_lwt.Make(Host.Sockets.Stream.Unix) in
     let module Writer = Tar.HeaderWriter(Lwt)(struct
@@ -936,17 +957,20 @@ struct
     Dns_forwarder.set_recorder interface;
 
     let kib = 1024 in
+    (* Capture 256 KiB of all traffic *)
+    let all_traffic = Netif.add_match ~t:interface ~name:"all.pcap" ~limit:(256 * kib)
+      ~snaplen:1500 ~predicate:(fun _ -> true) in
     (* Capture 256 KiB of DNS traffic *)
-    Netif.add_match ~t:interface ~name:"dns.pcap" ~limit:(256 * kib)
-      ~snaplen:1500 ~predicate:is_dns;
+    let (_: Netif.rule) = Netif.add_match ~t:interface ~name:"dns.pcap" ~limit:(256 * kib)
+      ~snaplen:1500 ~predicate:is_dns in
     (* Capture 64KiB of NTP traffic *)
-    Netif.add_match ~t:interface ~name:"ntp.pcap" ~limit:(64 * kib)
-      ~snaplen:1500 ~predicate:is_ntp;
+    let (_: Netif.rule) = Netif.add_match ~t:interface ~name:"ntp.pcap" ~limit:(64 * kib)
+      ~snaplen:1500 ~predicate:is_ntp in
     (* Capture 8KiB of ICMP traffic *)
-    Netif.add_match ~t:interface ~name:"icmp.pcap" ~limit:(8 * kib)
-      ~snaplen:1500 ~predicate:is_icmp;
-    Netif.add_match ~t:interface ~name:"http_proxy.pcap" ~limit:(1024 * kib)
-      ~snaplen:1500 ~predicate:is_http_proxy;
+    let (_: Netif.rule) = Netif.add_match ~t:interface ~name:"icmp.pcap" ~limit:(8 * kib)
+      ~snaplen:1500 ~predicate:is_icmp in
+    let (_: Netif.rule) = Netif.add_match ~t:interface ~name:"http_proxy.pcap" ~limit:(1024 * kib)
+      ~snaplen:1500 ~predicate:is_http_proxy in
     or_failwith "Switch.connect" (Switch.connect interface)
     >>= fun switch ->
 
@@ -981,6 +1005,7 @@ struct
       endpoints_m;
       udp_nat;
       icmp_nat;
+      all_traffic;
     } in
     Lwt.async @@ delete_unused_endpoints ~port_max_idle_time:c.Configuration.port_max_idle_time t;
 

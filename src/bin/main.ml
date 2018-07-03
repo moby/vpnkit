@@ -192,20 +192,20 @@ let hvsock_addr_of_uri ~default_serviceid uri =
                );
                Lwt.return_unit))
 
-  let start_diagnostics diagnostics_url flow_cb =
-    if diagnostics_url = ""
+  let start_server name url flow_cb =
+    if url = ""
     then Log.info (fun f ->
-        f "No diagnostics server requested. See the --diagnostics argument")
+        f "No %s server requested. See the --%s argument" name name)
     else Lwt.async (fun () ->
         log_exception_continue
-          ("Starting diagnostics server on: " ^ diagnostics_url)
+          ("Starting " ^ name ^ " server on: " ^ url)
           (fun () ->
              Log.info (fun f ->
-                 f "Starting diagnostics server on: %s" diagnostics_url);
-             unix_listen diagnostics_url
+                 f "Starting %s server on: %s" name url);
+             unix_listen url
              >>= function
              | Error (`Msg m) ->
-               Log.err (fun f -> f "Failed to start diagnostics server because: %s" m);
+               Log.err (fun f -> f "Failed to start %s server because: %s" name m);
                Lwt.return_unit
              | Ok s ->
                Host.Sockets.Stream.Unix.disable_connection_tracking s;
@@ -279,7 +279,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main_t
       configuration
-      socket_url port_control_urls introspection_urls diagnostics_urls
+      socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
       vsock_path db_path db_branch hosts
       listen_backlog gc_compact
     =
@@ -361,8 +361,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           start_introspection url (Slirp_stack.filesystem stack)
         ) introspection_urls;
         List.iter (fun url ->
-          start_diagnostics url @@ Slirp_stack.diagnostics stack
+          start_server "diagnostics" url @@ Slirp_stack.diagnostics stack
         ) diagnostics_urls;
+        List.iter (fun url ->
+          start_server "pcap" url @@ Slirp_stack.pcap stack
+        ) pcap_urls;
         Slirp_stack.after_disconnect stack >|= fun () ->
         Log.info (fun f -> f "TCP/IP stack disconnected") in
       if Uri.scheme uri = Some "hyperv-connect"
@@ -390,8 +393,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
             start_introspection url (Slirp_stack.filesystem stack);
           ) introspection_urls;
           List.iter (fun url ->
-            start_diagnostics url @@ Slirp_stack.diagnostics stack
+            start_server "diagnostics" url @@ Slirp_stack.diagnostics stack
           ) diagnostics_urls;
+          List.iter (fun url ->
+            start_server "pcap" url @@ Slirp_stack.pcap stack
+          ) pcap_urls;
           Slirp_stack.after_disconnect stack >|= fun () ->
           Log.info (fun f -> f "TCP/IP stack disconnected")
         );
@@ -399,7 +405,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       wait_forever
 
   let main
-      socket_url port_control_urls introspection_urls diagnostics_urls
+      socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
       max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
@@ -469,7 +475,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       | Some socket_url ->
     try
       Host.Main.run
-        (main_t configuration socket_url port_control_urls introspection_urls diagnostics_urls
+        (main_t configuration socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
           vsock_path db_path db_branch hosts
           listen_backlog gc_compact);
     with e ->
@@ -533,6 +539,19 @@ let diagnostics_urls =
        socket for incoming connections or \
        \\\\\\\\.\\\\pipe\\\\diagnostics to listen on a Windows named pipe"
       [ "diagnostics" ]
+  in
+  Arg.(value & opt_all string [] doc)
+
+let pcap_urls =
+  let doc =
+    Arg.info ~doc:
+      "The address on the host on which to serve a pcap file containing \
+        a live stream of all the network traffic on the internal link. \
+        Possible values include: \
+        /var/tmp/com.docker.slirp.pcap.socket to listen on a Unix domain \
+        socket for incoming connections or \
+        \\\\\\\\.\\\\pipe\\\\pcap to listen on a Windows named pipe"
+      [ "pcap" ]
   in
   Arg.(value & opt_all string [] doc)
 
@@ -733,7 +752,7 @@ let command =
          flows via userspace sockets"]
   in
   Term.(pure main
-        $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls
+        $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls $ pcap_urls
         $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip

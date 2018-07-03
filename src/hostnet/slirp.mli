@@ -42,6 +42,9 @@ sig
   val diagnostics: connection -> Host.Sockets.Stream.Unix.flow -> unit Lwt.t
   (** Output diagnostics in .tar format over a local Unix socket or named pipe *)
 
+  val pcap: connection -> Host.Sockets.Stream.Unix.flow -> unit Lwt.t
+  (** Output all traffic in pcap format over a local Unix socket or named pipe *)
+
   module Debug: sig
     val get_nat_table_size: connection -> int
     (** Return the number of active NAT table entries *)
