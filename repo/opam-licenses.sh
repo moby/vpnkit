@@ -60,10 +60,15 @@ while read -r PACKAGE; do
     echo "$DIR"
     ls "$DIR" | grep LICENSE >> "$PACKAGE.files" || true
     ls "$DIR" | grep COPYING >> "$PACKAGE.files" || true
-    if [ -z "$(cat "$PACKAGE.files")" ]; then
+    if [ -z "$(cat $PACKAGE.files)" ]; then
       echo "No LICENSE or COPYING file found in $DIR;"
       echo "please write LICENSE.$PACKAGE yourself"
       exit 1
     fi
+    rm -f "LICENSE.$PACKAGE.extracted"
+    # There can be more than one license file
+    for licensefile in $(cat $PACKAGE.files); do
+      cat "${SOURCES}/${PACKAGE}/${licensefile}" >> "LICENSE.$PACKAGE.extracted"
+    done
   fi
 done < all-packages.txt
