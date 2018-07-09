@@ -183,7 +183,7 @@ let connection =
 
 let pcap_dir = "./_pcap/"
 
-let with_stack ?uuid ?preferred_ip ~pcap f =
+let with_stack ?uuid ?preferred_ip ~pcap:_ f =
   connection >>= fun port ->
   Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 Ipaddr.V4.localhost, port)
   >>= function
@@ -205,8 +205,6 @@ let with_stack ?uuid ?preferred_ip ~pcap f =
       failwith x
     | Ok client' ->
       (try Unix.mkdir pcap_dir 0o0755 with Unix.Unix_error(Unix.EEXIST, _, _) -> ());
-      VMNET.start_capture client' (pcap_dir ^ pcap)
-      >>= fun () ->
       Lwt.finalize (fun () ->
           Log.info (fun f -> f "Initialising client TCP/IP stack");
           Client.connect client' >>= fun client ->
