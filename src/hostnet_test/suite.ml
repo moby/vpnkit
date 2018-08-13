@@ -90,6 +90,32 @@ let test_etc_hosts_query server use_host () =
   in
   run ~pcap:"test_etc_hosts_query.pcap" t
 
+let test_etc_hosts_priority server use_host () =
+  let name = "builtins.should.be.higher.priority" in
+  let builtin_ip = Ipaddr.of_string_exn "127.0.0.1" in
+  let hosts_ip = Ipaddr.of_string_exn "127.0.0.2" in
+  let t _ stack =
+    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, builtin_ip ] use_host
+    >>= fun () ->
+    Hosts.etc_hosts := [
+      name, hosts_ip;
+    ];
+    let resolver = DNS.create stack.Client.t in
+    DNS.gethostbyname ~server resolver name >>= function
+    | [ ip ] ->
+      Log.info (fun f -> f "%s has single IP: %a" name Ipaddr.pp_hum ip);
+      if Ipaddr.compare ip builtin_ip = 0
+      then Lwt.return ()
+      else failwith ("Builtin DNS names should have higher priority than /etc/hosts")
+    | (_ :: _) as ips ->
+      Log.info (fun f -> f "%s has IPs: %a" name pp_ips ips);
+      failwith ("Duplicate DNS names resolved for " ^ name);
+    | _ ->
+      Log.err (fun f -> f "Failed to lookup %s" name);
+      failwith ("Failed to lookup " ^ name)
+  in
+  run ~pcap:"test_etc_hosts_priority.pcap" t
+
 let test_max_connections () =
   let t _ stack =
     Lwt.finalize (fun () ->
@@ -357,6 +383,9 @@ let test_dns use_host =
 
     prefix ^ ": _etc_hosts",
     [ "", `Quick, test_etc_hosts_query primary_dns_ip use_host ];
+
+    prefix ^ ": _etc_hosts_priority",
+    [ "", `Quick, test_etc_hosts_priority primary_dns_ip use_host ];
   ]
 
 let test_tcp = [
