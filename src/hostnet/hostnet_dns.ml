@@ -355,16 +355,18 @@ struct
           additionals }
       in
       begin
-        match try_etc_hosts question with
-        | Some answers ->
+        (* Consider the builtins (from the command-line) to have higher priority
+           than the addresses in the /etc/hosts file. *)
+        match try_builtins t.builtin_names question with
+        | `Does_not_exist ->
+          Lwt.return (Ok (marshal nxdomain))
+        | `Answers answers ->
           Lwt.return (Ok (marshal @@ reply answers))
-        | None ->
-          match try_builtins t.builtin_names question with
-          | `Does_not_exist ->
-            Lwt.return (Ok (marshal nxdomain))
-          | `Answers answers ->
+        | `Dont_know ->
+          match try_etc_hosts question with
+          | Some answers ->
             Lwt.return (Ok (marshal @@ reply answers))
-          | `Dont_know ->
+          | None ->
             match is_tcp, t.resolver with
             | true, Upstream { dns_tcp_resolver; _ } ->
               Dns_tcp_resolver.answer buf dns_tcp_resolver
