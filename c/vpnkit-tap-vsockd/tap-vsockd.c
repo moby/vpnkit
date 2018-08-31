@@ -23,6 +23,7 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <ifaddrs.h>
+#include <linux/vm_sockets.h>
 
 #include "hvsock.h"
 #include "protocol.h"
@@ -33,8 +34,6 @@ int daemon_flag;
 int nofork_flag;
 int listen_flag;
 int connect_flag;
-
-char *default_sid = "30D48B34-7D27-4B0B-AAAF-BBBED334DD59";
 
 /* Support big frames if the server requests it */
 const int max_packet_size = 16384;
@@ -402,7 +401,7 @@ static void handle(struct connection *connection)
 		fatal("Failed to join the ring_to_vmnet thread");
 }
 
-static int create_listening_socket(GUID serviceid)
+static int create_listening_hvsocket(GUID serviceid)
 {
 	SOCKADDR_HV sa;
 	int lsock;
@@ -410,7 +409,7 @@ static int create_listening_socket(GUID serviceid)
 
 	lsock = socket(AF_HYPERV, SOCK_STREAM, HV_PROTOCOL_RAW);
 	if (lsock == -1)
-		fatal("socket()");
+		return -1;
 
 	sa.Family = AF_HYPERV;
 	sa.Reserved = 0;
@@ -419,16 +418,43 @@ static int create_listening_socket(GUID serviceid)
 
 	res = bind(lsock, (const struct sockaddr *)&sa, sizeof(sa));
 	if (res == -1)
-		fatal("bind()");
+		return -1; /* ignore the fd leak */
 
-	res = listen(lsock, SOMAXCONN);
+	res = listen(lsock, 1);
 	if (res == -1)
-		fatal("listen()");
+		return -1; /* ignore the fd leak */
 
 	return lsock;
 }
 
-static int connect_socket(GUID serviceid)
+static int create_listening_vsocket(long port)
+{
+	struct sockaddr_vm sa;
+	int lsock;
+	int res;
+
+	lsock = socket(AF_VSOCK, SOCK_STREAM, 0);
+	if (lsock == -1)
+		return -1;
+
+	sa.svm_family = AF_VSOCK;
+	sa.svm_reserved1 = 0;
+	sa.svm_port = port;
+	sa.svm_cid = VMADDR_CID_ANY;
+
+	res = bind(lsock, (const struct sockaddr *)&sa, sizeof(sa));
+	if (res == -1)
+		return -1; /* ignore the fd leak */
+
+	res = listen(lsock, 1);
+	if (res == -1)
+		return -1; /* ignore the fd leak */
+
+	return lsock;
+}
+
+
+static int connect_hvsocket(GUID serviceid)
 {
 	SOCKADDR_HV sa;
 	int sock;
@@ -436,7 +462,7 @@ static int connect_socket(GUID serviceid)
 
 	sock = socket(AF_HYPERV, SOCK_STREAM, HV_PROTOCOL_RAW);
 	if (sock == -1)
-		fatal("socket()");
+		return -1;
 
 	sa.Family = AF_HYPERV;
 	sa.Reserved = 0;
@@ -445,12 +471,34 @@ static int connect_socket(GUID serviceid)
 
 	res = connect(sock, (const struct sockaddr *)&sa, sizeof(sa));
 	if (res == -1)
-		fatal("connect()");
+		return -1; /* ignore the fd leak */
 
 	return sock;
 }
 
-static int accept_socket(int lsock)
+static int connect_vsocket(long port)
+{
+	struct sockaddr_vm sa;
+	int sock;
+	int res;
+
+	sock = socket(AF_VSOCK, SOCK_STREAM, 0);
+	if (sock == -1)
+		return -1;
+
+	sa.svm_family = AF_VSOCK;
+	sa.svm_reserved1 = 0;
+	sa.svm_port = port;
+	sa.svm_cid = VMADDR_CID_HOST;
+
+	res = connect(sock, (const struct sockaddr *)&sa, sizeof(sa));
+	if (res == -1)
+		return -1; /* ignore the fd leak */
+
+	return sock;
+}
+
+static int accept_hvsocket(int lsock)
 {
 	SOCKADDR_HV sac;
 	socklen_t socklen = sizeof(sac);
@@ -462,6 +510,21 @@ static int accept_socket(int lsock)
 
 	INFO("Connect from: " GUID_FMT ":" GUID_FMT "\n",
 	       GUID_ARGS(sac.VmId), GUID_ARGS(sac.ServiceId));
+
+	return csock;
+}
+
+static int accept_vsocket(int lsock)
+{
+	struct sockaddr_vm sac;
+	socklen_t socklen = sizeof(sac);
+	int csock;
+
+	csock = accept(lsock, (struct sockaddr *)&sac, &socklen);
+	if (csock == -1)
+		fatal("accept()");
+
+	INFO("Connect from: port=%x cid=%d", sac.svm_port, sac.svm_cid);
 
 	return csock;
 }
@@ -522,7 +585,7 @@ void daemonize(const char *pidfile)
 void usage(char *name)
 {
 	printf("%s usage:\n", name);
-	printf("\t[--daemon] [--tap <name>] [--serviceid <guid>] [--pid <file>]\n");
+	printf("\t[--daemon] [--tap <name>] [--vsock <port>] [--pid <file>]\n");
 	printf("\t[--message-size <bytes>] [--buffer-size <bytes>]\n");
 	printf("\t[--listen | --connect]\n\n");
 	printf("where\n");
@@ -530,8 +593,7 @@ void usage(char *name)
 	printf("\t--nofork: don't run handlers in subprocesses\n");
 	printf("\t--tap <name>: create a tap device with the given name\n");
 	printf("\t  (defaults to eth1)\n");
-	printf("\t--serviceid <guid>: use <guid> as the well-known service GUID\n");
-	printf("\t  (defaults to %s)\n", default_sid);
+	printf("\t--vsock <port>: use <port> as the well-known AF_VSOCK port\n");
 	printf("\t--pid <file>: write a pid to the given file\n");
 	printf("\t--message-size <bytes>: dictates the maximum transfer size for AF_HVSOCK\n");
 	printf("\t--buffer-size <bytes>: dictates the buffer size for AF_HVSOCK\n");
@@ -541,7 +603,8 @@ void usage(char *name)
 
 int main(int argc, char **argv)
 {
-	char *serviceid = default_sid;
+	char serviceid[37]; /* 36 for a GUID and 1 for a NULL */
+	unsigned int port = 0;
 	struct connection connection;
 	char *tap = "eth1";
 	char *pidfile = NULL;
@@ -552,6 +615,7 @@ int main(int argc, char **argv)
 	int status;
 	pid_t child;
 	int tapfd;
+	int using_vsock = 0;
 	int ring_size = 1048576;
 	int message_size = 8192; /* Well known to work across Hyper-V versions */
 	GUID sid;
@@ -562,7 +626,7 @@ int main(int argc, char **argv)
 		/* These options set a flag. */
 		{"daemon", no_argument, &daemon_flag, 1},
 		{"nofork", no_argument, &nofork_flag, 1},
-		{"serviceid", required_argument, NULL, 's'},
+		{"vsock", required_argument, NULL, 'w'},
 		{"tap", required_argument, NULL, 't'},
 		{"pidfile", required_argument, NULL, 'p'},
 		{"post-up-script", required_argument, NULL, 'x'},
@@ -578,7 +642,7 @@ int main(int argc, char **argv)
 	while (1) {
 		option_index = 0;
 
-		c = getopt_long(argc, argv, "ds:t:p:r:m:v",
+		c = getopt_long(argc, argv, "dw:t:p:r:m:v",
 				long_options, &option_index);
 		if (c == -1)
 			break;
@@ -590,8 +654,8 @@ int main(int argc, char **argv)
 		case 'n':
 			nofork_flag = 1;
 			break;
-		case 's':
-			serviceid = optarg;
+		case 'w':
+			port = (unsigned int) strtol(optarg, NULL, 0);
 			break;
 		case 't':
 			tap = optarg;
@@ -629,9 +693,11 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	snprintf(serviceid, sizeof(serviceid), "%08x-FACB-11E6-BD58-64006A7986D3", port);
 	res = parseguid(serviceid, &sid);
 	if (res) {
-		fprintf(stderr, "Failed to parse serviceid as GUID: %s\n", serviceid);
+		fprintf(stderr,
+			"Failed to parse serviceid as GUID: %s\n", serviceid);
 		usage(argv[0]);
 		exit(1);
 	}
@@ -641,11 +707,18 @@ int main(int argc, char **argv)
 	connection.to_vmnet_ring = ring_allocate(ring_size);
 	connection.from_vmnet_ring = ring_allocate(ring_size);
 	connection.message_size = message_size;
+
 	if (listen_flag) {
-		INFO("starting in listening mode with serviceid=%s and tap=%s", serviceid, tap);
-		lsocket = create_listening_socket(sid);
+		INFO("starting in listening mode with port=%x and tap=%s", port, tap);
+		using_vsock = 1;
+		lsocket = create_listening_vsocket(port);
+		if (lsocket == -1) {
+			INFO("failed to create AF_VSOCK, trying AF_HVSOCK serviceid=%s", serviceid);
+			lsocket = create_listening_hvsocket(sid);
+			using_vsock = 0;
+		}
 	} else {
-		INFO("starting in connect mode with serviceid=%s and tap=%s", serviceid, tap);
+		INFO("starting in connect mode with port=%x serviceid=%s and tap=%s", port, serviceid, tap);
 	}
 
 	for (;;) {
@@ -654,11 +727,19 @@ int main(int argc, char **argv)
 			sock = -1;
 		}
 
-		if (listen_flag)
-			sock = accept_socket(lsocket);
-		else
-			sock = connect_socket(sid);
-
+		if (listen_flag) {
+			if (using_vsock) {
+				sock = accept_vsocket(lsocket);
+			} else {
+				sock = accept_hvsocket(lsocket);
+			}
+		} else {
+			sock = connect_vsocket(port);
+			if (sock == -1) {
+				INFO("failed to connect AF_VSOCK, trying AF_HVSOCK serviceid=%s", serviceid);
+				sock = connect_hvsocket(sid);
+			}
+		}
 		connection.fd = sock;
 		if (negotiate(sock, &connection.vif) != 0) {
 			sleep(1);
