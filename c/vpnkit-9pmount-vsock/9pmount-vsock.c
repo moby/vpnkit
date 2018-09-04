@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#include <syslog.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,6 +14,7 @@
 #include <linux/vm_sockets.h>
 
 #include "hvsock.h"
+#include "log.h"
 
 #define NONE 0
 #define LISTEN 1
@@ -23,12 +23,6 @@
 int mode = NONE;
 
 char *mount = "/bin/mount";
-
-void fatal(const char *msg)
-{
-	syslog(LOG_CRIT, "%s Error: %d. %s", msg, errno, strerror(errno));
-	exit(1);
-}
 
 static int handle(int fd, char *tag, char *path)
 {
@@ -58,8 +52,7 @@ static int handle(int fd, char *tag, char *path)
 
 	res = waitpid(pid, &status, 0);
 	if (res == -1) {
-		syslog(LOG_CRIT,
-		       "waitpid failed: %d. %s", errno, strerror(errno));
+		ERROR("waitpid failed: %d. %s", errno, strerror(errno));
 		exit(1);
 	}
 	return WEXITSTATUS(status);
@@ -172,7 +165,7 @@ static int accept_hvsocket(int lsock)
 	if (csock == -1)
 		fatal("accept()");
 
-	syslog(LOG_INFO, "Connect from: " GUID_FMT ":" GUID_FMT "\n",
+	INFO("Connect from: " GUID_FMT ":" GUID_FMT "\n",
 	       GUID_ARGS(sac.VmId), GUID_ARGS(sac.ServiceId));
 
 	return csock;
@@ -188,7 +181,7 @@ static int accept_vsocket(int lsock)
 	if (csock == -1)
 		fatal("accept()");
 
-	syslog(LOG_INFO, "Connect from: port=%x cid=%d", sac.svm_port, sac.svm_cid);
+	INFO("Connect from: port=%x cid=%d", sac.svm_port, sac.svm_cid);
 
 	return csock;
 }
@@ -210,7 +203,7 @@ int main(int argc, char **argv)
 	GUID sid;
 	int c;
 	unsigned int port = 0;
-	char serviceid[36];
+	char serviceid[37]; /* 36 for a GUID and 1 for a NULL */
 	char *tag = NULL;
 	char *path = NULL;
 
@@ -219,6 +212,7 @@ int main(int argc, char **argv)
 		static struct option long_options[] = {
 			/* These options set a flag. */
 			{"vsock", required_argument, NULL, 'v'},
+			{"verbose", no_argument, NULL, 'w'},
 			{0, 0, 0, 0}
 		};
 		int option_index = 0;
@@ -230,6 +224,9 @@ int main(int argc, char **argv)
 		switch (c) {
 		case 'v':
 			port = (unsigned int) strtol(optarg, NULL, 0);
+			break;
+		case 'w':
+			verbose++;
 			break;
 		case 0:
 			break;
@@ -279,20 +276,19 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	openlog(argv[0], LOG_CONS | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
 	for (;;) {
 		int lsocket;
 		int sock;
 		int r;
 
 		if (mode == LISTEN) {
-			syslog(LOG_INFO, "starting in listening mode with port=%x, tag=%s, path=%s", port, tag, path);
+			INFO("starting in listening mode with port=%x, tag=%s, path=%s", port, tag, path);
 			lsocket = create_listening_vsocket(port);
 			if (lsocket != -1) {
 				sock = accept_vsocket(lsocket);
 				close(lsocket);
 			} else {
-				syslog(LOG_INFO, "failed to create AF_VSOCK, trying with AF_HVSOCK serviceid=%s", serviceid);
+				INFO("failed to create AF_VSOCK, trying with AF_HVSOCK serviceid=%s", serviceid);
 				lsocket = create_listening_hvsocket(sid);
 				if (lsocket == -1)
 					fatal("create_listening_vsocket");
@@ -300,10 +296,10 @@ int main(int argc, char **argv)
 				close(lsocket);
 			}
 		} else {
-			syslog(LOG_INFO, "starting in connect mode with port=%x, tag=%s, path=%s", port, tag, path);
+			INFO("starting in connect mode with port=%x, tag=%s, path=%s", port, tag, path);
 			sock = connect_vsocket(port);
 			if (sock == -1) {
-				syslog(LOG_INFO, "failed to connect AF_VSOCK, trying with AF_HVSOCK serviceid=%s", sid);
+				INFO("failed to connect AF_VSOCK, trying with AF_HVSOCK serviceid=%s", serviceid);
 				sock = connect_hvsocket(sid);
 			}
 		}
@@ -312,7 +308,7 @@ int main(int argc, char **argv)
 		close(sock);
 
 		if (r == 0) {
-			syslog(LOG_INFO, "mount successful for (serviceid=%s) port=%x tag=%s path=%s", serviceid, port, tag, path);
+			INFO("mount successful for (serviceid=%s) port=%x tag=%s path=%s", serviceid, port, tag, path);
 			exit(0);
 		}
 
@@ -320,7 +316,7 @@ int main(int argc, char **argv)
 		 * This can happen if the client times out the connection
 		 * after we accept it
 		 */
-		syslog(LOG_CRIT, "mount failed with %d for (serviceid=%s) port=%x tag=%s path=%s", r, serviceid, port, tag, path);
+		ERROR("mount failed with %d for (serviceid=%s) port=%x tag=%s path=%s", r, serviceid, port, tag, path);
 		sleep(1); /* retry */
 	}
 }
