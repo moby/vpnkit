@@ -598,6 +598,7 @@ int main(int argc, char **argv)
 		{"connect", no_argument, &connect_flag, 1},
 		{"buffer-size", required_argument, NULL, 'b'},
 		{"message-size", required_argument, NULL, 'm'},
+		{"verbose", no_argument, NULL, 'v'},
 		{0, 0, 0, 0}
 	};
 
