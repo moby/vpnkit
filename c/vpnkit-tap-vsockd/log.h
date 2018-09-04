@@ -9,10 +9,8 @@ extern int verbose;
     } while (0)
 #define INFO(...)                                                       \
     do {                                                                \
-        if (verbose) {                                                  \
-            printf(__VA_ARGS__);                                        \
-            fflush(stdout);                                             \
-        }                                                               \
+        printf(__VA_ARGS__);                                            \
+        fflush(stdout);                                                 \
     } while (0)
 #define DBG(...)                                                        \
     do {                                                                \
