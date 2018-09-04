@@ -545,6 +545,7 @@ int main(int argc, char **argv)
 	struct connection connection;
 	char *tap = "eth1";
 	char *pidfile = NULL;
+	char *post_up_script = NULL;
 	int lsocket = -1;
 	int sock = -1;
 	int res = 0;
@@ -564,6 +565,7 @@ int main(int argc, char **argv)
 		{"serviceid", required_argument, NULL, 's'},
 		{"tap", required_argument, NULL, 't'},
 		{"pidfile", required_argument, NULL, 'p'},
+		{"post-up-script", required_argument, NULL, 'x'},
 		{"listen", no_argument, &listen_flag, 1},
 		{"connect", no_argument, &connect_flag, 1},
 		{"buffer-size", required_argument, NULL, 'b'},
@@ -596,6 +598,9 @@ int main(int argc, char **argv)
 			break;
 		case 'p':
 			pidfile = optarg;
+			break;
+		case 'x':
+			post_up_script = optarg;
 			break;
 		case 'b':
 			ring_size = atoi(optarg);
@@ -666,6 +671,12 @@ int main(int argc, char **argv)
 			);
 		set_macaddr(tap, &connection.vif.mac[0]);
 		set_mtu(tap, connection.vif.mtu);
+
+		if (post_up_script) {
+			INFO("Executing post-up-script %s", post_up_script);
+			int result = system(post_up_script);
+			INFO("Result of post-up-script = %d", result);
+		}
 
 		/* Daemonize after we've made our first reliable connection */
 		if (daemon_flag) {
