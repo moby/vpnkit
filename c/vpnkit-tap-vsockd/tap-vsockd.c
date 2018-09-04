@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#include <syslog.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,6 +27,7 @@
 #include "hvsock.h"
 #include "protocol.h"
 #include "ring.h"
+#include "log.h"
 
 int daemon_flag;
 int nofork_flag;
@@ -39,34 +39,6 @@ char *default_sid = "30D48B34-7D27-4B0B-AAAF-BBBED334DD59";
 /* Support big frames if the server requests it */
 const int max_packet_size = 16384;
 
-static int verbose;
-#define INFO(...)                                                       \
-    do {                                                                \
-        if (verbose) {                                                  \
-            printf(__VA_ARGS__);                                        \
-            fflush(stdout);                                             \
-        }                                                               \
-    } while (0)
-#define DBG(...)                                                        \
-    do {                                                                \
-        if (verbose > 1) {                                              \
-            printf(__VA_ARGS__);                                        \
-            fflush(stdout);                                             \
-        }                                                               \
-    } while (0)
-#define TRC(...)                                                        \
-    do {                                                                \
-        if (verbose > 2) {                                              \
-            printf(__VA_ARGS__);                                        \
-            fflush(stdout);                                             \
-        }                                                               \
-    } while (0)
-
-void fatal(const char *msg)
-{
-	syslog(LOG_CRIT, "%s Error: %d. %s", msg, errno, strerror(errno));
-	exit(1);
-}
 
 int alloc_tap(const char *dev)
 {
@@ -88,7 +60,7 @@ int alloc_tap(const char *dev)
 	if (ioctl(fd, TUNSETPERSIST, persist) < 0)
 		fatal("TUNSETPERSIST failed");
 
-	syslog(LOG_INFO, "successfully created TAP device %s", dev);
+	INFO("successfully created TAP device %s", dev);
 	return fd;
 }
 
@@ -147,7 +119,7 @@ int negotiate(int fd, struct vif_info *vif)
 		goto err;
 
 	if (me->version != you.version) {
-		syslog(LOG_CRIT, "Server did not accept our protocol version (client: %d, server: %d)", me->version, you.version);
+		ERROR("Server did not accept our protocol version (client: %d, server: %d)", me->version, you.version);
 		goto err;
 	}
 
@@ -155,7 +127,7 @@ int negotiate(int fd, struct vif_info *vif)
 	if (!txt)
 		goto err;
 
-	syslog(LOG_INFO, "Server reports %s", txt);
+	INFO("Server reports %s", txt);
 	free(txt);
 
 	if (write_command(fd, &command) == -1)
@@ -171,7 +143,7 @@ int negotiate(int fd, struct vif_info *vif)
 
 	return 0;
 err:
-	syslog(LOG_CRIT, "Failed to negotiate vmnet connection");
+	ERROR("Failed to negotiate vmnet connection");
 	return 1;
 }
 
@@ -231,14 +203,14 @@ static void* vmnet_to_ring(void *arg)
 		ssize_t n = readv(c->fd, &iovec[0], iovec_len);
 		TRC("vmnet_to_ring: read %zd\n", n);
 		if (n == 0) {
-			syslog(LOG_CRIT, "EOF reading from socket: closing\n");
+			ERROR("EOF reading from socket: closing\n");
 			ring_producer_eof(ring);
 			goto err;
 		}
 		if (n < 0) {
-			syslog(LOG_CRIT,
-						 "Failure reading from socket: closing: %s (%d)",
-						 strerror(errno), errno);
+			ERROR(
+				"Failure reading from socket: closing: %s (%d)",
+				strerror(errno), errno);
 			ring_producer_eof(ring);
 			goto err;
 		}
@@ -280,9 +252,9 @@ static void* ring_to_tap(void *arg)
 		assert(length > 0);
 		TRC("ring_to_tap: packet of length %d\n", length);
 		if (length > max_packet_size) {
-			syslog(LOG_CRIT,
-			       "Received an over-large packet: %d > %ld",
-			       length, max_packet_size);
+			ERROR(
+				"Received an over-large packet: %d > %d",
+			    length, max_packet_size);
 			exit(1);
 		}
 		ring_consumer_advance(ring, 2);
@@ -297,8 +269,7 @@ static void* ring_to_tap(void *arg)
 		trim_iovec(iovec, &iovec_len, length);
 		ssize_t n = writev(c->tapfd, &iovec[0], iovec_len);
 		if (n != length) {
-			syslog(LOG_CRIT,
-						 "Failed to write %d bytes to tap device (wrote %d)", length, n);
+			ERROR("Failed to write %d bytes to tap device (wrote %zd)", length, n);
 			//exit(1);
 		}
 		TRC("ring_to_tap: ring_consumer_advance n=%zd\n", n);
@@ -354,7 +325,7 @@ static void *tap_to_ring(void *arg)
 			if (errno == ENXIO)
 				fatal("tap device has gone down");
 
-			syslog(LOG_WARNING, "ignoring error %d", errno);
+			INFO("ignoring error %d", errno);
 			/*
 			 * This is what mirage-net-unix does. Is it a good
 			 * idea really?
@@ -489,7 +460,7 @@ static int accept_socket(int lsock)
 	if (csock == -1)
 		fatal("accept()");
 
-	syslog(LOG_INFO, "Connect from: " GUID_FMT ":" GUID_FMT "\n",
+	INFO("Connect from: " GUID_FMT ":" GUID_FMT "\n",
 	       GUID_ARGS(sac.VmId), GUID_ARGS(sac.ServiceId));
 
 	return csock;
@@ -508,7 +479,7 @@ void write_pidfile(const char *pidfile)
 	len = strlen(pid_s);
 	file = fopen(pidfile, "w");
 	if (file == NULL) {
-		syslog(LOG_CRIT, "Failed to open pidfile %s", pidfile);
+		ERROR("Failed to open pidfile %s", pidfile);
 		exit(1);
 	}
 
@@ -586,7 +557,6 @@ int main(int argc, char **argv)
 	int c;
 
 	int option_index;
-	int log_flags = LOG_CONS | LOG_NDELAY;
 	static struct option long_options[] = {
 		/* These options set a flag. */
 		{"daemon", no_argument, &daemon_flag, 1},
@@ -661,21 +631,16 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (!daemon_flag)
-		log_flags |= LOG_PERROR;
-
-	openlog(argv[0], log_flags, LOG_DAEMON);
-
 	tapfd = alloc_tap(tap);
 	connection.tapfd = tapfd;
 	connection.to_vmnet_ring = ring_allocate(ring_size);
 	connection.from_vmnet_ring = ring_allocate(ring_size);
 	connection.message_size = message_size;
 	if (listen_flag) {
-		syslog(LOG_INFO, "starting in listening mode with serviceid=%s and tap=%s", serviceid, tap);
+		INFO("starting in listening mode with serviceid=%s and tap=%s", serviceid, tap);
 		lsocket = create_listening_socket(sid);
 	} else {
-		syslog(LOG_INFO, "starting in connect mode with serviceid=%s and tap=%s", serviceid, tap);
+		INFO("starting in connect mode with serviceid=%s and tap=%s", serviceid, tap);
 	}
 
 	for (;;) {
@@ -695,7 +660,7 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		syslog(LOG_INFO, "VMNET VIF has MAC %02x:%02x:%02x:%02x:%02x:%02x",
+		INFO("VMNET VIF has MAC %02x:%02x:%02x:%02x:%02x:%02x",
 		       connection.vif.mac[0], connection.vif.mac[1], connection.vif.mac[2],
 		       connection.vif.mac[3], connection.vif.mac[4], connection.vif.mac[5]
 			);
