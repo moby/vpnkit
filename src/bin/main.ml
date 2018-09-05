@@ -107,6 +107,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       hvsock_create ()
       >>= fun socket ->
       Lwt.catch (fun () ->
+        HV.Hvsock.bind socket sockaddr;
         HV.Hvsock.listen socket 5;
         let rec accept_forever () =
           HV.Hvsock.accept socket
