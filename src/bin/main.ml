@@ -107,6 +107,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       hvsock_create ()
       >>= fun socket ->
       Lwt.catch (fun () ->
+        HV.Hvsock.bind socket sockaddr;
         HV.Hvsock.listen socket 5;
         let rec accept_forever () =
           HV.Hvsock.accept socket
@@ -123,6 +124,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
             (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
             sockaddr.Hvsock.serviceid);
           log_exception_continue "HV.Hvsock.close" (fun () -> HV.Hvsock.close socket)
+          >>= fun () ->
+          Host.Time.sleep_ns (Duration.of_sec 1)
       )
       >>= fun () ->
       aux () in
