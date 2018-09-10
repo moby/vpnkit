@@ -228,12 +228,12 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         then (module Active_list.Make(Forward_unix) : Forwarder)
         else (module Active_list.Make(Forward_hvsock) : Forwarder)
 
-  let start_port_forwarding port_control_url max_connections vsock_path =
+  let start_port_forwarding port_control_url max_connections port_forwards =
     Log.info (fun f ->
-        f "Starting port forwarding server on port_control_url:\"%s\" vsock_path:\"%s\""
-          port_control_url vsock_path);
+        f "Starting port forwarding server on port_control_url:\"%s\" port_forwards:\"%s\""
+          port_control_url port_forwards);
     (* Start the 9P port forwarding server *)
-    Connect_unix.vsock_path := vsock_path;
+    Connect_unix.vsock_path := port_forwards;
     (match max_connections with
     | None   -> ()
     | Some _ ->
@@ -283,7 +283,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let main_t
       configuration
       socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
-      vsock_path db_path db_branch hosts
+      port_forwards db_path db_branch hosts
       listen_backlog gc_compact
     =
     Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
@@ -317,7 +317,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       (fun url ->
         Lwt.async (fun () ->
             log_exception_continue ("Starting the 9P port control filesystem on " ^ url) (fun () ->
-                start_port_forwarding url configuration.Configuration.max_connections vsock_path
+                start_port_forwarding url configuration.Configuration.max_connections port_forwards
               )
           )
       ) port_control_urls;
@@ -409,7 +409,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main
       socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls pcap_snaplen
-      max_connections vsock_path db_path db_branch dns http hosts host_names gateway_names
+      max_connections port_forwards db_path db_branch dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
       dhcp_json_path mtu udpv4_forwards gc_compact log_destination
@@ -480,7 +480,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     try
       Host.Main.run
         (main_t configuration socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
-          vsock_path db_path db_branch hosts
+          port_forwards db_path db_branch hosts
           listen_backlog gc_compact);
     with e ->
       Log.err (fun f -> f "Host.Main.run caught exception %s: %s" (Printexc.to_string e) (Printexc.get_backtrace ()))
@@ -575,11 +575,11 @@ let max_connections =
   in
   Arg.(value & opt (some int) None doc)
 
-let vsock_path =
+let port_forwards =
   let doc =
     Arg.info ~doc:
       "Path of the Unix domain socket used to setup virtio-vsock connections \
-       to the VM." [ "vsock-path" ] ~docv:"VSOCK"
+       to the VM." [ "vsock-path"; "port-forwards" ] ~docv:"VSOCK"
   in
   Arg.(value & opt string "" doc)
 
@@ -765,7 +765,7 @@ let command =
   in
   Term.(pure main
         $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls $ pcap_urls $ pcap_snaplen
-        $ max_connections $ vsock_path $ db_path $ db_branch $ dns $ http $ hosts
+        $ max_connections $ port_forwards $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards
