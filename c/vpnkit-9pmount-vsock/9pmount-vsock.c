@@ -68,6 +68,7 @@ static int create_listening_hvsocket(GUID serviceid)
 	if (lsock == -1)
 		return -1;
 
+	bzero(&sa, sizeof(sa));
 	sa.Family = AF_HYPERV;
 	sa.Reserved = 0;
 	sa.VmId = HV_GUID_WILDCARD;
@@ -94,6 +95,7 @@ static int create_listening_vsocket(long port)
 	if (lsock == -1)
 		return -1;
 
+	bzero(&sa, sizeof(sa));
 	sa.svm_family = AF_VSOCK;
 	sa.svm_reserved1 = 0;
 	sa.svm_port = port;
@@ -121,6 +123,7 @@ static int connect_hvsocket(GUID serviceid)
 	if (sock == -1)
 		return -1;
 
+	bzero(&sa, sizeof(sa));
 	sa.Family = AF_HYPERV;
 	sa.Reserved = 0;
 	sa.VmId = HV_GUID_PARENT;
@@ -143,6 +146,7 @@ static int connect_vsocket(long port)
 	if (sock == -1)
 		return -1;
 
+	bzero(&sa, sizeof(sa));
 	sa.svm_family = AF_VSOCK;
 	sa.svm_reserved1 = 0;
 	sa.svm_port = port;
