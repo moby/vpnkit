@@ -8,7 +8,7 @@ authors: [ "Anil Madhavapeddy" "Tim Deegan" "Richard Mortier" "Haris Rotsos"
   "David Sheets" "Thomas Gazagnaire" "Luke Dunstan" ]
 
 build: [
-  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "subst" "-p" name] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
 

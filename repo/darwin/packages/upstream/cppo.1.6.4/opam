@@ -7,7 +7,7 @@ bug-reports: "https://github.com/mjambon/cppo/issues"
 license: "BSD-3-Clause"
 
 build: [
-  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "subst" "-p" name] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
 build-test: [

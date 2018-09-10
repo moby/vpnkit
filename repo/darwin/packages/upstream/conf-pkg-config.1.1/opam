@@ -3,7 +3,6 @@ maintainer: "unixjunkie@sdf.org"
 authors: ["Francois Berenger"]
 homepage: "http://www.freedesktop.org/wiki/Software/pkg-config/"
 bug-reports: "https://github.com/ocaml/opam-repository/issues"
-dev-repo: "git://github.com/ocaml/opam-repository"
 license: "GPL"
 build: [
   ["pkg-config" "--help"]

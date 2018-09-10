@@ -15,6 +15,6 @@ build: [
 depends: [
   "result"
   "ocamlfind" {build}
-  "jbuilder" {build & >= "1.0+beta18.1"}
+  "dune" {build}
 ]
 available: ocaml-version >= "4.02.0"
