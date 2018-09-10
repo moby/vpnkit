@@ -3,7 +3,6 @@ maintainer: "unixjunkie@sdf.org"
 homepage: "http://www.gnu.org/software/autoconf"
 authors: "https://www.gnu.org/software/autoconf/autoconf.html#maintainer"
 bug-reports: "https://github.com/ocaml/opam-repository/issues"
-dev-repo: "https://github.com/ocaml/opam-repository.git"
 license: "GPL-3.0"
 build: [
   ["which" "autoconf"]

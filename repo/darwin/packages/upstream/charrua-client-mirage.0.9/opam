@@ -9,7 +9,7 @@ tags:         [ "org:mirage"]
 doc:          "https://docs.mirage.io"
 
 build: [
-  ["jbuilder" "subst" "-n" name] {pinned}
+  ["jbuilder" "subst" "-p" name] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
 
@@ -31,6 +31,6 @@ depends: [
   "tcpip" {>= "3.2.0"}
   "fmt"
   "lwt"
-  "mirage-types-lwt" {>="3.0.0"}
+  "mirage-types-lwt" {>="3.0.0" & < "3.2.0"}
 ]
 available: [ocaml-version >= "4.03.0"]

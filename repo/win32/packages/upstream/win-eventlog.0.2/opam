@@ -9,7 +9,7 @@ dev-repo: "https://github.com/mirage/ocaml-win-eventlog.git"
 bug-reports: "https://github.com/mirage/ocaml-win-eventlog/issues"
 
 build: [
-  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "subst" "-p" name] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
 build-test: [

@@ -9,12 +9,12 @@ doc:          "https://mirage.github.io/ocaml-pcap/"
 tags:         [ "org:mirage" "org:xapi-project" ]
 
 build: [
-  [ "jbuilder" "subst"] {pinned}
+  [ "jbuilder" "subst" "-p" name] {pinned}
   [ "jbuilder" "build" "-p" name "-j" jobs ]
 ]
 
 build-test:[
-  [ "jbuilder" "subst"] {pinned}
+  [ "jbuilder" "subst" "-p" name] {pinned}
   [ "jbuilder" "runtest" "-p" name "-j" jobs ]
 ]
 

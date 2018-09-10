@@ -373,7 +373,27 @@
      let check_dir d =
        let d' = Fl_split.norm_dir d in
        (d' = dlldir_norm) || 
-@@ -2356,7 +2474,7 @@
+@@ -2333,6 +2451,9 @@
+         | Unix.Unix_error(Unix.ENOENT,_,_) ->
+             prerr_endline ("ocamlfind: [WARNING] No such file: " ^ f);
+             false
++        | Unix.Unix_error(Unix.EACCES,_,_) when is_win ->
++            remove_file f;
++            true
+         | Unix.Unix_error(code, _, arg) ->
+             raise(sys_error code arg)
+     ) else
+@@ -2345,6 +2466,9 @@
+         | Unix.Unix_error(Unix.ENOENT,_,_) ->
+             prerr_endline ("ocamlfind: [WARNING] No such file: " ^ f);
+             false
++        | Unix.Unix_error(Unix.EACCES,_,_) when is_win ->
++            remove_file f;
++            true
+         | Unix.Unix_error(code, _, arg) ->
+             raise(sys_error code arg) in
+ 
+@@ -2356,7 +2480,7 @@
        List.iter
          (fun file ->
             let absfile = Filename.concat dlldir file in
@@ -382,7 +402,7 @@
             prerr_endline ("Removed " ^ absfile)
          )
          dll_files
-@@ -2365,7 +2483,7 @@
+@@ -2365,7 +2489,7 @@
      (* Remove the files from the package directory: *)
      if Sys.file_exists pkgdir then begin
        let files = Sys.readdir pkgdir in
@@ -391,7 +411,7 @@
        Unix.rmdir pkgdir;
        prerr_endline ("Removed " ^ pkgdir)
      end
-@@ -2415,7 +2533,9 @@
+@@ -2415,7 +2539,9 @@
  
  
  let print_configuration() =
@@ -401,7 +421,7 @@
      if Sys.file_exists s then
        s
      else
-@@ -2453,27 +2573,27 @@
+@@ -2453,27 +2579,27 @@
  	   if md = "" then "the corresponding package directories" else dir md
  	  );
  	Printf.printf "The standard library is assumed to reside in:\n    %s\n"
@@ -439,7 +459,7 @@
      | _ ->
  	assert false
  ;;
-@@ -2481,7 +2601,7 @@
+@@ -2481,7 +2607,7 @@
  
  let ocamlcall pkg cmd =
    let dir = package_directory pkg in
@@ -448,7 +468,7 @@
    begin
      try Unix.access path [ Unix.X_OK ]
      with
-@@ -2647,6 +2767,10 @@
+@@ -2647,6 +2773,10 @@
    | Sys_error f ->
        prerr_endline ("ocamlfind: " ^ f);
        exit 2

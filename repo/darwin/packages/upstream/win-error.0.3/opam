@@ -9,12 +9,12 @@ dev-repo: "https://github.com/djs55/ocaml-win-error.git"
 bug-reports: "https://github.com/djs55/ocaml-win-error/issues"
 
 build: [
-  [ "jbuilder" "subst"] {pinned}
+  [ "jbuilder" "subst" "-p" name] {pinned}
   [ "jbuilder" "build" "-p" name "-j" jobs ]
 ]
 
 build-test:[
-  [ "jbuilder" "subst"] {pinned}
+  [ "jbuilder" "subst" "-p" name] {pinned}
   [ "jbuilder" "runtest" "-p" name "-j" jobs ]
 ]
 

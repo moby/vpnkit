@@ -8,7 +8,7 @@ bug-reports:  "https://github.com/mirage/ocaml-9p/issues"
 doc:          "https://mirage.github.io/ocaml-9p/"
 
 build: [
-  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "subst" "-p" name] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
 depends: [

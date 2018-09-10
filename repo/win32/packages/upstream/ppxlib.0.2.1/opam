@@ -10,7 +10,7 @@ build: [
 ]
 depends: [
   "base"                    {>= "v0.11.0"}
-  "jbuilder"                {build & >= "1.0+beta18.1"}
+  "dune"                    {build}
   "ocaml-compiler-libs"     {>= "v0.11.0"}
   "ocaml-migrate-parsetree" {>= "1.0.9"}
   "ppx_derivers"            {>= "1.0"}
