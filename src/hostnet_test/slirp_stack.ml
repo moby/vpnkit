@@ -174,17 +174,16 @@ let start_stack config () =
       Slirp_stack.after_disconnect stack >|= fun () ->
       Log.info (fun f -> f "stack disconnected")
     );
-  port
+  server, port
 
-let connection =
-  config >>= fun config ->
-  start_stack config ()
-
+let stop_stack server = Host.Sockets.Stream.Tcp.shutdown server
 
 let pcap_dir = "./_pcap/"
 
 let with_stack ?uuid ?preferred_ip ~pcap:_ f =
-  connection >>= fun port ->
+  config >>= fun config ->
+  start_stack config ()
+  >>= fun (server, port) ->
   Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 Ipaddr.V4.localhost, port)
   >>= function
   | Error (`Msg x) -> failwith x
@@ -213,4 +212,6 @@ let with_stack ?uuid ?preferred_ip ~pcap:_ f =
         ) (fun () ->
           (* Server will close when it gets EOF *)
           VMNET.disconnect client'
+          >>= fun () ->
+          stop_stack server
         )
