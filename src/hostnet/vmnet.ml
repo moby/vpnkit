@@ -482,7 +482,7 @@ module Make(C: Sig.CONN) = struct
        Log.debug (fun f ->
            let b = Buffer.create 128 in
            List.iter (Cstruct.hexdump_to_buffer b) bufs;
-           f "received\n%s" (Buffer.contents b)
+           f "received%s" (Buffer.contents b)
          );
        let buf = Cstruct.concat bufs in
        let callback buf =
@@ -551,7 +551,7 @@ module Make(C: Sig.CONN) = struct
             Log.debug (fun f ->
                 let b = Buffer.create 128 in
                 Cstruct.hexdump_to_buffer b buf;
-                f "sending\n%s" (Buffer.contents b)
+                f "sending%s" (Buffer.contents b)
               );
             Channel.write_buffer fd buf;
             Channel.flush fd >|= function
