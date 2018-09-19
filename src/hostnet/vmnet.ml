@@ -468,7 +468,7 @@ module Make(C: Sig.CONN) = struct
     | Error (`Msg e) -> err_unexpected t Fmt.string e
     | Ok x           -> f x
 
-  let listen t new_callback =
+  let listen_nocancel t new_callback =
     Log.info (fun f -> f "%s.listen: rebinding the primary listen callback" t.log_prefix);
     t.callback <- new_callback;
 
@@ -527,6 +527,25 @@ module Make(C: Sig.CONN) = struct
     >>= fun () ->
     Log.info (fun f -> f "%s.listen returning Ok()" t.log_prefix);
     Lwt.return (Ok ())
+
+  let listen t new_callback =
+    let task, u = Lwt.task () in
+    (* There is a clash over the Netif.listen callbacks between the DHCP client (which
+       wants ethernet frames) and the rest of the TCP/IP stack. It seems to work
+       usually by accident: first the DHCP client calls `listen`, performs a transaction
+       and then the main stack calls `listen` and this overrides the DHCP client listen.
+       Unfortunately the DHCP client calls `cancel` after 4s which can ripple through
+       and cancel the ethernet `read`. We work around that by ignoring `cancel`. *)
+    Lwt.on_cancel task (fun () ->
+      Log.warn (fun f -> f "%s.listen: ignoring Lwt.cancel (called from the DHCP client)" t.log_prefix);
+    );
+    let _ =
+      listen_nocancel t new_callback
+      >>= fun x ->
+      Lwt.wakeup_later u x;
+      Lwt.return_unit
+    in
+    task
 
   let write t buf =
     Lwt_mutex.with_lock t.write_m (fun () ->
