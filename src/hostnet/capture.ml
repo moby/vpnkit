@@ -264,6 +264,12 @@ module Make(Input: Sig.VMNET) = struct
   let of_fd ~connect_client_fn:_ ~server_macaddr:_ ~mtu:_ =
     failwith "Capture.of_fd unimplemented"
 
+  let start_capture _ ?size_limit:_ _ =
+    failwith "Capture.start_capture unimplemented"
+
+  let stop_capture _ =
+    failwith "Capture.stop_capture unimplemented"
+
   let get_client_uuid _ =
     failwith "Capture.get_client_uuid unimplemented"
 

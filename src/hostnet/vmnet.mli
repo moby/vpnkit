@@ -27,6 +27,17 @@ module Make(C: Sig.CONN): sig
   val client_of_fd: uuid:Uuidm.t -> ?preferred_ip:Ipaddr.V4.t ->
       server_macaddr:Macaddr.t -> C.flow -> (t, [`Msg of string]) result Lwt.t
 
+  val start_capture: t -> ?size_limit:int64 -> string -> unit Lwt.t
+  (** [start_capture t ?size_limit filename] closes any existing pcap
+      capture file and starts capturing to [filename]. If
+      [?size_limit] is provided then the file will be automatically
+      closed after the given number of bytes are written -- this is to
+      avoid forgetting to close the file and filling up your storage
+      with capture data. *)
+
+  val stop_capture: t -> unit Lwt.t
+  (** [stop_capture t] stops any in-progress capture and closes the file. *)
+
   val get_client_uuid: t -> Uuidm.t
 
   val get_client_macaddr: t -> Macaddr.t
