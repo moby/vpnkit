@@ -129,4 +129,9 @@ module Make(Input: Sig.VMNET) = struct
   let get_client_macaddr _ =
     failwith "Filter.get_client_macaddr unimplemented"
 
+  let start_capture _ ?size_limit:_ _ =
+    failwith "Filter.start_capture unimplemented"
+
+  let stop_capture _ =
+    failwith "Filter.stop_capture unimplemented"
 end

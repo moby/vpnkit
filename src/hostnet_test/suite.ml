@@ -420,4 +420,6 @@ let tests =
 let scalability = [
   "1026conns",
   [ "Test many connections", `Quick, test_many_connections (1024 + 2) ];
+  "nmap the host",
+  [ "check that we can survive an agressive port scan", `Quick, Test_nmap.test_nmap ];
 ]

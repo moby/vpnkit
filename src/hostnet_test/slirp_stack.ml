@@ -127,6 +127,7 @@ module Client = struct
     } in
     connect cfg ethif arp ipv4 icmpv4 udp4 tcp4
     >>= fun t ->
+    Log.info (fun f -> f "Client has connected");
     Lwt.return { t; icmpv4 ; netif=interface }
 end
 
@@ -167,29 +168,33 @@ let start_stack config () =
   Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
   >|= fun server ->
   let _, port = Host.Sockets.Stream.Tcp.getsockname server in
+  Log.info (fun f -> f "Bound vpnkit server to localhost:%d" port);
   Host.Sockets.Stream.Tcp.listen server (fun flow ->
+      Log.info (fun f -> f "Server connecting   TCP/IP stack");
       Slirp_stack.connect config flow  >>= fun stack ->
+      Log.info (fun f -> f "Server connected    TCP/IP stack");
       set_slirp_stack stack;
-      Log.info (fun f -> f "stack connected");
       Slirp_stack.after_disconnect stack >|= fun () ->
-      Log.info (fun f -> f "stack disconnected")
+      Log.info (fun f -> f "Server disconnected TCP/IP stack")
     );
-  port
+  server, port
 
-let connection =
-  config >>= fun config ->
-  start_stack config ()
-
+let stop_stack server =
+  Log.info (fun f -> f "Shutting down slirp stack");
+  Host.Sockets.Stream.Tcp.shutdown server
 
 let pcap_dir = "./_pcap/"
 
-let with_stack ?uuid ?preferred_ip ~pcap:_ f =
-  connection >>= fun port ->
+let with_stack ?uuid ?preferred_ip ~pcap f =
+  config >>= fun config ->
+  start_stack config ()
+  >>= fun (server, port) ->
+  Log.info (fun f -> f "Connecting to vpnkit server on localhost:%d" port);
   Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 Ipaddr.V4.localhost, port)
   >>= function
   | Error (`Msg x) -> failwith x
   | Ok flow ->
-    Log.info (fun f -> f "Made a loopback connection");
+    Log.info (fun f -> f "Connected  to vpnkit server on localhost:%d" port);
     let server_macaddr = Configuration.default_server_macaddr in
     let uuid =
       match uuid, Uuidm.of_string "d1d9cd61-d0dc-4715-9bb3-4c11da7ad7a5" with
@@ -204,13 +209,20 @@ let with_stack ?uuid ?preferred_ip ~pcap:_ f =
       Host.Sockets.Stream.Tcp.close flow >>= fun () ->
       failwith x
     | Ok client' ->
+      Log.info (fun f -> f "Client has established an ethernet link with the vpnkit server");
       (try Unix.mkdir pcap_dir 0o0755 with Unix.Unix_error(Unix.EEXIST, _, _) -> ());
+      VMNET.start_capture client' (pcap_dir ^ pcap)
+      >>= fun () ->
       Lwt.finalize (fun () ->
-          Log.info (fun f -> f "Initialising client TCP/IP stack");
+          Log.info (fun f -> f "Client connecting TCP/IP stack");
           Client.connect client' >>= fun client ->
+          Log.info (fun f -> f "Client connected  TCP/IP stack");
           get_slirp_stack () >>= fun slirp_stack ->
+          Log.info (fun f -> f "Calling test case with client and server stack handles");
           f slirp_stack client
         ) (fun () ->
           (* Server will close when it gets EOF *)
           VMNET.disconnect client'
+          >>= fun () ->
+          stop_stack server
         )

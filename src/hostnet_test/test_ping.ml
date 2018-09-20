@@ -12,17 +12,6 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let google_1 = Ipaddr.V4.of_string_exn "8.8.8.8"
 let google_2 = Ipaddr.V4.of_string_exn "8.8.4.4"
 
-let make_ping ~id ~seq ~len =
-  let payload = Cstruct.create len in
-  let pattern = "plz reply i'm so lonely" in
-  for i = 0 to Cstruct.len payload - 1 do
-    Cstruct.set_char payload i pattern.[i mod (String.length pattern)]
-  done;
-  let req = Icmpv4_packet.({code = 0x00; ty = Icmpv4_wire.Echo_request;
-                            subheader = Id_and_seq (id, seq)}) in
-  let header = Icmpv4_packet.Marshal.make_cstruct req ~payload in
-  Cstruct.concat [ header; payload ]
-
 let test_ping () =
   let id = 0x1234 in
   Queue.clear Slirp_stack.Client.Icmpv41.packets;
@@ -32,7 +21,7 @@ let test_ping () =
         if Queue.length Slirp_stack.Client.Icmpv41.packets > 0
         then Lwt.return_unit
         else begin
-          let ping = make_ping ~id ~seq ~len:0 in
+          let ping = Packets.icmp_echo_request ~id ~seq ~len:0 in
           Printf.printf "sending ping\n%!";
           Slirp_stack.Client.Icmpv41.write stack.Slirp_stack.Client.icmpv4 ~dst:google_1 ping
           >>= function
@@ -53,8 +42,8 @@ let test_two_pings () =
       let rec loop seq =
         let id_1 = 0x1234 in
         let id_2 = 0x4321 in
-        let ping_1 = make_ping ~id:id_1 ~seq ~len:0 in
-        let ping_2 = make_ping ~id:id_2 ~seq ~len:128 in
+        let ping_1 = Packets.icmp_echo_request ~id:id_1 ~seq ~len:0 in
+        let ping_2 = Packets.icmp_echo_request ~id:id_2 ~seq ~len:128 in
 
         Printf.printf "sending ping\n%!";
         Slirp_stack.Client.Icmpv41.write stack.Slirp_stack.Client.icmpv4 ~dst:google_1 ping_1

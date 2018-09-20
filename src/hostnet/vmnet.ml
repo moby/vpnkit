@@ -358,6 +358,54 @@ module Make(C: Sig.CONN) = struct
         Log.err (fun f -> f "%s: Server requires protocol version %s, we have %s" client_log_prefix (Int32.to_string x) (Int32.to_string Init.default.version));
         Lwt_result.fail (`Msg "Server does not support our version of the protocol")
 
+  (* Use blocking I/O here so we can avoid Using Lwt_unix or Uwt. Ideally we
+     would use a FLOW handle referencing a file/stream. *)
+  let really_write fd str =
+    let rec loop ofs =
+      if ofs = (Bytes.length str)
+      then ()
+      else
+        let n = Unix.write fd str ofs (Bytes.length str - ofs) in
+        loop (ofs + n)
+    in
+    loop 0
+
+  let start_capture t ?size_limit filename =
+    Lwt_mutex.with_lock t.pcap_m (fun () ->
+        (match t.pcap with Some fd -> Unix.close fd | None -> ());
+        let fd =
+          Unix.openfile filename [ Unix.O_WRONLY; Unix.O_TRUNC; Unix.O_CREAT ]
+            0o0644
+        in
+        let buf = Cstruct.create Pcap.LE.sizeof_pcap_header in
+        let open Pcap.LE in
+        set_pcap_header_magic_number buf Pcap.magic_number;
+        set_pcap_header_version_major buf Pcap.major_version;
+        set_pcap_header_version_minor buf Pcap.minor_version;
+        set_pcap_header_thiszone buf 0l;
+        set_pcap_header_sigfigs buf 4l;
+        set_pcap_header_snaplen buf 1500l;
+        set_pcap_header_network buf
+          (Pcap.Network.to_int32 Pcap.Network.Ethernet);
+        really_write fd (Cstruct.to_string buf |> Bytes.of_string);
+        t.pcap <- Some fd;
+        t.pcap_size_limit <- size_limit;
+        Lwt.return ()
+      )
+
+  let stop_capture_already_locked t = match t.pcap with
+  | None    -> ()
+  | Some fd ->
+    Unix.close fd;
+    t.pcap <- None;
+    t.pcap_size_limit <- None
+
+  let stop_capture t =
+    Lwt_mutex.with_lock t.pcap_m  (fun () ->
+        stop_capture_already_locked t;
+        Lwt.return_unit
+      )
+
   let make ~client_macaddr ~server_macaddr ~mtu ~client_uuid ~log_prefix fd =
     let fd = Some fd in
     let stats = Mirage_net.Stats.create () in
@@ -414,8 +462,35 @@ module Make(C: Sig.CONN) = struct
 
   let after_disconnect t = t.after_disconnect
 
+  let capture t bufs =
+    match t.pcap with
+    | None -> Lwt.return ()
+    | Some pcap ->
+      Lwt_mutex.with_lock t.pcap_m (fun () ->
+          let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
+          let time = Unix.gettimeofday () in
+          let secs = Int32.of_float time in
+          let usecs = Int32.of_float (1e6 *. (time -. (floor time))) in
+          let buf = Cstruct.create Pcap.sizeof_pcap_packet in
+          let open Pcap.LE in
+          set_pcap_packet_ts_sec buf secs;
+          set_pcap_packet_ts_usec buf usecs;
+          set_pcap_packet_incl_len buf @@ Int32.of_int len;
+          set_pcap_packet_orig_len buf @@ Int32.of_int len;
+          really_write pcap (Cstruct.to_string buf |> Bytes.of_string);
+          List.iter (fun buf -> really_write pcap (Cstruct.to_string buf |> Bytes.of_string)) bufs;
+          match t.pcap_size_limit with
+          | None -> Lwt.return () (* no limit *)
+          | Some limit ->
+            let limit = Int64.(sub limit (of_int len)) in
+            t.pcap_size_limit <- Some limit;
+            if limit < 0L then stop_capture_already_locked t;
+            Lwt.return_unit
+        )
+
   let writev t bufs =
     Lwt_mutex.with_lock t.write_m (fun () ->
+        capture t bufs >>= fun () ->
         let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
         if len > (t.mtu + ethernet_header_length) then begin
           Log.err (fun f ->
@@ -468,7 +543,7 @@ module Make(C: Sig.CONN) = struct
     | Error (`Msg e) -> err_unexpected t Fmt.string e
     | Ok x           -> f x
 
-  let listen t new_callback =
+  let listen_nocancel t new_callback =
     Log.info (fun f -> f "%s.listen: rebinding the primary listen callback" t.log_prefix);
     t.callback <- new_callback;
 
@@ -479,10 +554,11 @@ module Make(C: Sig.CONN) = struct
        let read_header = Cstruct.concat bufs in
        with_msg t (Packet.unmarshal read_header) @@ fun (len, _) ->
        with_read t (Channel.read_exactly ~len fd) @@ fun bufs ->
+       capture t bufs >>= fun () ->
        Log.debug (fun f ->
            let b = Buffer.create 128 in
            List.iter (Cstruct.hexdump_to_buffer b) bufs;
-           f "received\n%s" (Buffer.contents b)
+           f "received%s" (Buffer.contents b)
          );
        let buf = Cstruct.concat bufs in
        let callback buf =
@@ -528,8 +604,28 @@ module Make(C: Sig.CONN) = struct
     Log.info (fun f -> f "%s.listen returning Ok()" t.log_prefix);
     Lwt.return (Ok ())
 
+  let listen t new_callback =
+    let task, u = Lwt.task () in
+    (* There is a clash over the Netif.listen callbacks between the DHCP client (which
+       wants ethernet frames) and the rest of the TCP/IP stack. It seems to work
+       usually by accident: first the DHCP client calls `listen`, performs a transaction
+       and then the main stack calls `listen` and this overrides the DHCP client listen.
+       Unfortunately the DHCP client calls `cancel` after 4s which can ripple through
+       and cancel the ethernet `read`. We work around that by ignoring `cancel`. *)
+    Lwt.on_cancel task (fun () ->
+      Log.warn (fun f -> f "%s.listen: ignoring Lwt.cancel (called from the DHCP client)" t.log_prefix);
+    );
+    let _ =
+      listen_nocancel t new_callback
+      >>= fun x ->
+      Lwt.wakeup_later u x;
+      Lwt.return_unit
+    in
+    task
+
   let write t buf =
     Lwt_mutex.with_lock t.write_m (fun () ->
+        capture t [ buf ] >>= fun () ->
         let len = Cstruct.len buf in
         if len > (t.mtu + ethernet_header_length) then begin
           Log.err (fun f ->
@@ -551,7 +647,7 @@ module Make(C: Sig.CONN) = struct
             Log.debug (fun f ->
                 let b = Buffer.create 128 in
                 Cstruct.hexdump_to_buffer b buf;
-                f "sending\n%s" (Buffer.contents b)
+                f "sending%s" (Buffer.contents b)
               );
             Channel.write_buffer fd buf;
             Channel.flush fd >|= function
