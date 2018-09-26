@@ -7,6 +7,7 @@ all: commit
 	@
 
 update-osx:
+	OPAM_BRANCH="1.2" \
 	./update-upstream.sh $(PKGS)
 
 update-win:
