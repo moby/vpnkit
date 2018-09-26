@@ -42,7 +42,7 @@ depends: [
   "pcap-format" {>= "0.4.0"}
   "cmdliner"
   "charrua-core" {>= "0.9"}
-  "charrua-client-mirage" {test}
+  "charrua-client-mirage" {test & = "0.9"}
   "hvsock" {>= "1.0.1"}
   "asl"
   "win-eventlog"

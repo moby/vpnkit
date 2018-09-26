@@ -1,5 +1,5 @@
 # The exact list is `ls packages/local` + $PKGS
-PKGS = alcotest depext merlin charrua-client-mirage mirage-flow mirage-vnetif ounit pcap-format mirage-clock-unix cstruct-unix ppx_driver
+PKGS = alcotest depext merlin charrua-client-mirage.0.9 mirage-flow mirage-vnetif ounit pcap-format mirage-clock-unix cstruct-unix ppx_driver
 
 .PHONY: commit update-win update-osx
 
