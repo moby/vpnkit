@@ -9,7 +9,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "10.10"
       CUSTOM_OPAM: "1"
       OPAM_REPO: repo/darwin
-      OPAM_COMP: "4.06.0"
+      OPAM_COMP: "4.07.0"
       OPAMVERBOSE: 1
       TERM: vt100
     steps:
