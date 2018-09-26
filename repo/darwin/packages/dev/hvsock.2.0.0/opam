@@ -8,13 +8,13 @@ bug-reports: "https://github.com/mirage/ocaml-hvsock/issues"
 doc: "https://mirage.github.io/ocaml-hvsock"
 
 build: [
-  [ "jbuilder" "subst"] {pinned}
-  [ "jbuilder" "build" "-p" name "-j" jobs ]
+  [ "dune" "subst" ] {pinned}
+  [ "dune" "build" "-p" name "-j" jobs ]
 ]
 
 build-test:[
-  [ "jbuilder" "subst"] {pinned}
-  [ "jbuilder" "runtest" "-p" name "-j" jobs ]
+  [ "dune" "subst" ] {pinned}
+  [ "dune" "runtest" "-p" name "-j" jobs ]
 ]
 
 depends: [
@@ -25,12 +25,21 @@ depends: [
   "logs"
   "fmt"
   "cmdliner"
+  "sha"
+  "uri"
+  "base64"
+  "uuidm"
+  "uutf"
   "mirage-flow-lwt" {>= "1.2.0"}
   "mirage-time-lwt" {>= "1.0.0"}
   "cstruct" {>= "2.4.0"}
   "duration"
-  "jbuilder" {build & >="1.0+beta10"}
+  "dune" {build}
   "alcotest" {test & >= "0.4.0"}
+]
+
+depexts: [
+  [["alpine"] ["linux-headers"]]
 ]
 
 available: [ ocaml-version >= "4.03.0" ]
