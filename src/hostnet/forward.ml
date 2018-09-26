@@ -107,19 +107,14 @@ struct
      header which describes the container IP and port we wish to
      connect to. *)
   let write_forwarding_header description remote remote_port =
-    (* Matches the Go definition *)
-    let proto = match remote_port.Port.proto with
-      | `Tcp -> 1
-      | `Udp -> 2 in
-    let ip = match remote_port.Port.ip with
-      | Ipaddr.V4 ip -> Ipaddr.V4.to_bytes ip
-      | Ipaddr.V6 ip -> Ipaddr.V6.to_bytes ip in
-    let port = remote_port.Port.port in
-    let header = Cstruct.create (1 + 2 + 4 + 2) in
-    Cstruct.set_uint8 header 0 proto;
-    Cstruct.LE.set_uint16 header 1 4;
-    Cstruct.blit_from_string ip 0 header 3 4;
-    Cstruct.LE.set_uint16 header 7 port;
+    let connect = Forwarding.Frame.Connect.({
+      proto = remote_port.Port.proto;
+      ip = remote_port.Port.ip;
+      port = remote_port.Port.port;
+    }) in
+    let header =
+      Cstruct.create Forwarding.Frame.Connect.sizeof
+      |> Forwarding.Frame.Connect.write connect in
     (* Write the header, we should be connected to the container port *)
     Connector.write remote header >>= function
     | Ok  () -> Lwt.return_unit
@@ -185,35 +180,11 @@ struct
          directly from the from_internet_buffer *)
       let write_header_buffer = Cstruct.create max_vsock_header_length in
       let write v buf (ip, port) =
-        (* Leave space for a uint16 frame length *)
-        let rest = Cstruct.shift write_header_buffer 2 in
-        (* uint16 IP address length *)
-        let ip_bytes =
-          match ip with
-          | Ipaddr.V4 ipv4 -> Ipaddr.V4.to_bytes ipv4
-          | Ipaddr.V6 ipv6 -> Ipaddr.V6.to_bytes ipv6
-        in
-        let ip_bytes_len = String.length ip_bytes in
-        Cstruct.LE.set_uint16 rest 0 ip_bytes_len;
-        let rest = Cstruct.shift rest 2 in
-        (* IP address bytes *)
-        Cstruct.blit_from_string ip_bytes 0 rest 0 ip_bytes_len;
-        let rest = Cstruct.shift rest ip_bytes_len in
-        (* uint16 Port *)
-        Cstruct.LE.set_uint16 rest 0 port;
-        let rest = Cstruct.shift rest 2 in
-        (* uint16 Zone length *)
-        Cstruct.LE.set_uint16 rest 0 0;
-        let rest = Cstruct.shift rest 2 in
-        (* Zone string *)
-        (* uint16 payload length *)
-        Cstruct.LE.set_uint16 rest 0 (Cstruct.len buf);
-        let rest = Cstruct.shift rest 2 in
-        let header_len = rest.Cstruct.off - write_header_buffer.Cstruct.off in
-        let frame_len = header_len + (Cstruct.len buf) in
-        let header = Cstruct.sub write_header_buffer 0 header_len in
-        (* Add an overall frame length at the start *)
-        Cstruct.LE.set_uint16 header 0 frame_len;
+        let udp = Forwarding.Frame.Udp.({
+            ip; port;
+            payload_length = Cstruct.len buf;
+        }) in
+        let header = Forwarding.Frame.Udp.write_header udp write_header_buffer in
         conn_write v header >>= fun () ->
         conn_write v buf
       in
@@ -230,28 +201,8 @@ struct
         end else begin
           let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in
           conn_read v rest >|= fun () ->
-          (* uint16 IP address length *)
-          let ip_bytes_len = Cstruct.LE.get_uint16 rest 0 in
-          (* IP address bytes *)
-          let ip_bytes_string = Cstruct.(to_string (sub rest 2 ip_bytes_len)) in
-          let rest = Cstruct.shift rest (2 + ip_bytes_len) in
-          let ip =
-            let open Ipaddr in
-            if String.length ip_bytes_string = 4
-            then V4 (V4.of_bytes_exn ip_bytes_string)
-            else V6 (Ipaddr.V6.of_bytes_exn ip_bytes_string)
-          in
-          (* uint16 Port *)
-          let port = Cstruct.LE.get_uint16 rest 0 in
-          let rest = Cstruct.shift rest 2 in
-          (* uint16 Zone length *)
-          let zone_length = Cstruct.LE.get_uint16 rest 0 in
-          let rest = Cstruct.shift rest (2 + zone_length) in
-          (* uint16 payload length *)
-          let payload_length = Cstruct.LE.get_uint16 rest 0 in
-          (* payload *)
-          let payload = Cstruct.sub rest 2 payload_length in
-          Some (payload, (ip, port))
+          let udp, payload = Forwarding.Frame.Udp.read from_vsock_buffer in
+          Some (payload, (udp.Forwarding.Frame.Udp.ip, udp.Forwarding.Frame.Udp.port))
         end
       in
       let rec from_internet v =

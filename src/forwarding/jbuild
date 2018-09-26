@@ -1,0 +1,9 @@
+(jbuild_version 1)
+
+(library
+  ((name        forwarding)
+   (libraries (
+    cstruct ipaddr
+   ))
+  )
+)
