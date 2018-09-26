@@ -33,23 +33,24 @@ module Int16 = struct
 end
 
 module Port = struct
-  type t = [
-    | `Tcp of Ipaddr.t * Int16.t
-    | `Udp of Ipaddr.t * Int16.t
-  ]
+  type t = {
+    proto: [ `Tcp | `Udp ];
+    ip: Ipaddr.t;
+    port: Int16.t;
+  }
 
-  let to_string = function
-  | `Tcp (addr, port) -> Fmt.strf "tcp:%a:%d" Ipaddr.pp_hum addr port
-  | `Udp (addr, port) -> Fmt.strf "udp:%a:%d" Ipaddr.pp_hum addr port
+  let to_string t =
+    Fmt.strf "%s:%a:%d" (match t.proto with `Tcp -> "tcp" | `Udp -> "udp") Ipaddr.pp_hum t.ip t.port
 
   let of_string x =
     try
       match Stringext.split ~on:':' x with
       | [ proto; ip; port ] ->
         let port = int_of_string port in
+        let ip = Ipaddr.of_string_exn ip in
         begin match String.lowercase_ascii proto with
-        | "tcp" -> Ok (`Tcp (Ipaddr.of_string_exn ip, port))
-        | "udp" -> Ok (`Udp (Ipaddr.of_string_exn ip, port))
+        | "tcp" -> Ok { proto = `Tcp; ip; port }
+        | "udp" -> Ok { proto = `Udp; ip; port }
         | _ -> errorf "unknown protocol: should be tcp or udp"
         end
       | _ -> errorf "port should be of the form proto:IP:port"
@@ -107,12 +108,13 @@ struct
      connect to. *)
   let write_forwarding_header description remote remote_port =
     (* Matches the Go definition *)
-    let proto, ip, port = match remote_port with
-    | `Tcp(Ipaddr.V4 ip, port) -> 1, Ipaddr.V4.to_bytes ip, port
-    | `Tcp(Ipaddr.V6 ip, port) -> 1, Ipaddr.V6.to_bytes ip, port
-    | `Udp(Ipaddr.V4 ip, port) -> 2, Ipaddr.V4.to_bytes ip, port
-    | `Udp(Ipaddr.V6 ip, port) -> 2, Ipaddr.V6.to_bytes ip, port
-    in
+    let proto = match remote_port.Port.proto with
+      | `Tcp -> 1
+      | `Udp -> 2 in
+    let ip = match remote_port.Port.ip with
+      | Ipaddr.V4 ip -> Ipaddr.V4.to_bytes ip
+      | Ipaddr.V6 ip -> Ipaddr.V6.to_bytes ip in
+    let port = remote_port.Port.port in
     let header = Cstruct.create (1 + 2 + 4 + 2) in
     Cstruct.set_uint8 header 0 proto;
     Cstruct.LE.set_uint16 header 1 4;
@@ -308,7 +310,7 @@ struct
 
   let start state t =
     match t.local with
-    | `Tcp (local_ip, local_port)  ->
+    | { Port.proto = `Tcp; ip = local_ip; port = local_port }  ->
       let description =
         Fmt.strf "forwarding from tcp:%a:%d" Ipaddr.pp_hum local_ip local_port
       in
@@ -319,9 +321,9 @@ struct
           t.server <- Some (`Tcp server);
           (* Resolve the local port yet (the fds are already bound) *)
           t.local <- ( match t.local with
-            | `Tcp (local_ip, 0) ->
+            | { Port.proto = `Tcp; port = 0; _ } ->
               let _, port = Socket.Stream.Tcp.getsockname server in
-              `Tcp (local_ip, port)
+              { t.local with Port.port }
             | _ ->
               t.local );
           start_tcp_proxy state (to_string t) t.remote_port server
@@ -341,7 +343,7 @@ struct
           errorf' "Bind for %a:%d: unexpected error %a" Ipaddr.pp_hum local_ip
             local_port Fmt.exn e
         )
-    | `Udp (local_ip, local_port) ->
+    | { Port.proto = `Udp; ip = local_ip; port = local_port } ->
       let description =
         Fmt.strf "forwarding from udp:%a:%d" Ipaddr.pp_hum local_ip local_port
       in
