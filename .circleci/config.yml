@@ -15,7 +15,8 @@ jobs:
     steps:
       - checkout
       - run: brew unlink python # remove files in /usr/local/bin
-      - run: brew install wget opam pkg-config dylibbundler
+      - run: brew install wget pkg-config dylibbundler
+      - run: brew install https://raw.githubusercontent.com/Homebrew/homebrew-core/72ce8812eaa33abe23533dfa021b51351a6b9c3e/Formula/opam.rb
       - run: make
       - run: make artefacts
       - run: make test
