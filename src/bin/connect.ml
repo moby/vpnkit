@@ -45,8 +45,9 @@ module Hvsock = struct
   (* Avoid using `detach` because we don't want to exhaust the
      thread pool since this will block the main TCP/IP stack. *)
   module F =
-    Flow_lwt_hvsock_shutdown.Make(Host.Time)
-      (Lwt_hvsock_main_thread.Make(Host.Main))
+    Hvsock_lwt.Flow_shutdown.Make(Host.Time)
+      (Hvsock_lwt.In_main_thread.Make(Host.Main))
+      (Hvsock.Af_hyperv)
 
   type flow = {
     idx: int;
@@ -71,8 +72,8 @@ module Hvsock = struct
   | Some sockaddr ->
     let description = "hvsock" in
     Host.Sockets.register_connection description >>= fun idx ->
-    let fd = F.Hvsock.create () in
-    F.Hvsock.connect fd sockaddr >|= fun () ->
+    let fd = F.Socket.create () in
+    F.Socket.connect fd sockaddr >|= fun () ->
     let flow = F.connect fd in
     { idx; flow }
 

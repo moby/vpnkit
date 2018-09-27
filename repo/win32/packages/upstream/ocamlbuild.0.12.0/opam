@@ -43,5 +43,5 @@ conflicts: [
   "base-ocamlbuild"
   "ocamlfind" {< "1.6.2"}
 ]
-available: [ocaml-version >= "4.03"]
+available: [ocaml-version >= "4.03" & ocaml-version < "4.08.0"]
 patches: "ocamlbuild-0.12.0.patch" {os = "win32"}

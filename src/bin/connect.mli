@@ -7,5 +7,5 @@ end
 module Hvsock: sig
   include Sig.Connector
 
-  val set_port_forward_addr: Hvsock.sockaddr -> unit
+  val set_port_forward_addr: Hvsock.Af_hyperv.sockaddr -> unit
 end

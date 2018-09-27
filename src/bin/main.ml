@@ -34,8 +34,12 @@ let ports_serviceid = "0B95756A-9985-48AD-9470-78E060895BE7"
 let hvsock_addr_of_uri ~default_serviceid uri =
   (* hyperv://vmid/serviceid *)
   let vmid = match Uri.host uri with
-  | None   -> Hvsock.Loopback
-  | Some x -> Hvsock.Id x
+  | None   -> Hvsock.Af_hyperv.Loopback
+  | Some x ->
+    begin match Uuidm.of_string x with
+    | Some x -> Hvsock.Af_hyperv.Id x
+    | None -> failwith (Printf.sprintf "In uri %s serviceid %s is not a GUID" (Uri.to_string uri) x)
+    end
   in
   let serviceid =
     let p = Uri.path uri in
@@ -44,7 +48,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     (* trim leading / *)
     else if String.length p > 0 then String.sub p 1 (String.length p - 1) else p
   in
-  { Hvsock.vmid; serviceid }
+  { Hvsock.Af_hyperv.vmid; serviceid }
 
   module Vnet = Basic_backend.Make
   module Connect_unix = Connect.Unix
@@ -54,7 +58,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
   module Forward_unix = Forward.Make(Mclock)(Connect_unix)(Bind)
   module Forward_hvsock = Forward.Make(Mclock)(Connect_hvsock)(Bind)
-  module HV = Flow_lwt_hvsock.Make(Host.Time)(Host.Fn)
+  module HV = Hvsock_lwt.Flow.Make(Host.Time)(Host.Fn)(Hvsock.Af_hyperv)
   module HostsFile = Hosts.Make(Host.Files)
 
   let file_descr_of_int (x: int) : Unix.file_descr =
@@ -90,7 +94,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let hvsock_create () =
     let rec loop () =
-      match HV.Hvsock.create () with
+      match HV.Socket.create () with
       | x -> Lwt.return x
       | exception e ->
         Log.err (fun f -> f "Caught %s while creating Hyper-V socket" (Printexc.to_string e));
@@ -100,30 +104,25 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     loop ()
 
   let hvsock_listen sockaddr callback =
-    Log.info (fun f ->
-      f "Listening on %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
-        sockaddr.Hvsock.serviceid);
+    Log.info (fun f -> f "Listening on %s" (Hvsock.Af_hyperv.string_of_sockaddr sockaddr));
     let rec aux () =
       hvsock_create ()
       >>= fun socket ->
       Lwt.catch (fun () ->
-        HV.Hvsock.bind socket sockaddr;
-        HV.Hvsock.listen socket 5;
+        HV.Socket.bind socket sockaddr;
+        HV.Socket.listen socket 5;
         let rec accept_forever () =
-          HV.Hvsock.accept socket
+          HV.Socket.accept socket
           >>= fun (t, clientaddr) ->
-          Log.info (fun f -> f "Accepted connection from %s:%s "
-            (Hvsock.string_of_vmid clientaddr.Hvsock.vmid)
-            clientaddr.Hvsock.serviceid);
+          Log.info (fun f -> f "Accepted connection from %s" (Hvsock.Af_hyperv.string_of_sockaddr clientaddr));
           Lwt.async (fun () -> callback t);
           accept_forever () in
         accept_forever ()
       ) (fun e ->
-          Log.warn (fun f -> f "Caught %s while listening on %s:%s"
+          Log.warn (fun f -> f "Caught %s while listening on %s"
             (Printexc.to_string e)
-            (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
-            sockaddr.Hvsock.serviceid);
-          log_exception_continue "HV.Hvsock.close" (fun () -> HV.Hvsock.close socket)
+            (Hvsock.Af_hyperv.string_of_sockaddr sockaddr));
+          log_exception_continue "HV.Socket.close" (fun () -> HV.Socket.close socket)
           >>= fun () ->
           Host.Time.sleep_ns (Duration.of_sec 1)
       )
@@ -132,26 +131,24 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     aux ()
 
   let hvsock_connect_forever url sockaddr callback =
-    Log.info (fun f ->
-        f "Connecting to %s:%s" (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
-          sockaddr.Hvsock.serviceid);
+    Log.info (fun f -> f "Connecting to %s" (Hvsock.Af_hyperv.string_of_sockaddr sockaddr));
     let rec aux () =
       hvsock_create ()
       >>= fun socket ->
       Lwt.catch (fun () ->
-          HV.Hvsock.connect ~timeout_ms:300 socket sockaddr >>= fun () ->
+          HV.Socket.connect ~timeout_ms:300 socket sockaddr >>= fun () ->
           Log.info (fun f -> f "AF_HVSOCK connected successfully");
           callback socket
         ) (function
         | Unix.Unix_error(Unix.ETIMEDOUT, _, _) ->
-          log_exception_continue "HV.Hvsock.close" (fun () -> HV.Hvsock.close socket)
+          log_exception_continue "HV.Socket.close" (fun () -> HV.Socket.close socket)
           (* no need to add more delay *)
         | Unix.Unix_error(_, _, _) ->
-          log_exception_continue "HV.Hvsock.close" (fun () -> HV.Hvsock.close socket)
+          log_exception_continue "HV.Socket.close" (fun () -> HV.Socket.close socket)
           >>= fun () ->
           Host.Time.sleep_ns (Duration.of_sec 1)
         | _ ->
-          log_exception_continue "HV.Hvsock.close" (fun () -> HV.Hvsock.close socket)
+          log_exception_continue "HV.Socket.close" (fun () -> HV.Socket.close socket)
           >>= fun () ->
           Host.Time.sleep_ns (Duration.of_sec 1)
         )
@@ -234,9 +231,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     begin match Uri.scheme uri with
     | Some "hyperv-connect" ->
       let sockaddr = hvsock_addr_of_uri ~default_serviceid:ports_serviceid uri in
-      Log.info (fun f -> f "Will forward ports over AF_HVSOCK to vpnkit-forwarder on %s:%s"
-        (Hvsock.string_of_vmid sockaddr.Hvsock.vmid)
-        sockaddr.Hvsock.serviceid
+      Log.info (fun f -> f "Will forward ports over AF_HVSOCK to vpnkit-forwarder on %s"
+        (Hvsock.Af_hyperv.string_of_sockaddr sockaddr)
       );
       Connect_hvsock.set_port_forward_addr sockaddr
     | Some "unix" ->
