@@ -107,14 +107,14 @@ struct
      header which describes the container IP and port we wish to
      connect to. *)
   let write_forwarding_header description remote remote_port =
-    let connect = Forwarding.Frame.Connect.({
+    let destination = Forwarding.Frame.Destination.({
       proto = remote_port.Port.proto;
       ip = remote_port.Port.ip;
       port = remote_port.Port.port;
     }) in
     let header =
-      Cstruct.create Forwarding.Frame.Connect.sizeof
-      |> Forwarding.Frame.Connect.write connect in
+      Cstruct.create (Forwarding.Frame.Destination.sizeof destination)
+      |> Forwarding.Frame.Destination.write destination in
     (* Write the header, we should be connected to the container port *)
     Connector.write remote header >>= function
     | Ok  () -> Lwt.return_unit

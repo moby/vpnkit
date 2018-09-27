@@ -5,6 +5,6 @@
    (libraries (
      hostnet cmdliner alcotest logs.fmt protocol-9p
      mirage-dns uwt.preemptive mirage-clock-unix
-     charrua-client-mirage
+     charrua-client-mirage forwarding
    ))
    (preprocess no_preprocessing)))

@@ -1,13 +1,13 @@
 
-module Connect = struct
-
+module Destination = struct
   type t = {
     proto: [ `Tcp | `Udp ];
     ip: Ipaddr.t;
     port: int;
   }
 
-  let sizeof = 1 + 2 + 4 + 2
+  let sizeof t =
+    1 + 2 + (match t.ip with Ipaddr.V4 _ -> 4 | Ipaddr.V6 _ -> 16) + 2
 
   let write t buf =
     (* Matches the Go definition *)
@@ -17,14 +17,28 @@ module Connect = struct
     let ip = match t.ip with
       | Ipaddr.V4 ip -> Ipaddr.V4.to_bytes ip
       | Ipaddr.V6 ip -> Ipaddr.V6.to_bytes ip in
-    let header = Cstruct.sub buf 0 sizeof in
+    let header = Cstruct.sub buf 0 (sizeof t) in
     Cstruct.set_uint8 header 0 proto;
-    Cstruct.LE.set_uint16 header 1 4;
-    Cstruct.blit_from_string ip 0 header 3 4;
-    Cstruct.LE.set_uint16 header 7 t.port;
+    Cstruct.LE.set_uint16 header 1 (String.length ip);
+    Cstruct.blit_from_string ip 0 header 3 (String.length ip);
+    Cstruct.LE.set_uint16 header (3 + (String.length ip)) t.port;
     header
 
-  end
+  let read buf =
+    let proto = match Cstruct.get_uint8 buf 0 with
+      | 1 -> `Tcp
+      | 2 -> `Udp
+      | x -> failwith (Printf.sprintf "Unknown Destination protocol: %d" x) in
+    let ip_len = Cstruct.LE.get_uint16 buf 1 in
+    let bytes = Cstruct.(to_string (sub buf 3 ip_len)) in
+    let ip = match ip_len with
+      | 4 -> Ipaddr.V4 (Ipaddr.V4.of_bytes_exn @@ bytes)
+      | 16 -> Ipaddr.V6 (Ipaddr.V6.of_bytes_exn @@ bytes)
+      | _ -> failwith (Printf.sprintf "Failed to parse IP address of length %d: %s" ip_len (String.escaped bytes)) in
+    let port = Cstruct.LE.get_uint16 buf (3 + (String.length bytes)) in
+    { proto; ip; port }
+
+end
 
 module Udp = struct
   type t = {
@@ -90,3 +104,59 @@ module Udp = struct
     let payload = Cstruct.sub rest 2 payload_length in
     { ip; port; payload_length }, payload
 end
+
+type connection =
+  | Dedicated (* the connection will be dedicated to this channel *)
+  | Multiplexed (* multiple channels will be multiplexed within this connection *)
+
+type command =
+  | Open of connection * Destination.t (* open a channel to a destination *)
+  | Close (* request / confirm close a channel *)
+  | Shutdown (* flush and shutdown this side of a channel *)
+  | Data (* payload on a given channel *)
+
+type t = {
+  command: command;
+  id: int32;
+}
+
+let sizeof t = match t.command with
+  | Open (_, d) -> 1 + 1 + 4 + 1 + (Destination.sizeof d)
+  | Close
+  | Shutdown
+  | Data -> 1 + 1 + 4
+
+let write t buf =
+  Cstruct.LE.set_uint32 buf 1 t.id;
+  begin match t.command with
+  | Open (connection, destination) ->
+    Cstruct.set_uint8 buf 0 1;
+    Cstruct.set_uint8 buf 5 (match connection with Dedicated -> 1 | Multiplexed -> 2);
+    let (_: Cstruct.t) = Destination.write destination (Cstruct.shift buf 6) in
+    ()
+  | Close->
+    Cstruct.set_uint8 buf 0 2
+  | Shutdown->
+    Cstruct.set_uint8 buf 0 3
+  | Data ->
+    Cstruct.set_uint8 buf 0 4
+  end;
+  Cstruct.sub buf 0 (sizeof t)
+
+let read buf =
+  let id = Cstruct.LE.get_uint32 buf 1 in
+  match Cstruct.get_uint8 buf 0 with
+  | 1 ->
+    let connection = match Cstruct.get_uint8 buf 5 with
+    | 1 -> Dedicated
+    | 2 -> Multiplexed
+    | x -> failwith (Printf.sprintf "Unknown connection type: %d" x) in
+    let destination = Destination.read (Cstruct.shift buf 6) in
+    { command = Open(connection, destination); id }
+  | 2 ->
+    { command = Close; id }
+  | 3 ->
+    { command = Shutdown; id }
+  | 4 ->
+    { command = Data; id }
+  | x -> failwith (Printf.sprintf "Unknown command type: %d" x)
