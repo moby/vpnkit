@@ -127,6 +127,7 @@ func TestTCP4Proxy(t *testing.T) {
 }
 
 func TestTCP6Proxy(t *testing.T) {
+	t.Skip("No support for IPv6 inside Docker")
 	backend := NewEchoServer(t, "tcp", "[::1]:0")
 	defer backend.Close()
 	backend.Run()
@@ -170,6 +171,7 @@ func TestUDP4Proxy(t *testing.T) {
 }
 
 func TestUDP6Proxy(t *testing.T) {
+	t.Skip("No support for IPv6 inside Docker")
 	backend := NewEchoServer(t, "udp", "[::1]:0")
 	defer backend.Close()
 	backend.Run()
