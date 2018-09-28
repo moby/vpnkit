@@ -23,6 +23,10 @@ let inputs = [
     command = Data 128l;
     id = 8l;
   };
+  "window", {
+    command = Window 8888888L;
+    id = 9l;
+  };
 ]
 
 let output_dir = Filename.(concat (dirname Sys.argv.(0)) "test_inputs")

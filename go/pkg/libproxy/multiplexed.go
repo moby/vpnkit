@@ -74,6 +74,16 @@ func unmarshalData(r io.Reader) (data, error) {
 	return d, err
 }
 
+type window struct {
+	seq uint64
+}
+
+func unmarshalWindow(r io.Reader) (window, error) {
+	w := window{}
+	err := binary.Read(r, binary.LittleEndian, &w.seq)
+	return w, err
+}
+
 // Command is the action requested by a message.
 type Command int8
 
@@ -86,6 +96,8 @@ const (
 	Shutdown
 	// Data is a payload of a connection/sub-connection
 	Data
+	// Window is permission to send and consume buffer space
+	Window
 )
 
 type frame struct {

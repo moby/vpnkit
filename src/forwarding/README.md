@@ -59,7 +59,7 @@ To send a UDP datagram:
 | 5             | `iplen`       | `uint16(4 or 16)`        |
 | 7             | `ip`          | 4 or 16 bytes (IP)       |
 | 7 + `iplen`   | `port`        | `uint16(port)` (port)    |
-| 9 + `iplen`   | `payloadlen`  | `uint64(seq)`            |
+| 9 + `iplen`   | `seq`         | `uint64(seq)`            |
 
 If the `vpnkit-forwarder` receives UDP which it can't transmit due to lack
 of buffer space, the packet can be dropped. TCP payloads cannot be dropped

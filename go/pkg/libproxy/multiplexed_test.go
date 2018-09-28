@@ -108,6 +108,25 @@ func TestParseData(t *testing.T) {
 	assertEqual(t, d.payloadlen, uint32(128))
 }
 
+func TestParseWindow(t *testing.T) {
+	b, err := ioutil.ReadFile(binDir + "window.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := bytes.NewBuffer(b)
+	f, err := unmarshalFrame(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertEqual(t, f.Command, Window)
+	assertEqual(t, f.ID, uint32(9))
+	d, err := unmarshalWindow(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertEqual(t, d.seq, uint64(8888888))
+}
+
 func assertEqual(t *testing.T, a interface{}, b interface{}) {
 	if a != b {
 		t.Fatalf("%s != %s", a, b)
