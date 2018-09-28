@@ -64,6 +64,16 @@ func unmarshalOpen(r io.Reader) (open, error) {
 	return o, err
 }
 
+type data struct {
+	payloadlen uint32
+}
+
+func unmarshalData(r io.Reader) (data, error) {
+	d := data{}
+	err := binary.Read(r, binary.LittleEndian, &d.payloadlen)
+	return d, err
+}
+
 // Command is the action requested by a message.
 type Command int8
 

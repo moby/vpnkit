@@ -101,6 +101,11 @@ func TestParseData(t *testing.T) {
 	}
 	assertEqual(t, f.Command, Data)
 	assertEqual(t, f.ID, uint32(8))
+	d, err := unmarshalData(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertEqual(t, d.payloadlen, uint32(128))
 }
 
 func assertEqual(t *testing.T, a interface{}, b interface{}) {

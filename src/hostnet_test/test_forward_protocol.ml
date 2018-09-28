@@ -20,7 +20,7 @@ let inputs = [
     id = 7l;
   };
   "data", {
-    command = Data;
+    command = Data 128l;
     id = 8l;
   };
 ]

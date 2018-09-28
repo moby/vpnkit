@@ -113,7 +113,7 @@ type command =
   | Open of connection * Destination.t (* open a channel to a destination *)
   | Close (* request / confirm close a channel *)
   | Shutdown (* flush and shutdown this side of a channel *)
-  | Data (* payload on a given channel *)
+  | Data of int32 (* payload on a given channel *)
 
 type t = {
   command: command;
@@ -124,7 +124,7 @@ let sizeof t = match t.command with
   | Open (_, d) -> 1 + 1 + 4 + 1 + (Destination.sizeof d)
   | Close
   | Shutdown
-  | Data -> 1 + 1 + 4
+  | Data _ -> 1 + 1 + 4 + 4
 
 let write t buf =
   Cstruct.LE.set_uint32 buf 1 t.id;
@@ -138,8 +138,9 @@ let write t buf =
     Cstruct.set_uint8 buf 0 2
   | Shutdown->
     Cstruct.set_uint8 buf 0 3
-  | Data ->
-    Cstruct.set_uint8 buf 0 4
+  | Data payloadlen ->
+    Cstruct.set_uint8 buf 0 4;
+    Cstruct.LE.set_uint32 buf 5 payloadlen
   end;
   Cstruct.sub buf 0 (sizeof t)
 
@@ -158,5 +159,6 @@ let read buf =
   | 3 ->
     { command = Shutdown; id }
   | 4 ->
-    { command = Data; id }
+    let payloadlen = Cstruct.LE.get_uint32 buf 5 in
+    { command = Data payloadlen; id }
   | x -> failwith (Printf.sprintf "Unknown command type: %d" x)
