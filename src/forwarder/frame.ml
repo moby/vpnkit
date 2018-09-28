@@ -6,6 +6,11 @@ module Destination = struct
     port: int;
   }
 
+  let to_string { proto; ip; port } =
+    Printf.sprintf "Destination { proto = %s; ip = %s; port = %d }"
+      (match proto with `Tcp -> "TCP" | `Udp -> "UDP")
+      (Ipaddr.to_string ip) port
+
   let sizeof t =
     1 + 2 + (match t.ip with Ipaddr.V4 _ -> 4 | Ipaddr.V6 _ -> 16) + 2
 
@@ -109,6 +114,10 @@ type connection =
   | Dedicated
   | Multiplexed
 
+let string_of_connection = function
+  | Dedicated -> "Dedicated"
+  | Multiplexed -> "Multiplexed"
+
 type command =
   | Open of connection * Destination.t
   | Close
@@ -116,57 +125,69 @@ type command =
   | Data of int32
   | Window of int64
 
+let string_of_command = function
+  | Open(connection, destination) -> Printf.sprintf "Open(%s, %s)" (string_of_connection connection) (Destination.to_string destination)
+  | Close -> "Close"
+  | Shutdown -> "Shutdown"
+  | Data len -> Printf.sprintf "Data length = %ld" len
+  | Window seq -> Printf.sprintf "Window seq = %Ld" seq
+
 type t = {
   command: command;
   id: int32;
 }
 
+let to_string { command; id } =
+  Printf.sprintf "Frame { command = %s; id = %ld }" (string_of_command command) id
+
 let sizeof t = match t.command with
-  | Open (_, d) -> 1 + 1 + 4 + 1 + (Destination.sizeof d)
+  | Open (_, d) -> 2 + 1 + 4 + 1 + (Destination.sizeof d)
   | Close
-  | Shutdown -> 1 + 1 + 4
-  | Data _ -> 1 + 1 + 4 + 4
-  | Window _ -> 1 + 1 + 4 + 8
+  | Shutdown -> 2 + 1 + 4
+  | Data _ -> 2 + 1 + 4 + 4
+  | Window _ -> 2 + 1 + 4 + 8
 
 let write t buf =
-  Cstruct.LE.set_uint32 buf 1 t.id;
+  Cstruct.LE.set_uint16 buf 0 (sizeof t);
+  Cstruct.LE.set_uint32 buf 3 t.id;
   begin match t.command with
   | Open (connection, destination) ->
-    Cstruct.set_uint8 buf 0 1;
-    Cstruct.set_uint8 buf 5 (match connection with Dedicated -> 1 | Multiplexed -> 2);
-    let (_: Cstruct.t) = Destination.write destination (Cstruct.shift buf 6) in
+    Cstruct.set_uint8 buf 2 1;
+    Cstruct.set_uint8 buf 7 (match connection with Dedicated -> 1 | Multiplexed -> 2);
+    let (_: Cstruct.t) = Destination.write destination (Cstruct.shift buf 8) in
     ()
   | Close->
-    Cstruct.set_uint8 buf 0 2
+    Cstruct.set_uint8 buf 2 2
   | Shutdown->
-    Cstruct.set_uint8 buf 0 3
+    Cstruct.set_uint8 buf 2 3
   | Data payloadlen ->
-    Cstruct.set_uint8 buf 0 4;
-    Cstruct.LE.set_uint32 buf 5 payloadlen
+    Cstruct.set_uint8 buf 2 4;
+    Cstruct.LE.set_uint32 buf 7 payloadlen
   | Window seq ->
-    Cstruct.set_uint8 buf 0 5;
-    Cstruct.LE.set_uint64 buf 5 seq
+    Cstruct.set_uint8 buf 2 5;
+    Cstruct.LE.set_uint64 buf 7 seq
   end;
   Cstruct.sub buf 0 (sizeof t)
 
 let read buf =
-  let id = Cstruct.LE.get_uint32 buf 1 in
-  match Cstruct.get_uint8 buf 0 with
+  (* skip the length *)
+  let id = Cstruct.LE.get_uint32 buf 3 in
+  match Cstruct.get_uint8 buf 2 with
   | 1 ->
-    let connection = match Cstruct.get_uint8 buf 5 with
+    let connection = match Cstruct.get_uint8 buf 7 with
     | 1 -> Dedicated
     | 2 -> Multiplexed
     | x -> failwith (Printf.sprintf "Unknown connection type: %d" x) in
-    let destination = Destination.read (Cstruct.shift buf 6) in
+    let destination = Destination.read (Cstruct.shift buf 8) in
     { command = Open(connection, destination); id }
   | 2 ->
     { command = Close; id }
   | 3 ->
     { command = Shutdown; id }
   | 4 ->
-    let payloadlen = Cstruct.LE.get_uint32 buf 5 in
+    let payloadlen = Cstruct.LE.get_uint32 buf 7 in
     { command = Data payloadlen; id }
   | 5 ->
-    let seq = Cstruct.LE.get_uint64 buf 5 in
+    let seq = Cstruct.LE.get_uint64 buf 7 in
     { command = Window seq; id }
   | x -> failwith (Printf.sprintf "Unknown command type: %d" x)

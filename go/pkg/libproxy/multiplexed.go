@@ -107,6 +107,10 @@ type frame struct {
 
 func unmarshalFrame(r io.Reader) (frame, error) {
 	f := frame{}
+	var headerlen uint16
+	if err := binary.Read(r, binary.LittleEndian, &headerlen); err != nil {
+		return f, err
+	}
 	if err := binary.Read(r, binary.LittleEndian, &f.Command); err != nil {
 		return f, err
 	}

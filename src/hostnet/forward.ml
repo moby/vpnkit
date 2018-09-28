@@ -107,14 +107,14 @@ struct
      header which describes the container IP and port we wish to
      connect to. *)
   let write_forwarding_header description remote remote_port =
-    let destination = Forwarding.Frame.Destination.({
+    let destination = Forwarder.Frame.Destination.({
       proto = remote_port.Port.proto;
       ip = remote_port.Port.ip;
       port = remote_port.Port.port;
     }) in
     let header =
-      Cstruct.create (Forwarding.Frame.Destination.sizeof destination)
-      |> Forwarding.Frame.Destination.write destination in
+      Cstruct.create (Forwarder.Frame.Destination.sizeof destination)
+      |> Forwarder.Frame.Destination.write destination in
     (* Write the header, we should be connected to the container port *)
     Connector.write remote header >>= function
     | Ok  () -> Lwt.return_unit
@@ -180,11 +180,11 @@ struct
          directly from the from_internet_buffer *)
       let write_header_buffer = Cstruct.create max_vsock_header_length in
       let write v buf (ip, port) =
-        let udp = Forwarding.Frame.Udp.({
+        let udp = Forwarder.Frame.Udp.({
             ip; port;
             payload_length = Cstruct.len buf;
         }) in
-        let header = Forwarding.Frame.Udp.write_header udp write_header_buffer in
+        let header = Forwarder.Frame.Udp.write_header udp write_header_buffer in
         conn_write v header >>= fun () ->
         conn_write v buf
       in
@@ -201,8 +201,8 @@ struct
         end else begin
           let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in
           conn_read v rest >|= fun () ->
-          let udp, payload = Forwarding.Frame.Udp.read from_vsock_buffer in
-          Some (payload, (udp.Forwarding.Frame.Udp.ip, udp.Forwarding.Frame.Udp.port))
+          let udp, payload = Forwarder.Frame.Udp.read from_vsock_buffer in
+          Some (payload, (udp.Forwarder.Frame.Udp.ip, udp.Forwarder.Frame.Udp.port))
         end
       in
       let rec from_internet v =

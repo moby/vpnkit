@@ -14,6 +14,7 @@ module Destination : sig
   val read: Cstruct.t -> t
   (** [read buf] reads [t] from [buf] or raises an exception *)
 
+  val to_string: t -> string
 end
 
 module Udp : sig
@@ -56,3 +57,5 @@ val write: t -> Cstruct.t -> Cstruct.t
 
 val read: Cstruct.t -> t
 (** [read buf] reads [t] from [buf] or raises an exception *)
+
+val to_string: t -> string
