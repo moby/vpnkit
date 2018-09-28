@@ -106,15 +106,15 @@ module Udp = struct
 end
 
 type connection =
-  | Dedicated (* the connection will be dedicated to this channel *)
-  | Multiplexed (* multiple channels will be multiplexed within this connection *)
+  | Dedicated
+  | Multiplexed
 
 type command =
-  | Open of connection * Destination.t (* open a channel to a destination *)
-  | Close (* request / confirm close a channel *)
-  | Shutdown (* flush and shutdown this side of a channel *)
-  | Data of int32 (* payload on a given channel *)
-  | Window of int64 (* sequence number to allow up to *)
+  | Open of connection * Destination.t
+  | Close
+  | Shutdown
+  | Data of int32
+  | Window of int64
 
 type t = {
   command: command;
