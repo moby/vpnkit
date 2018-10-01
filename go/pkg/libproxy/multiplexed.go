@@ -1,123 +1,356 @@
 package libproxy
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"net"
+	"sync"
 )
-
-// Proto is the protocol of the flow
-type Proto uint8
 
 const (
-	// TCP flow
-	TCP Proto = 1
-	// UDP flow
-	UDP Proto = 2
+	maxBufferSize = 65536
 )
 
-type destination struct {
-	Proto Proto
-	IP    net.IP
-	Port  uint16
+type windowState struct {
+	current uint64
+	allowed uint64
 }
 
-// Read header which describes TCP/UDP and destination IP:port
-func unmarshalDestination(r io.Reader) (destination, error) {
-	d := destination{}
-	if err := binary.Read(r, binary.LittleEndian, &d.Proto); err != nil {
-		return d, err
+func (w *windowState) String() string {
+	return fmt.Sprintf("current %d, allowed %d", w.current, w.allowed)
+}
+
+func newWindowState() *windowState {
+	return &windowState{}
+}
+func (w *windowState) size() int {
+	return int(w.allowed - w.current)
+}
+func (w *windowState) isAlmostClosed() bool {
+	return w.size() < maxBufferSize/2
+}
+func (w *windowState) advance() {
+	w.allowed = w.current + uint64(maxBufferSize)
+}
+
+type channel struct {
+	m             *sync.Mutex
+	c             *sync.Cond
+	multiplexer   *Multiplexer
+	destination   Destination
+	ID            uint32
+	read          *windowState
+	write         *windowState
+	readPipe      *bufferedPipe
+	closeReceived bool
+	closeSent     bool
+	shutdownSent  bool
+}
+
+// newChannel registers a channel through the multiplexer
+func newChannel(multiplexer *Multiplexer, ID uint32, d Destination) *channel {
+	var m sync.Mutex
+	c := sync.NewCond(&m)
+	readPipe := newBufferedPipe()
+	return &channel{
+		m:           &m,
+		c:           c,
+		multiplexer: multiplexer,
+		destination: d,
+		ID:          ID,
+		read:        &windowState{},
+		write:       &windowState{},
+		readPipe:    readPipe,
 	}
-	var length uint16
-	// IP length
-	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
-		return d, err
+}
+
+func (c *channel) sendWindowUpdate() error {
+	c.m.Lock()
+	c.read.advance()
+	seq := c.read.allowed
+	c.m.Unlock()
+	return c.multiplexer.send(NewWindow(c.ID, seq))
+}
+
+func (c *channel) recvWindowUpdate(seq uint64) {
+	c.m.Lock()
+	c.write.allowed = seq
+	c.c.Signal()
+	c.m.Unlock()
+}
+
+func (c *channel) Read(p []byte) (int, error) {
+	n, err := c.readPipe.Read(p)
+	c.m.Lock()
+	c.read.current = c.read.current + uint64(n)
+	needUpdate := c.read.isAlmostClosed()
+	c.m.Unlock()
+	if needUpdate {
+		c.sendWindowUpdate()
 	}
-	d.IP = make([]byte, length)
-	if err := binary.Read(r, binary.LittleEndian, &d.IP); err != nil {
-		return d, err
+	return n, err
+}
+
+func (c *channel) Write(p []byte) (int, error) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	written := 0
+	for {
+		if len(p) == 0 {
+			return written, nil
+		}
+		if c.closeReceived || c.closeSent || c.shutdownSent {
+			return written, io.EOF
+		}
+		if c.write.size() > 0 {
+			toWrite := c.write.size()
+			if toWrite > len(p) {
+				toWrite = len(p)
+			}
+			// need to write the header and the payload together
+			c.multiplexer.writeMutex.Lock()
+			f := NewData(c.ID, uint32(toWrite))
+			err1 := f.Write(c.multiplexer.conn)
+			_, err2 := c.multiplexer.conn.Write(p[0:toWrite])
+			c.multiplexer.writeMutex.Unlock()
+
+			if err1 != nil {
+				return written, err1
+			}
+			if err2 != nil {
+				return written, err2
+			}
+			c.write.current = c.write.current + uint64(toWrite)
+			p = p[toWrite:]
+			written = written + toWrite
+			continue
+		}
+
+		// Wait for the write window to be increased
+		c.c.Wait()
 	}
-	if err := binary.Read(r, binary.LittleEndian, &d.Port); err != nil {
-		return d, err
+}
+
+func (c *channel) Close() error {
+	if err := c.multiplexer.send(NewClose(c.ID)); err != nil {
+		return err
 	}
-	return d, nil
-}
-
-// Connection indicates whether the connection will use multiplexing or not.
-type Connection int8
-
-const (
-	// Dedicated means this connection will not use multiplexing
-	Dedicated Connection = iota + 1
-	// Multiplexed means this connection will contain labelled sub-connections mixed together
-	Multiplexed
-)
-
-type open struct {
-	Connection Connection // Connection describes whether the opened connection should be dedicated or multiplexed
-}
-
-func unmarshalOpen(r io.Reader) (open, error) {
-	o := open{}
-	err := binary.Read(r, binary.LittleEndian, &o.Connection)
-	return o, err
-}
-
-type data struct {
-	payloadlen uint32
-}
-
-func unmarshalData(r io.Reader) (data, error) {
-	d := data{}
-	err := binary.Read(r, binary.LittleEndian, &d.payloadlen)
-	return d, err
-}
-
-type window struct {
-	seq uint64
-}
-
-func unmarshalWindow(r io.Reader) (window, error) {
-	w := window{}
-	err := binary.Read(r, binary.LittleEndian, &w.seq)
-	return w, err
-}
-
-// Command is the action requested by a message.
-type Command int8
-
-const (
-	// Open requests to open a connection to a backend service.
-	Open Command = iota + 1
-	// Close requests and then acknowledges the close of a sub-connection
-	Close
-	// Shutdown indicates that no more data will be written in this direction
-	Shutdown
-	// Data is a payload of a connection/sub-connection
-	Data
-	// Window is permission to send and consume buffer space
-	Window
-)
-
-type frame struct {
-	Command Command // Command is the action erquested
-	ID      uint32  // Id of the sub-connection, managed by the client
-}
-
-func unmarshalFrame(r io.Reader) (frame, error) {
-	f := frame{}
-	var headerlen uint16
-	if err := binary.Read(r, binary.LittleEndian, &headerlen); err != nil {
-		return f, err
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.closeSent = true
+	c.c.Broadcast()
+	if c.closeSent && c.closeReceived {
+		c.multiplexer.freeChannel(c.ID)
 	}
-	if err := binary.Read(r, binary.LittleEndian, &f.Command); err != nil {
-		return f, err
+	return nil
+}
+
+func (c *channel) CloseRead() error {
+	return c.readPipe.CloseWrite()
+}
+
+func (c *channel) CloseWrite() error {
+	if err := c.multiplexer.send(NewShutdown(c.ID)); err != nil {
+		return err
 	}
-	if err := binary.Read(r, binary.LittleEndian, &f.ID); err != nil {
-		return f, err
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.shutdownSent = true
+	c.c.Broadcast()
+	return nil
+}
+
+func (c *channel) recvClose() error {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.closeReceived = true
+	c.c.Broadcast()
+	return nil
+}
+
+func (c *channel) isClosed() bool {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.closeReceived && c.closeSent
+}
+
+// Multiplexer muxes and demuxes sub-connections over a single connection
+type Multiplexer struct {
+	label         string
+	conn          Conn
+	writeMutex    *sync.Mutex // hold when writing on the channel
+	channels      map[uint32]*channel
+	nextChannelID uint32
+	metadataMutex *sync.Mutex // hold when reading/modifying this structure
+	pendingAccept []*channel  // incoming connections
+	acceptCond    *sync.Cond
+}
+
+// NewMultiplexer constructs a multiplexer from a channel
+func NewMultiplexer(label string, conn Conn) *Multiplexer {
+	var writeMutex, metadataMutex sync.Mutex
+	acceptCond := sync.NewCond(&metadataMutex)
+	channels := make(map[uint32]*channel)
+
+	return &Multiplexer{
+		label:         label,
+		conn:          conn,
+		writeMutex:    &writeMutex,
+		channels:      channels,
+		metadataMutex: &metadataMutex,
+		acceptCond:    acceptCond,
 	}
-	return f, nil
+}
+
+func (m *Multiplexer) send(f *Frame) error {
+	m.writeMutex.Lock()
+	defer m.writeMutex.Unlock()
+	return f.Write(m.conn)
+}
+
+func (m *Multiplexer) findFreeChannelID() uint32 {
+	// the metadataMutex is already held
+	id := m.nextChannelID
+	for {
+		if _, ok := m.channels[id]; !ok {
+			m.nextChannelID = id + 1
+			return id
+		}
+		id++
+	}
+}
+
+func (m *Multiplexer) freeChannel(ID uint32) {
+	m.metadataMutex.Lock()
+	defer m.metadataMutex.Unlock()
+	delete(m.channels, ID)
+}
+
+// Dial opens a connection to the given destination
+func (m *Multiplexer) Dial(d Destination) (Conn, error) {
+	m.metadataMutex.Lock()
+	id := m.findFreeChannelID()
+	channel := newChannel(m, id, d)
+	m.channels[id] = channel
+	m.metadataMutex.Unlock()
+
+	if err := m.send(NewOpen(id, d)); err != nil {
+		return nil, err
+	}
+	if err := channel.sendWindowUpdate(); err != nil {
+		return nil, err
+	}
+	return channel, nil
+}
+
+// Accept returns the next client connection
+func (m *Multiplexer) Accept() (Conn, *Destination, error) {
+	m.metadataMutex.Lock()
+	defer m.metadataMutex.Unlock()
+	for {
+		if len(m.pendingAccept) > 0 {
+			first := m.pendingAccept[0]
+			m.pendingAccept = m.pendingAccept[1:]
+			if err := first.sendWindowUpdate(); err != nil {
+				return nil, nil, err
+			}
+			return first, &first.destination, nil
+		}
+		m.acceptCond.Wait()
+	}
+}
+
+// Run starts handling the requests from the other side
+func (m *Multiplexer) Run() {
+	go func() {
+		if err := m.run(); err != nil {
+			log.Printf("Multiplexer main loop failed with %v", err)
+		}
+	}()
+}
+
+func (m *Multiplexer) run() error {
+	for {
+		f, err := unmarshalFrame(m.conn)
+		if err != nil {
+			return fmt.Errorf("Failed to unmarshal command frame: %v", err)
+		}
+		switch f.Command {
+		case Open:
+			o, err := f.Open()
+			if err != nil {
+				return fmt.Errorf("Failed to unmarshal open command: %v", err)
+			}
+			switch o.Connection {
+			case Dedicated:
+				return fmt.Errorf("Dedicated connections are not implemented yet")
+			case Multiplexed:
+				m.metadataMutex.Lock()
+				channel := newChannel(m, f.ID, o.Destination)
+				m.channels[f.ID] = channel
+				m.pendingAccept = append(m.pendingAccept, channel)
+				m.acceptCond.Signal()
+				m.metadataMutex.Unlock()
+			}
+		case Window:
+			m.metadataMutex.Lock()
+			channel, ok := m.channels[f.ID]
+			m.metadataMutex.Unlock()
+			if !ok {
+				return fmt.Errorf("Unknown channel id: %v", f.ID)
+			}
+			w, err := f.Window()
+			if err != nil {
+				return err
+			}
+			channel.recvWindowUpdate(w.seq)
+		case Data:
+			m.metadataMutex.Lock()
+			channel, ok := m.channels[f.ID]
+			m.metadataMutex.Unlock()
+			if !ok {
+				return fmt.Errorf("Unknown channel id: %v", f.ID)
+			}
+			d, err := f.Data()
+			if err != nil {
+				return err
+			}
+			if _, err := io.CopyN(channel.readPipe, m.conn, int64(d.payloadlen)); err != nil {
+				return err
+			}
+		case Shutdown:
+			m.metadataMutex.Lock()
+			channel, ok := m.channels[f.ID]
+			m.metadataMutex.Unlock()
+			if !ok {
+				return fmt.Errorf("Unknown channel id: %v", f.ID)
+			}
+			if err := channel.readPipe.CloseWrite(); err != nil {
+				return err
+			}
+		case Close:
+			m.metadataMutex.Lock()
+			channel, ok := m.channels[f.ID]
+			m.metadataMutex.Unlock()
+			if !ok {
+				return fmt.Errorf("Unknown channel id: %v", f.ID)
+			}
+			// this will unblock waiting Read calls
+			if err := channel.readPipe.CloseWrite(); err != nil {
+				return err
+			}
+			// this will unblock waiting Write calls
+			if err := channel.recvClose(); err != nil {
+				return err
+			}
+			if channel.isClosed() {
+				m.freeChannel(channel.ID)
+			}
+		default:
+			return fmt.Errorf("Unknown command type: %v", f)
+		}
+	}
 }
 
 // HandleMultiplexedConnections unmarshals and handles requests from the server.
@@ -128,7 +361,7 @@ func HandleMultiplexedConnections(conn net.Conn, quit chan struct{}) error {
 	}
 	switch f.Command {
 	case Open:
-		o, err := unmarshalOpen(conn)
+		o, err := f.Open()
 		if err != nil {
 			return fmt.Errorf("Failed to unmarshal open command: %v", err)
 		}
@@ -136,18 +369,14 @@ func HandleMultiplexedConnections(conn net.Conn, quit chan struct{}) error {
 		case Multiplexed:
 			return fmt.Errorf("Multiplexed connections are not implemented yet")
 		case Dedicated:
-			d, err := unmarshalDestination(conn)
-			if err != nil {
-				return fmt.Errorf("Failed to unmarshal header: %#v", err)
-			}
-			switch d.Proto {
+			switch o.Destination.Proto {
 			case TCP:
-				backendAddr := net.TCPAddr{IP: d.IP, Port: int(d.Port), Zone: ""}
+				backendAddr := net.TCPAddr{IP: o.Destination.IP, Port: int(o.Destination.Port), Zone: ""}
 				if err := HandleTCPConnection(conn.(Conn), &backendAddr, quit); err != nil {
 					return err
 				}
 			case UDP:
-				backendAddr := &net.UDPAddr{IP: d.IP, Port: int(d.Port), Zone: ""}
+				backendAddr := &net.UDPAddr{IP: o.Destination.IP, Port: int(o.Destination.Port), Zone: ""}
 
 				proxy, err := NewUDPProxy(backendAddr, NewUDPConn(conn), backendAddr)
 				if err != nil {
@@ -156,7 +385,7 @@ func HandleMultiplexedConnections(conn net.Conn, quit chan struct{}) error {
 				proxy.Run()
 				return nil
 			default:
-				return fmt.Errorf("Unknown protocol: %d", d.Proto)
+				return fmt.Errorf("Unknown protocol: %d", o.Destination.Proto)
 			}
 		}
 	default:

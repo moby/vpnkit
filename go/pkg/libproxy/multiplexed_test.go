@@ -2,133 +2,231 @@ package libproxy
 
 import (
 	"bytes"
-	"io/ioutil"
+	"crypto/rand"
+	"crypto/sha1"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"sync"
 	"testing"
 )
 
-// By default this is intended to be run from the Dockerfile
-var binDir = "../../test_inputs/"
-
-func TestParseOpenDedicated(t *testing.T) {
-	b, err := ioutil.ReadFile(binDir + "open_dedicated_connection.bin")
+func TestNew(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+	client, err := local.Dial(Destination{
+		Proto: TCP,
+		IP:    net.ParseIP("127.0.0.1"),
+		Port:  8080,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := bytes.NewBuffer(b)
-	f, err := unmarshalFrame(r)
+	server, _, err := remote.Accept()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertEqual(t, f.Command, Open)
-	assertEqual(t, f.ID, uint32(4))
-	o, err := unmarshalOpen(r)
-	if err != nil {
+	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
-	assertEqual(t, o.Connection, Dedicated)
-	d, err := unmarshalDestination(r)
-	if err != nil {
+	if err := server.Close(); err != nil {
 		t.Fatal(err)
 	}
-	assertEqual(t, d.Proto, TCP)
-	assertEqual(t, d.IP.String(), "127.0.0.1")
-	assertEqual(t, d.Port, uint16(8080))
 }
 
-func TestParseOpenMultiplexed(t *testing.T) {
-	b, err := ioutil.ReadFile(binDir + "open_multiplexed_connection.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := bytes.NewBuffer(b)
-	f, err := unmarshalFrame(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEqual(t, f.Command, Open)
-	assertEqual(t, f.ID, uint32(5))
-	o, err := unmarshalOpen(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEqual(t, o.Connection, Multiplexed)
-	d, err := unmarshalDestination(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEqual(t, d.Proto, UDP)
-	assertEqual(t, d.IP.String(), "::1")
-	assertEqual(t, d.Port, uint16(8080))
+func genRandomBuffer(size int) ([]byte, string) {
+	buf := make([]byte, size)
+	_, _ = rand.Read(buf)
+	return buf, fmt.Sprintf("% x", sha1.Sum(buf))
 }
 
-func TestParseClose(t *testing.T) {
-	b, err := ioutil.ReadFile(binDir + "close.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := bytes.NewBuffer(b)
-	f, err := unmarshalFrame(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEqual(t, f.Command, Close)
-	assertEqual(t, f.ID, uint32(6))
+func writeRandomBuffer(w Conn, toWriteClient int) (chan error, string) {
+	clientWriteBuf, clientWriteSha := genRandomBuffer(toWriteClient)
+	done := make(chan error)
+
+	go func() {
+		if _, err := w.Write(clientWriteBuf); err != nil {
+			done <- err
+		}
+		done <- w.CloseWrite()
+	}()
+	return done, clientWriteSha
 }
 
-func TestParseShutdown(t *testing.T) {
-	b, err := ioutil.ReadFile(binDir + "shutdown.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := bytes.NewBuffer(b)
-	f, err := unmarshalFrame(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEqual(t, f.Command, Shutdown)
-	assertEqual(t, f.ID, uint32(7))
+func readAndSha(t *testing.T, r Conn) chan string {
+	result := make(chan string)
+	go func() {
+		var toRead bytes.Buffer
+		_, err := io.Copy(&toRead, r)
+		if err != nil {
+			t.Error(err)
+		}
+		sha := fmt.Sprintf("% x", sha1.Sum(toRead.Bytes()))
+		result <- sha
+	}()
+	return result
 }
 
-func TestParseData(t *testing.T) {
-	b, err := ioutil.ReadFile(binDir + "data.bin")
+func muxReadWrite(t *testing.T, toWriteClient, toWriteServer int) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("other", loopback.OtherEnd())
+	remote.Run()
+	client, err := local.Dial(Destination{
+		Proto: TCP,
+		IP:    net.ParseIP("127.0.0.1"),
+		Port:  8080,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := bytes.NewBuffer(b)
-	f, err := unmarshalFrame(r)
+	clientWriteErr, clientWriteSha := writeRandomBuffer(client, toWriteClient)
+
+	server, _, err := remote.Accept()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertEqual(t, f.Command, Data)
-	assertEqual(t, f.ID, uint32(8))
-	d, err := unmarshalData(r)
-	if err != nil {
+
+	serverWriteErr, serverWriteSha := writeRandomBuffer(server, toWriteServer)
+
+	serverReadShaC := readAndSha(t, server)
+	clientReadShaC := readAndSha(t, client)
+	serverReadSha := <-serverReadShaC
+	clientReadSha := <-clientReadShaC
+	assertEqual(t, clientWriteSha, serverReadSha)
+	assertEqual(t, serverWriteSha, clientReadSha)
+
+	if err := <-clientWriteErr; err != nil {
 		t.Fatal(err)
 	}
-	assertEqual(t, d.payloadlen, uint32(128))
+	if err := <-serverWriteErr; err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatal(err)
+	}
 }
 
-func TestParseWindow(t *testing.T) {
-	b, err := ioutil.ReadFile(binDir + "window.bin")
-	if err != nil {
-		t.Fatal(err)
+var (
+	interesting = []int{
+		0,
+		1,
+		4,
+		4095,
+		4096,
+		4097,
+		4098,
+		4099,
+		5000,
+		5001,
+		5002,
+		1048575,
+		1048576,
+		1048577,
 	}
-	r := bytes.NewBuffer(b)
-	f, err := unmarshalFrame(r)
-	if err != nil {
-		t.Fatal(err)
+)
+
+func TestMuxCorners(t *testing.T) {
+	for _, toWriteClient := range interesting {
+		for _, toWriteServer := range interesting {
+			log.Printf("Client will write %d and server will write %d", toWriteClient, toWriteServer)
+			muxReadWrite(t, toWriteClient, toWriteServer)
+		}
 	}
-	assertEqual(t, f.Command, Window)
-	assertEqual(t, f.ID, uint32(9))
-	d, err := unmarshalWindow(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEqual(t, d.seq, uint64(8888888))
 }
 
-func assertEqual(t *testing.T, a interface{}, b interface{}) {
-	if a != b {
-		t.Fatalf("%s != %s", a, b)
+func TestMuxReadWrite(t *testing.T) {
+	muxReadWrite(t, 1048576, 1048576)
+}
+
+func TestMuxConcurrent(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("other", loopback.OtherEnd())
+	remote.Run()
+
+	numConcurrent := 1000
+	toWrite := 65536 * 2 // 2 * Window size
+	wg := &sync.WaitGroup{}
+	serverWriteSha := make(map[uint16]string)
+	serverReadSha := make(map[uint16]string)
+	clientWriteSha := make(map[uint16]string)
+	clientReadSha := make(map[uint16]string)
+	m := &sync.Mutex{}
+	wg.Add(numConcurrent)
+	for i := 0; i < numConcurrent; i++ {
+		go func(i int) {
+			defer wg.Done()
+			server, destination, err := remote.Accept()
+			if err != nil {
+				t.Fatal(err)
+			}
+			done, sha := writeRandomBuffer(server, toWrite)
+			m.Lock()
+			serverWriteSha[destination.Port] = sha
+			m.Unlock()
+
+			shaC := readAndSha(t, server)
+			sha = <-shaC
+			m.Lock()
+			serverReadSha[destination.Port] = sha
+			m.Unlock()
+
+			if err := <-done; err != nil {
+				t.Error(err)
+			}
+		}(i)
+	}
+
+	wg.Add(numConcurrent)
+	for i := uint16(0); i < uint16(numConcurrent); i++ {
+		go func(i uint16) {
+			defer wg.Done()
+			client, err := local.Dial(Destination{
+				Proto: TCP,
+				IP:    net.ParseIP("127.0.0.1"),
+				Port:  i,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			done, sha := writeRandomBuffer(client, toWrite)
+			m.Lock()
+			clientWriteSha[i] = sha
+			m.Unlock()
+
+			shaC := readAndSha(t, client)
+			sha = <-shaC
+			m.Lock()
+			clientReadSha[i] = sha
+			m.Unlock()
+			if err := <-done; err != nil {
+				t.Error(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	failed := false
+	for i := uint16(0); i < uint16(numConcurrent); i++ {
+		if clientWriteSha[i] != serverReadSha[i] {
+			fmt.Printf("clientWriteSha[%d] = %s\nserverReadSha[%d] = %s\n", i, clientWriteSha[i], i, serverReadSha[i])
+			failed = true
+		}
+		if serverWriteSha[i] != clientReadSha[i] {
+			fmt.Printf("serverWriteSha[%d] = %s\nclientReadSha[%d] = %s\n", i, serverWriteSha[i], i, clientReadSha[i])
+			failed = true
+		}
+	}
+	if failed {
+		t.Errorf("SHA mismatch")
 	}
 }
