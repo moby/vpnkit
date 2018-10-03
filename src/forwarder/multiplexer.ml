@@ -101,16 +101,18 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
         Window.advertise channel.subflow.Subflow.read
           channel.outer.max_buffer_size
       with
-      | None -> ()
+      | None -> Lwt.return_unit
       | Some seq ->
-          send channel.outer Frame.{command= Window seq; id= channel.id}
+          send channel.outer Frame.{command= Window seq; id= channel.id};
+          flush channel.outer
 
     let create outer id =
       let subflow = Subflow.create () in
       Hashtbl.add outer.subflows id subflow ;
       let channel = {outer; id; subflow} in
-      send_window_update channel ;
-      flush outer >>= fun () -> Lwt.return channel
+      send_window_update channel
+      >>= fun () ->
+      Lwt.return channel
 
     let connect outer destination =
       let find_free_flowid outer =
@@ -148,8 +150,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
               then rest
               else first :: rest;
             if Cstruct.len buf = 0 then begin
-              send_window_update channel ;
-              flush channel.outer
+              send_window_update channel
               >>= fun () ->
               Lwt.return (Ok (`Data ()))
             end else read_into channel buf
@@ -171,8 +172,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
             (channel.subflow).Subflow.incoming <- [] ;
             let len = List.fold_left ( + ) 0 (List.map Cstruct.len bufs) in
             Window.advance channel.subflow.Subflow.read len ;
-            send_window_update channel ;
-            flush channel.outer
+            send_window_update channel
             >>= fun () -> Lwt.return (Ok (`Data (Cstruct.concat bufs)))
       in
       wait ()
