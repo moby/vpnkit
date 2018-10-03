@@ -14,8 +14,8 @@ import (
 // Listen on virtio-vsock and AF_HYPERV for multiplexed connections
 func main() {
 	var (
-		vsockPort = flag.Int("vsockPort", 62373, "virtio-vsock port")
-		hvGUID    = flag.String("hvGuid", "0B95756A-9985-48AD-9470-78E060895BE7", "Hyper-V service GUID")
+		vsockPort = flag.Int("vsockPort", 0, "virtio-vsock port")
+		hvGUID    = flag.String("hvGuid", "", "Hyper-V service GUID")
 		listener  net.Listener
 	)
 	flag.Parse()
@@ -23,17 +23,22 @@ func main() {
 	quit := make(chan struct{})
 	defer close(quit)
 
-	vsock, err := vsock.Listen(vsock.CIDAny, uint32(*vsockPort))
-	if err != nil {
-		log.Printf("Failed to bind to vsock port %d: %#v", vsockPort, err)
-	} else {
+	if *vsockPort != 0 {
+		vsock, err := vsock.Listen(vsock.CIDAny, uint32(*vsockPort))
+		if err != nil {
+			log.Fatalf("Failed to bind to vsock port %d: %v", vsockPort, err)
+		}
+		log.Printf("Bound to AF_VSOCK port %d", *vsockPort)
 		listener = vsock
 	}
-	svcid, _ := hvsock.GUIDFromString(*hvGUID)
-	hvsock, err := hvsock.Listen(hvsock.HypervAddr{VMID: hvsock.GUIDWildcard, ServiceID: svcid})
-	if err != nil {
-		log.Printf("Failed to bind hvsock guid: %s: %#v", *hvGUID, err)
-	} else {
+
+	if *hvGUID != "" {
+		svcid, _ := hvsock.GUIDFromString(*hvGUID)
+		hvsock, err := hvsock.Listen(hvsock.HypervAddr{VMID: hvsock.GUIDWildcard, ServiceID: svcid})
+		if err != nil {
+			log.Fatalf("Failed to bind hvsock guid: %s: %v", *hvGUID, err)
+		}
+		log.Printf("Bound to AF_HYPERV GUID %s", *hvGUID)
 		listener = hvsock
 	}
 
