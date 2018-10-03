@@ -103,41 +103,47 @@ struct
     then Lwt.return ()
     else Lwt.fail (Unix.Unix_error(Unix.EPERM, "bind", ""))
 
-  (* Given a connection to the port forwarding service, write the
-     header which describes the container IP and port we wish to
-     connect to. *)
-  let write_forwarding_header description remote remote_port =
+  module Mux = Forwarder.Multiplexer.Make(Connector)
+
+  (* Since we only need one connection to the port forwarding service,
+     connect on demand and cache it. *)
+  let get_mux =
+    let mux = ref None in
+    let m = Lwt_mutex.create () in
+    fun () ->
+      match !mux with
+      | None ->
+        Lwt_mutex.with_lock m
+          (fun () ->
+            Connector.connect ()
+            >>= fun remote ->
+            let mux' = Mux.connect remote "port-forwarding"
+              (fun flow destination ->
+                Log.err (fun f -> f "Unexpected connection from %s via port multiplexer" (Forwarder.Frame.Destination.to_string destination));
+                Mux.Channel.close flow
+              ) in
+            mux := Some mux';
+            Lwt.return mux'
+          )
+      | Some m -> Lwt.return m
+
+  let open_channel remote_port =
+    get_mux ()
+    >>= fun mux ->
     let destination = Forwarder.Frame.Destination.({
       proto = remote_port.Port.proto;
       ip = remote_port.Port.ip;
       port = remote_port.Port.port;
     }) in
-    let header =
-      Cstruct.create (Forwarder.Frame.Destination.sizeof destination)
-      |> Forwarder.Frame.Destination.write destination in
-    (* Write the header, we should be connected to the container port *)
-    Connector.write remote header >>= function
-    | Ok  () -> Lwt.return_unit
-    | Error `Closed ->
-      let msg = Fmt.strf "%s: EOF writing forwarding header" description in
-      Log.err (fun f -> f "%s" msg);
-      Lwt.fail (Failure msg)
-    | Error e ->
-      let msg =
-        Fmt.strf "%s: failed to write forwarding header: %a" description
-          Connector.pp_write_error e
-      in
-      Log.err (fun f -> f "%s" msg);
-      Lwt.fail (Failure msg)
+    Mux.Channel.connect mux destination
 
-  module Proxy = Mirage_flow_lwt.Proxy(Clock)(Connector)(Socket.Stream.Tcp)
+  module Proxy = Mirage_flow_lwt.Proxy(Clock)(Mux.Channel)(Socket.Stream.Tcp)
 
   let start_tcp_proxy clock description remote_port server =
     Socket.Stream.Tcp.listen server (fun local ->
-        Connector.connect () >>= fun remote ->
+        open_channel remote_port
+        >>= fun remote ->
         Lwt.finalize (fun () ->
-            write_forwarding_header description remote remote_port
-            >>= fun () ->
             Log.debug (fun f -> f "%s: connected" description);
             Proxy.proxy clock remote local  >|= function
             | Error e ->
@@ -150,7 +156,7 @@ struct
                     Mirage_flow.pp_stats r_stats
                 )
           ) (fun () ->
-            Connector.close remote
+            Mux.Channel.close remote
           )
       );
     Lwt.return ()
@@ -158,15 +164,15 @@ struct
   let max_vsock_header_length = 1024
 
   let conn_read flow buf =
-    Connector.read_into flow buf >>= function
+    Mux.Channel.read_into flow buf >>= function
     | Ok `Eof       -> Lwt.fail End_of_file
-    | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Connector.pp_error e
+    | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Mux.Channel.pp_error e
     | Ok (`Data ()) -> Lwt.return ()
 
   let conn_write flow buf =
-    Connector.write flow buf >>= function
+    Mux.Channel.write flow buf >>= function
     | Error `Closed -> Lwt.fail End_of_file
-    | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Connector.pp_write_error e
+    | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Mux.Channel.pp_write_error e
     | Ok ()         -> Lwt.return ()
 
   let start_udp_proxy description remote_port server =
@@ -243,17 +249,17 @@ struct
       Log.debug (fun f ->
           f "%s: connecting to vsock port %s" description
             (Port.to_string remote_port));
-      Connector.connect () >>= fun v ->
+
+      open_channel remote_port
+      >>= fun remote ->
       Lwt.finalize (fun () ->
-          write_forwarding_header description v remote_port
-          >>= fun () ->
           Log.debug (fun f ->
               f "%s: connected to vsock port %s" description
                 (Port.to_string remote_port));
           (* FIXME(samoht): why ignoring that thread here? *)
-          let _ = from_vsock v in
-          from_internet v
-        ) (fun () -> Connector.close v)
+          let _ = from_vsock remote in
+          from_internet remote
+        ) (fun () -> Mux.Channel.close remote)
     in
     Lwt.async (fun () ->
         log_exception_continue "udp handle" (fun () -> handle server));

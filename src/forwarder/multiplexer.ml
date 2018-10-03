@@ -126,6 +126,36 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       send outer Frame.{command= Open (Multiplexed, destination); id} ;
       create outer id
 
+    let rec read_into channel buf =
+      let rec wait () =
+        match channel.subflow.Subflow.incoming with
+        | [] ->
+            if
+              channel.subflow.Subflow.incoming_shutdown
+              || channel.subflow.Subflow.close_received
+            then Lwt.return (Ok `Eof)
+            else
+              Lwt_condition.wait channel.subflow.Subflow.incoming_c
+              >>= fun () -> wait ()
+        | first :: rest ->
+            let num_from_first = min (Cstruct.len first) (Cstruct.len buf) in
+            Cstruct.blit first 0 buf 0 num_from_first;
+            let buf = Cstruct.shift buf num_from_first in
+            let first = Cstruct.shift first num_from_first in
+            Window.advance channel.subflow.Subflow.read num_from_first;
+            (channel.subflow).Subflow.incoming <-
+              if Cstruct.len first = 0
+              then rest
+              else first :: rest;
+            if Cstruct.len buf = 0 then begin
+              send_window_update channel ;
+              flush channel.outer
+              >>= fun () ->
+              Lwt.return (Ok (`Data ()))
+            end else read_into channel buf
+      in
+      wait ()
+
     let read channel =
       let rec wait () =
         match channel.subflow.Subflow.incoming with
