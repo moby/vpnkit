@@ -178,7 +178,7 @@ func (c *channel) isClosed() bool {
 // Multiplexer muxes and demuxes sub-connections over a single connection
 type Multiplexer struct {
 	label         string
-	conn          Conn
+	conn          io.ReadWriteCloser
 	writeMutex    *sync.Mutex // hold when writing on the channel
 	channels      map[uint32]*channel
 	nextChannelID uint32
@@ -188,7 +188,7 @@ type Multiplexer struct {
 }
 
 // NewMultiplexer constructs a multiplexer from a channel
-func NewMultiplexer(label string, conn Conn) *Multiplexer {
+func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
 	var writeMutex, metadataMutex sync.Mutex
 	acceptCond := sync.NewCond(&metadataMutex)
 	channels := make(map[uint32]*channel)
