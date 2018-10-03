@@ -38,6 +38,36 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestClose(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+	// There was a bug where the second iteration failed because the main loop had deadlocked
+	// when it received a Close message.
+	for i := 0; i < 2; i++ {
+		client, err := local.Dial(Destination{
+			Proto: TCP,
+			IP:    net.ParseIP("127.0.0.1"),
+			Port:  8080,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		server, _, err := remote.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := client.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := server.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func genRandomBuffer(size int) ([]byte, string) {
 	buf := make([]byte, size)
 	_, _ = rand.Read(buf)
@@ -170,6 +200,7 @@ func TestMuxConcurrent(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer server.Close()
 			done, sha := writeRandomBuffer(server, toWrite)
 			m.Lock()
 			serverWriteSha[destination.Port] = sha
@@ -199,6 +230,7 @@ func TestMuxConcurrent(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer client.Close()
 			done, sha := writeRandomBuffer(client, toWrite)
 			m.Lock()
 			clientWriteSha[i] = sha
