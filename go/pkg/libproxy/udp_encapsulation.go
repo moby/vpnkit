@@ -17,7 +17,7 @@ type UDPListener interface {
 
 // udpEncapsulator encapsulates a UDP connection and listener
 type udpEncapsulator struct {
-	conn net.Conn
+	conn io.ReadWriteCloser
 	m    *sync.Mutex
 	r    *sync.Mutex
 	w    *sync.Mutex
@@ -52,7 +52,7 @@ func (u *udpEncapsulator) Close() error {
 }
 
 // NewUDPConn initializes a new UDP connection
-func NewUDPConn(conn net.Conn) UDPListener {
+func NewUDPConn(conn io.ReadWriteCloser) UDPListener {
 	var m sync.Mutex
 	var r sync.Mutex
 	var w sync.Mutex
@@ -72,7 +72,7 @@ type udpDatagram struct {
 }
 
 // Marshal marshals data from the udpDatagram to the provided connection
-func (u *udpDatagram) Marshal(conn net.Conn) error {
+func (u *udpDatagram) Marshal(w io.Writer) error {
 	// marshal the variable length header to a temporary buffer
 	var header bytes.Buffer
 	var length uint16
@@ -104,15 +104,15 @@ func (u *udpDatagram) Marshal(conn net.Conn) error {
 	}
 
 	length = uint16(2 + header.Len() + len(u.payload))
-	if err := binary.Write(conn, binary.LittleEndian, &length); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, &length); err != nil {
 		return nil
 	}
-	_, err := io.Copy(conn, &header)
+	_, err := io.Copy(w, &header)
 	if err != nil {
 		return err
 	}
 	payload := bytes.NewBuffer(u.payload)
-	_, err = io.Copy(conn, payload)
+	_, err = io.Copy(w, payload)
 	if err != nil {
 		return err
 	}
@@ -120,36 +120,36 @@ func (u *udpDatagram) Marshal(conn net.Conn) error {
 }
 
 // Unmarshal unmarshals data from the connection to the udpDatagram
-func (u *udpDatagram) Unmarshal(conn net.Conn) (int, error) {
+func (u *udpDatagram) Unmarshal(r io.Reader) (int, error) {
 	var length uint16
 	// frame length
-	if err := binary.Read(conn, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return 0, err
 	}
-	if err := binary.Read(conn, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return 0, err
 	}
 	var IP net.IP
 	IP = make([]byte, length)
-	if err := binary.Read(conn, binary.LittleEndian, &IP); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &IP); err != nil {
 		return 0, err
 	}
 	u.IP = &IP
-	if err := binary.Read(conn, binary.LittleEndian, &u.Port); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &u.Port); err != nil {
 		return 0, err
 	}
-	if err := binary.Read(conn, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return 0, err
 	}
 	Zone := make([]byte, length)
-	if err := binary.Read(conn, binary.LittleEndian, &Zone); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &Zone); err != nil {
 		return 0, err
 	}
 	u.Zone = string(Zone)
-	if err := binary.Read(conn, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return 0, err
 	}
-	_, err := io.ReadFull(conn, u.payload[0:length])
+	_, err := io.ReadFull(r, u.payload[0:length])
 	if err != nil {
 		return 0, err
 	}
