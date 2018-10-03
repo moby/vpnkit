@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"io"
 	"log"
 	"net"
 
@@ -18,6 +19,9 @@ func main() {
 		listener  net.Listener
 	)
 	flag.Parse()
+
+	quit := make(chan struct{})
+	defer close(quit)
 
 	vsock, err := vsock.Listen(vsock.CIDAny, uint32(*vsockPort))
 	if err != nil {
@@ -37,20 +41,28 @@ func main() {
 		log.Fatal("Failed to bind vsock or hvsock")
 	}
 
-	quit := make(chan struct{})
-	defer close(quit)
-
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Printf("Error accepting connection: %#v", err)
 			return // no more listening
 		}
-		go func() {
-			defer conn.Close()
-			if err := libproxy.HandleMultiplexedConnections(conn, quit); err != nil {
-				log.Println(err)
-			}
-		}()
+		go handleConn(conn, quit)
+	}
+}
+
+// handle every AF_VSOCK connection to the multiplexer
+func handleConn(rw io.ReadWriteCloser, quit chan struct{}) {
+	defer rw.Close()
+
+	mux := libproxy.NewMultiplexer("local", rw)
+	mux.Run()
+	for {
+		conn, destination, err := mux.Accept()
+		if err != nil {
+			log.Printf("Error accepting subconnection: %v", err)
+			return
+		}
+		go libproxy.Forward(conn, *destination, quit)
 	}
 }

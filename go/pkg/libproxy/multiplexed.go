@@ -353,44 +353,29 @@ func (m *Multiplexer) run() error {
 	}
 }
 
-// HandleMultiplexedConnections unmarshals and handles requests from the server.
-func HandleMultiplexedConnections(conn net.Conn, quit chan struct{}) error {
-	f, err := unmarshalFrame(conn)
-	if err != nil {
-		return fmt.Errorf("Failed to unmarshal command frame: %v", err)
-	}
-	switch f.Command {
-	case Open:
-		o, err := f.Open()
+// Forward runs the TCP/UDP forwarder over a sub-connection
+func Forward(conn Conn, destination Destination, quit chan struct{}) {
+	defer conn.Close()
+
+	switch destination.Proto {
+	case TCP:
+		backendAddr := net.TCPAddr{IP: destination.IP, Port: int(destination.Port), Zone: ""}
+		if err := HandleTCPConnection(conn, &backendAddr, quit); err != nil {
+			log.Printf("Error setting up TCP proxy subconnection: %v", err)
+			return
+		}
+	case UDP:
+		backendAddr := &net.UDPAddr{IP: destination.IP, Port: int(destination.Port), Zone: ""}
+
+		proxy, err := NewUDPProxy(backendAddr, NewUDPConn(conn), backendAddr)
 		if err != nil {
-			return fmt.Errorf("Failed to unmarshal open command: %v", err)
+			log.Printf("Failed to setup UDP proxy for %s: %#v", backendAddr, err)
+			return
 		}
-		switch o.Connection {
-		case Multiplexed:
-			return fmt.Errorf("Multiplexed connections are not implemented yet")
-		case Dedicated:
-			switch o.Destination.Proto {
-			case TCP:
-				backendAddr := net.TCPAddr{IP: o.Destination.IP, Port: int(o.Destination.Port), Zone: ""}
-				if err := HandleTCPConnection(conn.(Conn), &backendAddr, quit); err != nil {
-					return err
-				}
-			case UDP:
-				backendAddr := &net.UDPAddr{IP: o.Destination.IP, Port: int(o.Destination.Port), Zone: ""}
-
-				proxy, err := NewUDPProxy(backendAddr, NewUDPConn(conn), backendAddr)
-				if err != nil {
-					return fmt.Errorf("Failed to setup UDP proxy for %s: %#v", backendAddr, err)
-				}
-				proxy.Run()
-				return nil
-			default:
-				return fmt.Errorf("Unknown protocol: %d", o.Destination.Proto)
-			}
-		}
+		proxy.Run()
+		return
 	default:
-		return fmt.Errorf("Unknown command type: %v", f)
+		log.Printf("Unknown protocol: %d", destination.Proto)
+		return
 	}
-
-	return nil
 }
