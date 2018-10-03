@@ -11,7 +11,7 @@ import (
 )
 
 // Listen on virtio-vsock and AF_HYPERV for multiplexed connections
-func manyPorts() {
+func main() {
 	var (
 		vsockPort = flag.Int("vsockPort", 62373, "virtio-vsock port")
 		hvGUID    = flag.String("hvGuid", "0B95756A-9985-48AD-9470-78E060895BE7", "Hyper-V service GUID")
