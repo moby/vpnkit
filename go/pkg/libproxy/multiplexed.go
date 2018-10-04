@@ -1,6 +1,7 @@
 package libproxy
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -179,6 +180,7 @@ func (c *channel) isClosed() bool {
 type Multiplexer struct {
 	label         string
 	conn          io.ReadWriteCloser
+	connR         io.Reader   // with buffering
 	writeMutex    *sync.Mutex // hold when writing on the channel
 	channels      map[uint32]*channel
 	nextChannelID uint32
@@ -192,10 +194,12 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
 	var writeMutex, metadataMutex sync.Mutex
 	acceptCond := sync.NewCond(&metadataMutex)
 	channels := make(map[uint32]*channel)
+	connR := bufio.NewReader(conn)
 
 	return &Multiplexer{
 		label:         label,
 		conn:          conn,
+		connR:         connR,
 		writeMutex:    &writeMutex,
 		channels:      channels,
 		metadataMutex: &metadataMutex,
@@ -272,7 +276,7 @@ func (m *Multiplexer) Run() {
 
 func (m *Multiplexer) run() error {
 	for {
-		f, err := unmarshalFrame(m.conn)
+		f, err := unmarshalFrame(m.connR)
 		if err != nil {
 			return fmt.Errorf("Failed to unmarshal command frame: %v", err)
 		}
@@ -316,7 +320,7 @@ func (m *Multiplexer) run() error {
 			if err != nil {
 				return err
 			}
-			if _, err := io.CopyN(channel.readPipe, m.conn, int64(d.payloadlen)); err != nil {
+			if _, err := io.CopyN(channel.readPipe, m.connR, int64(d.payloadlen)); err != nil {
 				return err
 			}
 		case Shutdown:
