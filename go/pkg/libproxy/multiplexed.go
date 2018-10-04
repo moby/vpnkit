@@ -112,8 +112,9 @@ func (c *channel) Write(p []byte) (int, error) {
 			// need to write the header and the payload together
 			c.multiplexer.writeMutex.Lock()
 			f := NewData(c.ID, uint32(toWrite))
-			err1 := f.Write(c.multiplexer.conn)
-			_, err2 := c.multiplexer.conn.Write(p[0:toWrite])
+			err1 := f.Write(c.multiplexer.connW)
+			_, err2 := c.multiplexer.connW.Write(p[0:toWrite])
+			err3 := c.multiplexer.connW.Flush()
 			c.multiplexer.writeMutex.Unlock()
 
 			if err1 != nil {
@@ -121,6 +122,9 @@ func (c *channel) Write(p []byte) (int, error) {
 			}
 			if err2 != nil {
 				return written, err2
+			}
+			if err3 != nil {
+				return written, err3
 			}
 			c.write.current = c.write.current + uint64(toWrite)
 			p = p[toWrite:]
@@ -179,8 +183,9 @@ func (c *channel) isClosed() bool {
 // Multiplexer muxes and demuxes sub-connections over a single connection
 type Multiplexer struct {
 	label         string
-	conn          io.ReadWriteCloser
-	connR         io.Reader   // with buffering
+	conn          io.Closer
+	connR         io.Reader // with buffering
+	connW         *bufio.Writer
 	writeMutex    *sync.Mutex // hold when writing on the channel
 	channels      map[uint32]*channel
 	nextChannelID uint32
@@ -195,11 +200,12 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
 	acceptCond := sync.NewCond(&metadataMutex)
 	channels := make(map[uint32]*channel)
 	connR := bufio.NewReader(conn)
-
+	connW := bufio.NewWriter(conn)
 	return &Multiplexer{
 		label:         label,
 		conn:          conn,
 		connR:         connR,
+		connW:         connW,
 		writeMutex:    &writeMutex,
 		channels:      channels,
 		metadataMutex: &metadataMutex,
@@ -210,7 +216,10 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
 func (m *Multiplexer) send(f *Frame) error {
 	m.writeMutex.Lock()
 	defer m.writeMutex.Unlock()
-	return f.Write(m.conn)
+	if err := f.Write(m.connW); err != nil {
+		return err
+	}
+	return m.connW.Flush()
 }
 
 func (m *Multiplexer) findFreeChannelID() uint32 {
