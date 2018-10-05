@@ -124,7 +124,7 @@ let read_http ch =
   in
   loop ""
 
-module LocalServer = struct
+module LocalTCPServer = struct
   type t = {
     local_port: int;
     server: Host.Sockets.Stream.Tcp.server;
@@ -237,11 +237,11 @@ let http_get flow =
     if not(Astring.String.is_prefix ~affix:"HTTP" response)
     then failwith (Printf.sprintf "unrecognised HTTP response: [%s]" response)
 
-let test_one_forward () =
-  let t = LocalServer.with_server (fun server ->
+let test_one_tcp_forward () =
+  let t = LocalTCPServer.with_server (fun server ->
       PortsServer.with_server (fun ports_port ->
           ForwardControl.with_connection ports_port (fun connection ->
-              let name = "tcp:127.0.0.1:0:" ^ LocalServer.to_string server in
+              let name = "tcp:127.0.0.1:0:" ^ LocalTCPServer.to_string server in
               ForwardControl.with_forward connection name (fun ip port ->
                   LocalClient.connect (ip, port)
                   >>= fun client ->
@@ -254,11 +254,11 @@ let test_one_forward () =
     ) in
   run t
 
-let test_10_connections () =
-  let t = LocalServer.with_server (fun server ->
+let test_10_tcp_connections () =
+  let t = LocalTCPServer.with_server (fun server ->
       PortsServer.with_server (fun ports_port ->
           ForwardControl.with_connection ports_port (fun connection ->
-              let name = "tcp:127.0.0.1:0:" ^ LocalServer.to_string server in
+              let name = "tcp:127.0.0.1:0:" ^ LocalTCPServer.to_string server in
               ForwardControl.with_forward connection name (fun ip port ->
                   let rec loop = function
                   | 0 -> Lwt.return ()
@@ -287,13 +287,13 @@ let test_10_connections () =
   run t
 
 let tests = [
-  "Ports: 1 port forward",
+  "Ports: 1 TCP port forward",
   [ "Perform an HTTP GET through a port forward",
     `Quick,
-    test_one_forward ];
+    test_one_tcp_forward ];
 
-  "Ports: 10 port forwards",
+  "Ports: 10 TCP port forwards",
   [ "Perform 10 HTTP GETs through a port forward",
     `Quick,
-    test_10_connections ];
+    test_10_tcp_connections ];
 ]
