@@ -54,7 +54,7 @@ module ForwardServer = struct
           Host.Sockets.Datagram.Udp.connect (destination.ip, destination.port) >>= function
           | Error (`Msg x) -> failwith x
           | Ok remote ->
-            let from_vsock_buffer = Cstruct.create (65536 * 2) in
+            let from_vsock_buffer = Cstruct.create (Constants.max_udp_length + Forwarder.Frame.Udp.max_sizeof) in
             (* A NAT table with one entry *)
             let from = ref None in
             let rec vsock2internet () =
@@ -87,7 +87,7 @@ module ForwardServer = struct
                 | Error _ -> Lwt.return_unit
                 | Ok () ->
                   vsock2internet () in
-            let write_header_buffer = Cstruct.create (65536 * 2) in
+            let write_header_buffer = Cstruct.create (Constants.max_udp_length + Forwarder.Frame.Udp.max_sizeof) in
             let rec internet2vsock () =
               let write flow buf =
                 Mux.Channel.write flow buf >>= function
@@ -281,7 +281,7 @@ module LocalUDPServer = struct
   }
 
   let echo server =
-    let from_internet_buffer = Cstruct.create 65536 in
+    let from_internet_buffer = Cstruct.create Constants.max_udp_length in
     let rec loop () =
       Log.info (fun f -> f "LocalUDPServer.recvfrom");
       Host.Sockets.Datagram.Udp.recvfrom server from_internet_buffer
