@@ -309,6 +309,13 @@ struct
           Socket.Datagram.Udp.bind ~description (local_ip, local_port)
           >>= fun server ->
           t.server <- Some (`Udp server);
+          (* Resolve the local port yet (the fds are already bound) *)
+          t.local <- ( match t.local with
+            | { Port.proto = `Udp; port = 0; _ } ->
+              let _, port = Socket.Datagram.Udp.getsockname server in
+              { t.local with Port.port }
+            | _ ->
+              t.local );
           start_udp_proxy (to_string t) t.remote_port server
           >|= fun () ->
           Ok t
