@@ -432,6 +432,32 @@ let test_one_udp_forward () =
     ) in
   run t
 
+let interesting_sizes = [
+  (* on macOS the maximum we can send is given by $(sysctl net.inet.udp.maxdgram)
+     which seems to be 9216 for me *)
+  1; 4; 511; 1023; 2034; 2035; 4095; 8191; 9215; 9216;
+]
+
+let test_large_udp_forwards () =
+  let t = LocalUDPServer.with_server (fun server ->
+      PortsServer.with_server (fun ports_port ->
+          ForwardControl.with_connection ports_port (fun connection ->
+              let name = "udp:127.0.0.1:0:" ^ LocalUDPServer.to_string server in
+              ForwardControl.with_forward connection name (fun ip port ->
+                  LocalUDPClient.connect (ip, port)
+                  >>= fun client ->
+                  Lwt_list.iter_s
+                    (fun size ->
+                      udp_echo client size
+                    ) interesting_sizes
+                  >>= fun () ->
+                  LocalUDPClient.disconnect client
+                )
+            )
+        )
+    ) in
+  run t
+
 let test_10_tcp_connections () =
   let t = LocalTCPServer.with_server (fun server ->
       PortsServer.with_server (fun ports_port ->
@@ -479,4 +505,9 @@ let tests = [
   [ "Send a UDP packet through a port forward",
     `Quick,
     test_one_udp_forward ];
+
+  "Ports: large UDP packets through a port forward",
+  [ "Send large UDP packets through a port forward",
+    `Quick,
+    test_large_udp_forwards ];
 ]
