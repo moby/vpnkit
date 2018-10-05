@@ -23,37 +23,31 @@ module Channel = Mirage_channel_lwt.Make(Host.Sockets.Stream.Tcp)
 module ForwardServer = struct
   (** Accept connections, read the forwarding header and run a proxy *)
 
+  module Mux = Forwarder.Multiplexer.Make(Host.Sockets.Stream.Tcp)
+
   module Proxy =
     Mirage_flow_lwt.Proxy
-      (Mclock)(Host.Sockets.Stream.Tcp)(Host.Sockets.Stream.Tcp)
+      (Mclock)(Mux.Channel)(Host.Sockets.Stream.Tcp)
 
   let accept flow =
-    let sizeof = 1 + 2 + 4 + 2 in
-    let header = Cstruct.create sizeof in
-    Host.Sockets.Stream.Tcp.read_into flow header >>= function
-    | Ok `Eof -> failwith "EOF"
-    | Error e -> Fmt.kstrf failwith "%a" Host.Sockets.Stream.Tcp.pp_error e
-    | Ok (`Data ()) ->
-      let ip_len = Cstruct.LE.get_uint16 header 1 in
-      let ip =
-        let bytes = Cstruct.(to_string @@ sub header 3 ip_len) in
-        if String.length bytes = 4
-        then Ipaddr.V4.of_bytes_exn bytes
-        else assert false in (* IPv4 only *)
-      let port = Cstruct.LE.get_uint16 header 7 in
-      assert (Cstruct.get_uint8 header 0 == 1); (* TCP only *)
+    let forever, _u = Lwt.task () in
+    let _mux = Mux.connect flow "ForwardServer"
+      (fun client_flow destination ->
+        let open Forwarder.Frame.Destination in
+        Host.Sockets.Stream.Tcp.connect (destination.ip, destination.port) >>= function
+        | Error (`Msg x) -> failwith x
+        | Ok remote ->
+          Mclock.connect () >>= fun clock ->
+          Lwt.finalize (fun () ->
+              Proxy.proxy clock client_flow remote >>= function
+              | Error e -> Fmt.kstrf failwith "%a" Proxy.pp_error e
+              | Ok (_l_stats, _r_stats) -> Lwt.return ()
+            ) (fun () ->
+              Host.Sockets.Stream.Tcp.close remote
+            )
 
-      Host.Sockets.Stream.Tcp.connect (Ipaddr.V4 ip, port) >>= function
-      | Error (`Msg x) -> failwith x
-      | Ok remote ->
-        Mclock.connect () >>= fun clock ->
-        Lwt.finalize (fun () ->
-            Proxy.proxy clock flow remote >>= function
-            | Error e -> Fmt.kstrf failwith "%a" Proxy.pp_error e
-            | Ok (_l_stats, _r_stats) -> Lwt.return ()
-          ) (fun () ->
-            Host.Sockets.Stream.Tcp.close remote
-          )
+      ) in
+    forever
 
   let port =
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)

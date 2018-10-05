@@ -1,9 +1,7 @@
 
 module Port : sig
-  type t = [
-    | `Tcp of Ipaddr.t * int
-    | `Udp of Ipaddr.t * int
-  ]
+
+  type t
 
   val of_string: string -> (t, [ `Msg of string ]) result
 end

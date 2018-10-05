@@ -60,6 +60,7 @@ depends: [
   "mirage-vnetif" {>= "0.4.0"}
   "uuidm"
   "ezjsonm"
+  "sha"
   "stringext" {= "1.4.3"}
   "mirage-clock-unix"
 ]

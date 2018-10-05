@@ -119,7 +119,7 @@ func TestTCP4Proxy(t *testing.T) {
 	defer backend.Close()
 	backend.Run()
 	frontendAddr := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0}
-	proxy, err := NewProxy(frontendAddr, backend.LocalAddr())
+	proxy, err := NewIPProxy(frontendAddr, backend.LocalAddr())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,11 +127,12 @@ func TestTCP4Proxy(t *testing.T) {
 }
 
 func TestTCP6Proxy(t *testing.T) {
+	t.Skip("No support for IPv6 inside Docker")
 	backend := NewEchoServer(t, "tcp", "[::1]:0")
 	defer backend.Close()
 	backend.Run()
 	frontendAddr := &net.TCPAddr{IP: net.IPv6loopback, Port: 0}
-	proxy, err := NewProxy(frontendAddr, backend.LocalAddr())
+	proxy, err := NewIPProxy(frontendAddr, backend.LocalAddr())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +147,7 @@ func TestTCPDualStackProxy(t *testing.T) {
 	defer backend.Close()
 	backend.Run()
 	frontendAddr := &net.TCPAddr{IP: net.IPv6loopback, Port: 0}
-	proxy, err := NewProxy(frontendAddr, backend.LocalAddr())
+	proxy, err := NewIPProxy(frontendAddr, backend.LocalAddr())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +163,7 @@ func TestUDP4Proxy(t *testing.T) {
 	defer backend.Close()
 	backend.Run()
 	frontendAddr := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0}
-	proxy, err := NewProxy(frontendAddr, backend.LocalAddr())
+	proxy, err := NewIPProxy(frontendAddr, backend.LocalAddr())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,11 +171,12 @@ func TestUDP4Proxy(t *testing.T) {
 }
 
 func TestUDP6Proxy(t *testing.T) {
+	t.Skip("No support for IPv6 inside Docker")
 	backend := NewEchoServer(t, "udp", "[::1]:0")
 	defer backend.Close()
 	backend.Run()
 	frontendAddr := &net.UDPAddr{IP: net.IPv6loopback, Port: 0}
-	proxy, err := NewProxy(frontendAddr, backend.LocalAddr())
+	proxy, err := NewIPProxy(frontendAddr, backend.LocalAddr())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +187,7 @@ func TestUDPWriteError(t *testing.T) {
 	frontendAddr := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0}
 	// Hopefully, this port will be free: */
 	backendAddr := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 25587}
-	proxy, err := NewProxy(frontendAddr, backendAddr)
+	proxy, err := NewIPProxy(frontendAddr, backendAddr)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,8 +8,6 @@ import (
 	"net"
 	"os"
 	"syscall"
-
-	"github.com/linuxkit/virtsock/pkg/vsock"
 )
 
 // Proxy defines the behavior of a proxy. It forwards traffic back and forth
@@ -29,26 +27,6 @@ type Proxy interface {
 	BackendAddr() net.Addr
 }
 
-// NewVsockProxy creates a Proxy listening on Vsock
-func NewVsockProxy(frontendAddr *vsock.VsockAddr, backendAddr net.Addr) (Proxy, error) {
-	switch backendAddr.(type) {
-	case *net.UDPAddr:
-		listener, err := vsock.Listen(vsock.CIDAny, frontendAddr.Port)
-		if err != nil {
-			return nil, err
-		}
-		return NewUDPProxy(frontendAddr, NewUDPListener(listener), backendAddr.(*net.UDPAddr))
-	case *net.TCPAddr:
-		listener, err := vsock.Listen(vsock.CIDAny, frontendAddr.Port)
-		if err != nil {
-			return nil, err
-		}
-		return NewTCPProxy(listener, backendAddr.(*net.TCPAddr))
-	default:
-		panic(fmt.Errorf("Unsupported protocol"))
-	}
-}
-
 // NewIPProxy creates a Proxy according to the specified frontendAddr and backendAddr.
 func NewIPProxy(frontendAddr, backendAddr net.Addr) (Proxy, error) {
 	switch frontendAddr.(type) {
@@ -57,15 +35,9 @@ func NewIPProxy(frontendAddr, backendAddr net.Addr) (Proxy, error) {
 		if err != nil {
 			return nil, err
 		}
-		return NewUDPProxy(frontendAddr, listener, backendAddr.(*net.UDPAddr))
+		return NewUDPProxy(listener.LocalAddr().(*net.UDPAddr), listener, backendAddr.(*net.UDPAddr))
 	case *net.TCPAddr:
 		listener, err := net.Listen("tcp", frontendAddr.String())
-		if err != nil {
-			return nil, err
-		}
-		return NewTCPProxy(listener, backendAddr.(*net.TCPAddr))
-	case *vsock.VsockAddr:
-		listener, err := vsock.Listen(vsock.CIDAny, frontendAddr.(*vsock.VsockAddr).Port)
 		if err != nil {
 			return nil, err
 		}
