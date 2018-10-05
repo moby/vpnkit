@@ -51,6 +51,13 @@ module Udp = struct
     port: int;
     payload_length: int;
   }
+  let max_sizeof =
+    2 + (* length of frame *)
+    2 + (* length of IP *)
+    16 + (* IPv6 *)
+    2 + (* port *)
+    2 + (* length of Zone, which is "" *)
+    2 (* length of payload length *)
   let write_header t buf =
     (* Leave space for a uint16 frame length *)
     let rest = Cstruct.shift buf 2 in

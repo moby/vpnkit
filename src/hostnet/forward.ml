@@ -161,8 +161,6 @@ struct
       );
     Lwt.return ()
 
-  let max_vsock_header_length = 1024
-
   let conn_read flow buf =
     Mux.Channel.read_into flow buf >>= function
     | Ok `Eof       -> Lwt.fail End_of_file
@@ -179,12 +177,12 @@ struct
     let from_internet_buffer = Cstruct.create Constants.max_udp_length in
     (* We write to the internet using the from_vsock_buffer *)
     let from_vsock_buffer =
-      Cstruct.create (Constants.max_udp_length + max_vsock_header_length)
+      Cstruct.create (Constants.max_udp_length + Forwarder.Frame.Udp.max_sizeof)
     in
     let handle fd =
       (* Construct the vsock header in a separate buffer but write the payload
          directly from the from_internet_buffer *)
-      let write_header_buffer = Cstruct.create max_vsock_header_length in
+      let write_header_buffer = Cstruct.create Forwarder.Frame.Udp.max_sizeof in
       let write v buf (ip, port) =
         let udp = Forwarder.Frame.Udp.({
             ip; port;
@@ -309,6 +307,13 @@ struct
           Socket.Datagram.Udp.bind ~description (local_ip, local_port)
           >>= fun server ->
           t.server <- Some (`Udp server);
+          (* Resolve the local port yet (the fds are already bound) *)
+          t.local <- ( match t.local with
+            | { Port.proto = `Udp; port = 0; _ } ->
+              let _, port = Socket.Datagram.Udp.getsockname server in
+              { t.local with Port.port }
+            | _ ->
+              t.local );
           start_udp_proxy (to_string t) t.remote_port server
           >|= fun () ->
           Ok t

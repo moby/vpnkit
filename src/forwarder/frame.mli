@@ -29,6 +29,9 @@ module Udp : sig
 
   val read: Cstruct.t -> t * Cstruct.t
     (** [read buf] reads [t] from [buf] and returns [t, payload] or raises an exception *)
+
+  val max_sizeof: int
+  (** The maximum size of a UDP header *)
 end
 
 type connection =
