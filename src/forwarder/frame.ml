@@ -1,47 +1,86 @@
 
 module Destination = struct
-  type t = {
-    proto: [ `Tcp | `Udp ];
-    ip: Ipaddr.t;
-    port: int;
-  }
+  type port = int
+  type path = string
+  type t = [
+    | `Tcp of Ipaddr.t * port
+    | `Udp of Ipaddr.t * port
+    | `Unix of path
+  ]
 
-  let to_string { proto; ip; port } =
-    Printf.sprintf "Destination { proto = %s; ip = %s; port = %d }"
-      (match proto with `Tcp -> "TCP" | `Udp -> "UDP")
-      (Ipaddr.to_string ip) port
+  let to_string = function
+    | `Tcp (ip, port) ->
+      Printf.sprintf "TCP %s:%d" (Ipaddr.to_string ip) port
+    | `Udp (ip, port) ->
+      Printf.sprintf "UDP %s:%d" (Ipaddr.to_string ip) port
+    | `Unix path ->
+      Printf.sprintf "Unix %s" path
 
-  let sizeof t =
-    1 + 2 + (match t.ip with Ipaddr.V4 _ -> 4 | Ipaddr.V6 _ -> 16) + 2
+  let sizeof = function
+    | `Tcp (ip, _)
+    | `Udp (ip, _) ->
+      1 + 2 + (match ip with Ipaddr.V4 _ -> 4 | Ipaddr.V6 _ -> 16) + 2
+    | `Unix path ->
+      1 + 2 + (String.length path)
 
-  let write t buf =
+  let write t rest =
     (* Matches the Go definition *)
-    let proto = match t.proto with
-      | `Tcp -> 1
-      | `Udp -> 2 in
-    let ip = match t.ip with
-      | Ipaddr.V4 ip -> Ipaddr.V4.to_bytes ip
-      | Ipaddr.V6 ip -> Ipaddr.V6.to_bytes ip in
-    let header = Cstruct.sub buf 0 (sizeof t) in
-    Cstruct.set_uint8 header 0 proto;
-    Cstruct.LE.set_uint16 header 1 (String.length ip);
-    Cstruct.blit_from_string ip 0 header 3 (String.length ip);
-    Cstruct.LE.set_uint16 header (3 + (String.length ip)) t.port;
-    header
+    let proto = match t with
+      | `Tcp (_, _) -> 1
+      | `Udp (_, _) -> 2
+      | `Unix _ -> 3 in
+    let header = Cstruct.sub rest 0 (sizeof t) in
+    Cstruct.set_uint8 rest 0 proto;
+    let rest = Cstruct.shift header 1 in
+
+    let write_string s buf =
+      Cstruct.LE.set_uint16 buf 0 (String.length s);
+      Cstruct.blit_from_string s 0 buf 2 (String.length s);
+      Cstruct.shift buf (2 + (String.length s)) in
+
+    let write_ip ip buf =
+      let ip = match ip with
+        | Ipaddr.V4 ip -> Ipaddr.V4.to_bytes ip
+        | Ipaddr.V6 ip -> Ipaddr.V6.to_bytes ip in
+      write_string ip buf in
+
+    match t with
+    | `Tcp(ip, port)
+    | `Udp(ip, port) ->
+      let rest = write_ip ip rest in
+      Cstruct.LE.set_uint16 rest 0 port;
+      header
+    | `Unix path ->
+      let _rest = write_string path rest in
+      header
 
   let read buf =
-    let proto = match Cstruct.get_uint8 buf 0 with
-      | 1 -> `Tcp
-      | 2 -> `Udp
-      | x -> failwith (Printf.sprintf "Unknown Destination protocol: %d" x) in
-    let ip_len = Cstruct.LE.get_uint16 buf 1 in
-    let bytes = Cstruct.(to_string (sub buf 3 ip_len)) in
-    let ip = match ip_len with
-      | 4 -> Ipaddr.V4 (Ipaddr.V4.of_bytes_exn @@ bytes)
-      | 16 -> Ipaddr.V6 (Ipaddr.V6.of_bytes_exn @@ bytes)
-      | _ -> failwith (Printf.sprintf "Failed to parse IP address of length %d: %s" ip_len (String.escaped bytes)) in
-    let port = Cstruct.LE.get_uint16 buf (3 + (String.length bytes)) in
-    { proto; ip; port }
+    let read_string (rest: Cstruct.t) =
+      let str_len : int = Cstruct.LE.get_uint16 rest 0 in
+      let str = Cstruct.(to_string (sub rest 2 str_len)) in
+      str, Cstruct.shift rest (2 + str_len) in
+    let read_ip rest =
+      let str, rest = read_string rest in
+      match String.length str with
+      | 4 -> Ipaddr.V4 (Ipaddr.V4.of_bytes_exn @@ str), rest
+      | 16 -> Ipaddr.V6 (Ipaddr.V6.of_bytes_exn @@ str), rest
+      | _ -> failwith (Printf.sprintf "Failed to parse IP address of length %d: %s" (String.length str) (String.escaped str)) in
+
+    let rest = Cstruct.shift buf 1 in
+    match Cstruct.get_uint8 buf 0 with
+    | 1 ->
+      let ip, rest = read_ip rest in
+      let port = Cstruct.LE.get_uint16 rest 0 in
+      `Tcp (ip, port)
+    | 2 ->
+      let ip, rest = read_ip rest in
+      let port = Cstruct.LE.get_uint16 rest 0 in
+      `Udp (ip, port)
+    | 3 ->
+      let path, _ = read_string rest in
+      `Unix path
+    | x ->
+      failwith (Printf.sprintf "Unknown Destination protocol: %d" x)
 
 end
 
