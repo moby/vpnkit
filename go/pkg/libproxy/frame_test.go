@@ -71,6 +71,27 @@ func TestParseOpenMultiplexed(t *testing.T) {
 	ParsePrint(t, b)
 }
 
+func TestParseOpenMultiplexedUnix(t *testing.T) {
+	b, err := ioutil.ReadFile(binDir + "open_multiplexed_unix_connection.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := bytes.NewBuffer(b)
+	f, err := unmarshalFrame(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertEqual(t, f.Command, Open)
+	assertEqual(t, f.ID, uint32(5))
+	o, err := f.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertEqual(t, o.Destination.Proto, Unix)
+	assertEqual(t, o.Destination.Path, "/tmp/foo")
+	ParsePrint(t, b)
+}
+
 func TestParseClose(t *testing.T) {
 	b, err := ioutil.ReadFile(binDir + "close.bin")
 	if err != nil {
