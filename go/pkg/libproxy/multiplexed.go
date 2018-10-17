@@ -377,6 +377,16 @@ func Forward(conn Conn, destination Destination, quit chan struct{}) {
 			log.Printf("Error setting up TCP proxy subconnection: %v", err)
 			return
 		}
+	case Unix:
+		backendAddr, err := net.ResolveUnixAddr("unix", destination.Path)
+		if err != nil {
+			log.Printf("Error resolving Unix address %s", destination.Path)
+			return
+		}
+		if err := HandleUnixConnection(conn, backendAddr, quit); err != nil {
+			log.Printf("Error setting up Unix proxy subconnection: %v", err)
+			return
+		}
 	case UDP:
 		backendAddr := &net.UDPAddr{IP: destination.IP, Port: int(destination.Port), Zone: ""}
 
