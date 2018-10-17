@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +21,7 @@ type EchoServer interface {
 	LocalAddr() net.Addr
 }
 
-type TCPEchoServer struct {
+type StreamEchoServer struct {
 	listener net.Listener
 	testCtx  *testing.T
 }
@@ -31,12 +33,12 @@ type UDPEchoServer struct {
 
 func NewEchoServer(t *testing.T, proto, address string) EchoServer {
 	var server EchoServer
-	if strings.HasPrefix(proto, "tcp") {
+	if strings.HasPrefix(proto, "tcp") || strings.HasPrefix(proto, "unix") {
 		listener, err := net.Listen(proto, address)
 		if err != nil {
 			t.Fatal(err)
 		}
-		server = &TCPEchoServer{listener: listener, testCtx: t}
+		server = &StreamEchoServer{listener: listener, testCtx: t}
 	} else {
 		socket, err := net.ListenPacket(proto, address)
 		if err != nil {
@@ -47,7 +49,7 @@ func NewEchoServer(t *testing.T, proto, address string) EchoServer {
 	return server
 }
 
-func (server *TCPEchoServer) Run() {
+func (server *StreamEchoServer) Run() {
 	go func() {
 		for {
 			client, err := server.listener.Accept()
@@ -64,8 +66,8 @@ func (server *TCPEchoServer) Run() {
 	}()
 }
 
-func (server *TCPEchoServer) LocalAddr() net.Addr { return server.listener.Addr() }
-func (server *TCPEchoServer) Close()              { server.listener.Addr() }
+func (server *StreamEchoServer) LocalAddr() net.Addr { return server.listener.Addr() }
+func (server *StreamEchoServer) Close()              { server.listener.Addr() }
 
 func (server *UDPEchoServer) Run() {
 	go func() {
@@ -92,6 +94,8 @@ func (server *UDPEchoServer) Close()              { server.conn.Close() }
 func testProxyAt(t *testing.T, proto string, proxy Proxy, addr string) {
 	defer proxy.Close()
 	go proxy.Run()
+	log.Printf("Proxy forwarding from %s -> %s\n", proxy.FrontendAddr().String(), proxy.BackendAddr().String())
+	log.Printf("Dial(%s, %s)\n", proto, addr)
 	client, err := net.Dial(proto, addr)
 	if err != nil {
 		t.Fatalf("Can't connect to the proxy: %v", err)
@@ -112,6 +116,30 @@ func testProxyAt(t *testing.T, proto string, proxy Proxy, addr string) {
 
 func testProxy(t *testing.T, proto string, proxy Proxy) {
 	testProxyAt(t, proto, proxy, proxy.FrontendAddr().String())
+}
+
+func TestUnixProxy(t *testing.T) {
+	pathA := "/tmp/network_proxy_test.sock"
+	pathB := "/tmp/network_proxy_test.sock2"
+	if err := os.Remove(pathA); err != nil && !(os.IsNotExist(err)) {
+		t.Fatal(err)
+	}
+	if err := os.Remove(pathB); err != nil && !(os.IsNotExist(err)) {
+		t.Fatal(err)
+	}
+	backend := NewEchoServer(t, "unix", pathA)
+	defer backend.Close()
+	backend.Run()
+	log.Printf("Running an echo server on %s\n", backend.LocalAddr().String())
+	frontendAddr, err := net.ResolveUnixAddr("unix", pathB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy, err := NewIPProxy(frontendAddr, backend.LocalAddr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	testProxy(t, "unix", proxy)
 }
 
 func TestTCP4Proxy(t *testing.T) {
