@@ -2,19 +2,9 @@ package libproxy
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
 )
-
-// Conn defines a network connection
-type Conn interface {
-	io.Reader
-	io.Writer
-	io.Closer
-	CloseRead() error
-	CloseWrite() error
-}
 
 // TCPProxy is a proxy for TCP connections. It implements the Proxy interface to
 // handle TCP traffic forwarding between the frontend and backend addresses.
@@ -39,45 +29,9 @@ func NewTCPProxy(listener net.Listener, backendAddr *net.TCPAddr) (*TCPProxy, er
 func HandleTCPConnection(client Conn, backendAddr *net.TCPAddr, quit chan struct{}) error {
 	backend, err := net.DialTCP("tcp", nil, backendAddr)
 	if err != nil {
-		return fmt.Errorf("Can't forward traffic to backend tcp/%v: %s\n", backendAddr, err)
+		return fmt.Errorf("can't forward traffic to backend tcp/%v: %s", backendAddr, err)
 	}
-
-	event := make(chan int64)
-	var broker = func(to, from Conn) {
-		written, err := io.Copy(to, from)
-		if err != nil {
-			log.Println("error copying:", err)
-		}
-		err = from.CloseRead()
-		if err != nil {
-			log.Println("error CloseRead from:", err)
-		}
-		err = to.CloseWrite()
-		if err != nil {
-			log.Println("error CloseWrite to:", err)
-		}
-		event <- written
-	}
-
-	go broker(client, backend)
-	go broker(backend, client)
-
-	var transferred int64
-	for i := 0; i < 2; i++ {
-		select {
-		case written := <-event:
-			transferred += written
-		case <-quit:
-			// Interrupt the two brokers and "join" them.
-			backend.Close()
-			for ; i < 2; i++ {
-				transferred += <-event
-			}
-			return nil
-		}
-	}
-	backend.Close()
-	return nil
+	return proxy(client, backend, quit)
 }
 
 // Run starts forwarding the traffic using TCP.
