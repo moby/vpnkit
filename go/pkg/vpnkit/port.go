@@ -19,14 +19,21 @@ type Port struct {
 	proto   string
 	outIP   net.IP
 	outPort uint16
+	outPath string
 	inIP    net.IP
 	inPort  uint16
+	inPath  string
 	handle  *datakit.File
 }
 
-// NewPort constructs an instance of Port
+// NewPort constructs an instance of a TCP or UDP Port
 func NewPort(connection *Connection, proto string, outIP net.IP, outPort uint16, inIP net.IP, inPort uint16) *Port {
-	return &Port{connection.client, proto, outIP, outPort, inIP, inPort, nil}
+	return &Port{connection.client, proto, outIP, outPort, "", inIP, inPort, "", nil}
+}
+
+// NewPath constructs an instance of a forwarded Unix path
+func NewPath(connection *Connection, outPath, inPath string) *Port {
+	return &Port{connection.client, "unix", nil, uint16(0), outPath, nil, uint16(0), inPath, nil}
 }
 
 // ListExposed returns a list of currently exposed ports
@@ -59,30 +66,48 @@ func (p *Port) String() string {
 // spec returns a string of the form proto:outIP:outPort:proto:inIP:inPort as
 // understood by vpnkit
 func (p *Port) spec() string {
-	return fmt.Sprintf("%s:%s:%d:%s:%s:%d", p.proto, p.outIP.String(), p.outPort, p.proto, p.inIP.String(), p.inPort)
+	switch p.proto {
+	case "tcp", "udp":
+		return fmt.Sprintf("%s:%s:%d:%s:%s:%d", p.proto, p.outIP.String(), p.outPort, p.proto, p.inIP.String(), p.inPort)
+	case "unix":
+		return fmt.Sprintf("unix:%s:unix:%s", p.outPath, p.inPath)
+	default:
+		return "unknown protocol"
+	}
 }
 
 func parse(name string) (*Port, error) {
 	bits := strings.Split(name, ":")
-	if len(bits) != 6 {
+	switch len(bits) {
+	case 6:
+		outProto := bits[0]
+		outIP := net.ParseIP(bits[1])
+		outPort, err := strconv.ParseUint(bits[2], 10, 16)
+		if err != nil {
+			return nil, err
+		}
+		inProto := bits[3]
+		inIP := net.ParseIP(bits[4])
+		inPort, err := strconv.ParseUint(bits[5], 10, 16)
+		if err != nil {
+			return nil, err
+		}
+		if outProto != inProto {
+			return nil, errors.New("Failed to parse port: external proto is " + outProto + " but internal proto is " + inProto)
+		}
+		return &Port{nil, outProto, outIP, uint16(outPort), "", inIP, uint16(inPort), "", nil}, nil
+	case 4:
+		outProto := bits[0]
+		outPath := bits[1]
+		inProto := bits[2]
+		inPath := bits[3]
+		if outProto != "unix" || inProto != "unix" {
+			return nil, errors.New("Failed to parse path: external proto is " + outProto + " and internal proto is " + inProto)
+		}
+		return &Port{nil, outProto, nil, uint16(0), outPath, nil, uint16(0), inPath, nil}, nil
+	default:
 		return nil, errors.New("Failed to parse port spec: " + name)
 	}
-	outProto := bits[0]
-	outIP := net.ParseIP(bits[1])
-	outPort, err := strconv.ParseUint(bits[2], 10, 16)
-	if err != nil {
-		return nil, err
-	}
-	inProto := bits[3]
-	inIP := net.ParseIP(bits[4])
-	inPort, err := strconv.ParseUint(bits[5], 10, 16)
-	if err != nil {
-		return nil, err
-	}
-	if outProto != inProto {
-		return nil, errors.New("Failed to parse port: external proto is " + outProto + " but internal proto is " + inProto)
-	}
-	return &Port{nil, outProto, outIP, uint16(outPort), inIP, uint16(inPort), nil}, nil
 }
 
 // Expose asks vpnkit to expose the port
