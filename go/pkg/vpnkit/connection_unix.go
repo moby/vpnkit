@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	datakit "github.com/moby/datakit/api/go-datakit"
@@ -21,10 +22,20 @@ type Connection struct {
 // default system path will be used.
 func NewConnection(ctx context.Context, path string) (*Connection, error) {
 	if path == "" {
-		switch runtime.GOOS {
-		case "darwin":
-			path = os.Getenv("HOME") + "/Library/Containers/com.docker.docker/Data/s51"
-		default:
+		if runtime.GOOS == "darwin" {
+			// The default path on the Mac has moved around a bit
+			for _, possible := range []string{
+				"s51",
+				"vpnkit.port.sock",
+			} {
+				abs := filepath.Join(os.Getenv("HOME"), "Library", "Containers", "com.docker.docker", "Data", possible)
+				if _, err := os.Stat(abs); err == nil {
+					path = abs
+					break
+				}
+			}
+		}
+		if path == "" {
 			return nil, errors.New("path must be provided")
 		}
 	}
