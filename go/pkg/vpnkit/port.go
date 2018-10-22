@@ -2,6 +2,7 @@ package vpnkit
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -70,7 +71,7 @@ func (p *Port) spec() string {
 	case "tcp", "udp":
 		return fmt.Sprintf("%s:%s:%d:%s:%s:%d", p.proto, p.outIP.String(), p.outPort, p.proto, p.inIP.String(), p.inPort)
 	case "unix":
-		return fmt.Sprintf("unix:%s:unix:%s", p.outPath, p.inPath)
+		return fmt.Sprintf("unix:%s:unix:%s", base64.StdEncoding.EncodeToString([]byte(p.outPath)), base64.StdEncoding.EncodeToString([]byte(p.inPath)))
 	default:
 		return "unknown protocol"
 	}
@@ -98,13 +99,21 @@ func parse(name string) (*Port, error) {
 		return &Port{nil, outProto, outIP, uint16(outPort), "", inIP, uint16(inPort), "", nil}, nil
 	case 4:
 		outProto := bits[0]
-		outPath := bits[1]
+		outPathEnc := bits[1]
+		outPath, err := base64.StdEncoding.DecodeString(outPathEnc)
+		if err != nil {
+			return nil, errors.New("Failed to base64 decode " + string(outPath))
+		}
 		inProto := bits[2]
-		inPath := bits[3]
+		inPathEnc := bits[3]
+		inPath, err := base64.StdEncoding.DecodeString(inPathEnc)
+		if err != nil {
+			return nil, errors.New("Failed to base64 decode " + string(inPath))
+		}
 		if outProto != "unix" || inProto != "unix" {
 			return nil, errors.New("Failed to parse path: external proto is " + outProto + " and internal proto is " + inProto)
 		}
-		return &Port{nil, outProto, nil, uint16(0), outPath, nil, uint16(0), inPath, nil}, nil
+		return &Port{nil, outProto, nil, uint16(0), string(outPath), nil, uint16(0), string(inPath), nil}, nil
 	default:
 		return nil, errors.New("Failed to parse port spec: " + name)
 	}

@@ -37,7 +37,7 @@ module Port = struct
     | `Udp (ip, port) ->
       Fmt.strf "udp:%a:%d" Ipaddr.pp_hum ip port
     | `Unix path ->
-      Fmt.strf "unix:%s" path
+      Fmt.strf "unix:%s" (B64.encode path)
 
   let of_string x =
     try
@@ -50,7 +50,7 @@ module Port = struct
         | "udp" -> Ok (`Udp(ip, port))
         | _ -> errorf "unknown protocol: should be tcp or udp"
         end
-      | [ "unix"; path ] -> Ok (`Unix path)
+      | [ "unix"; path ] -> Ok (`Unix (B64.decode path))
       | _ -> errorf "port should be of the form proto:IP:port or unix:path"
     with
     | _ -> errorf "port is not a proto:IP:port or unix:path: '%s'" x
