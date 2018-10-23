@@ -59,6 +59,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   module Forward_unix = Forward.Make(Mclock)(Connect_unix)(Bind)
   module Forward_hvsock = Forward.Make(Mclock)(Connect_hvsock)(Bind)
   module HV = Hvsock_lwt.Flow.Make(Host.Time)(Host.Fn)(Hvsock.Af_hyperv)
+  module HV_generic = Hvsock_lwt.Flow.Make(Host.Time)(Host.Fn)(Hvsock.Socket)
   module HostsFile = Hosts.Make(Host.Files)
 
   let file_descr_of_int (x: int) : Unix.file_descr =
@@ -123,6 +124,45 @@ let hvsock_addr_of_uri ~default_serviceid uri =
             (Printexc.to_string e)
             (Hvsock.Af_hyperv.string_of_sockaddr sockaddr));
           log_exception_continue "HV.Socket.close" (fun () -> HV.Socket.close socket)
+          >>= fun () ->
+          Host.Time.sleep_ns (Duration.of_sec 1)
+      )
+      >>= fun () ->
+      aux () in
+    aux ()
+
+  let hv_generic_create () =
+    let rec loop () =
+      match HV_generic.Socket.create () with
+      | x -> Lwt.return x
+      | exception e ->
+        Log.err (fun f -> f "Caught %s while creating hypervisor socket" (Printexc.to_string e));
+        Host.Time.sleep_ns (Duration.of_sec 1)
+        >>= fun () ->
+        loop () in
+    loop ()
+
+  let hv_generic_listen uri callback =
+    let sockaddr = Hvsock.Socket.sockaddr_of_uri uri in
+    Log.info (fun f -> f "Listening on %s" (Hvsock.Socket.string_of_sockaddr sockaddr));
+    let rec aux () =
+      hv_generic_create ()
+      >>= fun socket ->
+      Lwt.catch (fun () ->
+        HV_generic.Socket.bind socket sockaddr;
+        HV_generic.Socket.listen socket 5;
+        let rec accept_forever () =
+          HV_generic.Socket.accept socket
+          >>= fun (t, clientaddr) ->
+          Log.info (fun f -> f "Accepted connection from %s" (Hvsock.Socket.string_of_sockaddr clientaddr));
+          Lwt.async (fun () -> callback t);
+          accept_forever () in
+        accept_forever ()
+      ) (fun e ->
+          Log.warn (fun f -> f "Caught %s while listening on %s"
+            (Printexc.to_string e)
+            (Hvsock.Socket.string_of_sockaddr sockaddr));
+          log_exception_continue "HV_generic.Socket.close" (fun () -> HV_generic.Socket.close socket)
           >>= fun () ->
           Host.Time.sleep_ns (Duration.of_sec 1)
       )
@@ -274,11 +314,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       if Uri.scheme uri = Some "hyperv-connect"
       then hvsock_connect_forever port_control_url sockaddr callback
       else hvsock_listen sockaddr callback
-    | _ ->
+    | Some "fd" | None ->
       let module Server =
         Protocol_9p.Server.Make(Log9P)(Host.Sockets.Stream.Unix)(Ports)
       in
-      unix_listen port_control_url
+      begin unix_listen port_control_url
       >>= function
       | Error (`Msg m) ->
         Log.err (fun f -> f "Failed to start port forwarding server because: %s" m);
@@ -292,6 +332,17 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           | Ok server ->
             Server.after_disconnect server);
         Lwt.return_unit
+      end
+    | _ ->
+      let module Server = Protocol_9p.Server.Make(Log9P)(HV_generic)(Ports) in
+      let callback fd =
+        let flow = HV_generic.connect fd in
+        Server.connect fs flow () >>= function
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to establish 9P connection: %s" m);
+          Lwt.return ()
+        | Ok server -> Server.after_disconnect server in
+      hv_generic_listen uri callback
 
   let main_t
       configuration
@@ -387,38 +438,64 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       if Uri.scheme uri = Some "hyperv-connect"
       then hvsock_connect_forever socket_url sockaddr callback
       else hvsock_listen sockaddr callback
-    | _ ->
+    | Some "fd" | None ->
       let module Slirp_stack =
         Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
           (Mclock)(Stdlibrandom)(Vnet)
       in
-      unix_listen socket_url
+      begin unix_listen socket_url
       >>= function
-      | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to listen on ethernet socket because: %s" m);
-        Lwt.return_unit
-      | Ok server ->
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to listen on ethernet socket because: %s" m);
+          Lwt.return_unit
+        | Ok server ->
+        ( match config with
+        | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
+        | None -> Slirp_stack.create_static clock vnet_switch configuration
+        ) >>= fun stack_config ->
+        Host.Sockets.Stream.Unix.listen server (fun conn ->
+            Slirp_stack.connect stack_config conn >>= fun stack ->
+            Log.info (fun f -> f "TCP/IP stack connected");
+            List.iter (fun url ->
+              start_introspection url (Slirp_stack.filesystem stack);
+            ) introspection_urls;
+            List.iter (fun url ->
+              start_server "diagnostics" url @@ Slirp_stack.diagnostics stack
+            ) diagnostics_urls;
+            List.iter (fun url ->
+              start_server "pcap" url @@ Slirp_stack.pcap stack
+            ) pcap_urls;
+            Slirp_stack.after_disconnect stack >|= fun () ->
+            Log.info (fun f -> f "TCP/IP stack disconnected")
+          );
+        let wait_forever, _ = Lwt.task () in
+        wait_forever
+      end
+    | _ ->
+      let module Slirp_stack =
+        Slirp.Make(Config)(Vmnet.Make(HV_generic))(Dns_policy)
+          (Mclock)(Stdlibrandom)(Vnet)
+      in
       ( match config with
       | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
       | None -> Slirp_stack.create_static clock vnet_switch configuration
       ) >>= fun stack_config ->
-      Host.Sockets.Stream.Unix.listen server (fun conn ->
-          Slirp_stack.connect stack_config conn >>= fun stack ->
-          Log.info (fun f -> f "TCP/IP stack connected");
-          List.iter (fun url ->
-            start_introspection url (Slirp_stack.filesystem stack);
-          ) introspection_urls;
-          List.iter (fun url ->
-            start_server "diagnostics" url @@ Slirp_stack.diagnostics stack
-          ) diagnostics_urls;
-          List.iter (fun url ->
-            start_server "pcap" url @@ Slirp_stack.pcap stack
-          ) pcap_urls;
-          Slirp_stack.after_disconnect stack >|= fun () ->
-          Log.info (fun f -> f "TCP/IP stack disconnected")
-        );
-      let wait_forever, _ = Lwt.task () in
-      wait_forever
+      let callback fd =
+        let conn = HV_generic.connect fd in
+        Slirp_stack.connect stack_config conn >>= fun stack ->
+        Log.info (fun f -> f "TCP/IP stack connected");
+        List.iter (fun url ->
+          start_introspection url (Slirp_stack.filesystem stack)
+        ) introspection_urls;
+        List.iter (fun url ->
+          start_server "diagnostics" url @@ Slirp_stack.diagnostics stack
+        ) diagnostics_urls;
+        List.iter (fun url ->
+          start_server "pcap" url @@ Slirp_stack.pcap stack
+        ) pcap_urls;
+        Slirp_stack.after_disconnect stack >|= fun () ->
+        Log.info (fun f -> f "TCP/IP stack disconnected") in
+      hv_generic_listen uri callback
 
   let main
       socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls pcap_snaplen
