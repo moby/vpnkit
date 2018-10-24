@@ -1,10 +1,12 @@
 
 module Destination : sig
-  type t = {
-    proto: [ `Tcp | `Udp ];
-    ip: Ipaddr.t;
-    port: int;
-  }
+  type port = int
+  type path = string
+  type t = [
+    | `Tcp of Ipaddr.t * port
+    | `Udp of Ipaddr.t * port
+    | `Unix of path
+  ]
 
   val sizeof: t -> int
 

@@ -14,19 +14,13 @@ open Forwarder.Frame
 
 let inputs =
   [ ( "open_dedicated_connection"
-    , { command=
-          Open
-            ( Dedicated
-            , Destination.
-                {proto= `Tcp; ip= Ipaddr.V4 Ipaddr.V4.localhost; port= 8080} )
+    , { command= Open (Dedicated, `Tcp (Ipaddr.V4 Ipaddr.V4.localhost, 8080))
       ; id= 4l } )
   ; ( "open_multiplexed_connection"
-    , { command=
-          Open
-            ( Multiplexed
-            , Destination.
-                {proto= `Udp; ip= Ipaddr.V6 Ipaddr.V6.localhost; port= 8080} )
+    , { command= Open (Multiplexed, `Udp (Ipaddr.V6 Ipaddr.V6.localhost, 8080))
       ; id= 5l } )
+  ; ( "open_multiplexed_unix_connection"
+    , {command= Open (Multiplexed, `Unix "/tmp/foo"); id= 5l} )
   ; ("close", {command= Close; id= 6l})
   ; ("shutdown", {command= Shutdown; id= 7l})
   ; ("data", {command= Data 128l; id= 8l})
@@ -171,8 +165,7 @@ let test_connect_close () =
            ) ;
            Mux.Channel.close channel )
      in
-     Mux.Channel.connect left_mux
-       Destination.{proto= `Tcp; ip= Ipaddr.V4 Ipaddr.V4.localhost; port= 8080}
+     Mux.Channel.connect left_mux (`Tcp (Ipaddr.V4 Ipaddr.V4.localhost, 8080))
      >>= fun channel -> Mux.Channel.close channel)
 
 let send channel n =
@@ -237,6 +230,11 @@ let read_and_write channel to_write =
   >>= fun (num_read, sha) ->
   Lwt.return {written= to_write; written_sha; read= num_read; read_sha= sha}
 
+let port_of = function
+  | `Tcp (_, port) -> port
+  | `Udp (_, port) -> port
+  | `Unix _ -> failwith "Unix destinations do not have a port"
+
 let test_read_write to_write_left to_write_right =
   let right_metadata = Hashtbl.create 7 in
   Host.Main.run
@@ -253,12 +251,11 @@ let test_read_write to_write_left to_write_right =
            ) ;
            read_and_write channel to_write_right
            >>= fun metadata ->
-           Hashtbl.replace right_metadata destination.Destination.port metadata ;
+           Hashtbl.replace right_metadata (port_of destination) metadata ;
            Mux.Channel.close channel )
      in
      let port = 8080 in
-     Mux.Channel.connect left_mux
-       Destination.{proto= `Tcp; ip= Ipaddr.V4 Ipaddr.V4.localhost; port}
+     Mux.Channel.connect left_mux (`Tcp (Ipaddr.V4 Ipaddr.V4.localhost, port))
      >>= fun channel ->
      read_and_write channel to_write_left
      >>= fun metadata ->
@@ -311,7 +308,7 @@ let stress_multiplexer () =
            ) ;
            read_and_write channel (Random.int 8192)
            >>= fun metadata ->
-           Hashtbl.replace right_metadata destination.Destination.port metadata ;
+           Hashtbl.replace right_metadata (port_of destination) metadata ;
            Mux.Channel.close channel )
      in
      let rec mkints a b = if a = b then [] else a :: mkints (a + 1) b in
@@ -324,8 +321,7 @@ let stress_multiplexer () =
             List.map
               (fun port ->
                 Mux.Channel.connect left_mux
-                  Destination.
-                    {proto= `Tcp; ip= Ipaddr.V4 Ipaddr.V4.localhost; port}
+                  (`Tcp (Ipaddr.V4 Ipaddr.V4.localhost, port))
                 >>= fun channel ->
                 read_and_write channel (Random.int 8192)
                 >>= fun metadata ->

@@ -42,6 +42,12 @@ func NewIPProxy(frontendAddr, backendAddr net.Addr) (Proxy, error) {
 			return nil, err
 		}
 		return NewTCPProxy(listener, backendAddr.(*net.TCPAddr))
+	case *net.UnixAddr:
+		listener, err := net.Listen("unix", frontendAddr.String())
+		if err != nil {
+			return nil, err
+		}
+		return NewUnixProxy(listener, backendAddr.(*net.UnixAddr))
 	default:
 		panic(fmt.Errorf("Unsupported protocol"))
 	}

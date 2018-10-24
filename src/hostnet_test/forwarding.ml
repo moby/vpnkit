@@ -36,9 +36,9 @@ module ForwardServer = struct
       (fun client_flow destination ->
         let open Forwarder.Frame.Destination in
         Log.info (fun f -> f "ForwardServer.connect to %s" (to_string destination));
-        match destination.proto with
-        | `Tcp -> begin
-          Host.Sockets.Stream.Tcp.connect (destination.ip, destination.port) >>= function
+        match destination with
+        | `Tcp(ip, port) -> begin
+          Host.Sockets.Stream.Tcp.connect (ip, port) >>= function
           | Error (`Msg x) -> failwith x
           | Ok remote ->
             Mclock.connect () >>= fun clock ->
@@ -50,8 +50,8 @@ module ForwardServer = struct
                 Host.Sockets.Stream.Tcp.close remote
               )
         end
-        | `Udp -> begin
-          Host.Sockets.Datagram.Udp.connect (destination.ip, destination.port) >>= function
+        | `Udp(ip, port) -> begin
+          Host.Sockets.Datagram.Udp.connect (ip, port) >>= function
           | Error (`Msg x) -> failwith x
           | Ok remote ->
             let from_vsock_buffer = Cstruct.create (Constants.max_udp_length + Forwarder.Frame.Udp.max_sizeof) in
@@ -117,6 +117,7 @@ module ForwardServer = struct
                 end in
             Lwt.pick [ vsock2internet (); internet2vsock () ]
         end
+      | `Unix _ -> failwith "We don't simulate Unix paths"
       ) in
     forever
 

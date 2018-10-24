@@ -16,6 +16,8 @@ const (
 	TCP Proto = 1
 	// UDP flow
 	UDP Proto = 2
+	// Unix domain socket flow
+	Unix Proto = 3
 )
 
 // Destination refers to a listening TCP or UDP service
@@ -23,17 +25,19 @@ type Destination struct {
 	Proto Proto
 	IP    net.IP
 	Port  uint16
+	Path  string
 }
 
 func (d Destination) String() string {
-	proto := "unknown"
 	switch d.Proto {
 	case TCP:
-		proto = "TCP"
+		return fmt.Sprintf("TCP:%s:%d", d.IP.String(), d.Port)
 	case UDP:
-		proto = "UDP"
+		return fmt.Sprintf("UDP:%s:%d", d.IP.String(), d.Port)
+	case Unix:
+		return fmt.Sprintf("Unix:%s", d.Path)
 	}
-	return fmt.Sprintf("%s:%s:%d", proto, d.IP.String(), d.Port)
+	return "Unknown"
 }
 
 // Read header which describes TCP/UDP and destination IP:port
@@ -42,17 +46,31 @@ func unmarshalDestination(r io.Reader) (Destination, error) {
 	if err := binary.Read(r, binary.LittleEndian, &d.Proto); err != nil {
 		return d, err
 	}
-	var length uint16
-	// IP length
-	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
-		return d, err
-	}
-	d.IP = make([]byte, length)
-	if err := binary.Read(r, binary.LittleEndian, &d.IP); err != nil {
-		return d, err
-	}
-	if err := binary.Read(r, binary.LittleEndian, &d.Port); err != nil {
-		return d, err
+	switch d.Proto {
+	case TCP, UDP:
+		var length uint16
+		// IP length
+		if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
+			return d, err
+		}
+		d.IP = make([]byte, length)
+		if err := binary.Read(r, binary.LittleEndian, &d.IP); err != nil {
+			return d, err
+		}
+		if err := binary.Read(r, binary.LittleEndian, &d.Port); err != nil {
+			return d, err
+		}
+	case Unix:
+		var length uint16
+		// String length
+		if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
+			return d, err
+		}
+		path := make([]byte, length)
+		if err := binary.Read(r, binary.LittleEndian, &path); err != nil {
+			return d, err
+		}
+		d.Path = string(path)
 	}
 	return d, nil
 }
@@ -61,23 +79,41 @@ func (d Destination) Write(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, d.Proto); err != nil {
 		return err
 	}
-	b := []byte(d.IP)
-	length := uint16(len(b))
-	if err := binary.Write(w, binary.LittleEndian, length); err != nil {
-		return err
-	}
-	if err := binary.Write(w, binary.LittleEndian, b); err != nil {
-		return err
-	}
-	if err := binary.Write(w, binary.LittleEndian, d.Port); err != nil {
-		return err
+	switch d.Proto {
+	case TCP, UDP:
+		b := []byte(d.IP)
+		length := uint16(len(b))
+		if err := binary.Write(w, binary.LittleEndian, length); err != nil {
+			return err
+		}
+		if err := binary.Write(w, binary.LittleEndian, b); err != nil {
+			return err
+		}
+		if err := binary.Write(w, binary.LittleEndian, d.Port); err != nil {
+			return err
+		}
+	case Unix:
+		b := []byte(d.Path)
+		length := uint16(len(b))
+		if err := binary.Write(w, binary.LittleEndian, length); err != nil {
+			return err
+		}
+		if err := binary.Write(w, binary.LittleEndian, b); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // Size returns the marshalled size in bytes
 func (d Destination) Size() int {
-	return 1 + 2 + len(d.IP) + 2
+	switch d.Proto {
+	case TCP, UDP:
+		return 1 + 2 + len(d.IP) + 2
+	case Unix:
+		return 1 + 2 + len(d.Path)
+	}
+	return 0
 }
 
 // Connection indicates whether the connection will use multiplexing or not.

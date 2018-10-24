@@ -415,7 +415,7 @@ let tests =
   @ (test_dns true) @ (test_dns false)
   @ test_tcp @ Test_nat.tests @ Test_http.tests @ Test_http.Exclude.tests
   @ Test_half_close.tests @ Test_ping.tests
-  @ Test_bridge.tests
+  @ Test_bridge.tests @ Test_forward_protocol.suite
 
 let scalability = [
   "1026conns",

@@ -28,19 +28,16 @@ let set_allowed_addresses ips =
 let errorf fmt = Fmt.kstrf (fun e -> Error (`Msg e)) fmt
 let errorf' fmt = Fmt.kstrf (fun e -> Lwt.return (Error (`Msg e))) fmt
 
-module Int16 = struct
-  type t = int
-end
-
 module Port = struct
-  type t = {
-    proto: [ `Tcp | `Udp ];
-    ip: Ipaddr.t;
-    port: Int16.t;
-  }
+  type t = Forwarder.Frame.Destination.t
 
-  let to_string t =
-    Fmt.strf "%s:%a:%d" (match t.proto with `Tcp -> "tcp" | `Udp -> "udp") Ipaddr.pp_hum t.ip t.port
+  let to_string = function
+    | `Tcp (ip, port) ->
+      Fmt.strf "tcp:%a:%d" Ipaddr.pp_hum ip port
+    | `Udp (ip, port) ->
+      Fmt.strf "udp:%a:%d" Ipaddr.pp_hum ip port
+    | `Unix path ->
+      Fmt.strf "unix:%s" (B64.encode path)
 
   let of_string x =
     try
@@ -49,13 +46,14 @@ module Port = struct
         let port = int_of_string port in
         let ip = Ipaddr.of_string_exn ip in
         begin match String.lowercase_ascii proto with
-        | "tcp" -> Ok { proto = `Tcp; ip; port }
-        | "udp" -> Ok { proto = `Udp; ip; port }
+        | "tcp" -> Ok (`Tcp(ip, port))
+        | "udp" -> Ok (`Udp(ip, port))
         | _ -> errorf "unknown protocol: should be tcp or udp"
         end
-      | _ -> errorf "port should be of the form proto:IP:port"
+      | [ "unix"; path ] -> Ok (`Unix (B64.decode path))
+      | _ -> errorf "port should be of the form proto:IP:port or unix:path"
     with
-    | _ -> errorf "port is not a proto:IP:port: '%s'" x
+    | _ -> errorf "port is not a proto:IP:port or unix:path: '%s'" x
 
 end
 
@@ -68,6 +66,7 @@ struct
   type server = [
     | `Tcp of Socket.Stream.Tcp.server
     | `Udp of Socket.Datagram.Udp.server
+    | `Unix of Socket.Stream.Unix.server
   ]
 
   type t = {
@@ -86,7 +85,9 @@ struct
     Fmt.strf "%s:%s" (Port.to_string t.local) (Port.to_string t.remote_port)
 
   let description_of_format =
-    "'<tcp|udp>:local ip:local port:remote vchan port'"
+    "tcp:<local IP>:<local port>:tcp:<remote IP>:<remote port>
+udp:<local IP>:<local port>:udp:<remote IP>:<remote port>
+unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
 
   let check_bind_allowed ip = match !allowed_addresses with
   | None -> Lwt.return () (* no restriction *)
@@ -127,20 +128,37 @@ struct
           )
       | Some m -> Lwt.return m
 
-  let open_channel remote_port =
+  let open_channel destination =
     get_mux ()
     >>= fun mux ->
-    let destination = Forwarder.Frame.Destination.({
-      proto = remote_port.Port.proto;
-      ip = remote_port.Port.ip;
-      port = remote_port.Port.port;
-    }) in
     Mux.Channel.connect mux destination
 
-  module Proxy = Mirage_flow_lwt.Proxy(Clock)(Mux.Channel)(Socket.Stream.Tcp)
-
   let start_tcp_proxy clock description remote_port server =
+    let module Proxy = Mirage_flow_lwt.Proxy(Clock)(Mux.Channel)(Socket.Stream.Tcp) in
     Socket.Stream.Tcp.listen server (fun local ->
+        open_channel remote_port
+        >>= fun remote ->
+        Lwt.finalize (fun () ->
+            Log.debug (fun f -> f "%s: connected" description);
+            Proxy.proxy clock remote local  >|= function
+            | Error e ->
+              Log.err (fun f ->
+                  f "%s proxy failed with %a" description Proxy.pp_error e)
+            | Ok (l_stats, r_stats) ->
+              Log.debug (fun f ->
+                  f "%s completed: l2r = %a; r2l = %a" description
+                    Mirage_flow.pp_stats l_stats
+                    Mirage_flow.pp_stats r_stats
+                )
+          ) (fun () ->
+            Mux.Channel.close remote
+          )
+      );
+    Lwt.return ()
+
+  let start_unix_proxy clock description remote_port server =
+    let module Proxy = Mirage_flow_lwt.Proxy(Clock)(Mux.Channel)(Socket.Stream.Unix) in
+    Socket.Stream.Unix.listen server (fun local ->
         open_channel remote_port
         >>= fun remote ->
         Lwt.finalize (fun () ->
@@ -265,7 +283,7 @@ struct
 
   let start state t =
     match t.local with
-    | { Port.proto = `Tcp; ip = local_ip; port = local_port }  ->
+    | `Tcp (local_ip, local_port) ->
       let description =
         Fmt.strf "forwarding from tcp:%a:%d" Ipaddr.pp_hum local_ip local_port
       in
@@ -276,9 +294,9 @@ struct
           t.server <- Some (`Tcp server);
           (* Resolve the local port yet (the fds are already bound) *)
           t.local <- ( match t.local with
-            | { Port.proto = `Tcp; port = 0; _ } ->
+            | `Tcp (ip, 0) ->
               let _, port = Socket.Stream.Tcp.getsockname server in
-              { t.local with Port.port }
+              `Tcp (ip, port)
             | _ ->
               t.local );
           start_tcp_proxy state (to_string t) t.remote_port server
@@ -298,7 +316,7 @@ struct
           errorf' "Bind for %a:%d: unexpected error %a" Ipaddr.pp_hum local_ip
             local_port Fmt.exn e
         )
-    | { Port.proto = `Udp; ip = local_ip; port = local_port } ->
+    | `Udp (local_ip, local_port) ->
       let description =
         Fmt.strf "forwarding from udp:%a:%d" Ipaddr.pp_hum local_ip local_port
       in
@@ -309,9 +327,9 @@ struct
           t.server <- Some (`Udp server);
           (* Resolve the local port yet (the fds are already bound) *)
           t.local <- ( match t.local with
-            | { Port.proto = `Udp; port = 0; _ } ->
+            | `Udp (ip, 0) ->
               let _, port = Socket.Datagram.Udp.getsockname server in
-              { t.local with Port.port }
+              `Udp (ip, port)
             | _ ->
               t.local );
           start_udp_proxy (to_string t) t.remote_port server
@@ -331,12 +349,35 @@ struct
           errorf' "Bind for %a:%d: unexpected error %a" Ipaddr.pp_hum local_ip
             local_port Fmt.exn e
         )
+    | `Unix path ->
+      let description =
+        Fmt.strf "forwarding from unix:%s" path
+      in
+      Lwt.catch (fun () ->
+          Socket.Stream.Unix.bind ~description path
+          >>= fun server ->
+          t.server <- Some (`Unix server);
+          start_unix_proxy state (to_string t) t.remote_port server
+          >|= fun () ->
+          Ok t
+        ) (function
+        | Unix.Unix_error(Unix.EADDRINUSE, _, _) ->
+          errorf' "Bind for %s failed: port is already allocated" path
+        | Unix.Unix_error(Unix.EADDRNOTAVAIL, _, _) ->
+          errorf' "listen %s: bind: cannot assign requested address" path
+        | Unix.Unix_error(Unix.EPERM, _, _) ->
+          errorf' "Bind for %s failed: permission denied" path
+        | e ->
+          errorf' "Bind for %s: unexpected error %a" path
+            Fmt.exn e
+        )
 
   let stop t =
     Log.debug (fun f -> f "%s: closing listening socket" (to_string t));
     match t.server with
     | Some (`Tcp s) -> Socket.Stream.Tcp.shutdown s
     | Some (`Udp s) -> Socket.Datagram.Udp.shutdown s
+    | Some (`Unix s) -> Socket.Stream.Unix.shutdown s
     | None -> Lwt.return_unit
 
   let of_string x =
@@ -346,6 +387,17 @@ struct
         match
           Port.of_string (proto1 ^ ":" ^ ip1 ^ ":" ^ port1),
           Port.of_string (proto2 ^ ":" ^ ip2 ^ ":" ^ port2)
+        with
+        | Error x, _ -> Error x
+        | _, Error x -> Error x
+        | Ok local, Ok remote_port ->
+          Ok { local; remote_port; server = None }
+      end
+    | [ "unix"; path1; "unix"; path2 ] ->
+      begin
+        match
+          Port.of_string ("unix:" ^ path1),
+          Port.of_string ("unix:" ^ path2)
         with
         | Error x, _ -> Error x
         | _, Error x -> Error x
