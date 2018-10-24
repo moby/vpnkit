@@ -10,6 +10,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestNew(t *testing.T) {
@@ -65,6 +66,80 @@ func TestClose(t *testing.T) {
 		if err := server.Close(); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestReadDeadline(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+	client, err := local.Dial(Destination{
+		Proto: TCP,
+		IP:    net.ParseIP("127.0.0.1"),
+		Port:  8080,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, _, err := remote.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Server never writes
+	if err := client.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	var b []byte
+	if _, err := client.Read(b); err == nil {
+		t.Fatalf("Read should have timed out")
+	}
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriteDeadline(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+	client, err := local.Dial(Destination{
+		Proto: TCP,
+		IP:    net.ParseIP("127.0.0.1"),
+		Port:  8080,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, _, err := remote.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error)
+	go func() {
+		buf, _ := genRandomBuffer(1024)
+		for {
+			if _, err := server.Write(buf); err != nil {
+				done <- err
+			}
+		}
+	}()
+	// Client never reads so the window should close
+	<-done
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 

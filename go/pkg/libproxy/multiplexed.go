@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 const (
@@ -47,6 +48,7 @@ type channel struct {
 	closeReceived bool
 	closeSent     bool
 	shutdownSent  bool
+	writeDeadline time.Time
 }
 
 // newChannel registers a channel through the multiplexer
@@ -132,8 +134,29 @@ func (c *channel) Write(p []byte) (int, error) {
 			continue
 		}
 
-		// Wait for the write window to be increased
-		c.c.Wait()
+		// Wait for the write window to be increased (or a timeout)
+		done := make(chan struct{})
+		timeout := make(chan time.Time)
+		if !c.writeDeadline.IsZero() {
+			go func() {
+				time.Sleep(time.Until(c.writeDeadline))
+				close(timeout)
+			}()
+		}
+		go func() {
+			c.c.Wait()
+			close(done)
+		}()
+		select {
+		case <-timeout:
+			// clean up the goroutine
+			c.c.Broadcast()
+			<-done
+			return written, &errTimeout{}
+		case <-done:
+			// The timeout will still fire in the background
+			continue
+		}
 	}
 }
 
@@ -178,6 +201,47 @@ func (c *channel) isClosed() bool {
 	c.m.Lock()
 	defer c.m.Unlock()
 	return c.closeReceived && c.closeSent
+}
+
+func (c *channel) SetReadDeadline(timeout time.Time) error {
+	return c.readPipe.SetReadDeadline(timeout)
+}
+
+func (c *channel) SetWriteDeadline(timeout time.Time) error {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.writeDeadline = timeout
+	c.c.Broadcast()
+	return nil
+}
+
+func (c *channel) SetDeadline(timeout time.Time) error {
+	if err := c.SetReadDeadline(timeout); err != nil {
+		return err
+	}
+	return c.SetWriteDeadline(timeout)
+}
+
+func (c *channel) RemoteAddr() net.Addr {
+	return &channelAddr{
+		d: c.destination,
+	}
+}
+
+func (c *channel) LocalAddr() net.Addr {
+	return c.RemoteAddr() // There is no local address
+}
+
+type channelAddr struct {
+	d Destination
+}
+
+func (a *channelAddr) Network() string {
+	return "channel"
+}
+
+func (a *channelAddr) String() string {
+	return a.d.String()
 }
 
 // Multiplexer muxes and demuxes sub-connections over a single connection
