@@ -3,13 +3,12 @@ package libproxy
 import (
 	"io"
 	"log"
+	"net"
 )
 
 // Conn defines a network connection
 type Conn interface {
-	io.Reader
-	io.Writer
-	io.Closer
+	net.Conn
 	CloseRead() error
 	CloseWrite() error
 }
