@@ -79,6 +79,12 @@ struct
     by_last_use := By_last_use.remove flow.last_use (!by_last_use);
     Lwt.return_unit
 
+  let touch t flow =
+    let last_use = Clock.elapsed_ns t.clock in
+    (* Remove the old entry t.last_use and add a new one for last_use *)
+    t.by_last_use := By_last_use.(add last_use flow @@ remove flow.last_use !(t.by_last_use));
+    flow.last_use <- last_use
+
   let start_background_gc clock table by_last_use max_idle_time new_flow_lock =
     let rec loop () =
       Time.sleep_ns max_idle_time >>= fun () ->
@@ -113,10 +119,11 @@ struct
     Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp_hum src src_port Ipaddr.pp_hum
       dst dst_port
 
-  let rec loop t server d buf =
+  let rec loop t flow server d buf =
     Lwt.catch (fun () ->
         Udp.recvfrom server buf
         >>= fun (n, from) ->
+        touch t flow;
         (* In the default configuration with preserve_remote_port=true,
            the from address should be the true external address so the
            client behind the NAT can tell different peers apart.  It
@@ -154,7 +161,7 @@ struct
     >>= function
     | false ->
       Lwt.return ()
-    | true -> loop t server d buf
+    | true -> loop t flow server d buf
 
   let expire_old_flows_locked t =
     let current = By_last_use.cardinal !(t.by_last_use) in
@@ -201,7 +208,7 @@ struct
                 Hashtbl.replace external_to_internal (snd external_address) datagram.src;
                 (* Start a listener *)
                 let buf = Cstruct.create Constants.max_udp_length in
-                Lwt.async (fun () -> loop t server datagram buf);
+                Lwt.async (fun () -> loop t flow server datagram buf);
                 Lwt.return (Some flow)
               )
           ) (fun e ->
@@ -214,10 +221,7 @@ struct
     | Some flow ->
       Lwt.catch (fun () ->
           Udp.sendto flow.server datagram.intercept ~ttl datagram.payload >|= fun () ->
-          let last_use = Clock.elapsed_ns t.clock in
-          (* Remove the old entry t.last_use and add a new one for last_use *)
-          t.by_last_use := By_last_use.(add last_use flow @@ remove flow.last_use !(t.by_last_use));
-          flow.last_use <- last_use;
+          touch t flow
         ) (fun e ->
           Log.err (fun f ->
               f "Hostnet_udp %s: Lwt_bytes.send caught %a"
