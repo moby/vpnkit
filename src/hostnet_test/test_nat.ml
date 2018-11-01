@@ -23,7 +23,14 @@ module EchoServer = struct
     local_port: int;
     server: Host.Sockets.Datagram.Udp.server;
     mutable seen_addresses: Host.Sockets.Datagram.address list;
+    mutable buf: Cstruct.t;
   }
+
+  let resend_all_replies t =
+    Lwt_list.iter_p (fun address ->
+      Host.Sockets.Datagram.Udp.sendto t.server address
+        t.buf
+    ) t.seen_addresses
 
   let create () =
     Host.Sockets.Datagram.Udp.bind (Ipaddr.(V4 V4.localhost), 0)
@@ -32,17 +39,16 @@ module EchoServer = struct
     (* Start a background echo thread. This will naturally fail when the
        file descriptor is closed underneath it from `shutdown` *)
     let seen_addresses = [] in
-    let t = { local_port; server; seen_addresses } in
+    let buf = Cstruct.create 0 in
+    let t = { local_port; server; seen_addresses; buf } in
     let _ =
       let buf = Cstruct.create 2048 in
       let rec loop () =
         Host.Sockets.Datagram.Udp.recvfrom server buf
         >>= fun (len, address) ->
         t.seen_addresses <- address :: t.seen_addresses;
-        Lwt_list.iter_p (fun address ->
-            Host.Sockets.Datagram.Udp.sendto server address
-              (Cstruct.sub buf 0 len)
-          ) t.seen_addresses
+        t.buf <- Cstruct.sub buf 0 len;
+        resend_all_replies t
         >>=
         loop
       in
