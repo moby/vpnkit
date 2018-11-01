@@ -67,6 +67,7 @@ module UdpServer = struct
   type t = {
     port: int;
     mutable highest: int; (* highest packet payload received *)
+    mutable num_received: int;
     mutable seen_source_ports: PortSet.t; (* all source addresses seen *)
     c: unit Lwt_condition.t;
   }
@@ -74,10 +75,12 @@ module UdpServer = struct
     let highest = 0 in
     let c = Lwt_condition.create () in
     let seen_source_ports = PortSet.empty in
-    let t = { port; highest; seen_source_ports; c } in
+    let num_received = 0 in
+    let t = { port; highest; num_received; seen_source_ports; c } in
     Client.listen_udpv4 stack ~port (fun ~src:_ ~dst:_ ~src_port buffer ->
         t.highest <- max t.highest (Cstruct.get_uint8 buffer 0);
         t.seen_source_ports <- PortSet.add src_port t.seen_source_ports;
+        t.num_received <- t.num_received + 1;
         Log.debug (fun f ->
             f "Received UDP %d -> %d highest %d" src_port port t.highest);
         Lwt_condition.signal c ();
@@ -98,6 +101,14 @@ module UdpServer = struct
       >|= fun () ->
       PortSet.cardinal t.seen_source_ports >= num
     end else Lwt.return true
+  let wait_for_traffic ~initial t =
+    if t.num_received > initial
+    then Lwt.return true
+    else
+      Lwt.pick [ Lwt_condition.wait t.c;
+                  Host.Time.sleep_ns (Duration.of_sec 1) ]
+      >>= fun () ->
+      Lwt.return false
 end
 
 let err_udp e = Fmt.kstrf failwith "%a" Client.UDPV4.pp_error e
