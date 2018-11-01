@@ -152,6 +152,149 @@ let test_udp () =
   in
   run t
 
+(* Set up a UDP flow and verify that replies update the last use *)
+let test_udp_reply_last_use () =
+  let t = EchoServer.with_server (fun ({ EchoServer.local_port; _ } as echoserver) ->
+  with_stack ~pcap:"test_udp_reply_last_use.pcap"  (fun slirp_server stack ->
+      let buffer = Cstruct.create 1024 in
+      (* Send '1' *)
+      Cstruct.set_uint8 buffer 0 1;
+      let udpv4 = Client.udpv4 stack.t in
+      let virtual_port = 1024 in
+      let server = UdpServer.make stack.t virtual_port in
+      let rec loop remaining =
+        if remaining = 0 then
+          failwith "Timed-out before UDP response arrived";
+        Log.debug (fun f ->
+            f "Sending %d -> %d value %d" virtual_port local_port
+              (Cstruct.get_uint8 buffer 0));
+        Client.UDPV4.write
+          ~src_port:virtual_port
+          ~dst:Ipaddr.V4.localhost
+          ~dst_port:local_port udpv4 buffer
+        >>= function
+        | Error e -> err_udp e
+        | Ok ()   ->
+          UdpServer.wait_for_data ~highest:1 server >>= function
+          | true  -> Lwt.return_unit
+          | false -> loop (remaining - 1)
+      in
+      loop 5
+      >>= fun () ->
+      let get_last_use () =
+        let table = Slirp_stack.Debug.Nat.get_table slirp_server in
+        let rec search = function
+          | [] -> failwith "Failed to locate NAT rule in table"
+          | flow :: rest ->
+            if snd flow.Slirp_stack.Debug.Nat.inside = virtual_port
+            then flow.Slirp_stack.Debug.Nat.last_use_time_ns
+            else (search rest) in
+        search table in
+      let last_use = get_last_use () in
+      (* Trigger replies and verify the last_use is updated *)
+      let rec loop remaining = match remaining with
+        | 0 -> failwith "UDP replies didn't bump the last_use"
+        | _ ->
+          EchoServer.resend_all_replies echoserver
+          >>= fun () ->
+          if get_last_use () <> last_use
+          then Lwt.return_unit
+          else
+            Host.Time.sleep_ns (Duration.of_sec 5)
+            >>= fun () ->
+            loop (remaining - 1) in
+      loop 5
+    ))
+  in
+  run t
+
+(* Check that NAT table overflow doesn't kill new flows *)
+let test_udp_expiry () =
+  let t = EchoServer.with_server (fun { EchoServer.local_port; _ } ->
+  with_stack ~pcap:"test_udp_expiry.pcap"  (fun slirp_server stack ->
+    let active = Slirp_stack.Debug.Nat.get_table slirp_server |> List.length in
+    let limit = Slirp_stack.Debug.Nat.get_max_active_flows slirp_server in
+    let buffer = Cstruct.create 1024 in
+    (* Send '1' *)
+    Cstruct.set_uint8 buffer 0 1;
+    let udpv4 = Client.udpv4 stack.t in
+    let virtual_port = 1024 in
+    let server = UdpServer.make stack.t virtual_port in
+    (* Send spam to almost fill up the table. Leave one entry. *)
+    let initial_spam_entries = limit - active - 1 in
+    let rec spam from_port remaining = match remaining with
+      | 0 -> Lwt.return_unit
+      | n ->
+        Client.UDPV4.write
+          ~src_port:(from_port + n)
+          ~dst:Ipaddr.V4.localhost
+          ~dst_port:(local_port + 1) (* not the echo server *)
+          udpv4 buffer
+        >>= function
+        | Error e -> err_udp e
+        | Ok ()   ->
+          spam from_port (remaining - 1) in
+    spam virtual_port initial_spam_entries
+    >>= fun () ->
+    (* Send some real data -- this should take up the last slot *)
+    let rec loop remaining =
+      if remaining = 0 then
+        failwith "Timed-out before UDP response arrived";
+      Log.debug (fun f ->
+          f "Sending %d -> %d value %d" virtual_port local_port
+            (Cstruct.get_uint8 buffer 0));
+      Client.UDPV4.write
+        ~src_port:virtual_port
+        ~dst:Ipaddr.V4.localhost
+        ~dst_port:local_port udpv4 buffer
+      >>= function
+      | Error e -> err_udp e
+      | Ok ()   ->
+        UdpServer.wait_for_data ~highest:1 server >>= function
+        | true  -> Lwt.return_unit
+        | false -> loop (remaining - 1)
+    in
+    loop 5
+    >>= fun () ->
+    (* Check the table is full *)
+    let rec loop remaining =
+      let active = Slirp_stack.Debug.Nat.get_table slirp_server |> List.length in
+      match remaining with
+      | 0 -> failwith (Printf.sprintf "Failed to fill NAT table, active = %d, limit = %d" active limit)
+      | _ ->
+        if active <> limit
+        then Host.Time.sleep_ns (Duration.of_sec 1) >>= fun () -> loop (remaining - 1)
+        else Lwt.return_unit in
+    loop 5
+    >>= fun () ->
+    (* Send a little bit more spam to trigger an expiry *)
+    spam (virtual_port + initial_spam_entries) 1
+    >>= fun () ->
+    (* Verify there was an expiry *)
+    let rec loop remaining =
+      let active = Slirp_stack.Debug.Nat.get_table slirp_server |> List.length in
+      match remaining with
+      | 0 -> failwith (Printf.sprintf "Failed to expire NAT table, active = %d, limit = %d" active limit)
+      | _ ->
+        if active >= limit
+        then Host.Time.sleep_ns (Duration.of_sec 1) >>= fun () -> loop (remaining - 1)
+        else Lwt.return_unit in
+    loop 5
+    >>= fun () ->
+    (* Verify our rule still exists *)
+    let table = Slirp_stack.Debug.Nat.get_table slirp_server in
+    let rec search = function
+      | [] -> failwith "Failed to locate NAT rule in table"
+      | flow :: rest ->
+        if snd flow.Slirp_stack.Debug.Nat.inside = virtual_port
+        then ()
+        else (search rest) in
+    search table;
+    Lwt.return_unit
+    ))
+  in
+  run t
+
 (* Start a local UDP mult-echo server, send traffic to it from one
    source port, wait for the response, send traffic to it from
    another source port, expect responses to *both* source ports. *)
@@ -394,4 +537,6 @@ let tests = [
   "NAT: 2 UDP connections", [ "", `Quick, test_udp_2 ];
   "NAT: punch", [ "", `Quick, test_nat_punch ];
   "NAT: source ports", [ "", `Quick, test_source_ports ];
+  "NAT: flow reply last use", [ "", `Quick, test_udp_reply_last_use ];
+  "NAT: flow expiry", [ "", `Quick, test_udp_expiry ];
 ]
