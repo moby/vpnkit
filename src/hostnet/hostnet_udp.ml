@@ -191,14 +191,17 @@ struct
           limit we will expire the oldest 25% to amortise the cost. *)
       let to_delete = current - (t.max_active_flows / 4 * 3) in
       let seq = By_last_use.to_seq !(t.by_last_use) in
-      let rec loop remaining seq = match remaining, seq () with
-        | _, Seq.Nil -> Lwt.return_unit
-        | 0, _ -> Lwt.return_unit
+      let rec loop remaining seq count = match remaining, seq () with
+        | _, Seq.Nil -> Lwt.return count
+        | 0, _ -> Lwt.return count
         | n, Cons((_, oldest_flow), rest) ->
           expire t.table t.by_last_use oldest_flow
           >>= fun () ->
-          loop (n - 1) rest in
-      loop to_delete seq
+          loop (n - 1) rest (count + 1) in
+      loop to_delete seq 0
+      >>= fun count ->
+      Log.info (fun f -> f "Expired %d UDP NAT rules" count);
+      Lwt.return_unit
     end
 
   let input ~t ~datagram ~ttl () =
