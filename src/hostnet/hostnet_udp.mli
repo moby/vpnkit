@@ -50,6 +50,8 @@ sig
 
     val get_table: t -> flow list
     (** Return an instantaneous snapshot of the NAT table *)
+
+    val get_max_active_flows: t -> int
   end
 end
 

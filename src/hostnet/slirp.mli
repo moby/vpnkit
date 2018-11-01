@@ -57,6 +57,8 @@ sig
 
       val get_table: connection -> flow list
       (** Return an instantaneous snapshot of the NAT table *)
+
+      val get_max_active_flows: connection -> int
     end
 
     val update_dns: ?local_ip:Ipaddr.t -> ?builtin_names:(Dns.Name.t * Ipaddr.t) list ->

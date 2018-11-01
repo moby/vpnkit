@@ -80,6 +80,8 @@ struct
           last_use_time_ns = flow.last_use;
         } :: acc
       ) t.table []
+
+    let get_max_active_flows t = t.max_active_flows
   end
 
   let expire table by_last_use flow =
