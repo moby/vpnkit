@@ -273,7 +273,7 @@ let test_shared_nat_rule () =
           let virtual_port = 1024 in
           let server = UdpServer.make stack.t virtual_port in
           let init_table_size =
-            Slirp_stack.Debug.get_nat_table_size slirp_server
+            List.length @@ Slirp_stack.Debug.Nat.get_table slirp_server
           in
 
           let rec loop remaining =
@@ -295,7 +295,7 @@ let test_shared_nat_rule () =
           in
           loop 5 >>= fun () ->
           Alcotest.(check int) "One NAT rule" 1
-            (Slirp_stack.Debug.get_nat_table_size slirp_server
+            ((List.length @@ Slirp_stack.Debug.Nat.get_table slirp_server)
              - init_table_size);
           (* Send '2' *)
           Cstruct.set_uint8 buffer 0 2;
@@ -320,7 +320,7 @@ let test_shared_nat_rule () =
               in
               loop 5 >|= fun () ->
               Alcotest.(check int) "Still one NAT rule" 1
-                (Slirp_stack.Debug.get_nat_table_size slirp_server
+                ((List.length @@ Slirp_stack.Debug.Nat.get_table slirp_server)
                  - init_table_size)
             )))
   in

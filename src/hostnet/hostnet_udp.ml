@@ -63,7 +63,24 @@ struct
 
   let set_send_reply ~t ~send_reply = t.send_reply <- Some send_reply
 
-  let get_nat_table_size t = Hashtbl.length t.table
+  module Debug = struct
+    type address = Ipaddr.t * int
+
+    type flow = {
+      inside: address;
+      outside: address;
+      last_use_time_ns: int64;
+    }
+
+    let get_table t =
+      Hashtbl.fold (fun _ flow acc ->
+        {
+          inside = flow.src;
+          outside = flow.external_address;
+          last_use_time_ns = flow.last_use;
+        } :: acc
+      ) t.table []
+  end
 
   let expire table by_last_use flow =
     Lwt.catch (fun () ->

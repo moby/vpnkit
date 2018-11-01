@@ -46,8 +46,18 @@ sig
   (** Output all traffic in pcap format over a local Unix socket or named pipe *)
 
   module Debug: sig
-    val get_nat_table_size: connection -> int
-    (** Return the number of active NAT table entries *)
+    module Nat : sig
+      type address = Ipaddr.t * int
+
+      type flow = {
+        inside: address;
+        outside: address;
+        last_use_time_ns: int64;
+      }
+
+      val get_table: connection -> flow list
+      (** Return an instantaneous snapshot of the NAT table *)
+    end
 
     val update_dns: ?local_ip:Ipaddr.t -> ?builtin_names:(Dns.Name.t * Ipaddr.t) list ->
       Clock.t -> unit

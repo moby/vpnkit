@@ -39,8 +39,18 @@ sig
   (** Process an incoming datagram, forwarding it over the Sockets implementation
       and set up a listening rule to catch replies. *)
 
-  val get_nat_table_size: t -> int
-  (** Return the current number of allocated NAT table entries *)
+  module Debug : sig
+    type address = Ipaddr.t * int
+
+    type flow = {
+        inside: address;
+        outside: address;
+        last_use_time_ns: int64;
+    }
+
+    val get_table: t -> flow list
+    (** Return an instantaneous snapshot of the NAT table *)
+  end
 end
 
 val external_to_internal: (int, address) Hashtbl.t
