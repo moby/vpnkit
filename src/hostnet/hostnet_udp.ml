@@ -40,6 +40,10 @@ struct
     mutable last_use: int64;
   }
 
+  (* We keep a map of last_use (nanosecond) -> flow so we can partition it
+     and expire the oldest. *)
+  module By_last_use = Map.Make(Int64)
+
   (* For every src, src_port behind the NAT we create one listening socket
      on the external network. We translate the source address on the way out
      but preserve them on the way in. *)
@@ -49,6 +53,7 @@ struct
     max_idle_time: int64;
     background_gc_t: unit Lwt.t;
     table: (address, flow) Hashtbl.t; (* src -> flow *)
+    by_last_use: flow By_last_use.t ref; (* last use -> flow *)
     mutable send_reply: (datagram -> unit Lwt.t) option;
     preserve_remote_port: bool;
   }
@@ -57,7 +62,7 @@ struct
 
   let get_nat_table_size t = Hashtbl.length t.table
 
-  let start_background_gc clock table max_idle_time =
+  let start_background_gc clock table by_last_use max_idle_time =
     let rec loop () =
       Time.sleep_ns max_idle_time >>= fun () ->
       let now_ns = Clock.elapsed_ns clock in
@@ -81,6 +86,7 @@ struct
           >>= fun () ->
           Hashtbl.remove table k;
           Hashtbl.remove external_to_internal (snd flow.external_address);
+          by_last_use := By_last_use.remove flow.last_use (!by_last_use);
           Lwt.return_unit
         ) to_shutdown
       >>= fun () ->
@@ -90,9 +96,10 @@ struct
 
   let create ?(max_idle_time = Duration.(of_sec 60)) ?(preserve_remote_port=true) clock =
     let table = Hashtbl.create 7 in
-    let background_gc_t = start_background_gc clock table max_idle_time in
+    let by_last_use = ref By_last_use.empty in
+    let background_gc_t = start_background_gc clock table by_last_use max_idle_time in
     let send_reply = None in
-    { clock; max_idle_time; background_gc_t; table; send_reply; preserve_remote_port }
+    { clock; max_idle_time; background_gc_t; table; by_last_use; send_reply; preserve_remote_port }
 
   let description { src = src, src_port; dst = dst, dst_port; _ } =
     Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp_hum src src_port Ipaddr.pp_hum
@@ -159,6 +166,7 @@ struct
              let last_use = Clock.elapsed_ns t.clock in
              let flow = { description = d; server; external_address; last_use } in
              Hashtbl.replace t.table datagram.src flow;
+             t.by_last_use := By_last_use.add last_use flow !(t.by_last_use);
              Hashtbl.replace external_to_internal (snd external_address) datagram.src;
              (* Start a listener *)
              let buf = Cstruct.create Constants.max_udp_length in
@@ -174,7 +182,10 @@ struct
     | Some flow ->
       Lwt.catch (fun () ->
           Udp.sendto flow.server datagram.intercept ~ttl datagram.payload >|= fun () ->
-          flow.last_use <- Clock.elapsed_ns t.clock;
+          let last_use = Clock.elapsed_ns t.clock in
+          (* Remove the old entry t.last_use and add a new one for last_use *)
+          t.by_last_use := By_last_use.(add last_use flow @@ remove flow.last_use !(t.by_last_use));
+          flow.last_use <- last_use;
         ) (fun e ->
           Log.err (fun f ->
               f "Hostnet_udp %s: Lwt_bytes.send caught %a"
