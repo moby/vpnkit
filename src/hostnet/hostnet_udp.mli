@@ -24,9 +24,10 @@ sig
   type t
   (** A UDP NAT implementation *)
 
-  val create: ?max_idle_time:int64 -> ?preserve_remote_port:bool -> Clock.t -> t
+  val create: ?max_idle_time:int64 -> ?preserve_remote_port:bool -> ?max_active_flows:int -> Clock.t -> t
   (** Create a UDP NAT implementation which will keep "NAT rules" alive until
-      they become idle for the given [?max_idle_time].
+      they become idle for the given [?max_idle_time] or until the number of
+      flows hits [?max_active_flows] at which point the oldest will be expired.
       If [~preserve_remote_port] is set then reply traffic will come from the
       remote source port, otherwise it will come from the NAT port. *)
 
@@ -38,8 +39,20 @@ sig
   (** Process an incoming datagram, forwarding it over the Sockets implementation
       and set up a listening rule to catch replies. *)
 
-  val get_nat_table_size: t -> int
-  (** Return the current number of allocated NAT table entries *)
+  module Debug : sig
+    type address = Ipaddr.t * int
+
+    type flow = {
+        inside: address;
+        outside: address;
+        last_use_time_ns: int64;
+    }
+
+    val get_table: t -> flow list
+    (** Return an instantaneous snapshot of the NAT table *)
+
+    val get_max_active_flows: t -> int
+  end
 end
 
 val external_to_internal: (int, address) Hashtbl.t

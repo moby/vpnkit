@@ -35,10 +35,15 @@ struct
   (* For every source address, we allocate a flow with a receiving loop *)
   type flow = {
     description: string;
+    src: address;
     server: Udp.server;
     external_address: address;
     mutable last_use: int64;
   }
+
+  (* We keep a map of last_use (nanosecond) -> flow so we can partition it
+     and expire the oldest. *)
+  module By_last_use = Map.Make(Int64)
 
   (* For every src, src_port behind the NAT we create one listening socket
      on the external network. We translate the source address on the way out
@@ -47,61 +52,97 @@ struct
   type t = {
     clock: Clock.t;
     max_idle_time: int64;
+    max_active_flows: int;
+    new_flow_lock: Lwt_mutex.t;
     background_gc_t: unit Lwt.t;
     table: (address, flow) Hashtbl.t; (* src -> flow *)
+    by_last_use: flow By_last_use.t ref; (* last use -> flow *)
     mutable send_reply: (datagram -> unit Lwt.t) option;
     preserve_remote_port: bool;
   }
 
   let set_send_reply ~t ~send_reply = t.send_reply <- Some send_reply
 
-  let get_nat_table_size t = Hashtbl.length t.table
+  module Debug = struct
+    type address = Ipaddr.t * int
 
-  let start_background_gc clock table max_idle_time =
+    type flow = {
+      inside: address;
+      outside: address;
+      last_use_time_ns: int64;
+    }
+
+    let get_table t =
+      Hashtbl.fold (fun _ flow acc ->
+        {
+          inside = flow.src;
+          outside = flow.external_address;
+          last_use_time_ns = flow.last_use;
+        } :: acc
+      ) t.table []
+
+    let get_max_active_flows t = t.max_active_flows
+  end
+
+  let expire table by_last_use flow =
+    Lwt.catch (fun () ->
+        Udp.shutdown flow.server
+      ) (fun e ->
+        Log.err (fun f ->
+            f "Hostnet_udp %s: close raised %a" flow.description Fmt.exn e);
+        Lwt.return_unit
+      )
+    >>= fun () ->
+    Hashtbl.remove table flow.src;
+    Hashtbl.remove external_to_internal (snd flow.external_address);
+    by_last_use := By_last_use.remove flow.last_use (!by_last_use);
+    Lwt.return_unit
+
+  let touch t flow =
+    let last_use = Clock.elapsed_ns t.clock in
+    (* Remove the old entry t.last_use and add a new one for last_use *)
+    t.by_last_use := By_last_use.(add last_use flow @@ remove flow.last_use !(t.by_last_use));
+    flow.last_use <- last_use
+
+  let start_background_gc clock table by_last_use max_idle_time new_flow_lock =
     let rec loop () =
       Time.sleep_ns max_idle_time >>= fun () ->
-      let now_ns = Clock.elapsed_ns clock in
-      let to_shutdown =
-        Hashtbl.fold (fun k flow acc ->
-            if Int64.(sub now_ns flow.last_use) > max_idle_time then begin
-              Log.debug (fun f ->
-                  f "Hostnet_udp %s: expiring UDP NAT rule" flow.description);
-              (k, flow) :: acc
-            end else acc
-          ) table []
-      in
-      Lwt_list.iter_s (fun (k, flow) ->
-          Lwt.catch (fun () ->
-              Udp.shutdown flow.server
-            ) (fun e ->
-              Log.err (fun f ->
-                  f "Hostnet_udp %s: close raised %a" flow.description Fmt.exn e);
-              Lwt.return_unit
-            )
-          >>= fun () ->
-          Hashtbl.remove table k;
-          Hashtbl.remove external_to_internal (snd flow.external_address);
-          Lwt.return_unit
-        ) to_shutdown
+      Lwt_mutex.with_lock new_flow_lock
+        (fun () ->
+          let now_ns = Clock.elapsed_ns clock in
+          let to_shutdown =
+            Hashtbl.fold (fun _ flow acc ->
+                if Int64.(sub now_ns flow.last_use) > max_idle_time then begin
+                  Log.debug (fun f ->
+                      f "Hostnet_udp %s: expiring UDP NAT rule" flow.description);
+                  flow :: acc
+                end else acc
+              ) table []
+          in
+          Lwt_list.iter_s (expire table by_last_use) to_shutdown
+        )
       >>= fun () ->
       loop ()
     in
     loop ()
 
-  let create ?(max_idle_time = Duration.(of_sec 60)) ?(preserve_remote_port=true) clock =
+  let create ?(max_idle_time = Duration.(of_sec 60)) ?(preserve_remote_port=true) ?(max_active_flows=1024) clock =
     let table = Hashtbl.create 7 in
-    let background_gc_t = start_background_gc clock table max_idle_time in
+    let by_last_use = ref By_last_use.empty in
+    let new_flow_lock = Lwt_mutex.create () in
+    let background_gc_t = start_background_gc clock table by_last_use max_idle_time new_flow_lock in
     let send_reply = None in
-    { clock; max_idle_time; background_gc_t; table; send_reply; preserve_remote_port }
+    { clock; max_idle_time; max_active_flows; new_flow_lock; background_gc_t; table; by_last_use; send_reply; preserve_remote_port }
 
   let description { src = src, src_port; dst = dst, dst_port; _ } =
     Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp_hum src src_port Ipaddr.pp_hum
       dst dst_port
 
-  let rec loop t server d buf =
+  let rec loop t flow server d buf =
     Lwt.catch (fun () ->
         Udp.recvfrom server buf
         >>= fun (n, from) ->
+        touch t flow;
         (* In the default configuration with preserve_remote_port=true,
            the from address should be the true external address so the
            client behind the NAT can tell different peers apart.  It
@@ -139,7 +180,29 @@ struct
     >>= function
     | false ->
       Lwt.return ()
-    | true -> loop t server d buf
+    | true -> loop t flow server d buf
+
+  let expire_old_flows_locked t =
+    let current = By_last_use.cardinal !(t.by_last_use) in
+    if current < t.max_active_flows
+    then Lwt.return_unit
+    else begin
+      (* Although we want a hard limit of max_active_flows, when we hit the
+          limit we will expire the oldest 25% to amortise the cost. *)
+      let to_delete = current - (t.max_active_flows / 4 * 3) in
+      let seq = By_last_use.to_seq !(t.by_last_use) in
+      let rec loop remaining seq count = match remaining, seq () with
+        | _, Seq.Nil -> Lwt.return count
+        | 0, _ -> Lwt.return count
+        | n, Cons((_, oldest_flow), rest) ->
+          expire t.table t.by_last_use oldest_flow
+          >>= fun () ->
+          loop (n - 1) rest (count + 1) in
+      loop to_delete seq 0
+      >>= fun count ->
+      Log.info (fun f -> f "Expired %d UDP NAT rules" count);
+      Lwt.return_unit
+    end
 
   let input ~t ~datagram ~ttl () =
     let d = description datagram in
@@ -153,28 +216,34 @@ struct
        end else begin
          Log.debug (fun f -> f "Hostnet_udp %s: creating UDP NAT rule" d);
          Lwt.catch (fun () ->
-             Udp.bind ~description:(description datagram) (Ipaddr.(V4 V4.any), 0)
-             >>= fun server ->
-             let external_address = Udp.getsockname server in
-             let last_use = Clock.elapsed_ns t.clock in
-             let flow = { description = d; server; external_address; last_use } in
-             Hashtbl.replace t.table datagram.src flow;
-             Hashtbl.replace external_to_internal (snd external_address) datagram.src;
-             (* Start a listener *)
-             let buf = Cstruct.create Constants.max_udp_length in
-             Lwt.async (fun () -> loop t server datagram buf);
-             Lwt.return (Some flow)
-           ) (fun e ->
-             Log.err (fun f -> f "Hostnet_udp.input: bind raised %a" Fmt.exn e);
-             Lwt.return None
-           )
+            Lwt_mutex.with_lock t.new_flow_lock
+              (fun () ->
+                expire_old_flows_locked t
+                >>= fun () ->
+                Udp.bind ~description:(description datagram) (Ipaddr.(V4 V4.any), 0)
+                >>= fun server ->
+                let external_address = Udp.getsockname server in
+                let last_use = Clock.elapsed_ns t.clock in
+                let flow = { description = d; src = datagram.src; server; external_address; last_use } in
+                Hashtbl.replace t.table datagram.src flow;
+                t.by_last_use := By_last_use.add last_use flow !(t.by_last_use);
+                Hashtbl.replace external_to_internal (snd external_address) datagram.src;
+                (* Start a listener *)
+                let buf = Cstruct.create Constants.max_udp_length in
+                Lwt.async (fun () -> loop t flow server datagram buf);
+                Lwt.return (Some flow)
+              )
+          ) (fun e ->
+            Log.err (fun f -> f "Hostnet_udp.input: bind raised %a" Fmt.exn e);
+            Lwt.return None
+          )
        end
      end) >>= function
     | None -> Lwt.return ()
     | Some flow ->
       Lwt.catch (fun () ->
           Udp.sendto flow.server datagram.intercept ~ttl datagram.payload >|= fun () ->
-          flow.last_use <- Clock.elapsed_ns t.clock;
+          touch t flow
         ) (fun e ->
           Log.err (fun f ->
               f "Hostnet_udp %s: Lwt_bytes.send caught %a"

@@ -891,8 +891,11 @@ struct
           l "error while flushing the diagnostic: %a" C.pp_write_error e)
 
   module Debug = struct
-    let get_nat_table_size t = Udp_nat.get_nat_table_size t.udp_nat
-
+    module Nat = struct
+      include Udp_nat.Debug
+      let get_table t = get_table t.udp_nat
+      let get_max_active_flows t = get_max_active_flows t.udp_nat
+    end
     let update_dns
         ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(builtin_names = []) clock
       =
