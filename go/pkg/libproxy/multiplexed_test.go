@@ -69,6 +69,50 @@ func TestClose(t *testing.T) {
 	}
 }
 
+func TestCloseThenWrite(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+	// There was a bug where the second iteration failed because the main loop had deadlocked
+	// when it received a Close message.
+	for i := 0; i < 2; i++ {
+		client, err := local.Dial(Destination{
+			Proto: TCP,
+			IP:    net.ParseIP("127.0.0.1"),
+			Port:  8080,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		server, _, err := remote.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		loopback.simulateLatency = time.Second
+		done := make(chan struct{})
+		go func() {
+			for {
+				if _, err := client.Write([]byte{1}); err != nil {
+					close(done)
+					return // EOF
+				}
+			}
+		}()
+		if err := client.Close(); err != nil {
+			t.Fatal(err)
+		}
+		<-done
+		if !remote.IsRunning() {
+			t.Fatal("remote multiplexer has failed")
+		}
+		if err := server.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestReadDeadline(t *testing.T) {
 	loopback := newLoopback()
 	local := NewMultiplexer("local", loopback)
