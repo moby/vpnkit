@@ -264,6 +264,7 @@ type Multiplexer struct {
 	metadataMutex *sync.Mutex // hold when reading/modifying this structure
 	pendingAccept []*channel  // incoming connections
 	acceptCond    *sync.Cond
+	isRunning     bool
 }
 
 // NewMultiplexer constructs a multiplexer from a channel
@@ -348,11 +349,24 @@ func (m *Multiplexer) Accept() (Conn, *Destination, error) {
 
 // Run starts handling the requests from the other side
 func (m *Multiplexer) Run() {
+	m.metadataMutex.Lock()
+	m.isRunning = true
+	m.metadataMutex.Unlock()
 	go func() {
 		if err := m.run(); err != nil {
 			log.Printf("Multiplexer main loop failed with %v", err)
 		}
+		m.metadataMutex.Lock()
+		m.isRunning = false
+		m.metadataMutex.Unlock()
 	}()
+}
+
+// IsRunning returns whether the multiplexer is running or not
+func (m *Multiplexer) IsRunning() bool {
+	m.metadataMutex.Lock()
+	defer m.metadataMutex.Unlock()
+	return m.isRunning
 }
 
 func (m *Multiplexer) run() error {
