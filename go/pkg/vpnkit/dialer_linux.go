@@ -12,5 +12,5 @@ func (d *Dialer) connectTransport() (io.ReadWriteCloser, error) {
 		port = DefaultVsockPort
 	}
 	// 3 is the first VM
-	return vsock.Dial(3, port)
+	return vsock.Dial(uint32(3), uint32(port))
 }
