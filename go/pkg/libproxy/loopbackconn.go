@@ -139,9 +139,10 @@ func (pipe *bufferedPipe) CloseWrite() error {
 }
 
 type loopback struct {
-	write  *bufferedPipe
-	read   *bufferedPipe
-	closed bool
+	write           *bufferedPipe
+	read            *bufferedPipe
+	closed          bool
+	simulateLatency time.Duration
 }
 
 func newLoopback() *loopback {
@@ -199,7 +200,9 @@ func (l *loopback) Read(p []byte) (n int, err error) {
 }
 
 func (l *loopback) Write(p []byte) (n int, err error) {
-	return l.write.Write(p)
+	n, err = l.write.Write(p)
+	time.Sleep(l.simulateLatency)
+	return
 }
 
 func (l *loopback) CloseRead() error {

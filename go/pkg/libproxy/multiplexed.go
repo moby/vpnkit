@@ -161,12 +161,16 @@ func (c *channel) Write(p []byte) (int, error) {
 }
 
 func (c *channel) Close() error {
+	// Avoid a Write() racing with us and sending after we Close()
+	c.m.Lock()
+	c.closeSent = true
+	c.m.Unlock()
+
 	if err := c.multiplexer.send(NewClose(c.ID)); err != nil {
 		return err
 	}
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.closeSent = true
 	c.c.Broadcast()
 	if c.closeSent && c.closeReceived {
 		c.multiplexer.freeChannel(c.ID)
@@ -179,12 +183,16 @@ func (c *channel) CloseRead() error {
 }
 
 func (c *channel) CloseWrite() error {
+	// Avoid a Write() racing with us and sending after we Close()
+	c.m.Lock()
+	c.shutdownSent = true
+	c.m.Unlock()
+
 	if err := c.multiplexer.send(NewShutdown(c.ID)); err != nil {
 		return err
 	}
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.shutdownSent = true
 	c.c.Broadcast()
 	return nil
 }
@@ -256,6 +264,7 @@ type Multiplexer struct {
 	metadataMutex *sync.Mutex // hold when reading/modifying this structure
 	pendingAccept []*channel  // incoming connections
 	acceptCond    *sync.Cond
+	isRunning     bool
 }
 
 // NewMultiplexer constructs a multiplexer from a channel
@@ -340,11 +349,24 @@ func (m *Multiplexer) Accept() (Conn, *Destination, error) {
 
 // Run starts handling the requests from the other side
 func (m *Multiplexer) Run() {
+	m.metadataMutex.Lock()
+	m.isRunning = true
+	m.metadataMutex.Unlock()
 	go func() {
 		if err := m.run(); err != nil {
 			log.Printf("Multiplexer main loop failed with %v", err)
 		}
+		m.metadataMutex.Lock()
+		m.isRunning = false
+		m.metadataMutex.Unlock()
 	}()
+}
+
+// IsRunning returns whether the multiplexer is running or not
+func (m *Multiplexer) IsRunning() bool {
+	m.metadataMutex.Lock()
+	defer m.metadataMutex.Unlock()
+	return m.isRunning
 }
 
 func (m *Multiplexer) run() error {
