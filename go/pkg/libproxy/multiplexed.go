@@ -191,7 +191,7 @@ func (c *channel) CloseWrite() error {
 	// Avoid a Write() racing with us and sending after we Close()
 	// Avoid sending Shutdown twice
 	c.m.Lock()
-	alreadyShutdown := c.shutdownSent
+	alreadyShutdown := c.shutdownSent || c.closeSent
 	c.shutdownSent = true
 	c.m.Unlock()
 
