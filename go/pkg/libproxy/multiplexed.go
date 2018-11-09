@@ -162,10 +162,15 @@ func (c *channel) Write(p []byte) (int, error) {
 
 func (c *channel) Close() error {
 	// Avoid a Write() racing with us and sending after we Close()
+	// Avoid sending Close twice
 	c.m.Lock()
+	alreadyClosed := c.closeSent
 	c.closeSent = true
 	c.m.Unlock()
 
+	if alreadyClosed {
+		return nil
+	}
 	if err := c.multiplexer.send(NewClose(c.ID)); err != nil {
 		return err
 	}
@@ -184,10 +189,15 @@ func (c *channel) CloseRead() error {
 
 func (c *channel) CloseWrite() error {
 	// Avoid a Write() racing with us and sending after we Close()
+	// Avoid sending Shutdown twice
 	c.m.Lock()
+	alreadyShutdown := c.shutdownSent
 	c.shutdownSent = true
 	c.m.Unlock()
 
+	if alreadyShutdown {
+		return nil
+	}
 	if err := c.multiplexer.send(NewShutdown(c.ID)); err != nil {
 		return err
 	}
