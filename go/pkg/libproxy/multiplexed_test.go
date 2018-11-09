@@ -69,6 +69,114 @@ func TestClose(t *testing.T) {
 	}
 }
 
+func TestCloseClose(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+	// There was a bug where the second iteration failed because the main loop had deadlocked
+	// when it received a Close message.
+	for i := 0; i < 2; i++ {
+		client, err := local.Dial(Destination{
+			Proto: TCP,
+			IP:    net.ParseIP("127.0.0.1"),
+			Port:  8080,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		server, _, err := remote.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := client.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := client.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := server.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if !remote.IsRunning() {
+			t.Fatal("remote multiplexer has failed")
+		}
+	}
+}
+
+func TestCloseWriteCloseWrite(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+	// There was a bug where the second iteration failed because the main loop had deadlocked
+	// when it received a Close message.
+	for i := 0; i < 2; i++ {
+		client, err := local.Dial(Destination{
+			Proto: TCP,
+			IP:    net.ParseIP("127.0.0.1"),
+			Port:  8080,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		server, _, err := remote.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := client.CloseWrite(); err != nil {
+			t.Fatal(err)
+		}
+		if err := client.CloseWrite(); err != nil {
+			t.Fatal(err)
+		}
+		if err := server.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if !remote.IsRunning() {
+			t.Fatal("remote multiplexer has failed")
+		}
+	}
+}
+
+func TestCloseCloseWrite(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+	// There was a bug where the second iteration failed because the main loop had deadlocked
+	// when it received a Close message.
+	for i := 0; i < 2; i++ {
+		client, err := local.Dial(Destination{
+			Proto: TCP,
+			IP:    net.ParseIP("127.0.0.1"),
+			Port:  8080,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		server, _, err := remote.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := client.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := client.CloseWrite(); err != nil {
+			t.Fatal(err)
+		}
+		if err := server.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if !remote.IsRunning() {
+			t.Fatal("remote multiplexer has failed")
+		}
+	}
+}
+
 func TestCloseThenWrite(t *testing.T) {
 	loopback := newLoopback()
 	local := NewMultiplexer("local", loopback)
