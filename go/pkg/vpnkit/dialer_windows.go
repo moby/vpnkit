@@ -21,8 +21,12 @@ func (d *Dialer) connectTransport() (io.ReadWriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	addr := hvsock.Addr{
-		VMID:      d.HyperVVMID,
+	vmid, err := hvsock.GUIDFromString(d.HyperVVMID)
+	if err != nil {
+		return nil, err
+	}
+	addr := hvsock.HypervAddr{
+		VMID:      vmid,
 		ServiceID: svc,
 	}
 	return hvsock.Dial(addr)
