@@ -14,37 +14,54 @@ import (
 	datakit "github.com/moby/datakit/api/go-datakit"
 )
 
-// Port describes a UDP or TCP port forward
+// Protocol used by the exposed port.
+type Protocol string
+
+const (
+	// TCP port is exposed
+	TCP = Protocol("tcp")
+	// UDP port is exposed
+	UDP = Protocol("udp")
+	// Unix domain socket is exposed
+	Unix = Protocol("unix")
+)
+
+// Port describes a UDP, TCP port forward or a Unix domain socket forward.
 type Port struct {
-	client  *datakit.Client
-	proto   string
-	outIP   net.IP
-	outPort uint16
-	outPath string
-	inIP    net.IP
-	inPort  uint16
-	inPath  string
-	handle  *datakit.File
+	// Proto is the protocol used by the exposed port.
+	Proto Protocol
+	// OutIP is the external IP address.
+	OutIP net.IP
+	// OutPort is the external port number.
+	OutPort uint16
+	// OutPath is the external Unix domain socket.
+	OutPath string
+	// InIP is the internal IP address.
+	InIP net.IP
+	// InPort is the internal port number.
+	InPort uint16
+	// InPath is the internal Unix domain socket.
+	InPath string
+	handle *datakit.File
 }
 
 // NewPort constructs an instance of a TCP or UDP Port
-func NewPort(connection *Connection, proto string, outIP net.IP, outPort uint16, inIP net.IP, inPort uint16) *Port {
-	return &Port{connection.client, proto, outIP, outPort, "", inIP, inPort, "", nil}
+func NewPort(connection *Connection, proto Protocol, outIP net.IP, outPort uint16, inIP net.IP, inPort uint16) *Port {
+	return &Port{proto, outIP, outPort, "", inIP, inPort, "", nil}
 }
 
 // NewPath constructs an instance of a forwarded Unix path
 func NewPath(connection *Connection, outPath, inPath string) *Port {
-	return &Port{connection.client, "unix", nil, uint16(0), outPath, nil, uint16(0), inPath, nil}
+	return &Port{Unix, nil, uint16(0), outPath, nil, uint16(0), inPath, nil}
 }
 
-// ListExposed returns a list of currently exposed ports
-func ListExposed(connection *Connection) ([]*Port, error) {
-	ctx := context.TODO()
-	dirs, err := connection.client.List(ctx, []string{})
+// ListExposed returns a list of currently exposed ports.
+func (c *Connection) ListExposed(ctx context.Context) ([]Port, error) {
+	dirs, err := c.client.List(ctx, []string{})
 	if err != nil {
 		return nil, err
 	}
-	results := make([]*Port, 0)
+	results := make([]Port, 0)
 
 	for _, name := range dirs {
 		port, err := parse(name)
@@ -52,8 +69,7 @@ func ListExposed(connection *Connection) ([]*Port, error) {
 			// there are some special files like "." and "README" to ignore
 			continue
 		}
-		port.client = connection.client
-		results = append(results, port)
+		results = append(results, *port)
 	}
 
 	return results, nil
@@ -61,17 +77,17 @@ func ListExposed(connection *Connection) ([]*Port, error) {
 
 // String returns a human-readable string
 func (p *Port) String() string {
-	return fmt.Sprintf("%s forward from %s:%d to %s:%d", p.proto, p.outIP.String(), p.outPort, p.inIP.String(), p.inPort)
+	return fmt.Sprintf("%s forward from %s:%d to %s:%d", p.Proto, p.OutIP.String(), p.OutPort, p.InIP.String(), p.InPort)
 }
 
 // spec returns a string of the form proto:outIP:outPort:proto:inIP:inPort as
 // understood by vpnkit
 func (p *Port) spec() string {
-	switch p.proto {
+	switch p.Proto {
 	case "tcp", "udp":
-		return fmt.Sprintf("%s:%s:%d:%s:%s:%d", p.proto, p.outIP.String(), p.outPort, p.proto, p.inIP.String(), p.inPort)
+		return fmt.Sprintf("%s:%s:%d:%s:%s:%d", p.Proto, p.OutIP.String(), p.OutPort, p.Proto, p.InIP.String(), p.InPort)
 	case "unix":
-		return fmt.Sprintf("unix:%s:unix:%s", base64.StdEncoding.EncodeToString([]byte(p.outPath)), base64.StdEncoding.EncodeToString([]byte(p.inPath)))
+		return fmt.Sprintf("unix:%s:unix:%s", base64.StdEncoding.EncodeToString([]byte(p.OutPath)), base64.StdEncoding.EncodeToString([]byte(p.InPath)))
 	default:
 		return "unknown protocol"
 	}
@@ -96,7 +112,7 @@ func parse(name string) (*Port, error) {
 		if outProto != inProto {
 			return nil, errors.New("Failed to parse port: external proto is " + outProto + " but internal proto is " + inProto)
 		}
-		return &Port{nil, outProto, outIP, uint16(outPort), "", inIP, uint16(inPort), "", nil}, nil
+		return &Port{Protocol(outProto), outIP, uint16(outPort), "", inIP, uint16(inPort), "", nil}, nil
 	case 4:
 		outProto := bits[0]
 		outPathEnc := bits[1]
@@ -113,23 +129,23 @@ func parse(name string) (*Port, error) {
 		if outProto != "unix" || inProto != "unix" {
 			return nil, errors.New("Failed to parse path: external proto is " + outProto + " and internal proto is " + inProto)
 		}
-		return &Port{nil, outProto, nil, uint16(0), string(outPath), nil, uint16(0), string(inPath), nil}, nil
+		return &Port{Protocol(outProto), nil, uint16(0), string(outPath), nil, uint16(0), string(inPath), nil}, nil
 	default:
 		return nil, errors.New("Failed to parse port spec: " + name)
 	}
 }
 
 // Expose asks vpnkit to expose the port
-func (p *Port) Expose(ctx context.Context) error {
+func (c *Connection) Expose(ctx context.Context, p *Port) error {
 	if p.handle != nil {
 		return errors.New("Port is already exposed")
 	}
 	spec := p.spec()
-	client := p.client
 	// use the spec also as a name
 	name := spec
 
 	log.Printf("Expose %s\n", spec)
+	client := c.client
 	_ = client.Remove(ctx, name)
 
 	err := client.Mkdir(ctx, name)
@@ -191,9 +207,9 @@ func (p *Port) Expose(ctx context.Context) error {
 }
 
 // Unexpose asks vpnkit to hide the port again
-func (p *Port) Unexpose(ctx context.Context) error {
+func (c *Connection) Unexpose(ctx context.Context, p *Port) error {
 	if p.handle == nil {
-		ctl, err := p.client.Open(ctx, p9p.OREAD, p.spec(), "ctl")
+		ctl, err := c.client.Open(ctx, p9p.OREAD, p.spec(), "ctl")
 		if err != nil {
 			return errors.New("Port is not exposed")
 		}
@@ -204,31 +220,6 @@ func (p *Port) Unexpose(ctx context.Context) error {
 	// Any clunk frees the port
 	ctl.Close(ctx)
 	return nil
-}
-
-// Proto returns the protocol: either "tcp" or "udp"
-func (p *Port) Proto() string {
-	return p.proto
-}
-
-// OutIP returns the public IP
-func (p *Port) OutIP() net.IP {
-	return p.outIP
-}
-
-// OutPort returns the public port number
-func (p *Port) OutPort() uint16 {
-	return p.outPort
-}
-
-// InIP returns the private IP
-func (p *Port) InIP() net.IP {
-	return p.inIP
-}
-
-// InPort returns the private port number
-func (p *Port) InPort() uint16 {
-	return p.inPort
 }
 
 var enoent = p9p.MessageRerror{Ename: "file not found"}

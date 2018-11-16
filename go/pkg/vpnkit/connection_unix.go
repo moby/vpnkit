@@ -50,3 +50,5 @@ func NewConnection(ctx context.Context, path string) (*Connection, error) {
 func NewConnectionForClient(client *datakit.Client) *Connection {
 	return &Connection{client}
 }
+
+var _ = Client(&Connection{})
