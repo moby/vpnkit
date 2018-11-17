@@ -29,8 +29,9 @@ func main() {
 		log.Fatal(err)
 	}
 	switch *proto {
-	case "ucp", "udp":
+	case "tcp", "udp":
 		p := &vpnkit.Port{
+			Proto:   vpnkit.Protocol(*proto),
 			OutIP:   net.ParseIP(*hostIP),
 			OutPort: uint16(*hostPort),
 			InIP:    net.ParseIP(*containerIP),
@@ -42,6 +43,7 @@ func main() {
 		defer c.Unexpose(context.Background(), p)
 	case "unix":
 		p := &vpnkit.Port{
+			Proto:   vpnkit.Protocol(*proto),
 			OutPath: *hostPath,
 			InPath:  *containerPath,
 		}
