@@ -568,6 +568,7 @@ struct
       localhost_names: Dns.Name.t list;
       localhost_ips: Ipaddr.t list;
       udpv4_forwards: (int * (Ipaddr.V4.t * int)) list;
+      tcpv4_forwards: (int * (Ipaddr.V4.t * int)) list;
     }
     (** Services offered by vpnkit to the internal network *)
 
@@ -596,6 +597,18 @@ struct
       in
       (* Need to use a different UDP NAT with a different reply IP address *)
       Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
+      >|= ok
+
+    (* TCP to be forwarded elsewhere *)
+    | Ipv4 { src; dst;
+             payload = Tcp { src = src_port; dst = dst_port; syn; rst; raw;
+                             payload = Payload _; _ }; _ } when List.mem_assoc dst_port t.tcpv4_forwards ->
+      let id =
+        Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
+      in
+      let forward_ip, forward_port = List.assoc dst_port t.tcpv4_forwards in
+      Endpoint.input_tcp t.endpoint ~id ~syn ~rst
+        (Ipaddr.V4 forward_ip, forward_port) raw
       >|= ok
 
     (* UDP on port 53 -> DNS forwarder *)
@@ -641,8 +654,8 @@ struct
     | _ ->
       Lwt.return (Ok ())
 
-    let create clock endpoint udp_nat dns_ips localhost_names localhost_ips udpv4_forwards =
-      let tcp_stack = { clock; endpoint; udp_nat; dns_ips; localhost_names; localhost_ips; udpv4_forwards } in
+    let create clock endpoint udp_nat dns_ips localhost_names localhost_ips udpv4_forwards tcpv4_forwards =
+      let tcp_stack = { clock; endpoint; udp_nat; dns_ips; localhost_names; localhost_ips; udpv4_forwards; tcpv4_forwards } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -1178,7 +1191,7 @@ struct
               Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
               Gateway.create clock endpoint udp_nat [ c.Configuration.gateway_ip ]
                 c.Configuration.host_names [ Ipaddr.V4 c.Configuration.host_ip ]
-                c.Configuration.udpv4_forwards
+                c.Configuration.udpv4_forwards c.Configuration.tcpv4_forwards
             end >>= function
             | Error e ->
               Log.err (fun f ->
