@@ -141,11 +141,14 @@ let preferred_ip1 = Ipaddr.V4.of_string_exn "192.168.65.250"
 
 let names_for_localhost = List.map Dns.Name.of_string [ "name1.for.localhost"; "name2.for.localhost" ]
 
+let local_tcpv4_forwarded_port = 8888
+
 let config =
   let configuration = {
     Configuration.default with
     domain = Some "local";
     host_names = names_for_localhost;
+    tcpv4_forwards = [ local_tcpv4_forwarded_port, (Ipaddr.V4.localhost, local_tcpv4_forwarded_port)];
   } in
   Mclock.connect () >>= fun clock ->
   let vnet = Vnet.create () in
