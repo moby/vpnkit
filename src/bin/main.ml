@@ -502,7 +502,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections port_forwards db_path db_branch dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
-      dhcp_json_path mtu udpv4_forwards gc_compact log_destination
+      dhcp_json_path mtu udpv4_forwards tcpv4_forwards gc_compact log_destination
     =
     let level =
       let env_debug =
@@ -530,7 +530,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let host_ip = Ipaddr.V4.of_string_exn host_ip in
     let lowest_ip = Ipaddr.V4.of_string_exn lowest_ip in
     let highest_ip = Ipaddr.V4.of_string_exn highest_ip in
-    let udpv4_forwards =
+    let parse_forwards forwards =
       List.map (fun x -> match Stringext.split ~on:':' x with
         | [ local_port; remote_ip; remote_port ] ->
           let local_port = int_of_string local_port in
@@ -538,8 +538,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           let remote_port = int_of_string remote_port in
           local_port, (remote_ip, remote_port)
         | _ ->
-          failwith "Failed to parse UDPv4 forwards: expected <local-port>:<remote IP>:<remote port>"
-      ) (Stringext.split ~on:',' udpv4_forwards) in
+          failwith "Failed to parse forwards: expected <local-port>:<remote IP>:<remote port>"
+      ) (Stringext.split ~on:',' forwards) in
+    let udpv4_forwards = parse_forwards udpv4_forwards in
+    let tcpv4_forwards = parse_forwards tcpv4_forwards in
     let configuration = {
       Configuration.default with
       max_connections;
@@ -561,6 +563,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       dhcp_json_path;
       mtu;
       udpv4_forwards;
+      tcpv4_forwards;
       pcap_snaplen;
     } in
     match socket_url with
@@ -838,6 +841,15 @@ let udpv4_forwards =
   in
   Arg.(value & opt string "" doc)
 
+let tcpv4_forwards =
+  let doc =
+    Arg.info ~doc:
+      "Configure TCPv4 forwards from the gateway address to remote systems.
+       The argument is a comma-separated list of <local port>:<remote IPv4>:<remote port>"
+       [ "tcpv4-forwards" ]
+  in
+  Arg.(value & opt string "" doc)
+
 let gc_compact =
   let doc =
     Arg.info ~doc:
@@ -858,7 +870,7 @@ let command =
         $ max_connections $ port_forwards $ db_path $ db_branch $ dns $ http $ hosts
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
-        $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards
+        $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ tcpv4_forwards
         $ gc_compact $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Version.git ~doc ~man
 
