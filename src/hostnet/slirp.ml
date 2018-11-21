@@ -585,7 +585,7 @@ struct
       Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
       >|= ok
 
-    (* UDP to forwarded elsewhere *)
+    (* UDP to forwarded elsewhere via the command-line *)
     | Ipv4 { src; dst; ttl;
              payload = Udp { src = src_port; dst = dst_port;
                              payload = Payload payload; _ }; _ } when List.mem_assoc dst_port t.udpv4_forwards ->
@@ -598,8 +598,21 @@ struct
       (* Need to use a different UDP NAT with a different reply IP address *)
       Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
       >|= ok
+    (* UDP to forwarded elsewhere via the gateway forwards file *)
+    | Ipv4 { src; dst; ttl;
+             payload = Udp { src = src_port; dst = dst_port;
+                             payload = Payload payload; _ }; _ } when Gateway_forwards.Udp.mem dst_port ->
+      let intercept_ipv4, intercept_port = Gateway_forwards.Udp.find dst_port in
+      let datagram =
+      { Hostnet_udp.src = Ipaddr.V4 src, src_port;
+        dst = Ipaddr.V4 dst, dst_port;
+        intercept = Ipaddr.V4 intercept_ipv4, intercept_port; payload }
+      in
+      (* Need to use a different UDP NAT with a different reply IP address *)
+      Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
+      >|= ok
 
-    (* TCP to be forwarded elsewhere *)
+    (* TCP to be forwarded elsewhere via the command-line *)
     | Ipv4 { src; dst;
              payload = Tcp { src = src_port; dst = dst_port; syn; rst; raw;
                              payload = Payload _; _ }; _ } when List.mem_assoc dst_port t.tcpv4_forwards ->
@@ -607,6 +620,17 @@ struct
         Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
       in
       let forward_ip, forward_port = List.assoc dst_port t.tcpv4_forwards in
+      Endpoint.input_tcp t.endpoint ~id ~syn ~rst
+        (Ipaddr.V4 forward_ip, forward_port) raw
+      >|= ok
+    (* TCP to be forwarded elsewhere via the gateway forwards file *)
+    | Ipv4 { src; dst;
+             payload = Tcp { src = src_port; dst = dst_port; syn; rst; raw;
+                             payload = Payload _; _ }; _ } when Gateway_forwards.Tcp.mem dst_port ->
+      let id =
+        Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
+      in
+      let forward_ip, forward_port = Gateway_forwards.Tcp.find dst_port in
       Endpoint.input_tcp t.endpoint ~id ~syn ~rst
         (Ipaddr.V4 forward_ip, forward_port) raw
       >|= ok
@@ -1421,6 +1445,44 @@ struct
         Log.err (fun f -> f "Failed to watch DHCP configuration file %s for changes: %s" path m)
       | Ok _watch ->
         Log.info (fun f -> f "Watching DHCP configuration file %s for changes" path)
+      end;
+      Lwt.return_unit
+    ) >>= fun () ->
+
+    let read_gateway_forwards_file path =
+      Log.info (fun f -> f "Reading gateway forwards file from %s" path);
+      Host.Files.read_file path
+      >>= function
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to read gateway forwards from %s: %s." path m);
+        Gateway_forwards.update [];
+        Lwt.return_unit
+      | Ok txt ->
+        match Gateway_forwards.of_string txt with
+        | Ok xs ->
+          Gateway_forwards.update xs;
+          Lwt.return_unit
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to parse gateway forwards from %s: %s." path m);
+          Lwt.return_unit
+      in
+    ( match c.gateway_forwards_path with
+    | None -> Lwt.return_unit
+    | Some path ->
+      begin match Host.Files.watch_file path
+        (fun () ->
+          Log.info (fun f -> f "Gateway forwards file %s has changed" path);
+          Lwt.async (fun () ->
+            log_exception_continue "Parsing gateway forwards"
+              (fun () ->
+                read_gateway_forwards_file path
+              )
+          )
+        ) with
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to watch gateway forwards file %s for changes: %s" path m)
+      | Ok _watch ->
+        Log.info (fun f -> f "Watching gateway forwards file %s for changes" path)
       end;
       Lwt.return_unit
     ) >>= fun () ->
