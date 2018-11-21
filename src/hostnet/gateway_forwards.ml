@@ -48,18 +48,28 @@ let of_string x =
 
 let dynamic = ref []
 
-let update xs = dynamic := xs
+let static = ref []
+
+let all = ref []
+
+let set_static xs =
+    static := xs;
+    all := !static @ !dynamic
+
+let update xs =
+    dynamic := xs;
+    all := !static @ !dynamic
 
 module Udp = struct
-  let mem port = List.exists (fun f -> f.protocol = Udp && f.external_port = port) !dynamic
+  let mem port = List.exists (fun f -> f.protocol = Udp && f.external_port = port) !all
   let find port =
-    let f = List.find (fun f -> f.protocol = Udp && f.external_port = port) !dynamic in
+    let f = List.find (fun f -> f.protocol = Udp && f.external_port = port) !all in
     f.internal_ip, f.internal_port
 end
 
 module Tcp = struct
-  let mem port = List.exists (fun f -> f.protocol = Udp && f.external_port = port) !dynamic
+  let mem port = List.exists (fun f -> f.protocol = Tcp && f.external_port = port) !all
   let find port =
-    let f = List.find (fun f -> f.protocol = Udp && f.external_port = port) !dynamic in
+    let f = List.find (fun f -> f.protocol = Tcp && f.external_port = port) !all in
     f.internal_ip, f.internal_port
 end

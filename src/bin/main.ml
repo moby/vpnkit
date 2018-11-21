@@ -530,18 +530,18 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let host_ip = Ipaddr.V4.of_string_exn host_ip in
     let lowest_ip = Ipaddr.V4.of_string_exn lowest_ip in
     let highest_ip = Ipaddr.V4.of_string_exn highest_ip in
-    let parse_forwards forwards =
+    let parse_forwards protocol forwards =
       List.map (fun x -> match Stringext.split ~on:':' x with
-        | [ local_port; remote_ip; remote_port ] ->
-          let local_port = int_of_string local_port in
-          let remote_ip = Ipaddr.V4.of_string_exn remote_ip in
-          let remote_port = int_of_string remote_port in
-          local_port, (remote_ip, remote_port)
+        | [ external_port; internal_ip; internal_port ] ->
+          let external_port = int_of_string external_port in
+          let internal_ip = Ipaddr.V4.of_string_exn internal_ip in
+          let internal_port = int_of_string internal_port in
+          Gateway_forwards.( { protocol; external_port; internal_ip; internal_port } )
         | _ ->
           failwith "Failed to parse forwards: expected <local-port>:<remote IP>:<remote port>"
       ) (Stringext.split ~on:',' forwards) in
-    let udpv4_forwards = parse_forwards udpv4_forwards in
-    let tcpv4_forwards = parse_forwards tcpv4_forwards in
+    let udpv4_forwards = parse_forwards Gateway_forwards.Udp udpv4_forwards in
+    let tcpv4_forwards = parse_forwards Gateway_forwards.Tcp tcpv4_forwards in
     let configuration = {
       Configuration.default with
       max_connections;

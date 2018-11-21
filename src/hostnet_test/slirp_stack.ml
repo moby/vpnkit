@@ -148,7 +148,12 @@ let config =
     Configuration.default with
     domain = Some "local";
     host_names = names_for_localhost;
-    tcpv4_forwards = [ local_tcpv4_forwarded_port, (Ipaddr.V4.localhost, local_tcpv4_forwarded_port)];
+    tcpv4_forwards = [ {
+      protocol = Tcp;
+      external_port = local_tcpv4_forwarded_port;
+      internal_ip = Ipaddr.V4.localhost;
+      internal_port = local_tcpv4_forwarded_port;
+    } ];
   } in
   Mclock.connect () >>= fun clock ->
   let vnet = Vnet.create () in

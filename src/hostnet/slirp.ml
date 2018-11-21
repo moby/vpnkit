@@ -567,8 +567,6 @@ struct
       dns_ips: Ipaddr.V4.t list;
       localhost_names: Dns.Name.t list;
       localhost_ips: Ipaddr.t list;
-      udpv4_forwards: (int * (Ipaddr.V4.t * int)) list;
-      tcpv4_forwards: (int * (Ipaddr.V4.t * int)) list;
     }
     (** Services offered by vpnkit to the internal network *)
 
@@ -585,20 +583,7 @@ struct
       Stack_ipv4.input t.endpoint.Endpoint.ipv4 ~tcp:none ~udp:none ~default raw
       >|= ok
 
-    (* UDP to forwarded elsewhere via the command-line *)
-    | Ipv4 { src; dst; ttl;
-             payload = Udp { src = src_port; dst = dst_port;
-                             payload = Payload payload; _ }; _ } when List.mem_assoc dst_port t.udpv4_forwards ->
-      let intercept_ipv4, intercept_port = List.assoc dst_port t.udpv4_forwards in
-      let datagram =
-      { Hostnet_udp.src = Ipaddr.V4 src, src_port;
-        dst = Ipaddr.V4 dst, dst_port;
-        intercept = Ipaddr.V4 intercept_ipv4, intercept_port; payload }
-      in
-      (* Need to use a different UDP NAT with a different reply IP address *)
-      Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
-      >|= ok
-    (* UDP to forwarded elsewhere via the gateway forwards file *)
+    (* UDP to forwarded elsewhere *)
     | Ipv4 { src; dst; ttl;
              payload = Udp { src = src_port; dst = dst_port;
                              payload = Payload payload; _ }; _ } when Gateway_forwards.Udp.mem dst_port ->
@@ -612,18 +597,7 @@ struct
       Udp_nat.input ~t:t.udp_nat ~datagram ~ttl ()
       >|= ok
 
-    (* TCP to be forwarded elsewhere via the command-line *)
-    | Ipv4 { src; dst;
-             payload = Tcp { src = src_port; dst = dst_port; syn; rst; raw;
-                             payload = Payload _; _ }; _ } when List.mem_assoc dst_port t.tcpv4_forwards ->
-      let id =
-        Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
-      in
-      let forward_ip, forward_port = List.assoc dst_port t.tcpv4_forwards in
-      Endpoint.input_tcp t.endpoint ~id ~syn ~rst
-        (Ipaddr.V4 forward_ip, forward_port) raw
-      >|= ok
-    (* TCP to be forwarded elsewhere via the gateway forwards file *)
+    (* TCP to be forwarded elsewhere *)
     | Ipv4 { src; dst;
              payload = Tcp { src = src_port; dst = dst_port; syn; rst; raw;
                              payload = Payload _; _ }; _ } when Gateway_forwards.Tcp.mem dst_port ->
@@ -678,8 +652,8 @@ struct
     | _ ->
       Lwt.return (Ok ())
 
-    let create clock endpoint udp_nat dns_ips localhost_names localhost_ips udpv4_forwards tcpv4_forwards =
-      let tcp_stack = { clock; endpoint; udp_nat; dns_ips; localhost_names; localhost_ips; udpv4_forwards; tcpv4_forwards } in
+    let create clock endpoint udp_nat dns_ips localhost_names localhost_ips =
+      let tcp_stack = { clock; endpoint; udp_nat; dns_ips; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -1215,7 +1189,6 @@ struct
               Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
               Gateway.create clock endpoint udp_nat [ c.Configuration.gateway_ip ]
                 c.Configuration.host_names [ Ipaddr.V4 c.Configuration.host_ip ]
-                c.Configuration.udpv4_forwards c.Configuration.tcpv4_forwards
             end >>= function
             | Error e ->
               Log.err (fun f ->
@@ -1449,6 +1422,8 @@ struct
       Lwt.return_unit
     ) >>= fun () ->
 
+    (* Set the static forwarding table before watching for changes on the dynamic table *)
+    Gateway_forwards.set_static (c.Configuration.udpv4_forwards @ c.Configuration.tcpv4_forwards);
     let read_gateway_forwards_file path =
       Log.info (fun f -> f "Reading gateway forwards file from %s" path);
       Host.Files.read_file path

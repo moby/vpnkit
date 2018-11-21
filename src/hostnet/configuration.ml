@@ -54,8 +54,8 @@ type t = {
   host_names: Dns.Name.t list;
   gateway_names: Dns.Name.t list;
   vm_names: Dns.Name.t list;
-  udpv4_forwards: (int * (Ipaddr.V4.t * int)) list;
-  tcpv4_forwards: (int * (Ipaddr.V4.t * int)) list;
+  udpv4_forwards: Gateway_forwards.t;
+  tcpv4_forwards: Gateway_forwards.t;
   gateway_forwards_path: string option;
   pcap_snaplen: int;
 }
@@ -82,8 +82,8 @@ let to_string t =
     (String.concat ", " (List.map Dns.Name.to_string t.host_names))
     (String.concat ", " (List.map Dns.Name.to_string t.gateway_names))
     (String.concat ", " (List.map Dns.Name.to_string t.vm_names))
-    (String.concat ", " (List.map (fun (src_port, (dst_ipv4, dst_port)) -> Printf.sprintf "%d -> %s:%d" src_port (Ipaddr.V4.to_string dst_ipv4) dst_port) t.udpv4_forwards))
-    (String.concat ", " (List.map (fun (src_port, (dst_ipv4, dst_port)) -> Printf.sprintf "%d -> %s:%d" src_port (Ipaddr.V4.to_string dst_ipv4) dst_port) t.tcpv4_forwards))
+    (Gateway_forwards.to_string t.udpv4_forwards)
+    (Gateway_forwards.to_string t.tcpv4_forwards)
     (match t.gateway_forwards_path with None -> "None" | Some x -> x)
     t.pcap_snaplen
 

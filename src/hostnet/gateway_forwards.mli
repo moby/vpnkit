@@ -14,8 +14,11 @@ type t = forward list
 val to_string: t -> string
 val of_string: string -> (t, [`Msg of string]) result
 
+val set_static: t -> unit
+(** update the static forwarding table *)
+
 val update: t -> unit
-(** update the current forwarding table *)
+(** update the dynamic forwarding table *)
 
 module Udp: sig
   val mem: int -> bool
