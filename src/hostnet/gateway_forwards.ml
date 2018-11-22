@@ -1,3 +1,9 @@
+let src =
+    let src = Logs.Src.create "gateway_forwards" ~doc:"Manages IP forwarding from the gateway IP" in
+    Logs.Src.set_level src (Some Logs.Info);
+    src
+
+module Log = (val Logs.src_log src : Logs.LOG)
 
 type protocol =
   | Tcp
@@ -54,11 +60,13 @@ let all = ref []
 
 let set_static xs =
     static := xs;
-    all := !static @ !dynamic
+    all := !static @ !dynamic;
+    Log.info (fun f -> f "New Gateway forward configuration: %s" (to_string !all))
 
 let update xs =
     dynamic := xs;
-    all := !static @ !dynamic
+    all := !static @ !dynamic;
+    Log.info (fun f -> f "New Gateway forward configuration: %s" (to_string !all))
 
 module Udp = struct
   let mem port = List.exists (fun f -> f.protocol = Udp && f.external_port = port) !all
