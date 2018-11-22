@@ -54,13 +54,14 @@ type t = {
   host_names: Dns.Name.t list;
   gateway_names: Dns.Name.t list;
   vm_names: Dns.Name.t list;
-  udpv4_forwards: (int * (Ipaddr.V4.t * int)) list;
-  tcpv4_forwards: (int * (Ipaddr.V4.t * int)) list;
+  udpv4_forwards: Gateway_forwards.t;
+  tcpv4_forwards: Gateway_forwards.t;
+  gateway_forwards_path: string option;
   pcap_snaplen: int;
 }
 
 let to_string t =
-  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; host_ip = %s; lowest_ip = %s; highest_ip = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s; gateway_names = %s; vm_names = %s; udpv4_forwards = %s; tcpv4_forwards = %s; pcap_snaplen = %d"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; host_ip = %s; lowest_ip = %s; highest_ip = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s; gateway_names = %s; vm_names = %s; udpv4_forwards = %s; tcpv4_forwards = %s; gateway_forwards_path = %s; pcap_snaplen = %d"
     (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
     (match t.dns_path with None -> "None" | Some x -> x)
@@ -81,8 +82,9 @@ let to_string t =
     (String.concat ", " (List.map Dns.Name.to_string t.host_names))
     (String.concat ", " (List.map Dns.Name.to_string t.gateway_names))
     (String.concat ", " (List.map Dns.Name.to_string t.vm_names))
-    (String.concat ", " (List.map (fun (src_port, (dst_ipv4, dst_port)) -> Printf.sprintf "%d -> %s:%d" src_port (Ipaddr.V4.to_string dst_ipv4) dst_port) t.udpv4_forwards))
-    (String.concat ", " (List.map (fun (src_port, (dst_ipv4, dst_port)) -> Printf.sprintf "%d -> %s:%d" src_port (Ipaddr.V4.to_string dst_ipv4) dst_port) t.tcpv4_forwards))
+    (Gateway_forwards.to_string t.udpv4_forwards)
+    (Gateway_forwards.to_string t.tcpv4_forwards)
+    (match t.gateway_forwards_path with None -> "None" | Some x -> x)
     t.pcap_snaplen
 
 let no_dns_servers =
@@ -129,6 +131,7 @@ let default = {
   vm_names = default_gateway_names;
   udpv4_forwards = [];
   tcpv4_forwards = [];
+  gateway_forwards_path = None;
   pcap_snaplen = default_pcap_snaplen;
 }
 

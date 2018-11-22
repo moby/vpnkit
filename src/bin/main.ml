@@ -502,7 +502,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections port_forwards db_path db_branch dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
-      dhcp_json_path mtu udpv4_forwards tcpv4_forwards gc_compact log_destination
+      dhcp_json_path mtu udpv4_forwards tcpv4_forwards gateway_forwards_path gc_compact log_destination
     =
     let level =
       let env_debug =
@@ -530,18 +530,18 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     let host_ip = Ipaddr.V4.of_string_exn host_ip in
     let lowest_ip = Ipaddr.V4.of_string_exn lowest_ip in
     let highest_ip = Ipaddr.V4.of_string_exn highest_ip in
-    let parse_forwards forwards =
+    let parse_forwards protocol forwards =
       List.map (fun x -> match Stringext.split ~on:':' x with
-        | [ local_port; remote_ip; remote_port ] ->
-          let local_port = int_of_string local_port in
-          let remote_ip = Ipaddr.V4.of_string_exn remote_ip in
-          let remote_port = int_of_string remote_port in
-          local_port, (remote_ip, remote_port)
+        | [ external_port; internal_ip; internal_port ] ->
+          let external_port = int_of_string external_port in
+          let internal_ip = Ipaddr.V4.of_string_exn internal_ip in
+          let internal_port = int_of_string internal_port in
+          Gateway_forwards.( { protocol; external_port; internal_ip; internal_port } )
         | _ ->
           failwith "Failed to parse forwards: expected <local-port>:<remote IP>:<remote port>"
       ) (Stringext.split ~on:',' forwards) in
-    let udpv4_forwards = parse_forwards udpv4_forwards in
-    let tcpv4_forwards = parse_forwards tcpv4_forwards in
+    let udpv4_forwards = parse_forwards Gateway_forwards.Udp udpv4_forwards in
+    let tcpv4_forwards = parse_forwards Gateway_forwards.Tcp tcpv4_forwards in
     let configuration = {
       Configuration.default with
       max_connections;
@@ -564,6 +564,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       mtu;
       udpv4_forwards;
       tcpv4_forwards;
+      gateway_forwards_path;
       pcap_snaplen;
     } in
     match socket_url with
@@ -850,6 +851,14 @@ let tcpv4_forwards =
   in
   Arg.(value & opt string "" doc)
 
+let gateway_forwards_path =
+  let doc =
+    Arg.info ~doc:
+      "Path of gateway forwards configuration file"
+      [ "gateway-forwards" ]
+  in
+  Arg.(value & opt (some file) None doc)
+
 let gc_compact =
   let doc =
     Arg.info ~doc:
@@ -871,7 +880,7 @@ let command =
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ tcpv4_forwards
-        $ gc_compact $ Logging.log_destination),
+        $ gateway_forwards_path $ gc_compact $ Logging.log_destination),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Version.git ~doc ~man
 
 let () =
