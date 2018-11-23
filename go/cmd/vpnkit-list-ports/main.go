@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ports, err := vpnkit.ListExposed(c)
+	ports, err := c.ListExposed(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}

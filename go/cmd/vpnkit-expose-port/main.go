@@ -29,22 +29,28 @@ func main() {
 		log.Fatal(err)
 	}
 	switch *proto {
-	case "ucp", "udp":
-		outIP := net.ParseIP(*hostIP)
-		outPort := uint16(*hostPort)
-		inIP := net.ParseIP(*containerIP)
-		inPort := uint16(*containerPort)
-		p := vpnkit.NewPort(c, *proto, outIP, outPort, inIP, inPort)
-		if err = p.Expose(context.Background()); err != nil {
+	case "tcp", "udp":
+		p := &vpnkit.Port{
+			Proto:   vpnkit.Protocol(*proto),
+			OutIP:   net.ParseIP(*hostIP),
+			OutPort: uint16(*hostPort),
+			InIP:    net.ParseIP(*containerIP),
+			InPort:  uint16(*containerPort),
+		}
+		if err = c.Expose(context.Background(), p); err != nil {
 			log.Fatal(err)
 		}
-		defer p.Unexpose(context.Background())
+		defer c.Unexpose(context.Background(), p)
 	case "unix":
-		p := vpnkit.NewPath(c, *hostPath, *containerPath)
-		if err = p.Expose(context.Background()); err != nil {
+		p := &vpnkit.Port{
+			Proto:   vpnkit.Protocol(*proto),
+			OutPath: *hostPath,
+			InPath:  *containerPath,
+		}
+		if err = c.Expose(context.Background(), p); err != nil {
 			log.Fatal(err)
 		}
-		defer p.Unexpose(context.Background())
+		defer c.Unexpose(context.Background(), p)
 	default:
 		log.Fatalf("Unknown protocol %s. Use tcp, udp or unix", *proto)
 	}

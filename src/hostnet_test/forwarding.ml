@@ -491,6 +491,67 @@ let test_10_tcp_connections () =
     ) in
   run t
 
+let run_test ?(timeout=Duration.of_sec 60) t =
+  let timeout =
+    Host.Time.sleep_ns timeout >>= fun () ->
+    Lwt.fail_with "timeout"
+  in
+  Host.Main.run @@ Lwt.pick [ timeout; t ]
+
+let run ?timeout ~pcap t = run_test ?timeout (Slirp_stack.with_stack ~pcap t)
+
+(* Test the --tcpv4-forwards gateway forwarding option *)
+let test_tcpv4_forwarded_configuration () =
+  let t _ stack =
+    Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, Slirp_stack.local_tcpv4_forwarded_port)
+    >>= fun server ->
+    Lwt.finalize
+      (fun () ->
+        Host.Sockets.Stream.Tcp.listen server LocalTCPServer.accept;
+        let open Slirp_stack in
+        Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (primary_dns_ip, local_tcpv4_forwarded_port)
+        >>= function
+        | Error _ ->
+          Log.err (fun f -> f "Failed to connect to gateway:%d" local_tcpv4_forwarded_port);
+          failwith "http_fetch"
+        | Ok flow ->
+          Log.info (fun f -> f "Connected to gateway:%d" local_tcpv4_forwarded_port);
+          let page = Io_page.(to_cstruct (get 1)) in
+          let http_get = "GET / HTTP/1.0\nHost: dave.recoil.org\n\n" in
+          Cstruct.blit_from_string http_get 0 page 0 (String.length http_get);
+          let buf = Cstruct.sub page 0 (String.length http_get) in
+          Client.TCPV4.write flow buf >>= function
+          | Error `Closed ->
+            Log.err (fun f ->
+                f "EOF writing HTTP request to gateway:%d" local_tcpv4_forwarded_port);
+            failwith "EOF on writing HTTP GET"
+          | Error _ ->
+            Log.err (fun f ->
+                f "Failure writing HTTP request to gateway:%d" local_tcpv4_forwarded_port);
+            failwith "Failure on writing HTTP GET"
+          | Ok () ->
+            let rec loop total_bytes =
+              Client.TCPV4.read flow >>= function
+              | Ok `Eof     -> Lwt.return total_bytes
+              | Error _ ->
+                Log.err (fun f ->
+                    f "Failure read HTTP response from gateway:%d" local_tcpv4_forwarded_port);
+                failwith "Failure on reading HTTP GET"
+              | Ok (`Data buf) ->
+                Log.info (fun f ->
+                    f "Read %d bytes from gateway:%d" (Cstruct.len buf) local_tcpv4_forwarded_port);
+                Log.info (fun f -> f "%s" (Cstruct.to_string buf));
+                loop (total_bytes + (Cstruct.len buf))
+            in
+            loop 0 >|= fun total_bytes ->
+            Log.info (fun f -> f "Response had %d total bytes" total_bytes);
+    ) (fun () ->
+      Host.Sockets.Stream.Tcp.shutdown server
+    )
+    in
+    run ~pcap:"test_tcpv4_forwarded_configuration" t
+
+
 let tests = [
   "Ports: 1 TCP port forward",
   [ "Perform an HTTP GET through a port forward",
@@ -511,4 +572,9 @@ let tests = [
   [ "Send large UDP packets through a port forward",
     `Quick,
     test_large_udp_forwards ];
+
+  "Ports: check --tcpv4-forwards option",
+  [ "Connect to a local server",
+    `Quick,
+    test_tcpv4_forwarded_configuration ];
 ]
