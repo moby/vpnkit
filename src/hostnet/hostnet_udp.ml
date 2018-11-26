@@ -138,11 +138,17 @@ struct
     Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp_hum src src_port Ipaddr.pp_hum
       dst dst_port
 
-  let rec loop t flow server d buf =
-    Lwt.catch (fun () ->
+  let outside_to_inside t flow server d =
+    let buf = Cstruct.create Constants.max_udp_length in
+    let rec loop () =
+      Lwt.catch (fun () ->
         Udp.recvfrom server buf
         >>= fun (n, from) ->
         touch t flow;
+        (* Copy the payload because lower down in the stack we will keep
+           references, for example in the .pcap capturing logic. *)
+        let payload = Cstruct.create n in
+        Cstruct.blit buf 0 payload 0 n;
         (* In the default configuration with preserve_remote_port=true,
            the from address should be the true external address so the
            client behind the NAT can tell different peers apart.  It
@@ -158,7 +164,7 @@ struct
         let reply = { d with
           src = if t.preserve_remote_port then from else d.dst;
           dst = d.src;
-          payload = Cstruct.sub buf 0 n
+          payload;
         } in
         ( match t.send_reply with
         | Some fn -> fn reply
@@ -177,10 +183,11 @@ struct
               (description d) Fmt.exn e);
         Lwt.return false
       )
-    >>= function
-    | false ->
-      Lwt.return ()
-    | true -> loop t flow server d buf
+      >>= function
+      | false ->
+        Lwt.return ()
+      | true -> loop () in
+    loop ()
 
   let expire_old_flows_locked t =
     let current = By_last_use.cardinal !(t.by_last_use) in
@@ -234,8 +241,7 @@ struct
                   t.by_last_use := By_last_use.add last_use flow !(t.by_last_use);
                   Hashtbl.replace external_to_internal (snd external_address) datagram.src;
                   (* Start a listener *)
-                  let buf = Cstruct.create Constants.max_udp_length in
-                  Lwt.async (fun () -> loop t flow server datagram buf);
+                  Lwt.async (fun () -> outside_to_inside t flow server datagram);
                   Lwt.return (Some flow)
                 end
               )
