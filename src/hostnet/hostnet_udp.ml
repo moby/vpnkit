@@ -218,20 +218,26 @@ struct
          Lwt.catch (fun () ->
             Lwt_mutex.with_lock t.new_flow_lock
               (fun () ->
-                expire_old_flows_locked t
-                >>= fun () ->
-                Udp.bind ~description:(description datagram) (Ipaddr.(V4 V4.any), 0)
-                >>= fun server ->
-                let external_address = Udp.getsockname server in
-                let last_use = Clock.elapsed_ns t.clock in
-                let flow = { description = d; src = datagram.src; server; external_address; last_use } in
-                Hashtbl.replace t.table datagram.src flow;
-                t.by_last_use := By_last_use.add last_use flow !(t.by_last_use);
-                Hashtbl.replace external_to_internal (snd external_address) datagram.src;
-                (* Start a listener *)
-                let buf = Cstruct.create Constants.max_udp_length in
-                Lwt.async (fun () -> loop t flow server datagram buf);
-                Lwt.return (Some flow)
+                (* Re-check the table with the lock held as another thread might
+                   have acquired the lock before us. *)
+                if Hashtbl.mem t.table datagram.src
+                then Lwt.return (Some (Hashtbl.find t.table datagram.src))
+                else begin
+                  expire_old_flows_locked t
+                  >>= fun () ->
+                  Udp.bind ~description:(description datagram) (Ipaddr.(V4 V4.any), 0)
+                  >>= fun server ->
+                  let external_address = Udp.getsockname server in
+                  let last_use = Clock.elapsed_ns t.clock in
+                  let flow = { description = d; src = datagram.src; server; external_address; last_use } in
+                  Hashtbl.replace t.table datagram.src flow;
+                  t.by_last_use := By_last_use.add last_use flow !(t.by_last_use);
+                  Hashtbl.replace external_to_internal (snd external_address) datagram.src;
+                  (* Start a listener *)
+                  let buf = Cstruct.create Constants.max_udp_length in
+                  Lwt.async (fun () -> loop t flow server datagram buf);
+                  Lwt.return (Some flow)
+                end
               )
           ) (fun e ->
             Log.err (fun f -> f "Hostnet_udp.input: bind raised %a" Fmt.exn e);
