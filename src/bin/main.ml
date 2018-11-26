@@ -857,7 +857,7 @@ let gateway_forwards_path =
       "Path of gateway forwards configuration file"
       [ "gateway-forwards" ]
   in
-  Arg.(value & opt (some file) None doc)
+  Arg.(value & opt (some string) None doc)
 
 let gc_compact =
   let doc =
