@@ -61,6 +61,6 @@ depends: [
   "uuidm"
   "ezjsonm"
   "sha"
-  "stringext" {= "1.4.3"}
+  "stringext"
   "mirage-clock-unix"
 ]
