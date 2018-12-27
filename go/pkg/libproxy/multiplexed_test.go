@@ -328,12 +328,7 @@ func readAndSha(t *testing.T, r Conn) chan string {
 	return result
 }
 
-func muxReadWrite(t *testing.T, toWriteClient, toWriteServer int) {
-	loopback := newLoopback()
-	local := NewMultiplexer("local", loopback)
-	local.Run()
-	remote := NewMultiplexer("other", loopback.OtherEnd())
-	remote.Run()
+func muxReadWrite(t *testing.T, local, remote *Multiplexer, toWriteClient, toWriteServer int) {
 	client, err := local.Dial(Destination{
 		Proto: TCP,
 		IP:    net.ParseIP("127.0.0.1"),
@@ -395,13 +390,23 @@ func TestMuxCorners(t *testing.T) {
 	for _, toWriteClient := range interesting {
 		for _, toWriteServer := range interesting {
 			log.Printf("Client will write %d and server will write %d", toWriteClient, toWriteServer)
-			muxReadWrite(t, toWriteClient, toWriteServer)
+			loopback := newLoopback()
+			local := NewMultiplexer("local", loopback)
+			local.Run()
+			remote := NewMultiplexer("other", loopback.OtherEnd())
+			remote.Run()
+			muxReadWrite(t, local, remote, toWriteClient, toWriteServer)
 		}
 	}
 }
 
 func TestMuxReadWrite(t *testing.T) {
-	muxReadWrite(t, 1048576, 1048576)
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("other", loopback.OtherEnd())
+	remote.Run()
+	muxReadWrite(t, local, remote, 1048576, 1048576)
 }
 
 func TestMuxConcurrent(t *testing.T) {
