@@ -293,6 +293,7 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
 		channels:      channels,
 		metadataMutex: &metadataMutex,
 		acceptCond:    acceptCond,
+		nextChannelID: ^uint32(0),
 	}
 }
 
