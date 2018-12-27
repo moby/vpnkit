@@ -36,16 +36,14 @@ func newBufferedPipe() *bufferedPipe {
 func (pipe *bufferedPipe) TryReadLocked(p []byte) (n int, err error) {
 	// drain buffers before considering EOF
 	if len(pipe.bufs) > 0 {
-		first := pipe.bufs[0]
 		n := copy(p, pipe.bufs[0])
-		pipe.bufs[0] = first[n:]
+		pipe.bufs[0] = pipe.bufs[0][n:]
 
-		if len(pipe.bufs[0]) > 0 {
-			// some of the first fragment remains
-			return n, nil
+		if len(pipe.bufs[0]) == 0 {
+			// first fragment consumed
+			pipe.bufs = pipe.bufs[1:]
 		}
-		// first fragment consumed
-		pipe.bufs = pipe.bufs[1:]
+
 		return n, nil
 	}
 	if pipe.eof {
