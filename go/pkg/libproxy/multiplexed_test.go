@@ -494,3 +494,66 @@ func TestMuxConcurrent(t *testing.T) {
 		t.Errorf("SHA mismatch")
 	}
 }
+
+func writeAndBlock(t *testing.T, local, remote *Multiplexer) chan error {
+	client, err := local.Dial(Destination{
+		Proto: TCP,
+		IP:    net.ParseIP("127.0.0.1"),
+		Port:  8080,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, _, err := remote.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.SetWriteDeadline(time.Now().Add(1 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		buf, _ := genRandomBuffer(1024)
+		for {
+			// Client never reads so the window should close
+			if _, err := server.Write(buf); err != nil {
+				fmt.Printf("server.Write failed with %v", err)
+				break
+			}
+		}
+		if err := client.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := server.Close(); err != nil {
+			t.Fatal(err)
+		}
+		close(done)
+	}()
+	// (hack) wait until the window must be full and the Write is blocked
+	time.Sleep(500 * time.Millisecond)
+	return done
+}
+
+func TestWindow(t *testing.T) {
+	// Check that one connection blocked on a window update doesn't preclude
+	// other connections from working i.e. the lowlevel connection handler isn't
+	// itself blocked in a write()
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+
+	done := writeAndBlock(t, local, remote)
+	// The first connection should have blocked and the window should be closed for another 500ms
+	muxReadWrite(t, local, remote, 1048576, 1048576)
+
+	select {
+	case <-done:
+		t.Fatalf("the second connection was blocked by the first")
+	default:
+		fmt.Println("second connection completed while the first was blocked")
+		<-done
+		fmt.Println("first connection has now unblocked")
+	}
+}
