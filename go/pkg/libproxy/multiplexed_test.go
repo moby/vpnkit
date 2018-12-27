@@ -303,7 +303,7 @@ func genRandomBuffer(size int) ([]byte, string) {
 
 func writeRandomBuffer(w Conn, toWriteClient int) (chan error, string) {
 	clientWriteBuf, clientWriteSha := genRandomBuffer(toWriteClient)
-	done := make(chan error)
+	done := make(chan error, 1)
 
 	go func() {
 		if _, err := w.Write(clientWriteBuf); err != nil {
