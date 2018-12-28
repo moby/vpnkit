@@ -72,7 +72,8 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
     ; (* held when writing frames *)
       subflows: (int32, Subflow.t) Hashtbl.t
     ; mutable next_subflowid: int32
-    ; max_buffer_size: int }
+    ; max_buffer_size: int
+    ; mutable running: bool }
 
   let free_id outer id =
     Log.debug (fun f -> f "%s: forgetting flow %ld" outer.label id) ;
@@ -249,6 +250,8 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
 
   type flow = outer
 
+  let is_running flow = flow.running
+
   type listen_cb = Channel.flow -> Frame.Destination.t -> unit Channel.io
 
   let connect flow label listen_cb =
@@ -258,7 +261,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
     let next_subflowid = 1l in
     let max_buffer_size = 65536 in
     let outer =
-      {label; channel; flow; m; subflows; next_subflowid; max_buffer_size}
+      {label; channel; flow; m; subflows; next_subflowid; max_buffer_size; running = true}
     in
     (* Process incoming data, window advertisements *)
     let handle_one () =
@@ -351,6 +354,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       >>= function
       | false ->
           Log.err (fun f -> f "%s: dispatcher shutting down" label) ;
+          outer.running <- false;
           Lwt.return_unit
       | true -> dispatcher ()
     in
