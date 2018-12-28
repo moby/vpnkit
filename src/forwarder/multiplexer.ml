@@ -44,7 +44,8 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       ; incoming_c: unit Lwt_condition.t
       ; write_c: unit Lwt_condition.t
       ; mutable close_sent: bool
-      ; mutable close_received: bool }
+      ; mutable close_received: bool
+      ; mutable ref_count: int }
 
     let create () =
       { read= Window.create ()
@@ -54,7 +55,8 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       ; incoming_c= Lwt_condition.create ()
       ; write_c= Lwt_condition.create ()
       ; close_sent= false
-      ; close_received= false }
+      ; close_received= false
+      ; ref_count= 2 (* sender + receiver *) }
   end
 
   module C = Mirage_channel_lwt.Make (Flow)
@@ -75,9 +77,18 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
     ; max_buffer_size: int
     ; mutable running: bool }
 
-  let free_id outer id =
-    Log.debug (fun f -> f "%s: forgetting flow %ld" outer.label id) ;
-    Hashtbl.remove outer.subflows id
+  (* When the refcount goes to 0 i.e. when both the sender and receiver side
+     have sent Close, then we can mark the id as free. *)
+  let decr_refcount outer id =
+    if Hashtbl.mem outer.subflows id then begin
+      let flow = Hashtbl.find outer.subflows id in
+      if flow.ref_count = 1 then begin
+        Log.debug (fun f -> f "%s: forgetting flow %ld" outer.label id) ;
+        Hashtbl.remove outer.subflows id
+      end else begin
+        flow.ref_count <- flow.ref_count - 1
+      end
+    end
 
   let send outer frame =
     Log.debug (fun f -> f "%s: send %s" outer.label (Frame.to_string frame)) ;
@@ -220,13 +231,15 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       flush channel.outer
 
     let close channel =
-      send channel.outer Frame.{command= Close; id= channel.id} ;
-      flush channel.outer
-      >>= fun () ->
-      (channel.subflow).Subflow.close_sent <- true ;
-      if channel.subflow.Subflow.close_received then
-        free_id channel.outer channel.id ;
-      Lwt.return_unit
+      (* Don't send Close more than once *)
+      if channel.subflow.Subflow.close_sent
+      then Lwt.return_unit
+      else begin
+        (channel.subflow).Subflow.close_sent <- true ;
+        send channel.outer Frame.{command= Close; id= channel.id} ;
+        decr_refcount channel.outer channel.id ;
+        flush channel.outer
+      end
 
     (* boilerplate: *)
     let shutdown_read _chanel = Lwt.return_unit
@@ -308,7 +321,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
                     Lwt_condition.signal subflow.incoming_c () ;
                     (* Unblock any waiting write *)
                     Lwt_condition.signal subflow.write_c () ;
-                    if subflow.Subflow.close_sent then free_id outer frame.id ;
+                    decr_refcount outer frame.id ;
                     Lwt.return true
                 | Shutdown ->
                     let subflow = Hashtbl.find subflows frame.id in
