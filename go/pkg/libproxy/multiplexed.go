@@ -47,6 +47,8 @@ type channel struct {
 	readPipe      *bufferedPipe
 	closeReceived bool
 	closeSent     bool
+	// initially 2 (sender + receiver), protected by the multiplexer
+	refCount      int
 	shutdownSent  bool
 	writeDeadline time.Time
 }
@@ -65,6 +67,7 @@ func newChannel(multiplexer *Multiplexer, ID uint32, d Destination) *channel {
 		read:        &windowState{},
 		write:       &windowState{},
 		readPipe:    readPipe,
+		refCount:    2,
 	}
 }
 
@@ -177,9 +180,9 @@ func (c *channel) Close() error {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.c.Broadcast()
-	if c.closeSent && c.closeReceived {
-		c.multiplexer.freeChannel(c.ID)
-	}
+
+	c.multiplexer.decrChannelRef(c.ID)
+
 	return nil
 }
 
@@ -213,12 +216,6 @@ func (c *channel) recvClose() error {
 	c.closeReceived = true
 	c.c.Broadcast()
 	return nil
-}
-
-func (c *channel) isClosed() bool {
-	c.m.Lock()
-	defer c.m.Unlock()
-	return c.closeReceived && c.closeSent
 }
 
 func (c *channel) SetReadDeadline(timeout time.Time) error {
@@ -293,6 +290,7 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
 		channels:      channels,
 		metadataMutex: &metadataMutex,
 		acceptCond:    acceptCond,
+		nextChannelID: ^uint32(0),
 	}
 }
 
@@ -317,10 +315,16 @@ func (m *Multiplexer) findFreeChannelID() uint32 {
 	}
 }
 
-func (m *Multiplexer) freeChannel(ID uint32) {
+func (m *Multiplexer) decrChannelRef(ID uint32) {
 	m.metadataMutex.Lock()
 	defer m.metadataMutex.Unlock()
-	delete(m.channels, ID)
+	if channel, ok := m.channels[ID]; ok {
+		if channel.refCount == 1 {
+			delete(m.channels, ID)
+			return
+		}
+		channel.refCount = channel.refCount - 1
+	}
 }
 
 // Dial opens a connection to the given destination
@@ -453,9 +457,7 @@ func (m *Multiplexer) run() error {
 			if err := channel.recvClose(); err != nil {
 				return err
 			}
-			if channel.isClosed() {
-				m.freeChannel(channel.ID)
-			}
+			m.decrChannelRef(channel.ID)
 		default:
 			return fmt.Errorf("Unknown command type: %v", f)
 		}

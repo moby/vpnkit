@@ -303,7 +303,7 @@ func genRandomBuffer(size int) ([]byte, string) {
 
 func writeRandomBuffer(w Conn, toWriteClient int) (chan error, string) {
 	clientWriteBuf, clientWriteSha := genRandomBuffer(toWriteClient)
-	done := make(chan error)
+	done := make(chan error, 1)
 
 	go func() {
 		if _, err := w.Write(clientWriteBuf); err != nil {
@@ -328,12 +328,7 @@ func readAndSha(t *testing.T, r Conn) chan string {
 	return result
 }
 
-func muxReadWrite(t *testing.T, toWriteClient, toWriteServer int) {
-	loopback := newLoopback()
-	local := NewMultiplexer("local", loopback)
-	local.Run()
-	remote := NewMultiplexer("other", loopback.OtherEnd())
-	remote.Run()
+func muxReadWrite(t *testing.T, local, remote *Multiplexer, toWriteClient, toWriteServer int) {
 	client, err := local.Dial(Destination{
 		Proto: TCP,
 		IP:    net.ParseIP("127.0.0.1"),
@@ -395,13 +390,23 @@ func TestMuxCorners(t *testing.T) {
 	for _, toWriteClient := range interesting {
 		for _, toWriteServer := range interesting {
 			log.Printf("Client will write %d and server will write %d", toWriteClient, toWriteServer)
-			muxReadWrite(t, toWriteClient, toWriteServer)
+			loopback := newLoopback()
+			local := NewMultiplexer("local", loopback)
+			local.Run()
+			remote := NewMultiplexer("other", loopback.OtherEnd())
+			remote.Run()
+			muxReadWrite(t, local, remote, toWriteClient, toWriteServer)
 		}
 	}
 }
 
 func TestMuxReadWrite(t *testing.T) {
-	muxReadWrite(t, 1048576, 1048576)
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("other", loopback.OtherEnd())
+	remote.Run()
+	muxReadWrite(t, local, remote, 1048576, 1048576)
 }
 
 func TestMuxConcurrent(t *testing.T) {
@@ -487,5 +492,68 @@ func TestMuxConcurrent(t *testing.T) {
 	}
 	if failed {
 		t.Errorf("SHA mismatch")
+	}
+}
+
+func writeAndBlock(t *testing.T, local, remote *Multiplexer) chan error {
+	client, err := local.Dial(Destination{
+		Proto: TCP,
+		IP:    net.ParseIP("127.0.0.1"),
+		Port:  8080,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, _, err := remote.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.SetWriteDeadline(time.Now().Add(1 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		buf, _ := genRandomBuffer(1024)
+		for {
+			// Client never reads so the window should close
+			if _, err := server.Write(buf); err != nil {
+				fmt.Printf("server.Write failed with %v", err)
+				break
+			}
+		}
+		if err := client.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := server.Close(); err != nil {
+			t.Fatal(err)
+		}
+		close(done)
+	}()
+	// (hack) wait until the window must be full and the Write is blocked
+	time.Sleep(500 * time.Millisecond)
+	return done
+}
+
+func TestWindow(t *testing.T) {
+	// Check that one connection blocked on a window update doesn't preclude
+	// other connections from working i.e. the lowlevel connection handler isn't
+	// itself blocked in a write()
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+
+	done := writeAndBlock(t, local, remote)
+	// The first connection should have blocked and the window should be closed for another 500ms
+	muxReadWrite(t, local, remote, 1048576, 1048576)
+
+	select {
+	case <-done:
+		t.Fatalf("the second connection was blocked by the first")
+	default:
+		fmt.Println("second connection completed while the first was blocked")
+		<-done
+		fmt.Println("first connection has now unblocked")
 	}
 }

@@ -168,6 +168,34 @@ let test_connect_close () =
      Mux.Channel.connect left_mux (`Tcp (Ipaddr.V4 Ipaddr.V4.localhost, 8080))
      >>= fun channel -> Mux.Channel.close channel)
 
+let test_close_close () =
+  Host.Main.run
+    (let left_flow = Shared_memory.create () in
+     let right_flow = Shared_memory.otherend left_flow in
+     let left_mux =
+       Mux.connect left_flow "left" (fun _channel _destination ->
+           Lwt.fail_with "left side shouldn't get a connection" )
+     in
+     let right_mux =
+       Mux.connect right_flow "right" (fun channel destination ->
+           Log.debug (fun f ->
+               f "Got a connection to %s" (Destination.to_string destination)
+           ) ;
+           Mux.Channel.close channel )
+     in
+     Mux.Channel.connect left_mux (`Tcp (Ipaddr.V4 Ipaddr.V4.localhost, 8080))
+     >>= fun channel ->
+     Mux.Channel.close channel
+     >>= fun () ->
+     Mux.Channel.close channel
+     >>= fun () ->
+     if not (Mux.is_running left_mux)
+     then failwith "left_mux has failed";
+     if not (Mux.is_running right_mux)
+     then failwith "right_mux has failed";
+     Lwt.return_unit
+     )
+
 let send channel n =
   let sha = Sha256.init () in
   let rec loop n =
@@ -339,6 +367,9 @@ let mux_suite =
     , [ ( "check that the multiplexer can connect and disconnect"
         , `Quick
         , test_connect_close )
+      ; ( "check that double-close doesn't break the connection"
+        , `Quick
+        , test_close_close )
       ; ( "check that the multiplexer can handle concurrent connections"
         , `Quick
         , stress_multiplexer ) ] ) ]
