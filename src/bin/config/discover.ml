@@ -1,10 +1,15 @@
-open Sexplib.Std
+let os_type () =
+  match Sys.os_type with
+  | "Unix" ->
+    (* We want to differentiate between Linux and Darwin/macOS *)
+    let ic = Unix.open_process_in "uname" in
+    let line = input_line ic in
+    close_in ic;
+    line
+  | x -> x
 
 let flags () =
-  let ic = Unix.open_process_in "/bin/uname" in
-  let line = input_line ic in
-  close_in ic;
-  match line with
+  match os_type () with
   | "Linux" ->
     [ "-ccopt"; "-static" ]
   | _ ->
