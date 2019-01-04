@@ -63,4 +63,5 @@ depends: [
   "sha"
   "stringext"
   "mirage-clock-unix"
+  "mirage-random" {= "1.1.0"}
 ]

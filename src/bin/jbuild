@@ -7,7 +7,13 @@
      datakit-server-9p win-eventlog asl fd-send-recv duration
      mirage-clock-unix mirage-random
    ))
+   (flags (:standard (:include flags.sexp)))
    (preprocess  no_preprocessing)))
+
+(rule
+ ((targets  (flags.sexp))
+  (deps    (config/discover.exe))
+  (action  (run config/discover.exe -ocamlc %{OCAMLC}))))
 
 (rule
   ((targets (version.ml))
