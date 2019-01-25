@@ -53,7 +53,7 @@ func NewIPProxy(frontendAddr, backendAddr net.Addr) (Proxy, error) {
 	}
 }
 
-// Best-effort attempt to listen on the address in the VM. This is for
+// NewBestEffortIPProxy Best-effort attempt to listen on the address in the VM. This is for
 // backwards compatibility with software that expects to be able to listen on
 // 0.0.0.0 and then connect from within a container to the external port.
 // If the address doesn't exist in the VM (i.e. it exists only on the host)
