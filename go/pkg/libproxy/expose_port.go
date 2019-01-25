@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// ExposePort exposes a port using 9p
 func ExposePort(host net.Addr, container net.Addr) (*os.File, error) {
 	name := host.Network() + ":" + host.String() + ":" + container.Network() + ":" + container.String()
 	log.Printf("exposePort %s\n", name)

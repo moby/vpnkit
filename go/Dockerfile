@@ -6,8 +6,7 @@ ENV GOPATH=/go
 ADD . /go/src/github.com/moby/vpnkit/go
 WORKDIR /go/src/github.com/moby/vpnkit/go
 
-RUN cd pkg/libproxy && go test
-
+RUN make test
 RUN make build/vpnkit-forwarder.linux
 
 FROM scratch
