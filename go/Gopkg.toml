@@ -19,10 +19,6 @@
   name = "k8s.io/client-go"
   branch = "master"
 
-[[override]]
-  name = "golang.org/x/sys"
-  revision = "9c9d83fe39ed3fd2d9249fcf6b755891fff54b03"
-
 [[constraint]]
   name = "github.com/linuxkit/virtsock"
   revision = "a381dcc5bcddf1d7f449495c373dbf70f8e501c0"
