@@ -5,5 +5,6 @@ RUN apk add --no-cache go musl-dev build-base
 ADD . /go/src/github.com/moby/vpnkit/go
 WORKDIR /go/src/github.com/moby/vpnkit/go
 
+RUN GOPATH=/go make test
 RUN GOPATH=/go make build/dial-example.linux
 

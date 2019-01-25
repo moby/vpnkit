@@ -12,6 +12,10 @@ HASH?=$(shell git ls-tree HEAD -- ../$(notdir $(CURDIR)) | awk '{print $$3}')
 # This may fail when cross compiling as virtsock requires cgo
 all: build/vpnkit-iptables-wrapper.linux build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux build/kube-vpnkit-forwarder.linux build/dial-example.linux
 
+# Test
+test:
+	go test -v ./cmd/... ./pkg/...
+
 # Build in linux container
 build-in-container: build-forwarder-in-container build-expose-port-in-container build-kube-forwarder-in-container build-dial-example-in-container
 
