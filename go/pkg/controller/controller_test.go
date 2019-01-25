@@ -18,7 +18,7 @@ import (
 func TestNodePortService(t *testing.T) {
 	client := mockVpnKitClient{}
 	kubeClient := kubernetes.NewSimpleClientset()
-	controller := New(&client, kubeClient)
+	controller := New(&client, kubeClient.CoreV1())
 	service := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "ns1",
@@ -86,7 +86,7 @@ func TestNodePortService(t *testing.T) {
 
 func TestLoadBalancerService(t *testing.T) {
 	client := mockVpnKitClient{}
-	controller := New(&client, kubernetes.NewSimpleClientset())
+	controller := New(&client, kubernetes.NewSimpleClientset().CoreV1())
 
 	service := v1.Service{
 		Spec: v1.ServiceSpec{
@@ -119,7 +119,7 @@ func TestLoadBalancerService(t *testing.T) {
 func TestAddTwice(t *testing.T) {
 	client := mockVpnKitClient{}
 	kubeClient := kubernetes.NewSimpleClientset()
-	controller := New(&client, kubeClient)
+	controller := New(&client, kubeClient.CoreV1())
 
 	service := v1.Service{
 		Spec: v1.ServiceSpec{
@@ -144,7 +144,7 @@ func TestAddTwice(t *testing.T) {
 
 func TestOverlappingPorts(t *testing.T) {
 	client := mockVpnKitClient{}
-	controller := New(&client, kubernetes.NewSimpleClientset())
+	controller := New(&client, kubernetes.NewSimpleClientset().CoreV1())
 
 	controller.OnAdd(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -210,7 +210,7 @@ func TestOverlappingPorts(t *testing.T) {
 
 func TestControllerDispose(t *testing.T) {
 	client := mockVpnKitClient{}
-	controller := New(&client, kubernetes.NewSimpleClientset())
+	controller := New(&client, kubernetes.NewSimpleClientset().CoreV1())
 
 	controller.OnAdd(&v1.Service{
 		Spec: v1.ServiceSpec{
@@ -235,7 +235,7 @@ func TestControllerDispose(t *testing.T) {
 
 func TestDiscardClusterIPService(t *testing.T) {
 	client := mockVpnKitClient{}
-	controller := New(&client, kubernetes.NewSimpleClientset())
+	controller := New(&client, kubernetes.NewSimpleClientset().CoreV1())
 
 	controller.OnAdd(&v1.Service{
 		Spec: v1.ServiceSpec{

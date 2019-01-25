@@ -7,21 +7,21 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"net"
 )
 
 // Controller kubernetes controller used by Docker Desktop
 type Controller struct {
-	kubeClient kubernetes.Interface
-	client     vpnkit.Client
+	services corev1client.ServicesGetter
+	client   vpnkit.Client
 }
 
 // New creates a new controller
-func New(client vpnkit.Client, kubeClient kubernetes.Interface) *Controller {
+func New(client vpnkit.Client, services corev1client.ServicesGetter) *Controller {
 	return &Controller{
-		kubeClient: kubeClient,
-		client:     client,
+		services: services,
+		client:   client,
 	}
 }
 
@@ -94,7 +94,7 @@ func (c *Controller) ensureOpened(obj interface{}) error {
 				},
 			},
 		}
-		if _, err := c.kubeClient.CoreV1().Services(service.Namespace).UpdateStatus(copy); err != nil {
+		if _, err := c.services.Services(service.Namespace).UpdateStatus(copy); err != nil {
 			log.Errorf("Cannot update service status %s: %v", service.Name, err)
 		}
 	}
