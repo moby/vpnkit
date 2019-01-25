@@ -236,11 +236,12 @@
   revision = "2a92e673c9a6302dd05c3a691ae1f24aef46457d"
 
 [[projects]]
-  digest = "1:e0263a37dee938a7c28a3ec94b8969eb298d2c15f748707b26ebfea4fc379083"
+  digest = "1:d60bfd52a6eeba7d3f630516e08a70bbfc3c845d02bab40748a5a526925de457"
   name = "github.com/moby/datakit"
   packages = ["api/go-datakit"]
   pruneopts = "NUT"
-  revision = "97b3d230535397a813323902c23751e176481a86"
+  revision = "8a6c7f7b4f3158a58074993babb543f1f7b53c2f"
+  version = "0.12.2"
 
 [[projects]]
   digest = "1:2f42fa12d6911c7b7659738758631bec870b7e9b4c6be5444f963cdcfccc191f"

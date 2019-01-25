@@ -29,7 +29,7 @@
 
 [[constraint]]
   name = "github.com/moby/datakit"
-  revision = "97b3d230535397a813323902c23751e176481a86"
+  version = "0.12.2"
 
 [[constraint]]
   name = "github.com/google/uuid"
