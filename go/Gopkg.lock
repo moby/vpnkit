@@ -214,14 +214,15 @@
   version = "v1.0.1"
 
 [[projects]]
-  digest = "1:0e87612c84b64968bcddc3c0378f471d8a93384ed709b09501174c7e4ddcaf74"
+  branch = "10586_fixes"
+  digest = "1:afcc93a5ffcbf5a73618d5f832fbf65a7d62f63763a1b31dccddf2390a7f11e4"
   name = "github.com/linuxkit/virtsock"
   packages = [
     "pkg/hvsock",
     "pkg/vsock",
   ]
   pruneopts = "NUT"
-  revision = "a381dcc5bcddf1d7f449495c373dbf70f8e501c0"
+  revision = "76c5cbe7912fc569ca7d3c02ddf9974ce670f7dd"
 
 [[projects]]
   branch = "master"

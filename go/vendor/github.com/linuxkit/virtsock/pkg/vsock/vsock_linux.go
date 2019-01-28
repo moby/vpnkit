@@ -1,35 +1,20 @@
 // Bindings to the Linux hues interface to VM sockets.
+
 package vsock
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"os"
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
 // SocketMode is a NOOP on Linux
 func SocketMode(m string) {
-}
-
-// VsockAddr represents the address of a vsock end point.
-type VsockAddr struct {
-	CID  uint32
-	Port uint32
-}
-
-// Network returns the network type for a VsockAddr
-func (a VsockAddr) Network() string {
-	return "vsock"
-}
-
-// String returns a string representation of a VsockAddr
-func (a VsockAddr) String() string {
-	return fmt.Sprintf("%08x.%08x", a.CID, a.Port)
 }
 
 // Convert a generic unix.Sockaddr to a VsockAddr
@@ -43,34 +28,39 @@ func sockaddrToVsock(sa unix.Sockaddr) *VsockAddr {
 
 // Dial connects to the CID.Port via virtio sockets
 func Dial(cid, port uint32) (Conn, error) {
-	fd, err := syscall.Socket(unix.AF_VSOCK, syscall.SOCK_STREAM, 0)
+	fd, err := syscall.Socket(unix.AF_VSOCK, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to create AF_VSOCK socket")
 	}
 	sa := &unix.SockaddrVM{CID: cid, Port: port}
-	if err = unix.Connect(fd, sa); err != nil {
-		return nil, errors.New(fmt.Sprintf(
-			"failed connect() to %08x.%08x: %s", cid, port, err))
+	// Retry connect in a loop if EINTR is encountered.
+	for {
+		if err := unix.Connect(fd, sa); err != nil {
+			if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINTR {
+				continue
+			}
+			return nil, errors.Wrapf(err, "failed connect() to %08x.%08x", cid, port)
+		}
+		break
 	}
 	return newVsockConn(uintptr(fd), nil, &VsockAddr{cid, port}), nil
 }
 
 // Listen returns a net.Listener which can accept connections on the given port
 func Listen(cid, port uint32) (net.Listener, error) {
-	fd, err := syscall.Socket(unix.AF_VSOCK, syscall.SOCK_STREAM, 0)
+	fd, err := syscall.Socket(unix.AF_VSOCK, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	sa := &unix.SockaddrVM{CID: cid, Port: port}
 	if err = unix.Bind(fd, sa); err != nil {
-		return nil, errors.New(fmt.Sprintf(
-			"failed bind() to %08x.%08x: %s", cid, port, err))
+		return nil, errors.Wrapf(err, "bind() to %08x.%08x failed", cid, port)
 	}
 
 	err = syscall.Listen(fd, syscall.SOMAXCONN)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "listen() on %08x.%08x failed", cid, port)
 	}
 	return &vsockListener{fd, VsockAddr{cid, port}}, nil
 }
@@ -166,4 +156,14 @@ func (v *VsockConn) SetReadDeadline(t time.Time) error {
 // SetWriteDeadline sets the deadline for future Write calls
 func (v *VsockConn) SetWriteDeadline(t time.Time) error {
 	return nil // FIXME
+}
+
+// File duplicates the underlying socket descriptor and returns it.
+func (v *VsockConn) File() (*os.File, error) {
+	// This is equivalent to dup(2) but creates the new fd with CLOEXEC already set.
+	r0, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, uintptr(v.vsock.Fd()), syscall.F_DUPFD_CLOEXEC, 0)
+	if e1 != 0 {
+		return nil, os.NewSyscallError("fcntl", e1)
+	}
+	return os.NewFile(r0, v.vsock.Name()), nil
 }
