@@ -20,6 +20,10 @@ type hvsockListener struct {
 //
 // System call wrapper
 //
+func hvsocket(typ, proto int) (int, error) {
+	return 0, errors.New("hvsocket() not implemented")
+}
+
 func connect(s int, a *HypervAddr) (err error) {
 	return errors.New("connect() not implemented")
 }

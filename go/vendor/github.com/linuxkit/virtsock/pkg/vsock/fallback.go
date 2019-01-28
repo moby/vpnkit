@@ -14,11 +14,11 @@ func SocketMode(socketMode string) {
 }
 
 // Dial is the unimplemented fallback for unsupported OSes
-func Dial(cid, port uint) (Conn, error) {
+func Dial(cid, port uint32) (Conn, error) {
 	return nil, fmt.Errorf("Unimplemented")
 }
 
 // Listen is the unimplemented fallback for unsupported OSes
-func Listen(cid, port uint) (net.Listener, error) {
+func Listen(cid, port uint32) (net.Listener, error) {
 	return nil, fmt.Errorf("Unimplemented")
 }
