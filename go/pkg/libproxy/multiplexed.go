@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"sync"
@@ -48,9 +49,10 @@ type channel struct {
 	closeReceived bool
 	closeSent     bool
 	// initially 2 (sender + receiver), protected by the multiplexer
-	refCount      int
-	shutdownSent  bool
-	writeDeadline time.Time
+	refCount                     int
+	shutdownSent                 bool
+	writeDeadline                time.Time
+	testAllowDataAfterCloseWrite bool
 }
 
 // newChannel registers a channel through the multiplexer
@@ -98,6 +100,11 @@ func (c *channel) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// for unit testing only
+func (c *channel) setTestAllowDataAfterCloseWrite() {
+	c.testAllowDataAfterCloseWrite = true
+}
+
 func (c *channel) Write(p []byte) (int, error) {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -106,7 +113,7 @@ func (c *channel) Write(p []byte) (int, error) {
 		if len(p) == 0 {
 			return written, nil
 		}
-		if c.closeReceived || c.closeSent || c.shutdownSent {
+		if c.closeReceived || c.closeSent || (c.shutdownSent && !c.testAllowDataAfterCloseWrite) {
 			return written, io.EOF
 		}
 		if c.write.size() > 0 {
@@ -420,8 +427,19 @@ func (m *Multiplexer) run() error {
 			if !ok {
 				return fmt.Errorf("Unknown channel id: %v", f.ID)
 			}
-			if _, err := io.CopyN(channel.readPipe, m.connR, int64(payload.payloadlen)); err != nil {
-				return err
+			// A confused client could send a DataFrame after a ShutdownFrame or CloseFrame.
+			if n, err := io.CopyN(channel.readPipe, m.connR, int64(payload.payloadlen)); err != nil {
+				if err == io.EOF {
+					// discard the overflowing data to avoid desychronising the stream
+					discarded, err := io.CopyN(ioutil.Discard, m.connR, int64(payload.payloadlen)-n)
+					if err != nil {
+						return fmt.Errorf("Failed to discard %d bytes (payload len %d): %v", discarded, payload.payloadlen, err)
+					}
+					log.Printf("Discarded %d bytes from a Data payload of length %d on channel %d", discarded, payload.payloadlen, f.ID)
+				}
+				// channel.readPipe.Write can only fail with EOF. The error must have
+				// come from the m.connR
+				return fmt.Errorf("Failed reading after %d bytes a Data payload of length %d to internal buffered pipe: %v", n, payload.payloadlen, err)
 			}
 		case *ShutdownFrame:
 			m.metadataMutex.Lock()
