@@ -42,6 +42,9 @@ func TestParseOpenDedicated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, ok := f.Payload().(*OpenFrame); !ok {
+		t.Fatal("not an *OpenFrame")
+	}
 	assertEqual(t, o.Connection, Dedicated)
 	assertEqual(t, o.Destination.Proto, TCP)
 	assertEqual(t, o.Destination.IP.String(), "127.0.0.1")
@@ -65,6 +68,9 @@ func TestParseOpenMultiplexed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, ok := f.Payload().(*OpenFrame); !ok {
+		t.Fatal("not an *OpenFrame")
+	}
 	assertEqual(t, o.Destination.Proto, UDP)
 	assertEqual(t, o.Destination.IP.String(), "::1")
 	assertEqual(t, o.Destination.Port, uint16(8080))
@@ -87,6 +93,9 @@ func TestParseOpenMultiplexedUnix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, ok := f.Payload().(*OpenFrame); !ok {
+		t.Fatal("not an *OpenFrame")
+	}
 	assertEqual(t, o.Destination.Proto, Unix)
 	assertEqual(t, o.Destination.Path, "/tmp/foo")
 	ParsePrint(t, b)
@@ -104,6 +113,9 @@ func TestParseClose(t *testing.T) {
 	}
 	assertEqual(t, f.Command, Close)
 	assertEqual(t, f.ID, uint32(6))
+	if _, ok := f.Payload().(*CloseFrame); !ok {
+		t.Fatal("not an *CloseFrame")
+	}
 	ParsePrint(t, b)
 }
 
@@ -119,6 +131,9 @@ func TestParseShutdown(t *testing.T) {
 	}
 	assertEqual(t, f.Command, Shutdown)
 	assertEqual(t, f.ID, uint32(7))
+	if _, ok := f.Payload().(*ShutdownFrame); !ok {
+		t.Fatal("not an *ShutdownFrame")
+	}
 	ParsePrint(t, b)
 }
 
@@ -139,6 +154,9 @@ func TestParseData(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertEqual(t, d.payloadlen, uint32(128))
+	if _, ok := f.Payload().(*DataFrame); !ok {
+		t.Fatal("not an *DataFrame")
+	}
 	ParsePrint(t, b)
 }
 
@@ -159,6 +177,9 @@ func TestParseWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertEqual(t, w.seq, uint64(8888888))
+	if _, ok := f.Payload().(*WindowFrame); !ok {
+		t.Fatal("not an *WindowFrame")
+	}
 	ParsePrint(t, b)
 }
 

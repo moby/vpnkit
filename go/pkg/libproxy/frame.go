@@ -168,6 +168,14 @@ func (o *OpenFrame) Size() int {
 	return 1 + o.Destination.Size()
 }
 
+// CloseFrame requests to disconnect from a proxy backend
+type CloseFrame struct {
+}
+
+// ShutdownFrame requests to close the write channel to a proxy backend
+type ShutdownFrame struct {
+}
+
 // DataFrame is the header of a frame containing user data
 type DataFrame struct {
 	payloadlen uint32
@@ -226,11 +234,13 @@ const (
 
 // Frame is the low-level message sent to the multiplexer
 type Frame struct {
-	Command Command // Command is the action erquested
-	ID      uint32  // Id of the sub-connection, managed by the client
-	open    *OpenFrame
-	window  *WindowFrame
-	data    *DataFrame
+	Command  Command // Command is the action erquested
+	ID       uint32  // Id of the sub-connection, managed by the client
+	open     *OpenFrame
+	close    *CloseFrame
+	shutdown *ShutdownFrame
+	window   *WindowFrame
+	data     *DataFrame
 }
 
 func unmarshalFrame(r io.Reader) (*Frame, error) {
@@ -362,6 +372,24 @@ func (f *Frame) Data() (*DataFrame, error) {
 		return nil, errors.New("Frame is not Data()")
 	}
 	return f.data, nil
+}
+
+// Payload returns the payload of the frame.
+func (f *Frame) Payload() interface{} {
+	switch f.Command {
+	case Open:
+		return f.open
+	case Close:
+		return f.close
+	case Shutdown:
+		return f.shutdown
+	case Window:
+		return f.window
+	case Data:
+		return f.data
+	default:
+		return nil
+	}
 }
 
 // NewWindow creates a Window message

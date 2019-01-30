@@ -388,8 +388,8 @@ func (m *Multiplexer) run() error {
 		if err != nil {
 			return fmt.Errorf("Failed to unmarshal command frame: %v", err)
 		}
-		switch f.Command {
-		case Open:
+		switch payload := f.Payload().(type) {
+		case *OpenFrame:
 			o, err := f.Open()
 			if err != nil {
 				return fmt.Errorf("Failed to unmarshal open command: %v", err)
@@ -405,33 +405,25 @@ func (m *Multiplexer) run() error {
 				m.acceptCond.Signal()
 				m.metadataMutex.Unlock()
 			}
-		case Window:
+		case *WindowFrame:
 			m.metadataMutex.Lock()
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
 			if !ok {
 				return fmt.Errorf("Unknown channel id: %v", f.ID)
 			}
-			w, err := f.Window()
-			if err != nil {
-				return err
-			}
-			channel.recvWindowUpdate(w.seq)
-		case Data:
+			channel.recvWindowUpdate(payload.seq)
+		case *DataFrame:
 			m.metadataMutex.Lock()
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
 			if !ok {
 				return fmt.Errorf("Unknown channel id: %v", f.ID)
 			}
-			d, err := f.Data()
-			if err != nil {
+			if _, err := io.CopyN(channel.readPipe, m.connR, int64(payload.payloadlen)); err != nil {
 				return err
 			}
-			if _, err := io.CopyN(channel.readPipe, m.connR, int64(d.payloadlen)); err != nil {
-				return err
-			}
-		case Shutdown:
+		case *ShutdownFrame:
 			m.metadataMutex.Lock()
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
@@ -439,7 +431,7 @@ func (m *Multiplexer) run() error {
 				return fmt.Errorf("Unknown channel id: %v", f.ID)
 			}
 			channel.readPipe.closeWriteNoErr()
-		case Close:
+		case *CloseFrame:
 			m.metadataMutex.Lock()
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
