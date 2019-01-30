@@ -213,23 +213,34 @@ func TestUDP6Proxy(t *testing.T) {
 
 func TestUDPWriteError(t *testing.T) {
 	frontendAddr := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0}
-	// Hopefully, this port will be free: */
-	backendAddr := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 25587}
+	// Normally we would automatically choose a free port for the backend
+	// server but we specifically want to check what happens when the server
+	// is not running. This means we have to pick a port in advance.
+	// Hopefully, this port will be free:
+	port := 25587
+	backendAddr := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}
 	proxy, err := NewIPProxy(frontendAddr, backendAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
+	frontendAddr = proxy.FrontendAddr().(*net.UDPAddr)
+
 	defer proxy.Close()
 	go proxy.Run()
-	client, err := net.Dial("udp", "127.0.0.1:25587")
+	client, err := net.Dial("udp", fmt.Sprintf("127.0.0.1:%d", frontendAddr.Port))
 	if err != nil {
 		t.Fatalf("Can't connect to the proxy: %v", err)
 	}
 	defer client.Close()
+
 	// Make sure the proxy doesn't stop when there is no actual backend:
-	client.Write(testBuf)
-	client.Write(testBuf)
-	backend := NewEchoServer(t, "udp", "127.0.0.1:25587")
+	if _, err = client.Write(testBuf); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.Write(testBuf); err != nil {
+		t.Fatal(err)
+	}
+	backend := NewEchoServer(t, "udp", fmt.Sprintf("127.0.0.1:%d", port))
 	defer backend.Close()
 	backend.Run()
 	client.SetDeadline(time.Now().Add(10 * time.Second))
