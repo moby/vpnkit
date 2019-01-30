@@ -210,12 +210,11 @@ func (c *channel) CloseWrite() error {
 	return nil
 }
 
-func (c *channel) recvClose() error {
+func (c *channel) recvClose() {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.closeReceived = true
 	c.c.Broadcast()
-	return nil
 }
 
 func (c *channel) SetReadDeadline(timeout time.Time) error {
@@ -439,9 +438,7 @@ func (m *Multiplexer) run() error {
 			if !ok {
 				return fmt.Errorf("Unknown channel id: %v", f.ID)
 			}
-			if err := channel.readPipe.CloseWrite(); err != nil {
-				return err
-			}
+			channel.readPipe.closeWriteNoErr()
 		case Close:
 			m.metadataMutex.Lock()
 			channel, ok := m.channels[f.ID]
@@ -450,13 +447,9 @@ func (m *Multiplexer) run() error {
 				return fmt.Errorf("Unknown channel id: %v", f.ID)
 			}
 			// this will unblock waiting Read calls
-			if err := channel.readPipe.CloseWrite(); err != nil {
-				return err
-			}
+			channel.readPipe.closeWriteNoErr()
 			// this will unblock waiting Write calls
-			if err := channel.recvClose(); err != nil {
-				return err
-			}
+			channel.recvClose()
 			m.decrChannelRef(channel.ID)
 		default:
 			return fmt.Errorf("Unknown command type: %v", f)
