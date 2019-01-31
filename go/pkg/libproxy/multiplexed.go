@@ -417,7 +417,7 @@ func (m *Multiplexer) run() error {
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
 			if !ok {
-				return fmt.Errorf("Unknown channel id: %v", f.ID)
+				return fmt.Errorf("Unknown channel id %s", f.String())
 			}
 			channel.recvWindowUpdate(payload.seq)
 		case *DataFrame:
@@ -425,7 +425,7 @@ func (m *Multiplexer) run() error {
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
 			if !ok {
-				return fmt.Errorf("Unknown channel id: %v", f.ID)
+				return fmt.Errorf("Unknown channel id: %s", f.String())
 			}
 			// A confused client could send a DataFrame after a ShutdownFrame or CloseFrame.
 			if n, err := io.CopyN(channel.readPipe, m.connR, int64(payload.payloadlen)); err != nil {
@@ -446,7 +446,7 @@ func (m *Multiplexer) run() error {
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
 			if !ok {
-				return fmt.Errorf("Unknown channel id: %v", f.ID)
+				return fmt.Errorf("Unknown channel id: %s", f.String())
 			}
 			channel.readPipe.closeWriteNoErr()
 		case *CloseFrame:
@@ -454,7 +454,7 @@ func (m *Multiplexer) run() error {
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
 			if !ok {
-				return fmt.Errorf("Unknown channel id: %v", f.ID)
+				return fmt.Errorf("Unknown channel id: %s", f.String())
 			}
 			// this will unblock waiting Read calls
 			channel.readPipe.closeWriteNoErr()
