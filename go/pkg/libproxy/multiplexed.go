@@ -326,6 +326,7 @@ func (m *Multiplexer) decrChannelRef(ID uint32) {
 	defer m.metadataMutex.Unlock()
 	if channel, ok := m.channels[ID]; ok {
 		if channel.refCount == 1 {
+			log.Printf("Close channel id %d to %s", ID, channel.destination.String())
 			delete(m.channels, ID)
 			return
 		}
@@ -411,6 +412,7 @@ func (m *Multiplexer) run() error {
 				m.pendingAccept = append(m.pendingAccept, channel)
 				m.acceptCond.Signal()
 				m.metadataMutex.Unlock()
+				log.Printf("Open channel id %d to %s", f.ID, o.Destination.String())
 			}
 		case *WindowFrame:
 			m.metadataMutex.Lock()
