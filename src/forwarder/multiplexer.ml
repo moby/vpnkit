@@ -140,13 +140,16 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       send outer Frame.{command= Open (Multiplexed, destination); id} ;
       create outer id
 
+    let is_read_eof channel =
+      false
+      || channel.subflow.Subflow.incoming_shutdown
+      || channel.subflow.Subflow.close_received
+
     let rec read_into channel buf =
       let rec wait () =
         match channel.subflow.Subflow.incoming with
         | [] ->
-            if
-              channel.subflow.Subflow.incoming_shutdown
-              || channel.subflow.Subflow.close_received
+            if is_read_eof channel
             then Lwt.return (Ok `Eof)
             else
               Lwt_condition.wait channel.subflow.Subflow.incoming_c
@@ -173,9 +176,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       let rec wait () =
         match channel.subflow.Subflow.incoming with
         | [] ->
-            if
-              channel.subflow.Subflow.incoming_shutdown
-              || channel.subflow.Subflow.close_received
+            if is_read_eof channel
             then Lwt.return (Ok `Eof)
             else
               Lwt_condition.wait channel.subflow.Subflow.incoming_c
