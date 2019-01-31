@@ -45,6 +45,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       ; write_c: unit Lwt_condition.t
       ; mutable close_sent: bool
       ; mutable close_received: bool
+      ; mutable shutdown_sent: bool
       ; mutable ref_count: int }
 
     let create () =
@@ -56,6 +57,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       ; write_c= Lwt_condition.create ()
       ; close_sent= false
       ; close_received= false
+      ; shutdown_sent= false
       ; ref_count= 2 (* sender + receiver *) }
   end
 
@@ -190,12 +192,18 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       in
       wait ()
 
+    let is_write_eof channel =
+      false
+      || channel.subflow.Subflow.close_received
+      || channel.subflow.Subflow.close_sent
+      || channel.subflow.Subflow.shutdown_sent
+
     let writev channel bufs =
       let rec loop bufs =
         let rec wait () =
           if
             Window.size channel.subflow.Subflow.write = 0
-            && not channel.subflow.Subflow.close_received
+            && not (is_write_eof channel)
           then
             Lwt_condition.wait channel.subflow.Subflow.write_c
             >>= fun () -> wait ()
@@ -203,7 +211,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
         in
         wait ()
         >>= fun () ->
-        if channel.subflow.Subflow.close_received then Lwt.return `Eof
+        if is_write_eof channel then Lwt.return `Eof
         else
           let len = Window.size channel.subflow.Subflow.write in
           let to_send, remaining =
@@ -212,6 +220,8 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
           in
           List.iter
             (fun buf ->
+              (* Note the other end may have transmitted a Close.
+                 It has to be able to cope with unexpected Data. *)
               send channel.outer
                 Frame.
                   { command= Data (Int32.of_int (Cstruct.len buf))
@@ -228,6 +238,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       Lwt.return (Ok ())
 
     let shutdown_write channel =
+      channel.subflow.Subflow.shutdown_sent <- true;
       send channel.outer Frame.{command= Shutdown; id= channel.id} ;
       flush channel.outer
 
