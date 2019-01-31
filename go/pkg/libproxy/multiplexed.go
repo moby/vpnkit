@@ -55,6 +55,22 @@ type channel struct {
 	testAllowDataAfterCloseWrite bool
 }
 
+func (c *channel) String() string {
+	closeReceived := ""
+	if c.closeReceived {
+		closeReceived = "closeReceived "
+	}
+	closeSent := ""
+	if c.closeSent {
+		closeSent = "closeSent "
+	}
+	shutdownSent := ""
+	if c.shutdownSent {
+		shutdownSent = "shutdownSent "
+	}
+	return fmt.Sprintf("ID %d -> %s %s%s%s", c.ID, c.destination.String(), closeReceived, closeSent, shutdownSent)
+}
+
 // newChannel registers a channel through the multiplexer
 func newChannel(multiplexer *Multiplexer, ID uint32, d Destination) *channel {
 	var m sync.Mutex
@@ -376,6 +392,10 @@ func (m *Multiplexer) Run() {
 	go func() {
 		if err := m.run(); err != nil {
 			log.Printf("Multiplexer main loop failed with %v", err)
+			log.Printf("Active channels:")
+			for _, c := range m.channels {
+				log.Printf("%s", c.String())
+			}
 		}
 		m.metadataMutex.Lock()
 		m.isRunning = false
