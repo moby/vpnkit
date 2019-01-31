@@ -2,6 +2,7 @@ package libproxy
 
 import (
 	"bufio"
+	"container/ring"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -140,6 +141,7 @@ func (c *channel) Write(p []byte) (int, error) {
 			// need to write the header and the payload together
 			c.multiplexer.writeMutex.Lock()
 			f := NewData(c.ID, uint32(toWrite))
+			c.multiplexer.appendEvent(&event{eventType: eventSend, frame: f})
 			err1 := f.Write(c.multiplexer.connW)
 			_, err2 := c.multiplexer.connW.Write(p[0:toWrite])
 			err3 := c.multiplexer.connW.Flush()
@@ -281,6 +283,35 @@ func (a *channelAddr) String() string {
 	return a.d.String()
 }
 
+const (
+	eventSend  = 0
+	eventRecv  = 1
+	eventOpen  = 2
+	eventClose = 3
+)
+
+type event struct {
+	eventType   int
+	frame       *Frame      // for eventSend and eventRecv
+	id          uint32      // for eventOpen and eventClose
+	destination Destination // for eventOpen and eventClose
+}
+
+func (e *event) String() string {
+	switch e.eventType {
+	case eventSend:
+		return fmt.Sprintf("send  %s", e.frame.String())
+	case eventRecv:
+		return fmt.Sprintf("recv  %s", e.frame.String())
+	case eventOpen:
+		return fmt.Sprintf("open  %d -> %s", e.id, e.destination)
+	case eventClose:
+		return fmt.Sprintf("close %d -> %s", e.id, e.destination)
+	default:
+		return "unknown trace event"
+	}
+}
+
 // Multiplexer muxes and demuxes sub-connections over a single connection
 type Multiplexer struct {
 	label         string
@@ -294,15 +325,18 @@ type Multiplexer struct {
 	pendingAccept []*channel  // incoming connections
 	acceptCond    *sync.Cond
 	isRunning     bool
+	events        *ring.Ring // log of packetEvents
+	eventsM       *sync.Mutex
 }
 
 // NewMultiplexer constructs a multiplexer from a channel
 func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
-	var writeMutex, metadataMutex sync.Mutex
+	var writeMutex, metadataMutex, eventsM sync.Mutex
 	acceptCond := sync.NewCond(&metadataMutex)
 	channels := make(map[uint32]*channel)
 	connR := bufio.NewReader(conn)
 	connW := bufio.NewWriter(conn)
+	events := ring.New(500)
 	return &Multiplexer{
 		label:         label,
 		conn:          conn,
@@ -313,7 +347,16 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
 		metadataMutex: &metadataMutex,
 		acceptCond:    acceptCond,
 		nextChannelID: ^uint32(0),
+		events:        events,
+		eventsM:       &eventsM,
 	}
+}
+
+func (m *Multiplexer) appendEvent(e *event) {
+	m.eventsM.Lock()
+	defer m.eventsM.Unlock()
+	m.events.Value = e
+	m.events = m.events.Next()
 }
 
 func (m *Multiplexer) send(f *Frame) error {
@@ -322,6 +365,7 @@ func (m *Multiplexer) send(f *Frame) error {
 	if err := f.Write(m.connW); err != nil {
 		return err
 	}
+	m.appendEvent(&event{eventType: eventSend, frame: f})
 	return m.connW.Flush()
 }
 
@@ -342,7 +386,7 @@ func (m *Multiplexer) decrChannelRef(ID uint32) {
 	defer m.metadataMutex.Unlock()
 	if channel, ok := m.channels[ID]; ok {
 		if channel.refCount == 1 {
-			log.Printf("Close channel id %d to %s", ID, channel.destination.String())
+			m.appendEvent(&event{eventType: eventClose, id: ID, destination: channel.destination})
 			delete(m.channels, ID)
 			return
 		}
@@ -392,6 +436,12 @@ func (m *Multiplexer) Run() {
 	go func() {
 		if err := m.run(); err != nil {
 			log.Printf("Multiplexer main loop failed with %v", err)
+			log.Printf("Event trace:")
+			m.events.Do(func(p interface{}) {
+				if e, ok := p.(*event); ok {
+					log.Print(e.String())
+				}
+			})
 			log.Printf("Active channels:")
 			for _, c := range m.channels {
 				log.Printf("%s", c.String())
@@ -416,6 +466,7 @@ func (m *Multiplexer) run() error {
 		if err != nil {
 			return fmt.Errorf("Failed to unmarshal command frame: %v", err)
 		}
+		m.appendEvent(&event{eventType: eventRecv, frame: f})
 		switch payload := f.Payload().(type) {
 		case *OpenFrame:
 			o, err := f.Open()
@@ -432,7 +483,7 @@ func (m *Multiplexer) run() error {
 				m.pendingAccept = append(m.pendingAccept, channel)
 				m.acceptCond.Signal()
 				m.metadataMutex.Unlock()
-				log.Printf("Open channel id %d to %s", f.ID, o.Destination.String())
+				m.appendEvent(&event{eventType: eventOpen, id: f.ID, destination: o.Destination})
 			}
 		case *WindowFrame:
 			m.metadataMutex.Lock()
