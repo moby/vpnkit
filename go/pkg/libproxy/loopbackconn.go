@@ -128,11 +128,15 @@ func (pipe *bufferedPipe) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (pipe *bufferedPipe) CloseWrite() error {
+func (pipe *bufferedPipe) closeWriteNoErr() {
 	pipe.m.Lock()
 	defer pipe.m.Unlock()
 	pipe.eof = true
 	pipe.c.Broadcast()
+}
+
+func (pipe *bufferedPipe) CloseWrite() error {
+	pipe.closeWriteNoErr()
 	return nil
 }
 
