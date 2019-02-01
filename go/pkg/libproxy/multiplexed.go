@@ -2,10 +2,10 @@ package libproxy
 
 import (
 	"bufio"
+	"bytes"
 	"container/ring"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"sync"
@@ -500,19 +500,19 @@ func (m *Multiplexer) run() error {
 			if !ok {
 				return fmt.Errorf("Unknown channel id: %s", f.String())
 			}
-			// A confused client could send a DataFrame after a ShutdownFrame or CloseFrame.
-			if n, err := io.CopyN(channel.readPipe, m.connR, int64(payload.payloadlen)); err != nil {
-				if err == io.EOF {
-					// discard the overflowing data to avoid desychronising the stream
-					discarded, err := io.CopyN(ioutil.Discard, m.connR, int64(payload.payloadlen)-n)
-					if err != nil {
-						return fmt.Errorf("Failed to discard %d bytes (payload len %d): %v", discarded, payload.payloadlen, err)
-					}
-					log.Printf("Discarded %d bytes from a Data payload of length %d on channel %d", discarded, payload.payloadlen, f.ID)
-				}
-				// channel.readPipe.Write can only fail with EOF. The error must have
-				// come from the m.connR
-				return fmt.Errorf("Failed reading after %d bytes a Data payload of length %d to internal buffered pipe: %v", n, payload.payloadlen, err)
+			// We don't use a direct io.Copy or io.CopyN to the readPipe because if they get
+			// EOF on Write, they will drop the data in the buffer and we don't know how big
+			// it was so we can't avoid desychronising the stream.
+			// We trust the clients not to write more than a Window size.
+			var buf bytes.Buffer
+			if _, err := io.CopyN(&buf, m.connR, int64(payload.payloadlen)); err != nil {
+				return fmt.Errorf("Failed to read payload of %d bytes: %s", payload.payloadlen, f.String())
+			}
+			if n, err := io.Copy(channel.readPipe, &buf); err != nil {
+				// err must be io.EOF
+				log.Printf("Discarded %d bytes from %s", int64(payload.payloadlen)-n, f.String())
+				// A confused client could send a DataFrame after a ShutdownFrame or CloseFrame.
+				// The stream is not desychronised so we can keep going.
 			}
 		case *ShutdownFrame:
 			m.metadataMutex.Lock()
