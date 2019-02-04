@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"container/ring"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -402,6 +403,10 @@ func (m *Multiplexer) decrChannelRef(ID uint32) {
 // Dial opens a connection to the given destination
 func (m *Multiplexer) Dial(d Destination) (Conn, error) {
 	m.metadataMutex.Lock()
+	if !m.isRunning {
+		m.metadataMutex.Unlock()
+		return nil, errors.New("connection refused")
+	}
 	id := m.findFreeChannelID()
 	channel := newChannel(m, id, d)
 	m.channels[id] = channel
@@ -455,6 +460,15 @@ func (m *Multiplexer) Run() {
 		m.metadataMutex.Lock()
 		m.isRunning = false
 		m.metadataMutex.Unlock()
+
+		// close all open channels
+		for _, channel := range m.channels {
+			// this will unblock waiting Read calls
+			channel.readPipe.closeWriteNoErr()
+			// this will unblock waiting Write calls
+			channel.recvClose()
+			m.decrChannelRef(channel.ID)
+		}
 	}()
 }
 
