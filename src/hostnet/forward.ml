@@ -112,10 +112,20 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
     let mux = ref None in
     let m = Lwt_mutex.create () in
     fun () ->
-      match !mux with
-      | None ->
-        Lwt_mutex.with_lock m
-          (fun () ->
+      Lwt_mutex.with_lock m
+        (fun () ->
+          (* If there is a multiplexer but it is broken, reconnect *)
+          begin match !mux with
+          | None -> Lwt.return_unit
+          | Some m ->
+            if not(Mux.is_running m) then begin
+              Log.err (fun f -> f "Multiplexer has shutdown, reconnecting");
+              mux := None;
+              Mux.disconnect m
+            end else Lwt.return_unit
+          end >>= fun () ->
+          match !mux with
+          | None ->
             Connector.connect ()
             >>= fun remote ->
             let mux' = Mux.connect remote "port-forwarding"
@@ -125,8 +135,8 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
               ) in
             mux := Some mux';
             Lwt.return mux'
-          )
-      | Some m -> Lwt.return m
+          | Some m -> Lwt.return m
+        )
 
   let open_channel destination =
     get_mux ()

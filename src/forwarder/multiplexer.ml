@@ -384,4 +384,6 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       | true -> dispatcher ()
     in
     Lwt.async dispatcher ; outer
+
+  let disconnect m = Flow.close m.flow
 end

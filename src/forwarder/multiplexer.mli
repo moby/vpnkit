@@ -17,4 +17,7 @@ module Make (Flow : Mirage_flow_lwt.S) : sig
 
   val is_running : flow -> bool
   (** [is_running flow] is true if the dispatcher thread is still running. *)
+
+  val disconnect: flow -> unit Lwt.t
+  (** [disconnect flow] disconnects the underlying flow *)
 end

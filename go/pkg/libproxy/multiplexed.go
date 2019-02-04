@@ -352,6 +352,11 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
 	}
 }
 
+// Close the underlying transport.
+func (m *Multiplexer) Close() error {
+	return m.conn.Close()
+}
+
 func (m *Multiplexer) appendEvent(e *event) {
 	m.eventsM.Lock()
 	defer m.eventsM.Unlock()

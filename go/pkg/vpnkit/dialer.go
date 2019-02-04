@@ -25,6 +25,10 @@ type Dialer struct {
 func (d *Dialer) setupMultiplexer() error {
 	d.m.Lock()
 	defer d.m.Unlock()
+	if d.mux != nil && !d.mux.IsRunning() {
+		d.mux.Close()
+		d.mux = nil
+	}
 	if d.mux == nil {
 		conn, err := d.connectTransport()
 		if err != nil {
