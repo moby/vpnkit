@@ -16,7 +16,7 @@ jobs:
       - checkout
       - run: brew uninstall python # remove files in /usr/local/bin
       - run: brew install wget pkg-config dylibbundler
-      - run: brew install https://raw.githubusercontent.com/Homebrew/homebrew-core/72ce8812eaa33abe23533dfa021b51351a6b9c3e/Formula/opam.rb
+      - run: brew install https://gist.githubusercontent.com/djs55/7a94ee5aeb882ef5399c0485d2affdda/raw/bc04ff96e0082d7ee07642337dbb77c51b93d678/opam.rb
       - run: make
       - run: make artefacts
       - run: make test
