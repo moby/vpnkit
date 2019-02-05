@@ -238,9 +238,14 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       Lwt.return (Ok ())
 
     let shutdown_write channel =
-      channel.subflow.Subflow.shutdown_sent <- true;
-      send channel.outer Frame.{command= Shutdown; id= channel.id} ;
-      flush channel.outer
+      (* Avoid sending Shutdown twice or sending a shutdown after a Close *)
+      if is_write_eof channel
+      then Lwt.return_unit
+      else begin
+        channel.subflow.Subflow.shutdown_sent <- true;
+        send channel.outer Frame.{command= Shutdown; id= channel.id} ;
+        flush channel.outer
+      end
 
     let close channel =
       (* Don't send Close more than once *)
