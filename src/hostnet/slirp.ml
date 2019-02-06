@@ -474,7 +474,7 @@ struct
       clock: Clock.t;
       endpoint: Endpoint.t;
       udp_nat: Udp_nat.t;
-      dns_ips: Ipaddr.V4.t list;
+      dns_ips: Ipaddr.t list;
     }
     (** Proxies connections to services on localhost on the host *)
 
@@ -989,11 +989,11 @@ struct
     >>= fun switch ->
 
     (* Serve a static ARP table *)
-    let local_arp_table = [
-      c.Configuration.lowest_ip, client_macaddr;
-      c.Configuration.gateway_ip, c.Configuration.server_macaddr;
-      c.Configuration.host_ip, c.Configuration.server_macaddr;
-    ] in
+    let local_arp_table =
+      (c.Configuration.lowest_ip, client_macaddr)
+      :: (c.Configuration.gateway_ip, c.Configuration.server_macaddr)
+      :: (if Ipaddr.V4.(compare unspecified c.Configuration.host_ip = 0) then [] else [ c.Configuration.host_ip, c.Configuration.server_macaddr])
+    in
     Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
 
@@ -1155,7 +1155,11 @@ struct
           Global_arp.input arp (Cstruct.shift buf Ethif_wire.sizeof_ethernet)
         | Ok (Ethernet { payload = Ipv4 ({ dst; _ } as ipv4 ); _ }) ->
           (* For any new IP destination, create a stack to proxy for
-             the remote system *)
+            the remote system *)
+          let localhost_ips =
+            if Ipaddr.V4.(compare unspecified c.Configuration.host_ip) = 0
+            then []
+            else [ Ipaddr.V4 c.Configuration.host_ip ] in
           if dst = c.Configuration.gateway_ip then begin
             begin
               let open Lwt_result.Infix in
@@ -1188,7 +1192,7 @@ struct
                   end in
               Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
               Gateway.create clock endpoint udp_nat [ c.Configuration.gateway_ip ]
-                c.Configuration.host_names [ Ipaddr.V4 c.Configuration.host_ip ]
+                c.Configuration.host_names localhost_ips
             end >>= function
             | Error e ->
               Log.err (fun f ->
@@ -1200,13 +1204,13 @@ struct
               | Ok ()   -> ()
               | Error e ->
                 Log.err (fun f -> f "failed to read TCP/IP input: %a" pp_error e);
-          end else if dst = c.Configuration.host_ip then begin
+          end else if dst = c.Configuration.host_ip && Ipaddr.V4.(compare unspecified c.Configuration.host_ip <> 0) then begin
             begin
               let open Lwt_result.Infix in
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
                   f "creating localhost TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
-              Localhost.create clock endpoint udp_nat [ c.Configuration.host_ip ]
+              Localhost.create clock endpoint udp_nat localhost_ips
             end >>= function
             | Error e ->
               Log.err (fun f ->
@@ -1225,7 +1229,7 @@ struct
               Log.debug (fun f ->
                   f "create remote TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
               Remote.create endpoint udp_nat icmp_nat
-                c.Configuration.host_names [ Ipaddr.V4 c.Configuration.host_ip ]
+                c.Configuration.host_names localhost_ips
             end >>= function
             | Error e ->
               Log.err (fun f ->
@@ -1465,11 +1469,10 @@ struct
     Log.info (fun f -> f "Configuration %s" (Configuration.to_string c));
     let global_arp_table : arp_table = {
       mutex = Lwt_mutex.create();
-      table = [
-        c.Configuration.gateway_ip, c.Configuration.server_macaddr;
-        c.Configuration.host_ip,    c.Configuration.server_macaddr;
-      ];
-
+      table =
+        (c.Configuration.gateway_ip, c.Configuration.server_macaddr)
+        :: (if Ipaddr.V4.(compare unspecified c.Configuration.host_ip) = 0 then []
+            else [c.Configuration.host_ip,  c.Configuration.server_macaddr ]);
     } in
     let client_uuids : uuid_table = {
       mutex = Lwt_mutex.create();
