@@ -796,7 +796,7 @@ let gateway_ip =
 let host_ip =
   let doc =
     Arg.info ~doc:
-      "IP address which represents the host. Connections to this IP will be forwarded to localhost on the host."
+      "IP address which represents the host. Connections to this IP will be forwarded to localhost on the host. Use the value 0.0.0.0 to disable this feature."
       [ "host-ip" ]
   in
   Arg.(value & opt string (Ipaddr.V4.to_string Configuration.default_host_ip) doc)

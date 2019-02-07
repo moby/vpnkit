@@ -1,3 +1,29 @@
+### v0.3.0 (2019-02-06)
+
+* support multiplexing forwarded connections along one Hyper-V socket connection
+* add Kubernetes controller for exposing ports
+* go: move to go dep
+* support building Linux static binaries (with musl)
+* add a --gateway-forwards file for redirecting traffic to external services
+* udp: prevent too many flows exhausting all fds on the system
+* support forwarding to Unix domain sockets as well as TCP and UDP
+* go: move vmnet to its own package
+* test: add an nmap simulation test
+* vpnkit-{9pmount,tap}-vsock: fix operation on newer kernels with AF\_VSOCK
+* rename environment varible from DEBUG to VPNKIT\_DEBUG to avoid clashing with
+  other software
+* tcp: disable keep-alives: they were causing a space leak
+* http: HTTP/1.0 should default to Connection:close
+* icmp: don't log parse failures
+* ntp: remove the automatic NTP forward to localhost: use the --gateway-forwards
+  feature instead
+* http: handle Connection:close
+* http: consult the "localhost" names in the transparent proxy
+* http: support both hostnames and IPs in excludes
+* http: fix HTTP CONNECT
+* http: respect authorization headers
+* http: HEAD responses must not have bodies
+
 ### v0.2.0 (2018-01-03)
 
 * add 9pmount-vsock and tap-vsock helper programs
