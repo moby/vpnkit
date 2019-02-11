@@ -165,7 +165,7 @@ func (c *Connection) Expose(ctx context.Context, p *Port) error {
 	// shutdown the forward.
 
 	// Read any error from a previous session
-	bytes := make([]byte, 100)
+	bytes := make([]byte, 4096)
 	n, err := ctl.Read(ctx, bytes, 0)
 	if err != nil {
 		log.Printf("Expose %s: failed to read response from ctl: %#v\n", spec, err)
