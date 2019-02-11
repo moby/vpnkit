@@ -77,6 +77,9 @@ func (c *Connection) ListExposed(ctx context.Context) ([]Port, error) {
 
 // String returns a human-readable string
 func (p *Port) String() string {
+	if p.Proto == Unix {
+		return fmt.Sprintf("%s forward from %s to %s", p.Proto, p.OutPath, p.InPath)
+	}
 	return fmt.Sprintf("%s forward from %s:%d to %s:%d", p.Proto, p.OutIP.String(), p.OutPort, p.InIP.String(), p.InPort)
 }
 
