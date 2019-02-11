@@ -77,6 +77,9 @@ func (c *Connection) ListExposed(ctx context.Context) ([]Port, error) {
 
 // String returns a human-readable string
 func (p *Port) String() string {
+	if p.Proto == Unix {
+		return fmt.Sprintf("%s forward from %s to %s", p.Proto, p.OutPath, p.InPath)
+	}
 	return fmt.Sprintf("%s forward from %s:%d to %s:%d", p.Proto, p.OutIP.String(), p.OutPort, p.InIP.String(), p.InPort)
 }
 
@@ -162,7 +165,7 @@ func (c *Connection) Expose(ctx context.Context, p *Port) error {
 	// shutdown the forward.
 
 	// Read any error from a previous session
-	bytes := make([]byte, 100)
+	bytes := make([]byte, 4096)
 	n, err := ctl.Read(ctx, bytes, 0)
 	if err != nil {
 		log.Printf("Expose %s: failed to read response from ctl: %#v\n", spec, err)
