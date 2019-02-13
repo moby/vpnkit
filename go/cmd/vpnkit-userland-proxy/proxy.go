@@ -53,7 +53,7 @@ func parseHostContainerAddrs() (host net.Addr, port int, container net.Addr, loc
 		containerIP   = flag.String("container-ip", "", "container ip")
 		containerPort = flag.Int("container-port", -1, "container port")
 		interactive   = flag.Bool("i", false, "print success/failure to stdout/stderr")
-		noLocalIP     = flag.Bool("no-local-ip", false, "bind only on the Host, not in the VM")
+		noLocalIP     = flag.Bool("no-local-ip", true, "bind only on the Host, not in the VM")
 	)
 
 	flag.Parse()
