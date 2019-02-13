@@ -4,7 +4,7 @@ RUN apk add --no-cache go musl-dev
 
 ENV GOPATH=/go PATH=$PATH:/go/bin
 
-ADD . /go/src/github.com/moby/vpnkit/go
+COPY . /go/src/github.com/moby/vpnkit/go
 RUN go-compile.sh /go/src/github.com/moby/vpnkit/go/cmd/vpnkit-userland-proxy
 
 FROM scratch
