@@ -56,9 +56,41 @@ func (c *Controller) OnAdd(obj interface{}) {
 
 // OnUpdate exposes port if necessary
 func (c *Controller) OnUpdate(oldObj, newObj interface{}) {
+	if err := c.closeAbsentPorts(oldObj, newObj); err != nil {
+		log.Errorf("OnUpdate failed: %v", err)
+	}
 	if err := c.ensureOpened(newObj); err != nil {
 		log.Errorf("OnUpdate failed: %v", err)
 	}
+}
+
+// OnDelete unexposes port
+func (c *Controller) OnDelete(obj interface{}) {
+	if err := c.closeAbsentPorts(obj, &v1.Service{}); err != nil {
+		log.Errorf("OnUpdate failed: %v", err)
+	}
+}
+
+func (c *Controller) closeAbsentPorts(oldObj, newObj interface{}) error {
+	oldService, ok := oldObj.(*v1.Service)
+	if !ok {
+		return fmt.Errorf("received an invalid object, was expecting v1.Service")
+	}
+	newService, ok := newObj.(*v1.Service)
+	if !ok {
+		return fmt.Errorf("received an invalid object, was expecting v1.Service")
+	}
+	newPorts := servicePorts(newService)
+	for _, oldPort := range servicePorts(oldService) {
+		if !contains(newPorts, oldPort) {
+			if err := c.client.Unexpose(context.Background(), &oldPort); err != nil {
+				log.Errorf("cannot unexpose port: %s", err)
+				continue
+			}
+			log.Infof("Closed port %d", oldPort.OutPort)
+		}
+	}
+	return nil
 }
 
 func (c *Controller) ensureOpened(obj interface{}) error {
@@ -101,16 +133,20 @@ func (c *Controller) ensureOpened(obj interface{}) error {
 	return nil
 }
 
-func contains(s []vpnkit.Port, e vpnkit.Port) bool {
-	for _, a := range s {
-		if a.Proto == e.Proto &&
-			a.OutPort == e.OutPort &&
-			a.InIP.Equal(e.InIP) &&
-			a.InPort == e.InPort {
+func contains(list []vpnkit.Port, given vpnkit.Port) bool {
+	for _, current := range list {
+		if equals(current, given) {
 			return true
 		}
 	}
 	return false
+}
+
+func equals(left vpnkit.Port, right vpnkit.Port) bool {
+	return left.Proto == right.Proto &&
+		left.OutPort == right.OutPort &&
+		left.InIP.Equal(right.InIP) &&
+		left.InPort == right.InPort
 }
 
 func alreadyOpened(s []vpnkit.Port, e vpnkit.Port) bool {
@@ -120,22 +156,6 @@ func alreadyOpened(s []vpnkit.Port, e vpnkit.Port) bool {
 		}
 	}
 	return false
-}
-
-// OnDelete unexposes port
-func (c *Controller) OnDelete(obj interface{}) {
-	service, ok := obj.(*v1.Service)
-	if !ok {
-		log.Errorf("OnDelete handler received an invalid object, was expecting v1.Service")
-		return
-	}
-	for _, port := range servicePorts(service) {
-		if err := c.client.Unexpose(context.Background(), &port); err != nil {
-			log.Errorf("cannot unexpose port: %s", err)
-			continue
-		}
-		log.Infof("Closed port %d", port.OutPort)
-	}
 }
 
 func servicePorts(service *v1.Service) []vpnkit.Port {

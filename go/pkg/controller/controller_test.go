@@ -254,6 +254,59 @@ func TestDiscardClusterIPService(t *testing.T) {
 	assert.Len(t, client.exposed, 0)
 }
 
+func TestCloseUnusedPortsAfterUpdate(t *testing.T) {
+	client := mockVpnKitClient{}
+	kubeClient := kubernetes.NewSimpleClientset()
+	controller := New(&client, kubeClient.CoreV1())
+
+	source := v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns1",
+			Name:      "service1",
+		},
+		Spec: v1.ServiceSpec{
+			Type: v1.ServiceTypeNodePort,
+			Ports: []v1.ServicePort{
+				{
+					Protocol: v1.ProtocolTCP,
+					Port:     8080,
+					NodePort: 8080,
+				},
+			},
+			ClusterIP: "10.0.0.1",
+		},
+	}
+	controller.OnAdd(&source)
+
+	controller.OnUpdate(&source, &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns1",
+			Name:      "service1",
+		},
+		Spec: v1.ServiceSpec{
+			Type: v1.ServiceTypeNodePort,
+			Ports: []v1.ServicePort{
+				{
+					Protocol: v1.ProtocolTCP,
+					Port:     9090,
+					NodePort: 9090,
+				},
+			},
+			ClusterIP: "10.0.0.2",
+		},
+	})
+
+	assert.EqualValues(t, client.exposed, []vpnkit.Port{
+		{
+			Proto:   vpnkit.TCP,
+			OutIP:   net.ParseIP("0.0.0.0"),
+			OutPort: 9090,
+			InIP:    net.ParseIP("10.0.0.2"),
+			InPort:  9090,
+		},
+	})
+}
+
 type mockVpnKitClient struct {
 	exposed []vpnkit.Port
 }
