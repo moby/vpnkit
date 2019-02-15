@@ -3,7 +3,6 @@
 ORG?=vpnkit
 IMAGE=vpnkit-forwarder
 DEPS_FORWARDER:=$(wildcard cmd/vpnkit-forwarder/*.go)
-DEPS_USERLAND_PROXY:=$(wildcard cmd/vpnkit-userland-proxy/*.go)
 DEPS_DIAL_EXAMPLE:=$(wildcard cmd/dial-example/*.go)
 DEPS_IPTABLES:=$(wildcard cmd/vpnkit-iptables-wrapper/*.go)
 DEPS_KUBE_FORWARDER:=$(wildcard cmd/kube-vpnkit-forwarder/*.go)
@@ -11,14 +10,14 @@ DEPS:=$(DEPS_IPTABLES) $(DEPS_FORWARDER)
 HASH?=$(shell git ls-tree HEAD -- ../$(notdir $(CURDIR)) | awk '{print $$3}')
 
 # This may fail when cross compiling as virtsock requires cgo
-all: build/vpnkit-iptables-wrapper.linux build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux build/vpnkit-userland-proxy.linux build/kube-vpnkit-forwarder.linux build/dial-example.linux
+all: build/vpnkit-iptables-wrapper.linux build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux build/kube-vpnkit-forwarder.linux build/dial-example.linux
 
 # Test
 test:
 	go test -v ./cmd/... ./pkg/...
 
 # Build in linux container
-build-in-container: build-forwarder-in-container build-expose-port-in-container build-vpnkit-userland-proxy-in-container build-kube-forwarder-in-container build-dial-example-in-container
+build-in-container: build-forwarder-in-container build-expose-port-in-container build-kube-forwarder-in-container build-dial-example-in-container
 
 build-forwarder-in-container: $(DEPS_FORWARDER)
 	docker build -t $(ORG)/vpnkit-forwarder:$(HASH) -f Dockerfile .
@@ -28,9 +27,6 @@ build-expose-port-in-container: $(DEPS)
 
 build-kube-forwarder-in-container: $(DEPS_KUBE_FORWARDER)
 	docker build -t $(ORG)/kube-vpnkit-forwarder:$(HASH) -f Dockerfile.kube-forwarder .
-
-build-vpnkit-userland-proxy-in-container: $(DEPS_USERLAND_PROXY)
-	docker build -t $(ORG)/vpnkit-userland-proxy:$(HASH) -f Dockerfile.userland-proxy .
 
 build-dial-example-in-container: $(DEPS_DIAL_EXAMPLE)
 	docker build -t $(ORG)/dial-example:$(HASH) -f Dockerfile.dial-example .
@@ -52,11 +48,6 @@ build/kube-vpnkit-forwarder.linux: $(DEPS_KUBE_FORWARDER)
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
 	go build -o $@ --ldflags '-s -w' --buildmode pie \
 	$(DEPS_KUBE_FORWARDER)
-
-build/vpnkit-userland-proxy.linux: $(DEPS_USERLAND_PROXY)
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-	go build -o $@ --ldflags '-s -w' --buildmode pie \
-	$(DEPS_USERLAND_PROXY)
 
 build/vpnkit-iptables-wrapper.linux: $(DEPS_IPTABLES)
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
