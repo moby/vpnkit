@@ -1,7 +1,7 @@
 package main
 
 /*
-Spawns vpnkit-userland-proxy instances for swarm ports by wrapping calls to iptables in the format:
+Spawns vpnkit-expose-port instances for swarm ports by wrapping calls to iptables in the format:
 
 --wait -t nat -I DOCKER-INGRESS -p tcp --dport 80 -j DNAT --to-destination 172.18.0.2:80
 --wait -t nat -D DOCKER-INGRESS -p tcp --dport 80 -j DNAT --to-destination 172.18.0.2:80
@@ -22,7 +22,7 @@ import (
 
 const iptablesPath = "/sbin/iptables"
 const configKey = "/var/config/vpnkit/native-port-forwarding"
-const vpnKitUserlandProxy = "vpnkit-userland-proxy" // must be in PATH
+const vpnKitExposePort = "vpnkit-expose-port" // must be in PATH
 const pidDir = "/var/run/service-port-opener"
 
 type exposedPort struct {
@@ -46,9 +46,9 @@ func pidFileName(port exposedPort) string {
 	return fmt.Sprintf("%s/%s.%s.%s.%s.pid", pidDir, port.proto, port.dport, port.ip, port.port)
 }
 
-// insert starts a vpnKitUserlandProxy process and writes the pid to a file in pidDir
-func insert(vpnKitUserlandProxy string, port exposedPort) error {
-	cmd := exec.Command(vpnKitUserlandProxy, "-proto", port.proto, "-container-ip", port.ip, "-container-port", port.port, "-host-ip", "0.0.0.0", "-host-port", port.dport, "-i", "-no-local-ip")
+// insert starts a vpnKitExposePort process and writes the pid to a file in pidDir
+func insert(vpnKitExposePort string, port exposedPort) error {
+	cmd := exec.Command(vpnKitExposePort, "-proto", port.proto, "-container-ip", port.ip, "-container-port", port.port, "-host-ip", "0.0.0.0", "-host-port", port.dport, "-i", "-no-local-ip")
 
 	if err := cmd.Start(); err != nil {
 		return err
@@ -63,7 +63,7 @@ func insert(vpnKitUserlandProxy string, port exposedPort) error {
 	return nil
 }
 
-// remove finds the corresponding pid file in pidDir and kills the vpnKitUserlandProxy process
+// remove finds the corresponding pid file in pidDir and kills the vpnKitExposePort process
 func remove(port exposedPort) error {
 	pidFile := pidFileName(port)
 
@@ -150,7 +150,7 @@ func matchStringArray(input []string, pattern []interface{}) error {
 
 func main() {
 	var err error
-	var vpnKitUserlandProxyPath string
+	var vpnKitExposePortPath string
 	var iptables string
 
 	if iptables, err = exec.LookPath(iptablesPath); err != nil {
@@ -158,7 +158,7 @@ func main() {
 	}
 
 	if !useNativePortForwarding() {
-		if vpnKitUserlandProxyPath, err = exec.LookPath(vpnKitUserlandProxy); err != nil {
+		if vpnKitExposePortPath, err = exec.LookPath(vpnKitExposePort); err != nil {
 			log.Fatalln(err)
 		}
 
@@ -188,7 +188,7 @@ func main() {
 			case "-D":
 				remove(port)
 			case "-I":
-				insert(vpnKitUserlandProxyPath, port)
+				insert(vpnKitExposePortPath, port)
 			}
 		} else {
 			// ignore errors here, just pass to iptables
