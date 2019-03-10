@@ -26,19 +26,19 @@ const (
 	CIDHost = 2
 )
 
-// VsockAddr represents the address of a vsock end point.
-type VsockAddr struct {
+// Addr represents the address of a vsock end point.
+type Addr struct {
 	CID  uint32
 	Port uint32
 }
 
-// Network returns the network type for a VsockAddr
-func (a VsockAddr) Network() string {
+// Network returns the network type for a Addr
+func (a Addr) Network() string {
 	return "vsock"
 }
 
-// String returns a string representation of a VsockAddr
-func (a VsockAddr) String() string {
+// String returns a string representation of a Addr
+func (a Addr) String() string {
 	return fmt.Sprintf("%08x.%08x", a.CID, a.Port)
 }
 
