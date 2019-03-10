@@ -6,8 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/signal"
-	"syscall"
 )
 
 var interactiveMode bool
@@ -73,13 +71,4 @@ func parseHostContainerAddrs() (host net.Addr, port int, container net.Addr, loc
 	}
 	localIP = !*noLocalIP
 	return host, port, container, localIP
-}
-
-func handleStopSignals() {
-	s := make(chan os.Signal, 10)
-	signal.Notify(s, os.Interrupt, syscall.SIGTERM, syscall.SIGSTOP)
-
-	for range s {
-		os.Exit(0)
-	}
 }
