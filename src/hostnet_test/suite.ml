@@ -28,94 +28,6 @@ let test_dhcp_query () =
   in
   run ~pcap:"test_dhcp_query.pcap" t
 
-let set_dns_policy ?builtin_names use_host =
-  Mclock.connect () >|= fun clock ->
-  Dns_policy.remove ~priority:3;
-  Dns_policy.add ~priority:3
-    ~config:(if use_host then `Host else Dns_policy.google_dns);
-  Slirp_stack.Debug.update_dns ?builtin_names clock
-
-let test_dns_query server use_host () =
-  let t _ stack =
-    set_dns_policy use_host >>= fun () ->
-    let resolver = DNS.create stack.Client.t in
-    DNS.gethostbyname ~server resolver "www.google.com" >|= function
-    | (_ :: _) as ips ->
-      Log.info (fun f -> f "www.google.com has IPs: %a" pp_ips ips);
-    | _ ->
-      Log.err (fun f -> f "Failed to lookup www.google.com");
-      failwith "Failed to lookup www.google.com"
-  in
-  run ~pcap:"test_dns_query.pcap" t
-
-let test_builtin_dns_query server use_host () =
-  let name = "experimental.host.name.localhost" in
-  let t _ stack =
-    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, Ipaddr.V4 (Ipaddr.V4.localhost) ] use_host
-    >>= fun () ->
-    let resolver = DNS.create stack.Client.t in
-    DNS.gethostbyname ~server resolver name >>= function
-    | (_ :: _) as ips ->
-      Log.info (fun f -> f "%s has IPs: %a" name pp_ips ips);
-      Lwt.return ()
-    | _ ->
-      Log.err (fun f -> f "Failed to lookup %s" name);
-      failwith ("Failed to lookup " ^ name)
-  in
-  run ~pcap:"test_builtin_dns_query.pcap" t
-
-let test_etc_hosts_query server use_host () =
-  let test_name = "vpnkit.is.cool.yes.really" in
-  let t _ stack =
-    set_dns_policy use_host >>= fun () ->
-    let resolver = DNS.create stack.Client.t in
-    DNS.gethostbyname ~server resolver test_name >>= function
-    | (_ :: _) as ips ->
-      Log.err (fun f ->
-          f "This test relies on the name %s not existing but it really \
-             has IPs: %a" test_name pp_ips ips);
-      Fmt.kstrf failwith "Test name %s really does exist" test_name
-    | _ ->
-      Hosts.etc_hosts := [
-        test_name, Ipaddr.V4 (Ipaddr.V4.localhost);
-      ];
-      DNS.gethostbyname ~server resolver test_name >|= function
-      | (_ :: _) as ips ->
-        Log.info (fun f -> f "Name %s has IPs: %a" test_name pp_ips ips);
-        Hosts.etc_hosts := []
-      | _ ->
-        Log.err (fun f -> f "Failed to lookup name from /etc/hosts");
-        Hosts.etc_hosts := [];
-        failwith "failed to lookup name from /etc/hosts"
-  in
-  run ~pcap:"test_etc_hosts_query.pcap" t
-
-let test_etc_hosts_priority server use_host () =
-  let name = "builtins.should.be.higher.priority" in
-  let builtin_ip = Ipaddr.of_string_exn "127.0.0.1" in
-  let hosts_ip = Ipaddr.of_string_exn "127.0.0.2" in
-  let t _ stack =
-    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, builtin_ip ] use_host
-    >>= fun () ->
-    Hosts.etc_hosts := [
-      name, hosts_ip;
-    ];
-    let resolver = DNS.create stack.Client.t in
-    DNS.gethostbyname ~server resolver name >>= function
-    | [ ip ] ->
-      Log.info (fun f -> f "%s has single IP: %a" name Ipaddr.pp_hum ip);
-      if Ipaddr.compare ip builtin_ip = 0
-      then Lwt.return ()
-      else failwith ("Builtin DNS names should have higher priority than /etc/hosts")
-    | (_ :: _) as ips ->
-      Log.info (fun f -> f "%s has IPs: %a" name pp_ips ips);
-      failwith ("Duplicate DNS names resolved for " ^ name);
-    | _ ->
-      Log.err (fun f -> f "Failed to lookup %s" name);
-      failwith ("Failed to lookup " ^ name)
-  in
-  run ~pcap:"test_etc_hosts_priority.pcap" t
-
 let test_max_connections () =
   let t _ stack =
     Lwt.finalize (fun () ->
@@ -373,21 +285,6 @@ let test_dhcp = [
   ["check that the DHCP server works", `Quick, test_dhcp_query];
 ]
 
-let test_dns use_host =
-  let prefix = if use_host then "Host resolver" else "DNS forwarder" in [
-    prefix ^ ": lookup ",
-    ["", `Quick, test_dns_query primary_dns_ip use_host];
-
-    prefix ^ ": builtins",
-    [ "", `Quick, test_builtin_dns_query primary_dns_ip use_host ];
-
-    prefix ^ ": _etc_hosts",
-    [ "", `Quick, test_etc_hosts_query primary_dns_ip use_host ];
-
-    prefix ^ ": _etc_hosts_priority",
-    [ "", `Quick, test_etc_hosts_priority primary_dns_ip use_host ];
-  ]
-
 let test_tcp = [
   "HTTP GET", [ "HTTP GET http://www.google.com/", `Quick, test_http_fetch ];
 
@@ -412,7 +309,7 @@ let test_tcp = [
 
 let tests =
   Hosts_test.tests @ Forwarding.tests @ test_dhcp
-  @ (test_dns true) @ (test_dns false)
+  @ Test_dns.suite
   @ test_tcp @ Test_nat.tests @ Test_http.tests @ Test_http.Exclude.tests
   @ Test_half_close.tests @ Test_ping.tests
   @ Test_bridge.tests @ Test_forward_protocol.suite
