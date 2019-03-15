@@ -20,16 +20,17 @@ let run_test ?(timeout=Duration.of_sec 60) t =
 
 let run ?timeout ~pcap t = run_test ?timeout (with_stack ~pcap t)
 
-let set_dns_policy ?builtin_names use_host =
+let default_upstream_dns = Dns_policy.google_dns
+
+let set_dns_policy ?builtin_names config =
   Mclock.connect () >|= fun clock ->
   Dns_policy.remove ~priority:3;
-  Dns_policy.add ~priority:3
-    ~config:(if use_host then `Host else Dns_policy.google_dns);
+  Dns_policy.add ~priority:3 ~config;
   Slirp_stack.Debug.update_dns ?builtin_names clock
 
-let test_dns_query server use_host () =
+let test_dns_query server config () =
   let t _ stack =
-    set_dns_policy use_host >>= fun () ->
+    set_dns_policy config >>= fun () ->
     let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver "www.google.com" >|= function
     | (_ :: _) as ips ->
@@ -40,10 +41,10 @@ let test_dns_query server use_host () =
   in
   run ~pcap:"test_dns_query.pcap" t
 
-let test_builtin_dns_query server use_host () =
+let test_builtin_dns_query server config () =
   let name = "experimental.host.name.localhost" in
   let t _ stack =
-    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, Ipaddr.V4 (Ipaddr.V4.localhost) ] use_host
+    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, Ipaddr.V4 (Ipaddr.V4.localhost) ] config
     >>= fun () ->
     let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver name >>= function
@@ -56,10 +57,10 @@ let test_builtin_dns_query server use_host () =
   in
   run ~pcap:"test_builtin_dns_query.pcap" t
 
-let test_etc_hosts_query server use_host () =
+let test_etc_hosts_query server config () =
   let test_name = "vpnkit.is.cool.yes.really" in
   let t _ stack =
-    set_dns_policy use_host >>= fun () ->
+    set_dns_policy config >>= fun () ->
     let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver test_name >>= function
     | (_ :: _) as ips ->
@@ -82,12 +83,12 @@ let test_etc_hosts_query server use_host () =
   in
   run ~pcap:"test_etc_hosts_query.pcap" t
 
-let test_etc_hosts_priority server use_host () =
+let test_etc_hosts_priority server config () =
   let name = "builtins.should.be.higher.priority" in
   let builtin_ip = Ipaddr.of_string_exn "127.0.0.1" in
   let hosts_ip = Ipaddr.of_string_exn "127.0.0.2" in
   let t _ stack =
-    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, builtin_ip ] use_host
+    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, builtin_ip ] config
     >>= fun () ->
     Hosts.etc_hosts := [
       name, hosts_ip;
@@ -108,19 +109,19 @@ let test_etc_hosts_priority server use_host () =
   in
   run ~pcap:"test_etc_hosts_priority.pcap" t
 
-let test_dns use_host =
-  let prefix = if use_host then "Host resolver" else "DNS forwarder" in [
+let test_dns config =
+  let prefix = Dns_policy.(Config.to_string @@ config ()) in [
     prefix ^ ": lookup ",
-    ["", `Quick, test_dns_query primary_dns_ip use_host];
+    ["", `Quick, test_dns_query primary_dns_ip config];
 
     prefix ^ ": builtins",
-    [ "", `Quick, test_builtin_dns_query primary_dns_ip use_host ];
+    [ "", `Quick, test_builtin_dns_query primary_dns_ip config ];
 
     prefix ^ ": _etc_hosts",
-    [ "", `Quick, test_etc_hosts_query primary_dns_ip use_host ];
+    [ "", `Quick, test_etc_hosts_query primary_dns_ip config ];
 
     prefix ^ ": _etc_hosts_priority",
-    [ "", `Quick, test_etc_hosts_priority primary_dns_ip use_host ];
+    [ "", `Quick, test_etc_hosts_priority primary_dns_ip config ];
   ]
 
 module Server = struct
@@ -148,11 +149,13 @@ let truncate_big_response () =
     let ip = Ipaddr.V4 Ipaddr.V4.localhost in
     Server.with_server ip
       (fun _port ->
+      set_dns_policy default_upstream_dns
+      >>= fun () ->
         Lwt.return_unit
       ) in
   run ~pcap:"truncate_big_response.pcap" t
 
-let suite = test_dns true @ (test_dns false) @ [
+let suite = test_dns `Host @ (test_dns default_upstream_dns) @ [
   "big UDP responses are truncated",
   [ "", `Quick, truncate_big_response ]
 ]
