@@ -123,4 +123,36 @@ let test_dns use_host =
     [ "", `Quick, test_etc_hosts_priority primary_dns_ip use_host ];
   ]
 
-let suite = test_dns true @ (test_dns false)
+module Server = struct
+  open Host.Sockets.Datagram
+  type t = {
+    ip: Ipaddr.t;
+    port: int;
+    server: Udp.server;
+  }
+  let with_server ip f =
+    Udp.bind ~description:"DNS server" (ip, 0)
+    >>= fun server ->
+    Udp.listen server
+      (fun _flow ->
+        Log.debug (fun f -> f "Received UDP datagram");
+        Lwt.return_unit
+      );
+    let _, realport = Udp.getsockname server in
+    let t = { ip; port = realport; server } in
+    Lwt.finalize (fun () -> f t.port) (fun () -> Udp.shutdown t.server)
+end
+
+let truncate_big_response () =
+  let t _ _stack =
+    let ip = Ipaddr.V4 Ipaddr.V4.localhost in
+    Server.with_server ip
+      (fun _port ->
+        Lwt.return_unit
+      ) in
+  run ~pcap:"truncate_big_response.pcap" t
+
+let suite = test_dns true @ (test_dns false) @ [
+  "big UDP responses are truncated",
+  [ "", `Quick, truncate_big_response ]
+]
