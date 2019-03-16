@@ -135,9 +135,48 @@ module Server = struct
     Udp.bind ~description:"DNS server" (ip, 0)
     >>= fun server ->
     Udp.listen server
-      (fun _flow ->
+      (fun flow ->
         Log.debug (fun f -> f "Received UDP datagram");
-        Lwt.return_unit
+	let open Dns.Packet in
+        Udp.read flow
+        >>= function
+        | Error _ ->
+          Log.err (fun f -> f "Udp.listen failed to read");
+          Lwt.return_unit
+        | Ok `Eof ->
+          Log.err (fun f -> f "Udp.read got EOF");
+          Lwt.return_unit
+        | Ok (`Data buf) ->
+          let len = Cstruct.len buf in
+          begin match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
+          | None ->
+            Log.err (fun f -> f "failed to parse DNS packet");
+            Lwt.return_unit
+          | Some ({ questions = [ _question ]; _ } as request) ->
+
+            let reply answers =
+              let id = request.id in
+              let detail =
+                { request.detail with Dns.Packet.qr = Dns.Packet.Response; ra = true }
+              in
+              let questions = request.questions in
+              let authorities = [] and additionals = [] in
+              { Dns.Packet.id; detail; questions; answers; authorities; additionals }
+            in
+            let answers = [] in
+            let buf = marshal @@ reply answers in
+            begin Udp.write flow buf
+            >>= function
+            | Ok () ->
+              Lwt.return_unit
+            | Error _ ->
+              Log.err (fun f -> f "Failed to send UDP response");
+              Lwt.return_unit
+            end
+          | Some _ ->
+            Log.info (fun f -> f "Dropping unexpected DNS request");
+            Lwt.return_unit
+          end
       );
     let _, realport = Udp.getsockname server in
     let t = { ip; port = realport; server } in
@@ -145,13 +184,27 @@ module Server = struct
 end
 
 let truncate_big_response () =
-  let t _ _stack =
+  let t _ stack =
     let ip = Ipaddr.V4 Ipaddr.V4.localhost in
     Server.with_server ip
-      (fun _port ->
-      set_dns_policy default_upstream_dns
-      >>= fun () ->
-        Lwt.return_unit
+      (fun port ->
+        let open Dns_forward.Config in
+        let servers = Server.Set.of_list [
+          { Server.address = { Address.ip; port };
+            zones = Domain.Set.empty;
+            timeout_ms = Some 2000; order = 0
+          }
+        ] in
+        let config = `Upstream { servers; search = []; assume_offline_after_drops = None } in
+        set_dns_policy config
+        >>= fun () ->
+        let resolver = DNS.create stack.Client.t in
+        DNS.gethostbyname ~server:primary_dns_ip resolver "very.big.name" >|= function
+        | (_ :: _) as ips ->
+          Log.info (fun f -> f "very.big.name has IPs: %a" pp_ips ips);
+        | _ ->
+          Log.err (fun f -> f "Failed to lookup very.big.name");
+          failwith "Failed to lookup very.big.name"
       ) in
   run ~pcap:"truncate_big_response.pcap" t
 
