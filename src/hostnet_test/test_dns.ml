@@ -131,7 +131,7 @@ module Server = struct
     port: int;
     server: Udp.server;
   }
-  let with_server ip f =
+  let with_server ip answers f =
     Udp.bind ~description:"DNS server" (ip, 0)
     >>= fun server ->
     Udp.listen server
@@ -163,8 +163,8 @@ module Server = struct
               let authorities = [] and additionals = [] in
               { Dns.Packet.id; detail; questions; answers; authorities; additionals }
             in
-            let answers = [] in
             let buf = marshal @@ reply answers in
+            Log.info (fun f -> f "DNS response is a UDP datagram of length %d" (Cstruct.len buf));
             begin Udp.write flow buf
             >>= function
             | Ok () ->
@@ -186,7 +186,11 @@ end
 let truncate_big_response () =
   let t _ stack =
     let ip = Ipaddr.V4 Ipaddr.V4.localhost in
-    Server.with_server ip
+    (* The DNS response will be over 512 bytes *)
+    let answers = Array.to_list @@ Array.make 64
+      { Dns.Packet.name = Dns.Name.of_string "anything"; cls = RR_IN;
+        flush = false; ttl = 0l; rdata = A Ipaddr.V4.localhost } in
+    Server.with_server ip answers
       (fun port ->
         let open Dns_forward.Config in
         let servers = Server.Set.of_list [
