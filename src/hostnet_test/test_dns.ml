@@ -24,9 +24,14 @@ let default_upstream_dns = Dns_policy.google_dns
 
 let set_dns_policy ?builtin_names config =
   Mclock.connect () >|= fun clock ->
-  Dns_policy.remove ~priority:3;
-  Dns_policy.add ~priority:3 ~config;
+  Dns_policy.remove ~priority:4;
+  Dns_policy.add ~priority:4 ~config;
   Slirp_stack.Debug.update_dns ?builtin_names clock
+
+let reset_dns_policy () =
+  Dns_policy.clear ();
+  Mclock.connect () >|= fun clock ->
+  Slirp_stack.Debug.update_dns clock
 
 let test_dns_query server config () =
   let t _ stack =
@@ -242,21 +247,25 @@ let truncate_big_response () =
         let config = `Upstream { servers; search = []; assume_offline_after_drops = None } in
         set_dns_policy config
         >>= fun () ->
-        udp_rpc client 1024 primary_dns_ip 53 (Dns.Packet.marshal @@ query_a "very.big.name")
-        >>= fun response ->
-        Log.err (fun f -> f "UDP response has length %d" (Cstruct.len response));
-        (* Manually parse the details field to look for the TC bit. The full parser will throw
-           an exception.
-           The header fields are:
-           - id: uint16
-           - detail: uint16 *)
-        Cstruct.hexdump response;
-        let detail = Cstruct.BE.get_uint16 response 2 in
-        let tc = (detail lsr 9 land 1) <> 0 in
-        if not tc then failwith "DNS packet does not have TC bit set";
-        Log.info (fun f -> f "DNS response has truncated bit set");
-        Lwt.return_unit
-      ) in
+        Lwt.finalize
+          (fun () ->
+            udp_rpc client 1024 primary_dns_ip 53 (Dns.Packet.marshal @@ query_a "very.big.name")
+            >>= fun response ->
+            Log.err (fun f -> f "UDP response has length %d" (Cstruct.len response));
+            (* Manually parse the details field to look for the TC bit. The full parser will throw
+              an exception.
+              The header fields are:
+              - id: uint16
+              - detail: uint16 *)
+            Cstruct.hexdump response;
+            let detail = Cstruct.BE.get_uint16 response 2 in
+            let tc = (detail lsr 9 land 1) <> 0 in
+            if not tc then failwith "DNS packet does not have TC bit set";
+            Log.info (fun f -> f "DNS response has truncated bit set");
+            Lwt.return_unit
+          ) reset_dns_policy
+      )
+      in
   run ~pcap:"truncate_big_response.pcap" t
 
 let suite = test_dns `Host @ (test_dns default_upstream_dns) @ [

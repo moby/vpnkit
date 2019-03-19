@@ -39,6 +39,8 @@ module Dns_policy = struct
 
   let t = ref (IntMap.add 0 google_dns IntMap.empty)
 
+  let clear () = t := (IntMap.add 0 google_dns IntMap.empty)
+
   let config () =
     snd @@ IntMap.max_binding !t
 
