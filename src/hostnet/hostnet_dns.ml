@@ -7,6 +7,9 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+(* Maximum size of a UDP DNS response before we must truncate *)
+let max_udp_response = 512
+
 module Config = struct
   type t = [
     | `Upstream of Dns_forward.Config.t
@@ -326,6 +329,24 @@ struct
       Log.info (fun f -> f "Will use the host's DNS resolver");
       Lwt.return { local_ip; builtin_names; resolver = Host }
 
+  let search f low high =
+    if not(f low)
+    then None (* none of the elements satisfy the predicate *)
+    else
+      let rec loop low high =
+        if low = high
+        then Some low
+        else
+          let mid = (low + high + 1) / 2 in
+          (* since low <> high, mid <> low but it might be mid = high *)
+          if f mid
+          then loop mid high
+          else
+            if mid = high
+            then Some low
+            else loop low mid in
+      loop low high
+
   let answer t is_tcp buf =
     let open Dns.Packet in
     let len = Cstruct.len buf in
@@ -333,10 +354,10 @@ struct
     | None ->
       Lwt.return (Error (`Msg "failed to parse DNS packet"))
     | Some ({ questions = [ question ]; _ } as request) ->
-      let reply answers =
+      let reply ~tc answers =
         let id = request.id in
         let detail =
-          { request.detail with Dns.Packet.qr = Dns.Packet.Response; ra = true }
+          { request.detail with Dns.Packet.qr = Dns.Packet.Response; ra = true; tc }
         in
         let questions = request.questions in
         let authorities = [] and additionals = [] in
@@ -354,31 +375,70 @@ struct
         { Dns.Packet.id; detail; questions; answers; authorities;
           additionals }
       in
+      let marshal_reply answers =
+        let buf = marshal @@ reply ~tc:false answers in
+        if is_tcp
+        then Some buf (* No need to truncate for TCP *)
+        else begin
+          (* If the packet is too big then set the TC bit and truncate by dropping answers *)
+          let take n from =
+            let rec loop n from acc = match n, from with
+              | 0, _ -> acc
+              | _, [] -> acc
+              | n, x :: xs -> loop (n - 1) xs (x :: acc) in
+            List.rev @@ loop n from [] in
+          if Cstruct.len buf > max_udp_response then begin
+            match search (fun num ->
+              (* use only the first 'num' answers *)
+              Cstruct.len (marshal @@ reply ~tc:true (take num answers)) <= max_udp_response
+            ) 0 (List.length answers) with
+            | None -> None
+            | Some num -> Some (marshal @@ reply ~tc:true (take num answers))
+          end
+          else Some buf
+        end in
       begin
         (* Consider the builtins (from the command-line) to have higher priority
            than the addresses in the /etc/hosts file. *)
         match try_builtins t.builtin_names question with
         | `Does_not_exist ->
-          Lwt.return (Ok (marshal nxdomain))
+          Lwt.return (Ok (Some (marshal nxdomain)))
         | `Answers answers ->
-          Lwt.return (Ok (marshal @@ reply answers))
+          Lwt.return (Ok (marshal_reply answers))
         | `Dont_know ->
           match try_etc_hosts question with
           | Some answers ->
-            Lwt.return (Ok (marshal @@ reply answers))
+            Lwt.return (Ok (marshal_reply answers))
           | None ->
             match is_tcp, t.resolver with
             | true, Upstream { dns_tcp_resolver; _ } ->
-              Dns_tcp_resolver.answer buf dns_tcp_resolver
+              begin
+                Dns_tcp_resolver.answer buf dns_tcp_resolver
+                >>= function
+                | Error e -> Lwt.return (Error e)
+                | Ok buf -> Lwt.return (Ok (Some buf))
+              end
             | false, Upstream { dns_udp_resolver; _ } ->
-              Dns_udp_resolver.answer buf dns_udp_resolver
+              begin
+                Dns_udp_resolver.answer buf dns_udp_resolver
+                >>= function
+                | Error e -> Lwt.return (Error e)
+                | Ok buf ->
+                  (* We need to parse and re-marshal so we can set the TC bit and truncate *)
+                  begin match Dns.Protocol.Server.parse buf with
+                  | None ->
+                    Lwt.return (Error (`Msg "Failed to unmarshal DNS response from upstream"))
+                  | Some { answers; _ } ->
+                    Lwt.return (Ok (marshal_reply answers))
+                  end
+              end
             | _, Host ->
               D.resolve question
               >>= function
               | [] ->
-                Lwt.return (Ok (marshal nxdomain))
+                Lwt.return (Ok (Some (marshal nxdomain)))
               | answers ->
-                Lwt.return (Ok (marshal @@ reply answers))
+                Lwt.return (Ok (marshal_reply answers))
       end
     | _ ->
       Lwt.return (Error (`Msg "DNS packet had multiple questions"))
@@ -395,7 +455,10 @@ struct
     | Error (`Msg m) ->
       Log.warn (fun f -> f "%s lookup failed: %s" (describe buf) m);
       Lwt.return (Ok ())
-    | Ok buffer ->
+    | Ok None ->
+      Log.err (fun f -> f "%s unable to marshal response" (describe buf));
+      Lwt.return (Ok ())
+    | Ok (Some buffer) ->
       Udp.write ~src_port:53 ~dst:src ~dst_port:src_port udp buffer
 
   let handle_tcp ~t =
@@ -414,7 +477,10 @@ struct
               | Error (`Msg m) ->
                 Log.warn (fun f -> f "%s lookup failed: %s" (describe request) m);
                 Lwt.return_unit
-              | Ok buffer ->
+              | Ok None ->
+                Log.err (fun f -> f "%s unable to marshal response to" (describe request));
+                Lwt.return_unit
+              | Ok (Some buffer) ->
                 Dns_tcp_framing.write packets buffer >>= function
                 | Error (`Msg m) ->
                   Log.warn (fun f ->
