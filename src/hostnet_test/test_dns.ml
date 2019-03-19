@@ -124,6 +124,7 @@ let test_dns config =
     [ "", `Quick, test_etc_hosts_priority primary_dns_ip config ];
   ]
 
+(* A real UDP server listening on a physical port *)
 module Server = struct
   open Host.Sockets.Datagram
   type t = {
@@ -137,7 +138,7 @@ module Server = struct
     Udp.listen server
       (fun flow ->
         Log.debug (fun f -> f "Received UDP datagram");
-	let open Dns.Packet in
+	      let open Dns.Packet in
         Udp.read flow
         >>= function
         | Error _ ->
@@ -183,8 +184,47 @@ module Server = struct
     Lwt.finalize (fun () -> f t.port) (fun () -> Udp.shutdown t.server)
 end
 
+let err_udp e = Fmt.kstrf failwith "%a" Client.UDPV4.pp_error e
+
+let udp_rpc client src_port dst dst_port buffer =
+  let udpv4 = Client.udpv4 client.Client.t in
+  let send_request () =
+    Client.UDPV4.write ~src_port ~dst ~dst_port udpv4 buffer
+    >>= function
+    | Error e -> err_udp e
+    | Ok ()   -> Lwt.return_unit in
+
+  let response = ref None in
+  Client.listen_udpv4 client.Client.t ~port:src_port (fun ~src:_ ~dst:_ ~src_port:remote_src_port buffer ->
+    Log.debug (fun f ->
+        f "Received UDP %d -> %d" remote_src_port src_port);
+    begin match !response with
+    | Some _ -> () (* drop duplicates *)
+    | None -> response := Some buffer
+    end;
+    Lwt.return_unit
+  );
+  let rec loop () =
+    send_request ()
+    >>= fun () ->
+    match !response with
+    | Some x -> Lwt.return x
+    | None ->
+      Host.Time.sleep_ns (Duration.of_sec 1)
+      >>= fun () ->
+      loop () in
+  loop ()
+
+let query_a name =
+  let open Dns.Packet in
+  let id = Random.int 0xffff in
+  let detail = { qr = Query; opcode = Standard; aa = false; tc = false; rd = true; ra = false; rcode = NoError } in
+  let questions = [ { q_name = Dns.Name.of_string name; q_type = Q_A; q_class = Q_IN; q_unicast = Q_Normal }] in
+  let answers = [] and authorities = [] and additionals = [] in
+  { id; detail; questions; answers; authorities; additionals }
+
 let truncate_big_response () =
-  let t _ stack =
+  let t _ client =
     let ip = Ipaddr.V4 Ipaddr.V4.localhost in
     (* The DNS response will be over 512 bytes *)
     let answers = Array.to_list @@ Array.make 64
@@ -202,13 +242,20 @@ let truncate_big_response () =
         let config = `Upstream { servers; search = []; assume_offline_after_drops = None } in
         set_dns_policy config
         >>= fun () ->
-        let resolver = DNS.create stack.Client.t in
-        DNS.gethostbyname ~server:primary_dns_ip resolver "very.big.name" >|= function
-        | (_ :: _) as ips ->
-          Log.info (fun f -> f "very.big.name has IPs: %a" pp_ips ips);
-        | _ ->
-          Log.err (fun f -> f "Failed to lookup very.big.name");
-          failwith "Failed to lookup very.big.name"
+        udp_rpc client 1024 primary_dns_ip 53 (Dns.Packet.marshal @@ query_a "very.big.name")
+        >>= fun response ->
+        Log.err (fun f -> f "UDP response has length %d" (Cstruct.len response));
+        (* Manually parse the details field to look for the TC bit. The full parser will throw
+           an exception.
+           The header fields are:
+           - id: uint16
+           - detail: uint16 *)
+        Cstruct.hexdump response;
+        let detail = Cstruct.BE.get_uint16 response 2 in
+        let tc = (detail lsr 9 land 1) <> 0 in
+        if not tc then failwith "DNS packet does not have TC bit set";
+        Log.info (fun f -> f "DNS response has truncated bit set");
+        Lwt.return_unit
       ) in
   run ~pcap:"truncate_big_response.pcap" t
 
