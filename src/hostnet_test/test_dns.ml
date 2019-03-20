@@ -252,17 +252,17 @@ let truncate_big_response () =
             udp_rpc client 1024 primary_dns_ip 53 (Dns.Packet.marshal @@ query_a "very.big.name")
             >>= fun response ->
             Log.err (fun f -> f "UDP response has length %d" (Cstruct.len response));
-            (* Manually parse the details field to look for the TC bit. The full parser will throw
-              an exception.
-              The header fields are:
-              - id: uint16
-              - detail: uint16 *)
-            Cstruct.hexdump response;
-            let detail = Cstruct.BE.get_uint16 response 2 in
-            let tc = (detail lsr 9 land 1) <> 0 in
-            if not tc then failwith "DNS packet does not have TC bit set";
-            Log.info (fun f -> f "DNS response has truncated bit set");
-            Lwt.return_unit
+            begin match Dns.Protocol.Server.parse response with
+            | None ->
+              failwith "failed to parse truncated DNS response"
+            | Some { Dns.Packet.detail = { tc = true; _ }; answers; _ } ->
+              Log.info (fun f -> f "DNS response has truncated bit set");
+              if List.length answers <> 29
+              then failwith (Printf.sprintf "expected 29 answers, got %d" (List.length answers));
+              Lwt.return_unit
+            | Some { Dns.Packet.detail = { tc = false; _ }; _ } ->
+              failwith "DNS response does not have truncated bit set"
+            end
           ) reset_dns_policy
       )
       in
