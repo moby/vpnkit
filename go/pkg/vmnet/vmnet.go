@@ -561,6 +561,16 @@ func (v *Vif) dhcp() (net.IP, error) {
 
 	ethernet := NewEthernetFrame(broadcastMAC, v.ClientMAC, 0x800)
 	ethernet.setData(ipv4.Bytes())
+	finished := false
+	go func() {
+		for !finished {
+			if err := v.Write(ethernet.Bytes()); err != nil {
+				panic(err)
+			}
+			time.Sleep(time.Second)
+		}
+	}()
+
 	for {
 		response, err := v.Read()
 		if err != nil {
@@ -600,6 +610,7 @@ func (v *Vif) dhcp() (net.IP, error) {
 		}
 		var ip net.IP
 		ip = udpv4.Data[16:20]
+		finished = true // will terminate sending goroutine
 		return ip, nil
 	}
 
