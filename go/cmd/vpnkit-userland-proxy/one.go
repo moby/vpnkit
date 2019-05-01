@@ -13,16 +13,23 @@ import (
 )
 
 func onePort() {
-	host, _, container, localIP := parseHostContainerAddrs()
+	host, _, container, localBind := parseHostContainerAddrs()
 
 	var ipP libproxy.Proxy
 	var err error
 
-	if localIP {
+	switch localBind {
+	case alwaysLocalBind:
 		ipP, err = listenInVM(host, container)
 		if err != nil {
 			sendError(err)
 		}
+	case bestEffortLocalBind:
+		ipP, err = listenInVM(host, container)
+		if err != nil {
+			log.Printf("ignoring the error binding %s in the VM", host)
+		}
+	case neverLocalBind:
 	}
 
 	ctl, err := exposePort(host, container)

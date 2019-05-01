@@ -43,9 +43,17 @@ var vSockUDPPortOffset = 0x20000
 
 // From docker/libnetwork/portmapper/proxy.go:
 
+type localBind int
+
+const (
+	bestEffortLocalBind = localBind(0)
+	alwaysLocalBind     = localBind(1)
+	neverLocalBind      = localBind(2)
+)
+
 // parseHostContainerAddrs parses the flags passed on reexec to create the TCP or UDP
 // net.Addrs to map the host and container ports
-func parseHostContainerAddrs() (host net.Addr, port int, container net.Addr, localIP bool) {
+func parseHostContainerAddrs() (host net.Addr, port int, container net.Addr, bind localBind) {
 	var (
 		proto         = flag.String("proto", "tcp", "proxy protocol")
 		hostIP        = flag.String("host-ip", "", "host ip")
@@ -53,10 +61,36 @@ func parseHostContainerAddrs() (host net.Addr, port int, container net.Addr, loc
 		containerIP   = flag.String("container-ip", "", "container ip")
 		containerPort = flag.Int("container-port", -1, "container port")
 		interactive   = flag.Bool("i", false, "print success/failure to stdout/stderr")
-		noLocalIP     = flag.Bool("no-local-ip", true, "bind only on the Host, not in the VM")
+		local         = flag.String("local-bind", "", "bind only on the Host, not in the VM (default: best-effort)")
 	)
-
+	localBind := bestEffortLocalBind // default
+	// Attempt to remain backwards compatible for existing scripts which have `-no-local-ip` as a flag.
+	// Note there are no existing scripts which attempt to provide a `true` or `false` argument.
+	var args []string
+	for _, arg := range os.Args {
+		if arg == "-no-local-ip" {
+			localBind = neverLocalBind
+			continue
+		}
+		args = append(args, arg)
+	}
+	os.Args = args
 	flag.Parse()
+
+	// Support -no-local-ip for backwards compatibility
+	switch *local {
+	case "":
+		// default from code above
+	case "best-effort":
+		localBind = bestEffortLocalBind
+	case "always":
+		localBind = alwaysLocalBind
+	case "never":
+		localBind = neverLocalBind
+	default:
+		log.Fatal("-local-bind argument must be 'best-effort' or 'always' or 'never'")
+	}
+
 	interactiveMode = *interactive
 
 	switch *proto {
@@ -71,8 +105,7 @@ func parseHostContainerAddrs() (host net.Addr, port int, container net.Addr, loc
 	default:
 		log.Fatalf("unsupported protocol %s", *proto)
 	}
-	localIP = !*noLocalIP
-	return host, port, container, localIP
+	return host, port, container, localBind
 }
 
 func handleStopSignals() {
