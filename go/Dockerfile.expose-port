@@ -1,13 +1,16 @@
-FROM linuxkit/alpine:630ee558e4869672fae230c78364e367b8ea67a9 AS mirror
+FROM linuxkit/alpine:3683c9a66cd4da40bd7d6c7da599b2dcd738b559 AS mirror
 
-RUN apk add --no-cache go musl-dev build-base
+RUN apk add --no-cache go musl-dev
 
-ADD . /go/src/github.com/moby/vpnkit/go
-WORKDIR /go/src/github.com/moby/vpnkit/go
+ENV GOPATH=/go PATH=$PATH:/go/bin
 
-RUN GOPATH=/go make test
-RUN GOPATH=/go make build/vpnkit-expose-port.linux build/vpnkit-iptables-wrapper.linux
+COPY . /go/src/github.com/moby/vpnkit/go
+RUN go-compile.sh /go/src/github.com/moby/vpnkit/go/cmd/vpnkit-expose-port
+RUN go-compile.sh /go/src/github.com/moby/vpnkit/go/cmd/vpnkit-iptables-wrapper
 
 FROM scratch
-COPY --from=mirror /go/src/github.com/moby/vpnkit/go/build/vpnkit-expose-port.linux /usr/local/bin/vpnkit-expose-port
-COPY --from=mirror /go/src/github.com/moby/vpnkit/go/build/vpnkit-iptables-wrapper.linux /usr/local/bin/vpnkit-iptables-wrapper
+ENTRYPOINT []
+CMD []
+WORKDIR /
+COPY --from=mirror /go/bin/vpnkit-expose-port /usr/bin/vpnkit-expose-port
+COPY --from=mirror /go/bin/vpnkit-iptables-wrapper /usr/bin/vpnkit-iptables-wrapper

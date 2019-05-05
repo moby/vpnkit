@@ -14,6 +14,11 @@ import (
 // Expose ports via the control interface
 
 func main() {
+	// Backwards compatibility mode with the 9P mounted filesystem
+	if _, err := os.Stat("/port/README"); err == nil {
+		onePort()
+		return
+	}
 	proto := flag.String("proto", "tcp", "proxy protocol (tcp/udp/unix)")
 	hostIP := flag.String("host-ip", "", "host ip")
 	hostPort := flag.Int("host-port", -1, "host port")
