@@ -32,227 +32,225 @@ int connect_sockaddr_hv(int fd, const struct sockaddr_hv *sa_hv) {
 int accept_hv(int fd, struct sockaddr_hv *sa_hv, socklen_t *sa_hv_len) {
     return accept4(fd, (struct sockaddr *)sa_hv, sa_hv_len, 0);
 }
-
-struct sockaddr_vsock {
-	sa_family_t svm_family;
-	unsigned short svm_reserved1;
-	unsigned int svm_port;
-	unsigned int svm_cid;
-	unsigned char svm_zero[sizeof(struct sockaddr) -
-		sizeof(sa_family_t) - sizeof(unsigned short) -
-		sizeof(unsigned int) - sizeof(unsigned int)];
-};
-int bind_sockaddr_vsock(int fd, const struct sockaddr_vsock *sa_vsock) {
-    return bind(fd, (const struct sockaddr*)sa_vsock, sizeof(*sa_vsock));
-}
-int connect_sockaddr_vsock(int fd, const struct sockaddr_vsock *sa_vsock) {
-    return connect(fd, (const struct sockaddr*)sa_vsock, sizeof(*sa_vsock));
-}
-int accept_vsock(int fd, struct sockaddr_vsock *sa_vsock, socklen_t *sa_vsock_len) {
-    return accept4(fd, (struct sockaddr *)sa_vsock, sa_vsock_len, 0);
-}
 */
 import "C"
 
 import (
-	"encoding/binary"
-	"errors"
 	"fmt"
+	"net"
 	"os"
 	"syscall"
 	"time"
 
-	"github.com/linuxkit/virtsock/pkg/vsock"
-)
-
-var (
-	legacyMode bool
+	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 )
 
 const (
-	sysAF_HYPERV     = 43
-	sysAF_VSOCK      = 40
-	sysSHV_PROTO_RAW = 1
-
-	guidTmpl = "00000000-facb-11e6-bd58-64006a7986d3"
+	hvsockAF  = 43 //SHV_PROTO_RAW
+	hvsockRaw = 1  // SHV_PROTO_RAW
 )
 
-type hvsockListener struct {
-	acceptFD int
-	laddr    HypervAddr
-}
-
-// Try to determine if we need to run in legacy mode.
-// 4.11 defines AF_SMC as 43 but it doesn't support protocol 1 so the
-// socket() call should fail.
-func init() {
-	fd, err := syscall.Socket(sysAF_HYPERV, syscall.SOCK_STREAM, sysSHV_PROTO_RAW)
+// Supported returns if hvsocks are supported on your platform
+func Supported() bool {
+	// Try opening  a hvsockAF socket. If it works we are on older, i.e. 4.9.x kernels.
+	// 4.11 defines AF_SMC as 43 but it doesn't support protocol 1 so the
+	// socket() call should fail.
+	fd, err := syscall.Socket(hvsockAF, syscall.SOCK_STREAM, hvsockRaw)
 	if err != nil {
-		legacyMode = false
-	} else {
-		legacyMode = true
-		syscall.Close(fd)
+		return false
 	}
+	syscall.Close(fd)
+	return true
+}
+
+// Dial a Hyper-V socket address
+func Dial(raddr Addr) (Conn, error) {
+	fd, err := syscall.Socket(hvsockAF, syscall.SOCK_STREAM, hvsockRaw)
+	if err != nil {
+		return nil, err
+	}
+
+	sa := C.struct_sockaddr_hv{}
+	sa.shv_family = hvsockAF
+	sa.reserved = 0
+
+	for i := 0; i < 16; i++ {
+		sa.shv_vm_id[i] = C.uchar(raddr.VMID[i])
+	}
+	for i := 0; i < 16; i++ {
+		sa.shv_service_id[i] = C.uchar(raddr.ServiceID[i])
+	}
+
+	// Retry connect in a loop if EINTR is encountered.
+	for {
+		if ret, errno := C.connect_sockaddr_hv(C.int(fd), &sa); ret != 0 {
+			if errno == syscall.EINTR {
+				continue
+			}
+			return nil, fmt.Errorf("connect(%s) failed with %d, errno=%d", raddr, ret, errno)
+		}
+		break
+	}
+
+	return newHVsockConn(uintptr(fd), &Addr{VMID: GUIDZero, ServiceID: GUIDZero}, &raddr), nil
+}
+
+// Listen returns a net.Listener which can accept connections on the given port
+func Listen(addr Addr) (net.Listener, error) {
+	fd, err := syscall.Socket(hvsockAF, syscall.SOCK_STREAM, hvsockRaw)
+	if err != nil {
+		return nil, err
+	}
+
+	sa := C.struct_sockaddr_hv{}
+	sa.shv_family = hvsockAF
+	sa.reserved = 0
+
+	for i := 0; i < 16; i++ {
+		sa.shv_vm_id[i] = C.uchar(addr.VMID[i])
+	}
+	for i := 0; i < 16; i++ {
+		sa.shv_service_id[i] = C.uchar(addr.ServiceID[i])
+	}
+
+	if ret, errno := C.bind_sockaddr_hv(C.int(fd), &sa); ret != 0 {
+		return nil, fmt.Errorf("listen(%s) failed with %d, errno=%d", addr, ret, errno)
+	}
+
+	err = syscall.Listen(fd, syscall.SOMAXCONN)
+	if err != nil {
+		return nil, errors.Wrapf(err, "listen(%s) failed", addr)
+	}
+	return &hvsockListener{fd, addr}, nil
 }
 
 //
-// System call wrapper
+// Hyper-v sockets Listener implementation
 //
-func hvsocket(typ, proto int) (int, error) {
-	if legacyMode {
-		return syscall.Socket(sysAF_HYPERV, typ, proto)
-	}
-	return syscall.Socket(sysAF_VSOCK, typ, 0)
+
+type hvsockListener struct {
+	fd    int
+	local Addr
 }
 
-func connect(s int, a *HypervAddr) (err error) {
-	if legacyMode {
-		sa := C.struct_sockaddr_hv{}
-		sa.shv_family = sysAF_HYPERV
-		sa.reserved = 0
-
-		for i := 0; i < 16; i++ {
-			sa.shv_vm_id[i] = C.uchar(a.VMID[i])
-		}
-		for i := 0; i < 16; i++ {
-			sa.shv_service_id[i] = C.uchar(a.ServiceID[i])
-		}
-
-		if ret, errno := C.connect_sockaddr_hv(C.int(s), &sa); ret != 0 {
-			return errors.New(fmt.Sprintf(
-				"connect(%s:%s) returned %d, errno %d: %s",
-				a.VMID, a.ServiceID, ret, errno, errno))
-		}
-		return nil
-	}
-
-	sa := C.struct_sockaddr_vsock{}
-	sa.svm_family = sysAF_VSOCK
-	sa.svm_port = C.uint(binary.LittleEndian.Uint32(a.ServiceID[0:4]))
-	// Ignore what's passed in. Use CIDAny as this is an accepted value
-	sa.svm_cid = C.uint(vsock.CIDAny)
-
-	if ret, errno := C.connect_sockaddr_vsock(C.int(s), &sa); ret != 0 {
-		return errors.New(fmt.Sprintf(
-			"connect(%08x.%08x) returned %d, errno %d: %s",
-			sa.svm_cid, sa.svm_port, ret, errno, errno))
-	}
-	return nil
-}
-
-func bind(s int, a HypervAddr) error {
-	if legacyMode {
-		sa := C.struct_sockaddr_hv{}
-		sa.shv_family = sysAF_HYPERV
-		sa.reserved = 0
-
-		for i := 0; i < 16; i++ {
-			sa.shv_vm_id[i] = C.uchar(GUIDZero[i])
-		}
-		for i := 0; i < 16; i++ {
-			sa.shv_service_id[i] = C.uchar(a.ServiceID[i])
-		}
-
-		if ret, errno := C.bind_sockaddr_hv(C.int(s), &sa); ret != 0 {
-			return errors.New(fmt.Sprintf(
-				"bind(%s:%s) returned %d, errno %d: %s",
-				GUIDZero, a.ServiceID, ret, errno, errno))
-		}
-		return nil
-	}
-
-	sa := C.struct_sockaddr_vsock{}
-	sa.svm_family = sysAF_VSOCK
-	sa.svm_port = C.uint(binary.LittleEndian.Uint32(a.ServiceID[0:4]))
-	// Ignore what's passed in. Use CIDAny as this is the only accepted value
-	sa.svm_cid = C.uint(vsock.CIDAny)
-
-	if ret, errno := C.bind_sockaddr_vsock(C.int(s), &sa); ret != 0 {
-		return errors.New(fmt.Sprintf(
-			"connect(%08x.%08x) returned %d, errno %d: %s",
-			sa.svm_cid, sa.svm_port, ret, errno, errno))
-	}
-	return nil
-}
-
-func accept(s int, a *HypervAddr) (int, error) {
-	if legacyMode {
-		var acceptSA C.struct_sockaddr_hv
-		var acceptSALen C.socklen_t
-
-		acceptSALen = C.sizeof_struct_sockaddr_hv
-		fd, err := C.accept_hv(C.int(s), &acceptSA, &acceptSALen)
-		if err != nil {
-			return -1, err
-		}
-
-		a.VMID = guidFromC(acceptSA.shv_vm_id)
-		a.ServiceID = guidFromC(acceptSA.shv_service_id)
-
-		return int(fd), nil
-	}
-
-	var acceptSA C.struct_sockaddr_vsock
+// Accept accepts an incoming call and returns the new connection.
+func (v *hvsockListener) Accept() (net.Conn, error) {
+	var acceptSA C.struct_sockaddr_hv
 	var acceptSALen C.socklen_t
 
-	acceptSALen = C.sizeof_struct_sockaddr_vsock
-	fd, err := C.accept_vsock(C.int(s), &acceptSA, &acceptSALen)
+	acceptSALen = C.sizeof_struct_sockaddr_hv
+	fd, err := C.accept_hv(C.int(v.fd), &acceptSA, &acceptSALen)
 	if err != nil {
-		return -1, err
+		return nil, errors.Wrapf(err, "accept(%s) failed", v.local)
 	}
 
-	a.VMID = GUIDParent
-	a.ServiceID, _ = GUIDFromString(guidTmpl)
-	tmp := make([]byte, 4)
-	binary.LittleEndian.PutUint32(tmp, uint32(acceptSA.svm_port))
-	a.ServiceID[0] = tmp[0]
-	a.ServiceID[1] = tmp[1]
-	a.ServiceID[2] = tmp[2]
-	a.ServiceID[3] = tmp[3]
-	return int(fd), nil
+	remote := &Addr{VMID: guidFromC(acceptSA.shv_vm_id), ServiceID: guidFromC(acceptSA.shv_service_id)}
+	return newHVsockConn(uintptr(fd), &v.local, remote), nil
 }
 
-// Internal representation. Complex mostly due to asynch send()/recv() syscalls.
+// Close closes the listening connection
+func (v *hvsockListener) Close() error {
+	// Note this won't cause the Accept to unblock.
+	return unix.Close(v.fd)
+}
+
+// Addr returns the address the Listener is listening on
+func (v *hvsockListener) Addr() net.Addr {
+	return v.local
+}
+
+//
+// Hyper-V socket connection implementation
+//
+
+// hvsockConn represents a connection over a Hyper-V socket
 type hvsockConn struct {
-	fd     int
 	hvsock *os.File
-	local  HypervAddr
-	remote HypervAddr
+	fd     uintptr
+	local  *Addr
+	remote *Addr
 }
 
-// Main constructor
-func newHVsockConn(fd int, local HypervAddr, remote HypervAddr) (*HVsockConn, error) {
-	hvsock := os.NewFile(uintptr(fd), fmt.Sprintf("hvsock:%d", fd))
-	v := &hvsockConn{fd: fd, hvsock: hvsock, local: local, remote: remote}
-
-	return &HVsockConn{hvsockConn: *v}, nil
+func newHVsockConn(fd uintptr, local, remote *Addr) *hvsockConn {
+	hvsock := os.NewFile(fd, fmt.Sprintf("hvsock:%d", fd))
+	return &hvsockConn{hvsock: hvsock, fd: fd, local: local, remote: remote}
 }
 
-func (v *HVsockConn) close() error {
+// LocalAddr returns the local address of a connection
+func (v *hvsockConn) LocalAddr() net.Addr {
+	return v.local
+}
+
+// RemoteAddr returns the remote address of a connection
+func (v *hvsockConn) RemoteAddr() net.Addr {
+	return v.remote
+}
+
+// Close closes the connection
+func (v *hvsockConn) Close() error {
 	return v.hvsock.Close()
 }
 
-func (v *HVsockConn) read(buf []byte) (int, error) {
+// CloseRead shuts down the reading side of a hvsock connection
+func (v *hvsockConn) CloseRead() error {
+	return syscall.Shutdown(int(v.fd), syscall.SHUT_RD)
+}
+
+// CloseWrite shuts down the writing side of a hvsock connection
+func (v *hvsockConn) CloseWrite() error {
+	return syscall.Shutdown(int(v.fd), syscall.SHUT_WR)
+}
+
+// Read reads data from the connection
+func (v *hvsockConn) Read(buf []byte) (int, error) {
 	return v.hvsock.Read(buf)
 }
 
-func (v *HVsockConn) write(buf []byte) (int, error) {
-	return v.hvsock.Write(buf)
+// Write writes data over the connection
+// TODO(rn): replace with a straight call to v.hvsock.Write() once 4.9.x support is deprecated
+func (v *hvsockConn) Write(buf []byte) (int, error) {
+	written := 0
+	toWrite := len(buf)
+	for toWrite > 0 {
+		thisBatch := min(toWrite, maxMsgSize)
+		n, err := v.hvsock.Write(buf[written : written+thisBatch])
+		if err != nil {
+			return written, err
+		}
+		if n != thisBatch {
+			return written, fmt.Errorf("short write %d != %d", n, thisBatch)
+		}
+		toWrite -= n
+		written += n
+	}
+
+	return written, nil
 }
 
-// SetReadDeadline is un-implemented
-func (v *HVsockConn) SetReadDeadline(t time.Time) error {
+// SetDeadline sets the read and write deadlines associated with the connection
+func (v *hvsockConn) SetDeadline(t time.Time) error {
 	return nil // FIXME
 }
 
-// SetWriteDeadline is un-implemented
-func (v *HVsockConn) SetWriteDeadline(t time.Time) error {
+// SetReadDeadline sets the deadline for future Read calls.
+func (v *hvsockConn) SetReadDeadline(t time.Time) error {
 	return nil // FIXME
 }
 
-// SetDeadline is un-implemented
-func (v *HVsockConn) SetDeadline(t time.Time) error {
+// SetWriteDeadline sets the deadline for future Write calls
+func (v *hvsockConn) SetWriteDeadline(t time.Time) error {
 	return nil // FIXME
+}
+
+// File duplicates the underlying socket descriptor and returns it.
+func (v *hvsockConn) File() (*os.File, error) {
+	// This is equivalent to dup(2) but creates the new fd with CLOEXEC already set.
+	r0, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, uintptr(v.hvsock.Fd()), syscall.F_DUPFD_CLOEXEC, 0)
+	if e1 != 0 {
+		return nil, os.NewSyscallError("fcntl", e1)
+	}
+	return os.NewFile(r0, v.hvsock.Name()), nil
 }
 
 func guidFromC(cg [16]C.uchar) GUID {

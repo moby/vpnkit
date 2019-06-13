@@ -1,3 +1,6 @@
+### v0.4.0 (unreleased)
+* allow longer paths when forwarding Unix domain sockets
+
 ### v0.3.0 (2019-02-06)
 
 * support multiplexing forwarded connections along one Hyper-V socket connection
