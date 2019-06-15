@@ -368,7 +368,7 @@ func readAndSha(t *testing.T, r Conn) chan string {
 	return result
 }
 
-func muxReadWrite(t *testing.T, local, remote *Multiplexer, toWriteClient, toWriteServer int) {
+func muxReadWrite(t *testing.T, local, remote Multiplexer, toWriteClient, toWriteServer int) {
 	client, err := local.Dial(Destination{
 		Proto: TCP,
 		IP:    net.ParseIP("127.0.0.1"),
@@ -535,7 +535,7 @@ func TestMuxConcurrent(t *testing.T) {
 	}
 }
 
-func writeAndBlock(t *testing.T, local, remote *Multiplexer) chan error {
+func writeAndBlock(t *testing.T, local, remote Multiplexer) chan error {
 	client, err := local.Dial(Destination{
 		Proto: TCP,
 		IP:    net.ParseIP("127.0.0.1"),

@@ -28,21 +28,14 @@ const (
 
 // Port describes a UDP, TCP port forward or a Unix domain socket forward.
 type Port struct {
-	// Proto is the protocol used by the exposed port.
-	Proto Protocol
-	// OutIP is the external IP address.
-	OutIP net.IP
-	// OutPort is the external port number.
-	OutPort uint16
-	// OutPath is the external Unix domain socket.
-	OutPath string
-	// InIP is the internal IP address.
-	InIP net.IP
-	// InPort is the internal port number.
-	InPort uint16
-	// InPath is the internal Unix domain socket.
-	InPath string
-	handle *datakit.File
+	Proto   Protocol `json:"proto"`    // Proto is the protocol used by the exposed port.
+	OutIP   net.IP   `json:"out_ip"`   // OutIP is the external IP address.
+	OutPort uint16   `json:"out_port"` // OutPort is the external port number.
+	OutPath string   `json:"out_path"` // OutPath is the external Unix domain socket.
+	InIP    net.IP   `json:"in_ip"`    // InIP is the internal IP address.
+	InPort  uint16   `json:"in_port"`  // InPort is the internal port number.
+	InPath  string   `json:"in_path"`  // InPath is the internal Unix domain socket.
+	handle  *datakit.File
 }
 
 // NewPort constructs an instance of a TCP or UDP Port

@@ -2,74 +2,61 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"io"
 	"log"
-	"net"
+	"os"
+	"os/signal"
 
-	"github.com/linuxkit/virtsock/pkg/hvsock"
-	"github.com/linuxkit/virtsock/pkg/vsock"
-	"github.com/moby/vpnkit/go/pkg/libproxy"
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/control"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
+)
+
+var (
+	controlVsock string
+	controlPipe  string
+	dataListen   string
+	dataConnect  string
+	debug        bool
 )
 
 // Listen on either AF_VSOCK or AF_HVSOCK (depending on the kernel) for multiplexed connections
 func main() {
-	var (
-		port     int
-		listener net.Listener
-	)
-	flag.IntVar(&port, "port", 0, "AF_VSOCK port")
+	flag.StringVar(&controlVsock, "control-vsock", "", "AF_VSOCK port to listen for control connections on")
+	flag.StringVar(&controlPipe, "control-pipe", "", "Unix domain socket or Windows named pipe to listen for control connections on")
+	flag.StringVar(&dataListen, "data-listen", "", "AF_VSOCK port to listen for data connections on")
+	flag.StringVar(&dataConnect, "data-connect", "", "AF_VSOCK port to connect to on the host for data connections")
+	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 	flag.Parse()
 
+	// vpnkit-forwarder --control-vsock --control-pipe --data-listen --data-connect
 	quit := make(chan struct{})
 	defer close(quit)
 
-	if HvsockSupported() {
-		listener = hyperVListener(port)
-	} else {
-		listener = vsockListener(port)
-	}
-
-	for {
-		conn, err := listener.Accept()
+	ctrl := control.Make()
+	if controlVsock != "" {
+		t := transport.NewVsockTransport()
+		s, err := vpnkit.NewServer(controlVsock, t, ctrl)
 		if err != nil {
-			log.Printf("Error accepting connection: %v", err)
-			return // no more listening
+			log.Fatalf("unable to create a control server on AF_VSOCK port %s: %s", controlVsock, err)
 		}
-		go handleConn(conn, quit)
+		s.Start()
 	}
-}
-
-func hyperVListener(port int) net.Listener {
-	serviceID := fmt.Sprintf("%08x-FACB-11E6-BD58-64006A7986D3", port)
-	svcid, _ := hvsock.GUIDFromString(serviceID)
-	l, err := hvsock.Listen(hvsock.Addr{VMID: hvsock.GUIDWildcard, ServiceID: svcid})
-	if err != nil {
-		log.Fatalf("Failed to bind AF_HVSOCK guid: %s: %v", serviceID, err)
-	}
-	return l
-}
-
-func vsockListener(port int) net.Listener {
-	l, err := vsock.Listen(vsock.CIDAny, uint32(port))
-	if err != nil {
-		log.Fatalf("Failed to bind to AF_VSOCK port %d: %v", port, err)
-	}
-	return l
-}
-
-// handle every AF_VSOCK connection to the multiplexer
-func handleConn(rw io.ReadWriteCloser, quit chan struct{}) {
-	defer rw.Close()
-
-	mux := libproxy.NewMultiplexer("local", rw)
-	mux.Run()
-	for {
-		conn, destination, err := mux.Accept()
+	if controlPipe != "" {
+		t := transport.NewUnixTransport()
+		s, err := vpnkit.NewServer(controlPipe, t, ctrl)
 		if err != nil {
-			log.Printf("Error accepting subconnection: %v", err)
-			return
+			log.Fatalf("unable to create a control server on Pipe %s: %s", controlPipe, err)
 		}
-		go libproxy.Forward(conn, *destination, quit)
+		s.Start()
 	}
+	if dataListen != "" {
+		go ctrl.Listen(dataListen, quit)
+	}
+	if dataConnect != "" {
+		go ctrl.Connect(dataConnect, quit)
+	}
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	<-c
+	log.Println("Interrupt received, shutting down")
 }
