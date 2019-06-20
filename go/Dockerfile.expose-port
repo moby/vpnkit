@@ -5,7 +5,7 @@ RUN apk add --no-cache go musl-dev
 ENV GOPATH=/go PATH=$PATH:/go/bin
 
 COPY . /go/src/github.com/moby/vpnkit/go
-RUN go-compile.sh /go/src/github.com/moby/vpnkit/go/cmd/vpnkit-expose-port
+RUN REQUIRE_CGO=1 go-compile.sh /go/src/github.com/moby/vpnkit/go/cmd/vpnkit-expose-port
 RUN go-compile.sh /go/src/github.com/moby/vpnkit/go/cmd/vpnkit-iptables-wrapper
 
 FROM scratch
