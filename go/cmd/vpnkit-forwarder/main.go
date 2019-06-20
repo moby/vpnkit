@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -24,7 +25,7 @@ func main() {
 	flag.StringVar(&controlVsock, "control-vsock", "", "AF_VSOCK port to listen for control connections on")
 	flag.StringVar(&controlPipe, "control-pipe", "", "Unix domain socket or Windows named pipe to listen for control connections on")
 	flag.StringVar(&dataListen, "data-listen", "", "AF_VSOCK port to listen for data connections on")
-	flag.StringVar(&dataConnect, "data-connect", "", "AF_VSOCK port to connect to on the host for data connections")
+	flag.StringVar(&dataConnect, "data-connect", fmt.Sprintf("%d", vpnkit.DefaultDataVsock), "AF_VSOCK port to connect to on the host for data connections")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 	flag.Parse()
 
@@ -33,14 +34,15 @@ func main() {
 	defer close(quit)
 
 	ctrl := control.Make()
-	if controlVsock != "" {
-		t := transport.NewVsockTransport()
-		s, err := vpnkit.NewServer(controlVsock, t, ctrl)
-		if err != nil {
-			log.Fatalf("unable to create a control server on AF_VSOCK port %s: %s", controlVsock, err)
-		}
-		s.Start()
+	if controlVsock == "" {
+		controlVsock = fmt.Sprintf("%d", vpnkit.DefaultControlVsock)
 	}
+	t := transport.NewVsockTransport()
+	s, err := vpnkit.NewServer(controlVsock, t, ctrl)
+	if err != nil {
+		log.Fatalf("unable to create a control server on AF_VSOCK port %s: %s", controlVsock, err)
+	}
+	s.Start()
 	if controlPipe != "" {
 		t := transport.NewUnixTransport()
 		s, err := vpnkit.NewServer(controlPipe, t, ctrl)

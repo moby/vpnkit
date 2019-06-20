@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
+	"fmt"
+	"github.com/pkg/errors"
 	"log"
 	"net"
 	"os"
@@ -22,13 +23,15 @@ var (
 )
 
 func connectClient() (vpnkit.Client, error) {
-	if controlVsock != "" {
-		t := transport.NewVsockTransport()
-		return vpnkit.NewClient(t, controlVsock)
-	}
 	if controlPipe != "" {
 		t := transport.NewUnixTransport()
 		return vpnkit.NewClient(t, controlPipe)
+	}
+
+	if controlVsock != "" {
+		t := transport.NewVsockTransport()
+		return vpnkit.NewClient(t, controlVsock)
+
 	}
 	return nil, errors.New("Please supply either -control-vsock or -control-pipe arguments")
 }
@@ -43,8 +46,8 @@ func main() {
 	containerPath := flag.String("container-path", "", "container path to forward to")
 	local := flag.String("local-bind", "", "bind only on the Host, not in the VM (default: best-effort)")
 
-	flag.StringVar(&controlVsock, "control-vsock", "", "AF_VSOCK port to listen for control connections on")
-	flag.StringVar(&controlPipe, "control-pipe", "", "Unix domain socket or Windows named pipe to listen for control connections on")
+	flag.StringVar(&controlVsock, "control-vsock", fmt.Sprintf("%d", vpnkit.DefaultControlVsock), "AF_VSOCK port to connect to the Host control-plane")
+	flag.StringVar(&controlPipe, "control-pipe", "", "Unix domain socket or Windows named pipe to connect to the Host control-plane")
 
 	localBind := bestEffortLocalBind // default
 	// Attempt to remain backwards compatible for existing scripts which have `-no-local-ip` as a flag.
