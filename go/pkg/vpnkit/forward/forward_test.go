@@ -156,6 +156,56 @@ func TestUnixForward(t *testing.T) {
 	f.Stop()
 }
 
+func TestUnixForwardAlreadyExists(t *testing.T) {
+	ctrl := &mockControl{}
+	mux := &mockMux{}
+	ctrl.SetMux(mux)
+	outPath := "/tmp/outpath.sock"
+	inPath := "/tmp/inpath.sock"
+	file, err := os.Create(outPath)
+	assert.Nil(t, err)
+	assert.Nil(t, file.Close())
+	defer os.Remove(outPath)
+	port := vpnkit.Port{
+		OutPath: outPath,
+		InPath:  inPath,
+		Proto:   vpnkit.Unix,
+	}
+	_, err = Make(ctrl, port)
+	assert.NotNil(t, err)
+}
+
+func TestUnixForwardAlreadyExists2(t *testing.T) {
+	ctrl := &mockControl{}
+	mux := &mockMux{}
+	ctrl.SetMux(mux)
+	outPath := "/tmp/outpath.sock"
+	inPath := "/tmp/inpath.sock"
+	if err := os.Remove(outPath); err != nil {
+		assert.Equal(t, true, os.IsNotExist(err))
+	}
+	l, err := net.Listen("unix", outPath)
+	if l != nil {
+		assert.Nil(t, l.Close())
+	}
+	port := vpnkit.Port{
+		OutPath: outPath,
+		InPath:  inPath,
+		Proto:   vpnkit.Unix,
+	}
+	f, err := Make(ctrl, port)
+	assert.Nil(t, err)
+	a, err := net.Dial("unix", outPath)
+	assert.Nil(t, err)
+	defer a.Close()
+	f.Run() // will fail because Dial fails
+	assert.Equal(t, &libproxy.Destination{
+		Proto: libproxy.Unix,
+		Path:  inPath,
+	}, mux.dialed)
+	f.Stop()
+}
+
 // do the same with Unix and UDP
 
 func TestAddressInUse(t *testing.T) {
