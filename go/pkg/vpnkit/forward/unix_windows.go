@@ -1,12 +1,49 @@
 package forward
 
 import (
-	"strings"
+	"errors"
+	"net"
+
+	"github.com/Microsoft/go-winio"
+	"github.com/moby/vpnkit/go/pkg/libproxy"
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
 )
 
+type unixNetwork struct{}
 
-// isSaveToRemove returns true if the path references a Unix domain socket or named pipe
-// or if the path doesn't exist at all
-func isSafeToRemove(path string) bool {
-	return strings.HasPrefix(`\\.\pipe\`, path)
+func (t *unixNetwork) listen(port vpnkit.Port) (listener, error) {
+	l, err := winio.ListenPipe(port.OutPath, &winio.PipeConfig{
+		MessageMode:      true,  // Use message mode so that CloseWrite() is supported
+		InputBufferSize:  65536, // Use 64KB buffers to improve performance
+		OutputBufferSize: 65536,
+	})
+	if err != nil {
+		return nil, err
+	}
+	wrapped := unixListener{l}
+	return &wrapped, nil
+}
+
+type unixListener struct {
+	l net.Listener
+}
+
+func (l unixListener) accept() (libproxy.Conn, error) {
+	c, err := l.l.Accept()
+	if err != nil {
+		return nil, err
+	}
+	conn, ok := c.(libproxy.Conn)
+	if !ok {
+		return nil, errors.New("Named pipe connection does not support WriteClose")
+	}
+	return conn, nil
+}
+
+func (l unixListener) close() error {
+	return l.l.Close()
+}
+
+func makeUnix(c common) (Forward, error) {
+	return makeStream(c, &unixNetwork{})
 }
