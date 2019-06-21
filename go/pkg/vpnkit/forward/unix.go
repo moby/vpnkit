@@ -35,20 +35,20 @@ func (t *unixNetwork) listen(port vpnkit.Port) (listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	wrapped := unixListener(*l)
+	wrapped := unixListener{l}
 	return &wrapped, nil
 }
 
-type unixListener net.UnixListener
+type unixListener struct {
+	l *net.UnixListener
+}
 
 func (l unixListener) accept() (libproxy.Conn, error) {
-	t := net.UnixListener(l)
-	return t.AcceptUnix()
+	return l.l.AcceptUnix()
 }
 
 func (l unixListener) close() error {
-	t := net.UnixListener(l)
-	return t.Close()
+	return l.l.Close()
 }
 
 func makeUnix(c common) (Forward, error) {
