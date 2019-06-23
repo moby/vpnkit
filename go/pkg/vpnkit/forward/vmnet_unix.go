@@ -208,9 +208,9 @@ func readResult(conn *net.UnixConn) (uintptr, error) {
 		}
 		return uintptr(fds[0]), nil
 	case 48:
-		return 0, errors.New("EADDRINUSE")
+		return 0, errors.New("port is already allocated.")
 	case 49:
-		return 0, errors.New("EADDRNOTAVAIL")
+		return 0, errors.New("bind: cannot assign requested address.")
 	case 1:
 		return 0, errors.New("command failed")
 	default:
