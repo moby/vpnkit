@@ -1,19 +1,14 @@
 package forward
 
 import (
-	"log"
-	"net"
-
 	"github.com/moby/vpnkit/go/pkg/libproxy"
+	"log"
 )
 
 // Listen on UDP sockets and forward to a remote multiplexer.
 
 func makeUDP(c common) (*udp, error) {
-	l, err := net.ListenUDP("udp", &net.UDPAddr{
-		IP:   c.port.OutIP,
-		Port: int(c.port.OutPort),
-	})
+	l, err := listenUDP(c.Port())
 	if err != nil {
 		return nil, err
 	}

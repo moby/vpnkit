@@ -12,10 +12,7 @@ import (
 type tcpNetwork struct{}
 
 func (t *tcpNetwork) listen(port vpnkit.Port) (listener, error) {
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{
-		IP:   port.OutIP,
-		Port: int(port.OutPort),
-	})
+	l, err := listenTCP(port)
 	if err != nil {
 		return nil, err
 	}
