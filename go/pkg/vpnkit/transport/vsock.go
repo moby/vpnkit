@@ -31,10 +31,11 @@ type hvs struct {
 }
 
 func (_ *hvs) Dial(_ context.Context, path string) (net.Conn, error) {
-	// There are 2 problems here:
-	// 1. We don't know which VM to connect to
-	// 2. Connections to the VM during boot can crash Linux
-	return nil, errors.New("AF_HVSOCK Dial unimplemented on Windows. Please connect from the VM to the Host instead.")
+	svcid, err := parseGUID(path)
+	if err != nil {
+		return nil, err
+	}
+	return hvsock.Dial(hvsock.HypervAddr{VMID: hvsock.GUIDParent, ServiceID: svcid})
 }
 
 func (_ *hvs) Listen(path string) (net.Listener, error) {
