@@ -21,7 +21,8 @@ var (
 	controlVsock string
 	controlPipe  string
 
-	debug bool
+	debug       bool
+	interactive bool
 )
 
 func connectClient() (vpnkit.Client, error) {
@@ -48,6 +49,7 @@ func main() {
 	containerPath := flag.String("container-path", "", "container path to forward to")
 	local := flag.String("local-bind", "", "bind only on the Host, not in the VM (default: best-effort)")
 	flag.BoolVar(&debug, "debug", false, "debug interaction with docker")
+	flag.BoolVar(&interactive, "i", false, "print success/failure to stdout/stderr")
 
 	flag.StringVar(&controlVsock, "control-vsock", fmt.Sprintf("%d", vpnkit.DefaultControlVsock), "AF_VSOCK port to connect to the Host control-plane")
 	flag.StringVar(&controlPipe, "control-pipe", "", "Unix domain socket or Windows named pipe to connect to the Host control-plane")

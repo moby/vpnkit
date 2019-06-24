@@ -20,7 +20,7 @@ func sendError(err error) {
 		fmt.Printf("Sending to fd 3:\n1\n%s", err)
 		os.Exit(1)
 	}
-	if isOnTerminal() {
+	if isOnTerminal() || interactive {
 		log.Fatal("Failed to set up proxy", err)
 	}
 	f := os.NewFile(3, "signal-parent")
@@ -36,7 +36,7 @@ func sendOK() {
 		fmt.Printf("sending to fd 3:\n0\n")
 		return
 	}
-	if isOnTerminal() {
+	if isOnTerminal() || interactive {
 		log.Println("Proxy running")
 		return
 	}
