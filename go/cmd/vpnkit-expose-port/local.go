@@ -7,7 +7,7 @@ import (
 	"syscall"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
-	vpnkit "github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
 )
 
 type localBind int
@@ -26,11 +26,19 @@ func maybeLocalBind(port vpnkit.Port, localBind localBind) {
 			sendError(err)
 			// never get here
 		}
+		if ipP == nil {
+			log.Printf("address only exists on the host: not binding inside the VM")
+			return
+		}
 		go ipP.Run()
 	case bestEffortLocalBind:
 		ipP, err := listenInVM(port)
 		if err != nil {
 			log.Printf("ignoring the error binding in the VM for %s", port.String())
+			return
+		}
+		if ipP == nil {
+			log.Printf("address only exists on the host: not binding inside the VM")
 			return
 		}
 		go ipP.Run()
