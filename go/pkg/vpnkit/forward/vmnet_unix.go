@@ -9,9 +9,14 @@ import (
 	"io"
 	"net"
 	"syscall"
+	"time"
 )
 
 func listenTCPVmnet(IP net.IP, Port uint16) (*net.TCPListener, error) {
+	// I don't think it's possible to make a net.TCPListener from a raw file descriptor
+	// so we use a hack: we create a net.TCPListener listening on a random port and then
+	// use the `SyscallConn` low-level interface to replace the file descriptor with a
+	// clone of the one which is listening on the privileged port.
 	l, err := net.ListenTCP("tcp", &net.TCPAddr{
 		IP:   IP,
 		Port: 0,
@@ -30,12 +35,40 @@ func listenTCPVmnet(IP net.IP, Port uint16) (*net.TCPListener, error) {
 		_ = l.Close()
 		return nil, err
 	}
+	// Unfortunately setting non-blocking mode seems to break I/O in interesting ways,
+	// we we have to leave it in blocking mode. Unfortunately this makes `Close` more complicated,
+	// see below.
 	if err := switchFDs(raw, newFD); err != nil {
 		_ = l.Close()
 		_ = syscall.Close(int(newFD))
 		return nil, err
 	}
+	_ = syscall.Close(int(newFD))
 	return l, err
+}
+
+
+func closeTCPVmnet(IP net.IP, Port uint16, l *net.TCPListener) error {
+	errCh := make(chan error)
+	go func(){
+		errCh <- l.Close()
+	} ()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		conn, _ := net.DialTCP("tcp", nil, &net.TCPAddr{
+			IP: IP,
+			Port: int(Port),
+		})
+		if conn != nil {
+			conn.Close()
+		}
+		select {
+		case err := <- errCh:
+			return err
+		case <- ticker.C:
+		}
+	}
 }
 
 func listenUDPVmnet(IP net.IP, Port uint16) (*net.UDPConn, error) {
@@ -57,11 +90,19 @@ func listenUDPVmnet(IP net.IP, Port uint16) (*net.UDPConn, error) {
 		_ = l.Close()
 		return nil, err
 	}
+
+	if err := syscall.SetNonblock(int(newFD), true); err != nil {
+		_ = l.Close()
+		_ = syscall.Close(int(newFD))
+		return nil, err
+	}
+
 	if err := switchFDs(raw, newFD); err != nil {
 		_ = l.Close()
 		_ = syscall.Close(int(newFD))
 		return nil, err
 	}
+	_ = syscall.Close(int(newFD))
 	return l, err
 }
 

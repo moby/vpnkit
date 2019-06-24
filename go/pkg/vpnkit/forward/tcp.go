@@ -16,20 +16,24 @@ func (t *tcpNetwork) listen(port vpnkit.Port) (listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	wrapped := tcpListener(*l)
-	return &wrapped, nil
+	wrapped := &tcpListener{
+		l : l,
+		port: port,
+	}
+	return wrapped, nil
 }
 
-type tcpListener net.TCPListener
-
-func (l tcpListener) accept() (libproxy.Conn, error) {
-	t := net.TCPListener(l)
-	return t.AcceptTCP()
+type tcpListener struct {
+	l *net.TCPListener
+	port vpnkit.Port
 }
 
-func (l tcpListener) close() error {
-	t := net.TCPListener(l)
-	return t.Close()
+func (l *tcpListener) accept() (libproxy.Conn, error) {
+	return l.l.AcceptTCP()
+}
+
+func (l *tcpListener) close() error {
+	return closeTCP(l.port, l.l)
 }
 
 func makeTCP(c common) (Forward, error) {

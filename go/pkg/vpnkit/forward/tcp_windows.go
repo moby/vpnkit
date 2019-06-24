@@ -11,3 +11,7 @@ func listenTCP(port vpnkit.Port) (*net.TCPListener, error) {
 		Port: int(port.OutPort),
 	})
 }
+
+func closeTCP(port vpnkit.Port, l *net.TCPListener) error {
+	return l.Close()
+}
