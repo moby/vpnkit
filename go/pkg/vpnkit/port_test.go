@@ -3,6 +3,8 @@ package vpnkit
 import (
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseRoundTrip(t *testing.T) {
@@ -40,4 +42,15 @@ func TestParseRoundTrip(t *testing.T) {
 			t.Fatalf("Expected %s but has %s", parsed.spec(), port.spec())
 		}
 	}
+}
+
+func TestString(t *testing.T) {
+	p := Port{
+		Proto:   TCP,
+		InIP:    net.ParseIP("192.168.0.1"),
+		InPort:  8080,
+		OutIP:   net.ParseIP("192.168.0.2"),
+		OutPort: 8081,
+	}
+	assert.Equal(t, "tcp forward from 192.168.0.2:8081 to 192.168.0.1:8080", p.String())
 }
