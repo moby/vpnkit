@@ -10,7 +10,6 @@ import (
 // Conn defines a network connection
 type Conn interface {
 	net.Conn
-	CloseRead() error
 	CloseWrite() error
 }
 
@@ -21,10 +20,6 @@ func ProxyStream(client, backend Conn, quit chan struct{}) error {
 		written, err := io.Copy(to, from)
 		if err != nil {
 			log.Println("error copying:", err)
-		}
-		err = from.CloseRead()
-		if err != nil && !errIsNotConnected(err) {
-			log.Println("error CloseRead from:", err)
 		}
 		err = to.CloseWrite()
 		if err != nil {
