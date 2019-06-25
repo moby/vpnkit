@@ -3,12 +3,13 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net"
+
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	"net"
 )
 
 // Controller kubernetes controller used by Docker Desktop
@@ -39,6 +40,10 @@ func (c *Controller) Dispose() {
 	}
 	for _, port := range ports {
 		if dockerNet.Contains(port.InIP) {
+			continue
+		}
+		// FIXME: we should only dispose ports we created
+		if port.Proto == vpnkit.Unix {
 			continue
 		}
 		if err := c.client.Unexpose(context.Background(), &port); err != nil {
