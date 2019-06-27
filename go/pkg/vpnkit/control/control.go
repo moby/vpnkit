@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"sync"
@@ -128,13 +129,13 @@ func (c *Control) Listen(path string, quit chan struct{}) {
 }
 
 // Connect a data connection
-func (c *Control) Connect(path string, quit chan struct{}) {
+func (c *Control) Connect(path string, quit chan struct{}) error {
 	for {
 		t := transport.NewVsockTransport()
 		log.Printf("dialing AF_VSOCK port %s for data connection", path)
 		conn, err := t.Dial(context.Background(), path)
 		if err != nil {
-			log.Fatalf("unable to connect data on AF_VSOCK port %s: %s", path, err)
+			return fmt.Errorf("unable to connect data on AF_VSOCK port %s: %s", path, err)
 		}
 		log.Printf("connected data connection on AF_VSOCK port: %s", path)
 		c.handleDataConn(conn, quit)

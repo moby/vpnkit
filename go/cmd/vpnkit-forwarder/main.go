@@ -55,7 +55,11 @@ func main() {
 		go ctrl.Listen(dataListen, quit)
 	}
 	if dataConnect != "" {
-		go ctrl.Connect(dataConnect, quit)
+		go func() {
+			if err := ctrl.Connect(dataConnect, quit); err != nil {
+				fmt.Printf("unable to connect data on %s: %s\n", dataConnect, err)
+			}
+		}()
 	}
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
