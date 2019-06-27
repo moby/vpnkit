@@ -34,11 +34,3 @@ func (_ *vs) Listen(path string) (net.Listener, error) {
 	}
 	return vsock.Listen(vsock.CIDAny, uint32(port))
 }
-
-func parsePort(path string) (uint32, error) {
-	port, err := strconv.ParseUint(path, 10, 32)
-	if err != nil {
-		return 0, errors.Wrapf(err, "on Linux the vpnkit control client needs an AF_VSOCK port number")
-	}
-	return uint32(port), err
-}
