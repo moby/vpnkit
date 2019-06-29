@@ -76,6 +76,7 @@ func (c *Control) Expose(_ context.Context, port *vpnkit.Port) error {
 		}
 	}
 	c.forwards[key] = forward
+	log.Printf("adding port-forward %s\n", port.String())
 	go forward.Run()
 	return nil
 }
@@ -92,6 +93,7 @@ func (c *Control) Unexpose(_ context.Context, port *vpnkit.Port) error {
 		// make it idempotent
 		return nil
 	}
+	log.Printf("stopping port-forward %s\n", port.String())
 	forward.Stop()
 	delete(c.forwards, key)
 	return nil
