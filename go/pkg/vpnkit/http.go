@@ -14,6 +14,12 @@ import (
 	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
 )
 
+const (
+	ListPath     = "/list"
+	ExposePath   = "/expose"
+	UnexposePath = "/unexpose"
+)
+
 // NewClient can be used to manipulated exposed ports.
 func NewClient(t transport.Transport, path string) (Client, error) {
 	return &httpClient{
@@ -32,6 +38,9 @@ func NewClient(t transport.Transport, path string) (Client, error) {
 type Server interface {
 	Start()
 	Stop() error
+	List(echo.Context) error
+	Expose(echo.Context) error
+	Unexpose(echo.Context) error
 }
 
 // Implementation of the control interface.
@@ -63,14 +72,14 @@ func NewServer(path string, t transport.Transport, impl Implementation) (Server,
 		impl,
 	}
 
-	e.POST("/expose", func(c echo.Context) error {
-		return h.expose(c)
+	e.POST(ExposePath, func(c echo.Context) error {
+		return h.Expose(c)
 	})
-	e.POST("/unexpose", func(c echo.Context) error {
-		return h.unexpose(c)
+	e.POST(UnexposePath, func(c echo.Context) error {
+		return h.Unexpose(c)
 	})
-	e.GET("/list", func(c echo.Context) error {
-		return h.list(c)
+	e.GET(ListPath, func(c echo.Context) error {
+		return h.List(c)
 	})
 
 	return h, nil
@@ -81,7 +90,8 @@ type httpServer struct {
 	impl Implementation
 }
 
-func (h *httpServer) list(c echo.Context) error {
+// List ports HTTP handler
+func (h *httpServer) List(c echo.Context) error {
 	ports, err := h.impl.ListExposed(context.Background())
 	if err != nil {
 		return err
@@ -89,7 +99,8 @@ func (h *httpServer) list(c echo.Context) error {
 	return c.JSON(200, ports)
 }
 
-func (h *httpServer) expose(c echo.Context) error {
+// Expose port HTTP handler
+func (h *httpServer) Expose(c echo.Context) error {
 	var port Port
 	if err := c.Bind(&port); err != nil {
 		return err
@@ -104,7 +115,8 @@ func (h *httpServer) expose(c echo.Context) error {
 	return err
 }
 
-func (h *httpServer) unexpose(c echo.Context) error {
+// Unexpose port HTTP handler
+func (h *httpServer) Unexpose(c echo.Context) error {
 	var port Port
 	if err := c.Bind(&port); err != nil {
 		return err
