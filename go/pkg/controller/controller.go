@@ -12,6 +12,8 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
+const annotation = "vpnkit-k8s-controller"
+
 // Controller kubernetes controller used by Docker Desktop
 type Controller struct {
 	services corev1client.ServicesGetter
@@ -28,25 +30,17 @@ func New(client vpnkit.Client, services corev1client.ServicesGetter) *Controller
 
 // Dispose unexpose all ports previously exposed by this controller
 func (c *Controller) Dispose() {
-	_, dockerNet, err := net.ParseCIDR("172.17.0.0/16")
-	if err != nil {
-		log.Infof("Cannot parse default docker0 subnet: %v ", err)
-		return
-	}
-	ports, err := c.client.ListExposed(context.Background())
+	ctx := context.Background()
+	ports, err := c.client.ListExposed(ctx)
 	if err != nil {
 		log.Infof("Cannot list exposed ports: %v", err)
 		return
 	}
 	for _, port := range ports {
-		if dockerNet.Contains(port.InIP) {
+		if port.Annotation != annotation {
 			continue
 		}
-		// FIXME: we should only dispose ports we created
-		if port.Proto == vpnkit.Unix {
-			continue
-		}
-		if err := c.client.Unexpose(context.Background(), &port); err != nil {
+		if err := c.client.Unexpose(ctx, &port); err != nil {
 			log.Infof("cannot unexpose port: %v", err)
 		}
 	}
@@ -103,7 +97,8 @@ func (c *Controller) ensureOpened(obj interface{}) error {
 	if !ok {
 		return fmt.Errorf("received an invalid object, was expecting v1.Service")
 	}
-	opened, err := c.client.ListExposed(context.Background())
+	ctx := context.Background()
+	opened, err := c.client.ListExposed(ctx)
 	if err != nil {
 		return errors.Wrap(err, "cannot list exposed ports")
 	}
@@ -117,7 +112,7 @@ func (c *Controller) ensureOpened(obj interface{}) error {
 			log.Debugf("Port %d for service %s already opened", port.OutPort, service.Name)
 			continue
 		}
-		if err := c.client.Expose(context.Background(), &port); err != nil {
+		if err := c.client.Expose(ctx, &port); err != nil {
 			log.Debugf("cannot expose port: %v", err)
 			continue
 		}
@@ -191,22 +186,24 @@ func convert(service *v1.Service, servicePort v1.ServicePort) (*vpnkit.Port, err
 	switch service.Spec.Type {
 	case v1.ServiceTypeLoadBalancer:
 		return &vpnkit.Port{
-			Proto:   protocol,
-			OutIP:   net.ParseIP("0.0.0.0"),
-			OutPort: uint16(servicePort.Port),
-			InIP:    net.ParseIP(service.Spec.ClusterIP),
-			InPort:  uint16(servicePort.Port),
+			Proto:      protocol,
+			OutIP:      net.ParseIP("0.0.0.0"),
+			OutPort:    uint16(servicePort.Port),
+			InIP:       net.ParseIP(service.Spec.ClusterIP),
+			InPort:     uint16(servicePort.Port),
+			Annotation: annotation,
 		}, nil
 	case v1.ServiceTypeNodePort:
 		if servicePort.NodePort == 0 {
 			return nil, errors.New("NodePort is 0")
 		}
 		return &vpnkit.Port{
-			Proto:   protocol,
-			OutIP:   net.ParseIP("0.0.0.0"),
-			OutPort: uint16(servicePort.NodePort),
-			InIP:    net.ParseIP(service.Spec.ClusterIP),
-			InPort:  uint16(servicePort.Port),
+			Proto:      protocol,
+			OutIP:      net.ParseIP("0.0.0.0"),
+			OutPort:    uint16(servicePort.NodePort),
+			InIP:       net.ParseIP(service.Spec.ClusterIP),
+			InPort:     uint16(servicePort.Port),
+			Annotation: annotation,
 		}, nil
 	case v1.ServiceTypeClusterIP:
 		return nil, nil

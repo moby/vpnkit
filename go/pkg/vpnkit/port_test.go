@@ -54,3 +54,15 @@ func TestString(t *testing.T) {
 	}
 	assert.Equal(t, "tcp forward from 192.168.0.2:8081 to 192.168.0.1:8080", p.String())
 }
+
+func TestAnnotation(t *testing.T) {
+	p := Port{
+		Proto:      TCP,
+		InIP:       net.ParseIP("192.168.0.1"),
+		InPort:     8080,
+		OutIP:      net.ParseIP("192.168.0.2"),
+		OutPort:    8081,
+		Annotation: "kubernetes",
+	}
+	assert.Equal(t, "kubernetes tcp forward from 192.168.0.2:8081 to 192.168.0.1:8080", p.String())
+}
