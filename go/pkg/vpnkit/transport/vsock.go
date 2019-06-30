@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/linuxkit/virtsock/pkg/hvsock"
+	"github.com/linuxkit/virtsock/pkg/vsock"
 	"github.com/pkg/errors"
 )
 
@@ -32,41 +33,76 @@ type hvs struct {
 }
 
 func (_ *hvs) Dial(_ context.Context, path string) (net.Conn, error) {
-	vmid, svcid, err := parsePort(path)
+	addr, err := parseAddr(path)
 	if err != nil {
 		return nil, err
 	}
-	return hvsock.Dial(hvsock.HypervAddr{VMID: vmid, ServiceID: svcid})
+	return hvsock.Dial(hvsock.Addr{VMID: addr.vmID, ServiceID: addr.svcID})
 }
 
 func (_ *hvs) Listen(path string) (net.Listener, error) {
-	_, svcid, err := parsePort(path)
+	addr, err := parseAddr(path)
 	if err != nil {
 		return nil, err
 	}
-	return hvsock.Listen(hvsock.Addr{VMID: hvsock.GUIDWildcard, ServiceID: svcid})
+	return hvsock.Listen(hvsock.Addr{VMID: hvsock.GUIDWildcard, ServiceID: addr.svcID})
 }
 
-func parsePort(path string) (hvsock.GUID, hvsock.GUID, error) {
-	vmId := hvsock.GUIDZero
-	svcId := hvsock.GUIDZero
+// addr is a union of hvsock.HypervAddr and vsock.VsockAddr addresses
+type addr struct {
+	vmID  hvsock.GUID
+	svcID hvsock.GUID
+	cid   uint32
+	port  uint32
+}
+
+func parseAddr(path string) (*addr, error) {
+	// The string has an optional <vm>/ prefix
 	bits := strings.SplitN(path, "/", 2)
-	if len(bits) != 1 && len(bits) != 2 {
-		return vmId, svcId, errors.New("expected either <port> or <vmid>/<port>")
-	}
-	var err error
+	// The last thing on the string is always the port number
+	portString := bits[0]
 	if len(bits) == 2 {
-		vmId, err = hvsock.GUIDFromString(bits[0])
+		portString = bits[1]
+	}
+	addr := &addr{
+		vmID:  hvsock.GUIDZero,
+		svcID: hvsock.GUIDZero,
+		cid:   vsock.CIDAny,
+		port:  0,
+	}
+	// Maybe the port string is a GUID?
+	svcID, err := hvsock.GUIDFromString(portString)
+	if err == nil {
+		addr.svcID = svcID
+	} else {
+		port, err := strconv.ParseUint(portString, 10, 32)
 		if err != nil {
-			return vmId, svcId, errors.New("unable to parse Hyper-V VM ID " + bits[0])
+			return nil, fmt.Errorf("cannot parse %s as service GUID or AF_VSOCK port", portString)
 		}
-		path = bits[1]
+		addr.port = uint32(port)
+		serviceID := fmt.Sprintf("%08x-FACB-11E6-BD58-64006A7986D3", port)
+		svcID, err := hvsock.GUIDFromString(serviceID)
+		if err != nil {
+			// should never happen
+			return nil, errors.New("cannot create service ID from AF_VSOCK port number")
+		}
+		addr.svcID = svcID
 	}
-	port, err := strconv.ParseUint(path, 10, 32)
+
+	// Is there a <vm>/ prefix?
+	if len(bits) == 1 {
+		return addr, nil
+	}
+	vmID, err := hvsock.GUIDFromString(bits[0])
+	if err == nil {
+		addr.vmID = vmID
+		return addr, nil
+	}
+	// Maybe it's an integer
+	cid, err := strconv.ParseUint(bits[0], 10, 32)
 	if err != nil {
-		return vmId, svcId, errors.New("expected an AF_VSOCK port number")
+		return nil, errors.New("unable to parse the <vm>/ as either a GUID or AF_VSOCK port number")
 	}
-	serviceID := fmt.Sprintf("%08x-FACB-11E6-BD58-64006A7986D3", port)
-	svcId, err = hvsock.GUIDFromString(serviceID)
-	return vmId, svcId, err
+	addr.cid = uint32(cid)
+	return addr, nil
 }

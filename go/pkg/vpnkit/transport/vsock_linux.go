@@ -3,10 +3,8 @@ package transport
 import (
 	"context"
 	"net"
-	"strconv"
 
 	"github.com/linuxkit/virtsock/pkg/vsock"
-	"github.com/pkg/errors"
 )
 
 func NewVsockTransport() Transport {
@@ -20,17 +18,21 @@ type vs struct {
 }
 
 func (_ *vs) Dial(_ context.Context, path string) (net.Conn, error) {
-	port, err := parsePort(path)
+	addr, err := parseAddr(path)
 	if err != nil {
 		return nil, err
 	}
-	return vsock.Dial(vsock.CIDHost, uint32(port))
+	cid := uint32(vsock.CIDHost)
+	if addr.cid != vsock.CIDAny {
+		cid = addr.cid
+	}
+	return vsock.Dial(cid, addr.port)
 }
 
 func (_ *vs) Listen(path string) (net.Listener, error) {
-	port, err := parsePort(path)
+	addr, err := parseAddr(path)
 	if err != nil {
 		return nil, err
 	}
-	return vsock.Listen(vsock.CIDAny, uint32(port))
+	return vsock.Listen(vsock.CIDAny, addr.port)
 }
