@@ -2,10 +2,10 @@ package control
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
@@ -137,7 +137,10 @@ func (c *Control) Connect(path string, quit chan struct{}) error {
 		log.Printf("dialing AF_VSOCK port %s for data connection", path)
 		conn, err := t.Dial(context.Background(), path)
 		if err != nil {
-			return fmt.Errorf("unable to connect data on AF_VSOCK port %s: %s", path, err)
+			// This can happen if the server is restarting
+			log.Printf("unable to connect data on AF_VSOCK port %s: %s. Is the server restarting? Will retry in 1s.", path, err)
+			time.Sleep(time.Second)
+			continue
 		}
 		log.Printf("connected data connection on AF_VSOCK port: %s", path)
 		c.handleDataConn(conn, quit)
