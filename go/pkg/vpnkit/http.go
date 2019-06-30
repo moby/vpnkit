@@ -15,9 +15,11 @@ import (
 )
 
 const (
-	ListPath     = "/list"
-	ExposePath   = "/expose"
-	UnexposePath = "/unexpose"
+	ListPath         = "/forwards/list"
+	ExposePortPath   = "/forwards/expose/port"
+	ExposePipePath   = "/forwards/expose/pipe"
+	UnexposePortPath = "/forwards/unexpose/port"
+	UnexposePipePath = "/forwards/unexpose/pipe"
 )
 
 // NewClient can be used to manipulated exposed ports.
@@ -39,8 +41,10 @@ type Server interface {
 	Start()
 	Stop() error
 	List(echo.Context) error
-	Expose(echo.Context) error
-	Unexpose(echo.Context) error
+	ExposePort(echo.Context) error
+	ExposePipe(echo.Context) error
+	UnexposePort(echo.Context) error
+	UnexposePipe(echo.Context) error
 }
 
 // Implementation of the control interface.
@@ -72,11 +76,17 @@ func NewServer(path string, t transport.Transport, impl Implementation) (Server,
 		impl,
 	}
 
-	e.POST(ExposePath, func(c echo.Context) error {
-		return h.Expose(c)
+	e.POST(ExposePortPath, func(c echo.Context) error {
+		return h.ExposePort(c)
 	})
-	e.POST(UnexposePath, func(c echo.Context) error {
-		return h.Unexpose(c)
+	e.POST(ExposePipePath, func(c echo.Context) error {
+		return h.ExposePipe(c)
+	})
+	e.POST(UnexposePortPath, func(c echo.Context) error {
+		return h.UnexposePort(c)
+	})
+	e.POST(UnexposePipePath, func(c echo.Context) error {
+		return h.UnexposePipe(c)
 	})
 	e.GET(ListPath, func(c echo.Context) error {
 		return h.List(c)
@@ -100,10 +110,32 @@ func (h *httpServer) List(c echo.Context) error {
 }
 
 // Expose port HTTP handler
-func (h *httpServer) Expose(c echo.Context) error {
+func (h *httpServer) ExposePort(c echo.Context) error {
 	var port Port
 	if err := c.Bind(&port); err != nil {
 		return err
+	}
+	if port.Proto != TCP && port.Proto != UDP {
+		return c.JSON(400, "exposed ports can only be TCP or UDP")
+	}
+	err := h.impl.Expose(context.Background(), &port)
+	if err == nil {
+		return nil
+	}
+	if e, ok := err.(*ExposeError); ok {
+		return c.JSON(400, e)
+	}
+	return err
+}
+
+// Expose pipe HTTP handler
+func (h *httpServer) ExposePipe(c echo.Context) error {
+	var port Port
+	if err := c.Bind(&port); err != nil {
+		return err
+	}
+	if port.Proto != Unix {
+		return c.JSON(400, "exposed pipes can only have proto=Unix")
 	}
 	err := h.impl.Expose(context.Background(), &port)
 	if err == nil {
@@ -116,10 +148,25 @@ func (h *httpServer) Expose(c echo.Context) error {
 }
 
 // Unexpose port HTTP handler
-func (h *httpServer) Unexpose(c echo.Context) error {
+func (h *httpServer) UnexposePort(c echo.Context) error {
 	var port Port
 	if err := c.Bind(&port); err != nil {
 		return err
+	}
+	if port.Proto != TCP && port.Proto != UDP {
+		return c.JSON(400, "exposed ports can only be TCP or UDP")
+	}
+	return h.impl.Unexpose(context.Background(), &port)
+}
+
+// Unexpose pipe HTTP handler
+func (h *httpServer) UnexposePipe(c echo.Context) error {
+	var port Port
+	if err := c.Bind(&port); err != nil {
+		return err
+	}
+	if port.Proto != Unix {
+		return c.JSON(400, "exposed pipes can only have proto=Unix")
 	}
 	return h.impl.Unexpose(context.Background(), &port)
 }
@@ -146,7 +193,11 @@ func (h *httpClient) Expose(_ context.Context, port *Port) error {
 	if err := enc.Encode(port); err != nil {
 		return err
 	}
-	res, err := h.client.Post("http://unix/expose", "application/json", &buf)
+	path := ExposePortPath
+	if port.Proto == Unix {
+		path = ExposePipePath
+	}
+	res, err := h.client.Post("http://unix"+path, "application/json", &buf)
 	if err != nil {
 		return err
 	}
@@ -161,7 +212,7 @@ func (h *httpClient) Expose(_ context.Context, port *Port) error {
 		return &exposeError
 	}
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("/expose returned unexpected status: %d", res.StatusCode)
+		return fmt.Errorf(path+" returned unexpected status: %d", res.StatusCode)
 	}
 	return nil
 }
@@ -172,26 +223,30 @@ func (h *httpClient) Unexpose(_ context.Context, port *Port) error {
 	if err := enc.Encode(port); err != nil {
 		return err
 	}
-	res, err := h.client.Post("http://unix/unexpose", "application/json", &buf)
+	path := UnexposePortPath
+	if port.Proto == Unix {
+		path = UnexposePipePath
+	}
+	res, err := h.client.Post("http://unix"+path, "application/json", &buf)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("/unexpose returned unexpected status: %d", res.StatusCode)
+		return fmt.Errorf(path+" returned unexpected status: %d", res.StatusCode)
 	}
 	return nil
 }
 
 func (h *httpClient) ListExposed(context.Context) ([]Port, error) {
-	res, err := h.client.Get("http://unix/list")
+	res, err := h.client.Get("http://unix" + ListPath)
 	if err != nil {
 		fmt.Printf("GET failed with %v\n", err)
 		return nil, err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("/list returned unexpected status: %d", res.StatusCode)
+		return nil, fmt.Errorf(ListPath+" returned unexpected status: %d", res.StatusCode)
 	}
 	dec := json.NewDecoder(res.Body)
 	var ports []Port

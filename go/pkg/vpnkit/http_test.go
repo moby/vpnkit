@@ -77,10 +77,12 @@ func TestNonEmpyList(t *testing.T) {
 	assert.Nil(t, err)
 	ctx := context.Background()
 	assert.Nil(t, c.Expose(ctx, &Port{
+		Proto:   TCP,
 		InPort:  1,
 		OutPort: 1,
 	}))
 	assert.Nil(t, c.Expose(ctx, &Port{
+		Proto:   UDP,
 		InPort:  2,
 		OutPort: 2,
 	}))
@@ -102,11 +104,13 @@ func TestUnexpose(t *testing.T) {
 	assert.Nil(t, err)
 	ctx := context.Background()
 	p := &Port{
+		Proto:   TCP,
 		InPort:  1,
 		OutPort: 1,
 	}
 	assert.Nil(t, c.Expose(ctx, p))
 	q := &Port{
+		Proto:   UDP,
 		InPort:  2,
 		OutPort: 2,
 	}
@@ -134,6 +138,7 @@ func TestExposeError(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = c.Expose(ctx, &Port{
+		Proto:   TCP,
 		InPort:  1,
 		OutPort: 1,
 	})
