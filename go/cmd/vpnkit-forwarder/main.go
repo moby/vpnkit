@@ -43,7 +43,7 @@ func main() {
 func hyperVListener(port int) net.Listener {
 	serviceID := fmt.Sprintf("%08x-FACB-11E6-BD58-64006A7986D3", port)
 	svcid, _ := hvsock.GUIDFromString(serviceID)
-	l, err := hvsock.Listen(hvsock.HypervAddr{VMID: hvsock.GUIDWildcard, ServiceID: svcid})
+	l, err := hvsock.Listen(hvsock.Addr{VMID: hvsock.GUIDWildcard, ServiceID: svcid})
 	if err != nil {
 		log.Fatalf("Failed to bind AF_HVSOCK guid: %s: %v", serviceID, err)
 	}
