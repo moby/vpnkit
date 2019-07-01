@@ -4,15 +4,17 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/pkg/errors"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/pkg/errors"
+
 	vpnkit "github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
+	"github.com/spf13/viper"
 )
 
 // Expose ports via the control interface
@@ -40,6 +42,15 @@ func connectClient() (vpnkit.Client, error) {
 }
 
 func main() {
+	viper.SetConfigName("vpnkit-expose-port")
+	viper.AddConfigPath("/etc/")
+	viper.AddConfigPath(".")
+	viper.SetDefault("control-vsock", fmt.Sprintf("%d", vpnkit.DefaultControlVsock))
+	viper.SetDefault("control-pipe", "")
+	if err := viper.ReadInConfig(); err != nil {
+		log.Printf("unable to read config file: %s", err)
+	}
+
 	proto := flag.String("proto", "tcp", "proxy protocol (tcp/udp/unix)")
 	hostIP := flag.String("host-ip", "", "host ip")
 	hostPort := flag.Int("host-port", -1, "host port")
@@ -51,8 +62,18 @@ func main() {
 	flag.BoolVar(&debug, "debug", false, "debug interaction with docker")
 	flag.BoolVar(&interactive, "i", false, "print success/failure to stdout/stderr")
 
-	flag.StringVar(&controlVsock, "control-vsock", fmt.Sprintf("%d", vpnkit.DefaultControlVsock), "AF_VSOCK port to connect to the Host control-plane")
-	flag.StringVar(&controlPipe, "control-pipe", "", "Unix domain socket or Windows named pipe to connect to the Host control-plane")
+	defaultControlVsock, ok := viper.Get("control-vsock").(string)
+	if !ok {
+		log.Printf("In config file, control-vsock should be a string\n")
+		os.Exit(1)
+	}
+	flag.StringVar(&controlVsock, "control-vsock", defaultControlVsock, "AF_VSOCK port to connect to the Host control-plane")
+	defaultControlPipe, ok := viper.Get("control-pipe").(string)
+	if !ok {
+		log.Printf("In config file, control-pipe should be a string\n")
+		os.Exit(1)
+	}
+	flag.StringVar(&controlPipe, "control-pipe", defaultControlPipe, "Unix domain socket or Windows named pipe to connect to the Host control-plane")
 
 	localBind := bestEffortLocalBind // default
 	// Attempt to remain backwards compatible for existing scripts which have `-no-local-ip` as a flag.
