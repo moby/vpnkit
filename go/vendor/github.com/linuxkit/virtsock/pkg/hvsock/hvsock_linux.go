@@ -79,7 +79,7 @@ const (
 
 type hvsockListener struct {
 	acceptFD int
-	laddr    HypervAddr
+	laddr    Addr
 }
 
 // Try to determine if we need to run in legacy mode.
@@ -105,7 +105,7 @@ func hvsocket(typ, proto int) (int, error) {
 	return syscall.Socket(sysAF_VSOCK, typ, 0)
 }
 
-func connect(s int, a *HypervAddr) (err error) {
+func connect(s int, a *Addr) (err error) {
 	if legacyMode {
 		sa := C.struct_sockaddr_hv{}
 		sa.shv_family = sysAF_HYPERV
@@ -140,7 +140,7 @@ func connect(s int, a *HypervAddr) (err error) {
 	return nil
 }
 
-func bind(s int, a HypervAddr) error {
+func bind(s int, a Addr) error {
 	if legacyMode {
 		sa := C.struct_sockaddr_hv{}
 		sa.shv_family = sysAF_HYPERV
@@ -175,7 +175,7 @@ func bind(s int, a HypervAddr) error {
 	return nil
 }
 
-func accept(s int, a *HypervAddr) (int, error) {
+func accept(s int, a *Addr) (int, error) {
 	if legacyMode {
 		var acceptSA C.struct_sockaddr_hv
 		var acceptSALen C.socklen_t
@@ -216,12 +216,12 @@ func accept(s int, a *HypervAddr) (int, error) {
 type hvsockConn struct {
 	fd     int
 	hvsock *os.File
-	local  HypervAddr
-	remote HypervAddr
+	local  Addr
+	remote Addr
 }
 
 // Main constructor
-func newHVsockConn(fd int, local HypervAddr, remote HypervAddr) (*HVsockConn, error) {
+func newHVsockConn(fd int, local Addr, remote Addr) (*HVsockConn, error) {
 	hvsock := os.NewFile(uintptr(fd), fmt.Sprintf("hvsock:%d", fd))
 	v := &hvsockConn{fd: fd, hvsock: hvsock, local: local, remote: remote}
 

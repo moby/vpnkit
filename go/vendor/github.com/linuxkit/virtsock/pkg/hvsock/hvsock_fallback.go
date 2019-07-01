@@ -14,7 +14,7 @@ const (
 
 type hvsockListener struct {
 	acceptFD int
-	laddr    HypervAddr
+	laddr    Addr
 }
 
 //
@@ -24,25 +24,25 @@ func hvsocket(typ, proto int) (int, error) {
 	return 0, errors.New("hvsocket() not implemented")
 }
 
-func connect(s int, a *HypervAddr) (err error) {
+func connect(s int, a *Addr) (err error) {
 	return errors.New("connect() not implemented")
 }
 
-func bind(s int, a HypervAddr) error {
+func bind(s int, a Addr) error {
 	return errors.New("bind() not implemented")
 }
 
-func accept(s int, a *HypervAddr) (int, error) {
+func accept(s int, a *Addr) (int, error) {
 	return 0, errors.New("accept() not implemented")
 }
 
 type hvsockConn struct {
 	fd     int
-	local  HypervAddr
-	remote HypervAddr
+	local  Addr
+	remote Addr
 }
 
-func newHVsockConn(fd int, local HypervAddr, remote HypervAddr) (*HVsockConn, error) {
+func newHVsockConn(fd int, local Addr, remote Addr) (*HVsockConn, error) {
 	v := &hvsockConn{local: local, remote: remote}
 	return &HVsockConn{hvsockConn: *v}, errors.New("newHVsockConn() not implemented")
 }

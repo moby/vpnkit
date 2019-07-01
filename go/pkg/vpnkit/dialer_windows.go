@@ -25,7 +25,7 @@ func (d *Dialer) connectTransport() (io.ReadWriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	addr := hvsock.HypervAddr{
+	addr := hvsock.Addr{
 		VMID:      vmid,
 		ServiceID: svc,
 	}
