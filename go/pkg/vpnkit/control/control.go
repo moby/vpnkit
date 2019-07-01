@@ -111,7 +111,7 @@ var _ vpnkit.Implementation = &Control{}
 var _ vpnkit.Control = &Control{}
 
 // Listen for incoming data connections
-func (c *Control) Listen(path string, quit chan struct{}) {
+func (c *Control) Listen(path string, quit <-chan struct{}) {
 	t := transport.NewVsockTransport()
 	l, err := t.Listen(path)
 	if err != nil {
@@ -131,7 +131,7 @@ func (c *Control) Listen(path string, quit chan struct{}) {
 }
 
 // Connect a data connection
-func (c *Control) Connect(path string, quit chan struct{}) error {
+func (c *Control) Connect(path string, quit <-chan struct{}) error {
 	for {
 		t := transport.NewVsockTransport()
 		log.Printf("dialing AF_VSOCK port %s for data connection", path)
@@ -148,7 +148,7 @@ func (c *Control) Connect(path string, quit chan struct{}) error {
 }
 
 // handle data-plane forwarding
-func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit chan struct{}) {
+func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}) {
 	defer rw.Close()
 
 	mux := libproxy.NewMultiplexer("local", rw)

@@ -25,7 +25,7 @@ func NewUnixProxy(listener net.Listener, backendAddr *net.UnixAddr) (*UnixProxy,
 }
 
 // HandleUnixConnection forwards the Unix traffic to a specified backend address
-func HandleUnixConnection(client Conn, backendAddr *net.UnixAddr, quit chan struct{}) error {
+func HandleUnixConnection(client Conn, backendAddr *net.UnixAddr, quit <-chan struct{}) error {
 	backend, err := net.DialUnix("unix", nil, backendAddr)
 	if err != nil {
 		if errIsConnectionRefused(err) {

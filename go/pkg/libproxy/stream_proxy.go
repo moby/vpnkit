@@ -14,7 +14,7 @@ type Conn interface {
 }
 
 // ProxyStream data between client and backend, until both are at EOF or quit is closed.
-func ProxyStream(client, backend Conn, quit chan struct{}) error {
+func ProxyStream(client, backend Conn, quit <-chan struct{}) error {
 	event := make(chan int64)
 	var broker = func(to, from Conn) {
 		written, err := io.Copy(to, from)

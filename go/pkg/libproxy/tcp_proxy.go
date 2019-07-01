@@ -26,7 +26,7 @@ func NewTCPProxy(listener net.Listener, backendAddr *net.TCPAddr) (*TCPProxy, er
 }
 
 // HandleTCPConnection forwards the TCP traffic to a specified backend address
-func HandleTCPConnection(client Conn, backendAddr *net.TCPAddr, quit chan struct{}) error {
+func HandleTCPConnection(client Conn, backendAddr *net.TCPAddr, quit <-chan struct{}) error {
 	backend, err := net.DialTCP("tcp", nil, backendAddr)
 	if err != nil {
 		if errIsConnectionRefused(err) {

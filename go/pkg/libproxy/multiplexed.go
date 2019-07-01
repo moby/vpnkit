@@ -564,7 +564,7 @@ func (m *multiplexer) run() error {
 }
 
 // Forward runs the TCP/UDP forwarder over a sub-connection
-func Forward(conn Conn, destination Destination, quit chan struct{}) {
+func Forward(conn Conn, destination Destination, quit <-chan struct{}) {
 	defer conn.Close()
 
 	switch destination.Proto {
