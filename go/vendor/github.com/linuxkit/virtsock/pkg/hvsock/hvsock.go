@@ -67,16 +67,16 @@ func GUIDFromString(s string) (GUID, error) {
 	return g, err
 }
 
-// HypervAddr combined "address" and "port" structure
-type HypervAddr struct {
+// Addr combined "address" and "port" structure
+type Addr struct {
 	VMID      GUID
 	ServiceID GUID
 }
 
 // Network returns the type of network for Hyper-V sockets
-func (a HypervAddr) Network() string { return "hvsock" }
+func (a Addr) Network() string { return "hvsock" }
 
-func (a HypervAddr) String() string {
+func (a Addr) String() string {
 	vmid := a.VMID.String()
 	svc := a.ServiceID.String()
 
@@ -102,7 +102,7 @@ var (
 )
 
 // Dial a Hyper-V socket address
-func Dial(raddr HypervAddr) (Conn, error) {
+func Dial(raddr Addr) (Conn, error) {
 	fd, err := hvsocket(syscall.SOCK_STREAM, sysSHV_PROTO_RAW)
 	if err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func Dial(raddr HypervAddr) (Conn, error) {
 		return nil, err
 	}
 
-	v, err := newHVsockConn(fd, HypervAddr{VMID: GUIDZero, ServiceID: GUIDZero}, raddr)
+	v, err := newHVsockConn(fd, Addr{VMID: GUIDZero, ServiceID: GUIDZero}, raddr)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func Dial(raddr HypervAddr) (Conn, error) {
 }
 
 // Listen on a Hyper-V socket address
-func Listen(addr HypervAddr) (net.Listener, error) {
+func Listen(addr Addr) (net.Listener, error) {
 
 	acceptFD, err := hvsocket(syscall.SOCK_STREAM, sysSHV_PROTO_RAW)
 	if err != nil {
@@ -156,7 +156,7 @@ type Conn interface {
 }
 
 func (v *hvsockListener) Accept() (net.Conn, error) {
-	var raddr HypervAddr
+	var raddr Addr
 	fd, err := accept(v.acceptFD, &raddr)
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func (v *hvsockListener) Close() error {
 }
 
 func (v *hvsockListener) Addr() net.Addr {
-	return HypervAddr{VMID: v.laddr.VMID, ServiceID: v.laddr.ServiceID}
+	return Addr{VMID: v.laddr.VMID, ServiceID: v.laddr.ServiceID}
 }
 
 /*
