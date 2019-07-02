@@ -35,7 +35,7 @@ func NewIPProxy(frontendAddr, backendAddr net.Addr) (Proxy, error) {
 		if err != nil {
 			return nil, err
 		}
-		return NewUDPProxy(listener.LocalAddr().(*net.UDPAddr), listener, backendAddr.(*net.UDPAddr))
+		return NewUDPProxy(listener.LocalAddr().(*net.UDPAddr), listener, backendAddr.(*net.UDPAddr), nil)
 	case *net.TCPAddr:
 		listener, err := net.Listen("tcp", frontendAddr.String())
 		if err != nil {

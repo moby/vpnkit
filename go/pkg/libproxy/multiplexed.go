@@ -587,7 +587,7 @@ func Forward(conn Conn, destination Destination, quit <-chan struct{}) {
 	case UDP:
 		backendAddr := &net.UDPAddr{IP: destination.IP, Port: int(destination.Port), Zone: ""}
 
-		proxy, err := NewUDPProxy(backendAddr, NewUDPConn(conn), backendAddr)
+		proxy, err := NewUDPProxy(backendAddr, NewUDPConn(conn), backendAddr, nil)
 		if err != nil {
 			log.Printf("Failed to setup UDP proxy for %s: %#v", backendAddr, err)
 			return

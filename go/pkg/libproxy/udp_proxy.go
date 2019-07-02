@@ -40,7 +40,7 @@ func newConnTrackKey(addr *net.UDPAddr) *connTrackKey {
 	}
 }
 
-type connTrackMap map[connTrackKey]*net.UDPConn
+type connTrackMap map[connTrackKey]net.Conn
 
 // UDPProxy is proxy for which handles UDP datagrams. It implements the Proxy
 // interface to handle UDP traffic forwarding between the frontend and backend
@@ -49,22 +49,37 @@ type UDPProxy struct {
 	listener       UDPListener
 	frontendAddr   net.Addr
 	backendAddr    *net.UDPAddr
+	dialer         UDPDialer
 	connTrackTable connTrackMap
 	connTrackLock  sync.Mutex
 }
 
-// NewUDPProxy creates a new UDPProxy.
-func NewUDPProxy(frontendAddr net.Addr, listener UDPListener, backendAddr *net.UDPAddr) (*UDPProxy, error) {
+// UDPDialer creates UDP (pseudo-)connections to an address
+type UDPDialer interface {
+	Dial(*net.UDPAddr) (net.Conn, error)
+}
 
+type defaultUDPDialer struct{}
+
+func (d *defaultUDPDialer) Dial(addr *net.UDPAddr) (net.Conn, error) {
+	return net.DialUDP("udp", nil, addr)
+}
+
+// NewUDPProxy creates a new UDPProxy.
+func NewUDPProxy(frontendAddr net.Addr, listener UDPListener, backendAddr *net.UDPAddr, dialer UDPDialer) (*UDPProxy, error) {
+	if dialer == nil {
+		dialer = &defaultUDPDialer{}
+	}
 	return &UDPProxy{
 		listener:       listener,
 		frontendAddr:   frontendAddr,
 		backendAddr:    backendAddr,
+		dialer:         dialer,
 		connTrackTable: make(connTrackMap),
 	}, nil
 }
 
-func (proxy *UDPProxy) replyLoop(proxyConn *net.UDPConn, clientAddr *net.UDPAddr, clientKey *connTrackKey) {
+func (proxy *UDPProxy) replyLoop(proxyConn net.Conn, clientAddr *net.UDPAddr, clientKey *connTrackKey) {
 	defer func() {
 		proxy.connTrackLock.Lock()
 		delete(proxy.connTrackTable, *clientKey)
@@ -117,7 +132,7 @@ func (proxy *UDPProxy) Run() {
 		proxy.connTrackLock.Lock()
 		proxyConn, hit := proxy.connTrackTable[*fromKey]
 		if !hit {
-			proxyConn, err = net.DialUDP("udp", nil, proxy.backendAddr)
+			proxyConn, err = proxy.dialer.Dial(proxy.backendAddr)
 			if err != nil {
 				log.Printf("Can't proxy a datagram to udp/%s: %s\n", proxy.backendAddr, err)
 				proxy.connTrackLock.Unlock()
