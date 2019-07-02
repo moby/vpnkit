@@ -49,7 +49,7 @@ func (s *stream) Run() {
 			if err := src.Close(); err != nil {
 				log.Printf("unable to Close on %s: %s", s.port.String(), err)
 			}
-			return
+			continue // Multiplexer could be disconnected
 		}
 		go func() {
 			if err := libproxy.ProxyStream(src, dest, s.quit); err != nil {
