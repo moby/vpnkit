@@ -1,8 +1,10 @@
 package forward
 
 import (
-	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"log"
+	"time"
+
+	"github.com/moby/vpnkit/go/pkg/libproxy"
 )
 
 // Listen on UDP sockets and forward to a remote multiplexer.
@@ -27,17 +29,24 @@ type udp struct {
 }
 
 func (u *udp) Run() {
-	mux := u.ctrl.Mux()
-	dest, err := mux.Dial(*u.dest)
-	if err != nil {
-		log.Printf("unable to connect on %s: %s", u.port.String(), err)
-		return
-	}
-	u.inside = libproxy.NewUDPConn(dest)
+	for {
+		select {
+		case <-u.quit:
+			// Stop has been called
+			return
+		}
+		mux := u.ctrl.Mux()
+		dest, err := mux.Dial(*u.dest)
+		if err != nil {
+			log.Printf("unable to connect on %s: %s", u.port.String(), err)
+			time.Sleep(time.Second)
+			continue
+		}
+		u.inside = libproxy.NewUDPConn(dest)
 
-	go u.proxyUDP(u.outside, u.inside)
-	go u.proxyUDP(u.inside, u.outside)
-	<-u.quit
+		go u.proxyUDP(u.outside, u.inside)
+		u.proxyUDP(u.inside, u.outside)
+	}
 }
 
 func (u *udp) proxyUDP(left, right libproxy.UDPListener) {
@@ -59,10 +68,10 @@ func (u *udp) proxyUDP(left, right libproxy.UDPListener) {
 
 func (u *udp) Stop() {
 	log.Printf("Removing %s", u.port.String())
+	close(u.quit)
 	if u.inside != nil {
 		// only if Run() has been called
 		u.inside.Close()
 	}
 	u.outside.Close()
-	close(u.quit)
 }
