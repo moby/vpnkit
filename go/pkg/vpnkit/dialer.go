@@ -83,18 +83,11 @@ func (d *Dialer) Dial(network, address string) (net.Conn, error) {
 		if network == "tcp" {
 			proto = libproxy.TCP
 		}
-		conn, err := d.mux.Dial(libproxy.Destination{
+		return d.mux.Dial(libproxy.Destination{
 			Proto: proto,
 			IP:    ip,
 			Port:  uint16(port),
 		})
-		if err != nil {
-			return nil, err
-		}
-		if proto == libproxy.UDP {
-			return libproxy.NewUDPConn(conn), nil
-		}
-		return conn, nil
 	default:
 		return nil, errors.New("unknown network: " + network)
 	}

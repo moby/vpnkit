@@ -69,6 +69,49 @@ func TestClose(t *testing.T) {
 	}
 }
 
+func TestUDPEncapsulationIsTransparent(t *testing.T) {
+	loopback := newLoopback()
+	local := NewMultiplexer("local", loopback)
+	local.Run()
+	remote := NewMultiplexer("remote", loopback.OtherEnd())
+	remote.Run()
+
+	client, err := local.Dial(Destination{
+		Proto: UDP,
+		IP:    net.ParseIP("127.0.0.1"),
+		Port:  8080,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, _, err := remote.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := []byte("hello world")
+	n, err := client.Write(message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != len(message) {
+		t.Fatal("Failed to send whole message")
+	}
+	buf := make([]byte, 1024)
+	n, err = server.Read(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != len(message) {
+		t.Fatalf("Failed to read whole message, read %d expected %d", n, len(message))
+	}
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCloseClose(t *testing.T) {
 	loopback := newLoopback()
 	local := NewMultiplexer("local", loopback)

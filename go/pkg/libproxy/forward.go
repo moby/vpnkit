@@ -30,7 +30,6 @@ func Forward(conn Conn, destination Destination, quit <-chan struct{}) {
 	case UDP:
 		backendAddr := &net.UDPAddr{IP: destination.IP, Port: int(destination.Port), Zone: ""}
 		// copy to and from the backend without using NewUDPProxy
-		outside := NewUDPConn(conn) // de-encapsulate the UDP
 		inside, err := net.DialUDP("udp", nil, backendAddr)
 		if err != nil {
 			log.Printf("Failed to Dial UDP backend for %s: %v", backendAddr, err)
@@ -40,11 +39,11 @@ func Forward(conn Conn, destination Destination, quit <-chan struct{}) {
 		one := make(chan struct{})
 		two := make(chan struct{})
 		go func() {
-			copyUDP(fmt.Sprintf("from %s to host", backendAddr.String()), inside, outside)
+			copyUDP(fmt.Sprintf("from %s to host", backendAddr.String()), inside, conn)
 			close(one)
 		}()
 		go func() {
-			copyUDP(fmt.Sprintf("from host to %s", backendAddr.String()), outside, inside)
+			copyUDP(fmt.Sprintf("from host to %s", backendAddr.String()), conn, inside)
 			close(two)
 		}()
 		select {

@@ -17,15 +17,10 @@ type UDPListener interface {
 }
 
 // UDPEncapsulator implements net.Conn and reads and writes UDP datagrams framed within a stream connection
-type UDPEncapsulator interface {
-	UDPListener
-	Read(b []byte) (int, error)
-	Write(b []byte) (int, error)
-	LocalAddr() net.Addr
-	RemoteAddr() net.Addr
-	SetDeadline(t time.Time) error
-	SetReadDeadline(t time.Time) error
-	SetWriteDeadline(t time.Time) error
+type uDPEncapsulator interface {
+	Conn
+	ReadFromUDP(b []byte) (int, *net.UDPAddr, error)
+	WriteToUDP(b []byte, addr *net.UDPAddr) (int, error)
 }
 
 // udpEncapsulator encapsulates a UDP connection and listener
@@ -65,6 +60,10 @@ func (u *udpEncapsulator) Close() error {
 	return u.conn.Close()
 }
 
+func (u *udpEncapsulator) CloseWrite() error {
+	return nil
+}
+
 func (u *udpEncapsulator) Read(b []byte) (int, error) {
 	n, _, err := u.ReadFromUDP(b)
 	return n, err
@@ -98,8 +97,8 @@ func (u *udpEncapsulator) Connect(a *net.UDPAddr) {
 	u.addr = a
 }
 
-// NewUDPConn initializes a new UDP connection
-func NewUDPConn(conn net.Conn) UDPEncapsulator {
+// newUDPConn initializes a new UDP connection
+func newUDPConn(conn net.Conn) uDPEncapsulator {
 	var m sync.Mutex
 	var r sync.Mutex
 	var w sync.Mutex

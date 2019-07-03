@@ -418,6 +418,10 @@ func (m *multiplexer) Dial(d Destination) (Conn, error) {
 	if err := channel.sendWindowUpdate(); err != nil {
 		return nil, err
 	}
+	if d.Proto == UDP {
+		// remove encapsulation
+		return newUDPConn(channel), nil
+	}
 	return channel, nil
 }
 
@@ -434,6 +438,9 @@ func (m *multiplexer) Accept() (Conn, *Destination, error) {
 			m.pendingAccept = m.pendingAccept[1:]
 			if err := first.sendWindowUpdate(); err != nil {
 				return nil, nil, err
+			}
+			if first.destination.Proto == UDP {
+				return newUDPConn(first), &first.destination, nil
 			}
 			return first, &first.destination, nil
 		}

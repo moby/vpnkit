@@ -64,15 +64,11 @@ type udpDialer struct {
 func (u *udpDialer) Dial(a *net.UDPAddr) (net.Conn, error) {
 	dest := libproxy.Destination{
 		Proto: libproxy.UDP,
-		IP: a.IP,
-		Port: uint16(a.Port),
+		IP:    a.IP,
+		Port:  uint16(a.Port),
 	}
 	mux := u.ctrl.Mux()
-	conn, err := mux.Dial(dest)
-	if err != nil {
-		return nil, err
-	}
-	return libproxy.NewUDPConn(conn), err
+	return mux.Dial(dest)
 }
 
 func (u *udp) Stop() {
