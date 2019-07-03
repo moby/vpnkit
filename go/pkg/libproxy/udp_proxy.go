@@ -127,7 +127,6 @@ func (proxy *UDPProxy) Run() {
 			}
 			break
 		}
-
 		fromKey := newConnTrackKey(from)
 		proxy.connTrackLock.Lock()
 		proxyConn, hit := proxy.connTrackTable[*fromKey]

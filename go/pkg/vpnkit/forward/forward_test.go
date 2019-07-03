@@ -1,6 +1,8 @@
 package forward
 
 import (
+	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -119,7 +121,7 @@ func TestUDP(t *testing.T) {
 	}
 	f, err := Make(ctrl, port)
 	assert.Nil(t, err)
-	f.Run()
+	go f.Run()
 	f.Stop()
 }
 
@@ -148,12 +150,14 @@ func TestUnixForward(t *testing.T) {
 	a, err := net.Dial("unix", outPath)
 	assert.Nil(t, err)
 	defer a.Close()
-	f.Run() // will fail because Dial fails
+	go f.Run()
+	defer f.Stop()
+	_, err = io.Copy(ioutil.Discard, a)
+	assert.Nil(t, err)
 	assert.Equal(t, &libproxy.Destination{
 		Proto: libproxy.Unix,
 		Path:  inPath,
 	}, mux.dialed)
-	f.Stop()
 }
 
 func TestUnixForwardAlreadyExists(t *testing.T) {
@@ -198,12 +202,13 @@ func TestUnixForwardAlreadyExists2(t *testing.T) {
 	a, err := net.Dial("unix", outPath)
 	assert.Nil(t, err)
 	defer a.Close()
-	f.Run() // will fail because Dial fails
+	go f.Run()
+	defer f.Stop()
+	_, err = io.Copy(ioutil.Discard, a)
 	assert.Equal(t, &libproxy.Destination{
 		Proto: libproxy.Unix,
 		Path:  inPath,
 	}, mux.dialed)
-	f.Stop()
 }
 
 func TestUnixForwardDirNotExist(t *testing.T) {
@@ -225,12 +230,12 @@ func TestUnixForwardDirNotExist(t *testing.T) {
 	a, err := net.Dial("unix", outPath)
 	assert.Nil(t, err)
 	defer a.Close()
-	f.Run() // will fail because Dial fails
+	go f.Run()
+	_, err = io.Copy(ioutil.Discard, a)
 	assert.Equal(t, &libproxy.Destination{
 		Proto: libproxy.Unix,
 		Path:  inPath,
 	}, mux.dialed)
-	f.Stop()
 }
 
 // do the same with Unix and UDP
