@@ -34,6 +34,7 @@ func (u *udp) Run() {
 		case <-u.quit:
 			// Stop has been called
 			return
+		default:
 		}
 		mux := u.ctrl.Mux()
 		dest, err := mux.Dial(*u.dest)
