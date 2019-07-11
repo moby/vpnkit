@@ -3,12 +3,12 @@ package vpnkit
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
-	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,16 +47,19 @@ func (m *mockImpl) ListExposed(_ context.Context) ([]Port, error) {
 	return m.exposed, nil
 }
 
+func (m *mockImpl) DumpState(_ context.Context, _ io.Writer) error {
+	return nil
+}
+
 func TestEmptyList(t *testing.T) {
-	transport := transport.NewUnixTransport()
 	impl := &mockImpl{}
 	path := testPath()
-	s, err := NewServer(path, transport, impl)
+	s, err := NewServer(path, impl)
 	assert.Nil(t, err)
 	assert.NotNil(t, s)
 	s.Start()
 	defer s.Stop()
-	c, err := NewClient(transport, path)
+	c, err := NewClient(path)
 	assert.Nil(t, err)
 	ctx := context.Background()
 	ports, err := c.ListExposed(ctx)
@@ -65,15 +68,14 @@ func TestEmptyList(t *testing.T) {
 }
 
 func TestNonEmpyList(t *testing.T) {
-	transport := transport.NewUnixTransport()
 	impl := &mockImpl{}
 	path := testPath()
-	s, err := NewServer(path, transport, impl)
+	s, err := NewServer(path, impl)
 	assert.Nil(t, err)
 	assert.NotNil(t, s)
 	s.Start()
 	defer s.Stop()
-	c, err := NewClient(transport, path)
+	c, err := NewClient(path)
 	assert.Nil(t, err)
 	ctx := context.Background()
 	assert.Nil(t, c.Expose(ctx, &Port{
@@ -92,15 +94,14 @@ func TestNonEmpyList(t *testing.T) {
 }
 
 func TestUnexpose(t *testing.T) {
-	transport := transport.NewUnixTransport()
 	impl := &mockImpl{}
 	path := testPath()
-	s, err := NewServer(path, transport, impl)
+	s, err := NewServer(path, impl)
 	assert.Nil(t, err)
 	assert.NotNil(t, s)
 	s.Start()
 	defer s.Stop()
-	c, err := NewClient(transport, path)
+	c, err := NewClient(path)
 	assert.Nil(t, err)
 	ctx := context.Background()
 	p := &Port{
@@ -123,15 +124,14 @@ func TestUnexpose(t *testing.T) {
 }
 
 func TestExposeError(t *testing.T) {
-	transport := transport.NewUnixTransport()
 	impl := &mockImpl{}
 	path := testPath()
-	s, err := NewServer(path, transport, impl)
+	s, err := NewServer(path, impl)
 	assert.Nil(t, err)
 	assert.NotNil(t, s)
 	s.Start()
 	defer s.Stop()
-	c, err := NewClient(transport, path)
+	c, err := NewClient(path)
 	assert.Nil(t, err)
 	impl.exposeError = &ExposeError{
 		Message: "EADDRESSINUSE",

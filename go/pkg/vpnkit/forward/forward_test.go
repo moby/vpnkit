@@ -38,6 +38,9 @@ func (m *mockMux) Close() error {
 	return nil
 }
 
+func (m *mockMux) DumpState(_ io.Writer) {
+}
+
 type mockControl struct {
 	mux libproxy.Multiplexer
 }

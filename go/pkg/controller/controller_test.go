@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"io"
 	"net"
 	"testing"
 
@@ -341,4 +342,8 @@ func (c *mockVpnKitClient) Unexpose(_ context.Context, port *vpnkit.Port) error 
 
 func (c *mockVpnKitClient) ListExposed(_ context.Context) ([]vpnkit.Port, error) {
 	return c.exposed, nil
+}
+
+func (c *mockVpnKitClient) DumpState(_ context.Context, _ io.Writer) error {
+	return nil
 }
