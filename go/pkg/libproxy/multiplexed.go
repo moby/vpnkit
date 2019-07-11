@@ -58,6 +58,8 @@ type channel struct {
 }
 
 func (c *channel) String() string {
+	c.m.Lock()
+	defer c.m.Unlock()
 	closeReceived := ""
 	if c.closeReceived {
 		closeReceived = "closeReceived "
@@ -459,34 +461,46 @@ func (m *multiplexer) Run() {
 		if err := m.run(); err != nil {
 			log.Printf("Multiplexer main loop failed with %v", err)
 			log.Printf("Event trace:")
+			m.eventsM.Lock()
 			m.events.Do(func(p interface{}) {
 				if e, ok := p.(*event); ok {
 					log.Print(e.String())
 				}
 			})
+			m.eventsM.Unlock()
+
+			m.metadataMutex.Lock()
 			log.Printf("Active channels:")
 			for _, c := range m.channels {
 				log.Printf("%s", c.String())
 			}
+			m.metadataMutex.Unlock()
 		}
 		m.metadataMutex.Lock()
 		m.isRunning = false
 		m.acceptCond.Broadcast()
+		var channels []*channel
+		for _, channel := range m.channels {
+			channels = append(channels, channel)
+		}
 		m.metadataMutex.Unlock()
 
 		// close all open channels
-		for _, channel := range m.channels {
+		for _, channel := range channels {
 			// this will unblock waiting Read calls
 			channel.readPipe.closeWriteNoErr()
 			// this will unblock waiting Write calls
 			channel.recvClose()
 			m.decrChannelRef(channel.ID)
 		}
+
 	}()
 }
 
 // DumpState writes internal multiplexer state
 func (m *multiplexer) DumpState(w io.Writer) {
+	m.eventsM.Lock()
+	defer m.eventsM.Unlock()
 	io.WriteString(w, "Event trace:\n")
 	m.events.Do(func(p interface{}) {
 		if e, ok := p.(*event); ok {
