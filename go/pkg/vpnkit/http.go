@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -20,6 +21,7 @@ const (
 	ExposePipePath   = "/forwards/expose/pipe"
 	UnexposePortPath = "/forwards/unexpose/port"
 	UnexposePipePath = "/forwards/unexpose/pipe"
+	DumpStatePath    = "/forwards/dump"
 )
 
 // NewClient can be used to manipulated exposed ports.
@@ -45,6 +47,7 @@ type Server interface {
 	ExposePipe(echo.Context) error
 	UnexposePort(echo.Context) error
 	UnexposePipe(echo.Context) error
+	DumpState(echo.Context) error
 }
 
 // Implementation of the control interface.
@@ -90,6 +93,9 @@ func NewServer(path string, t transport.Transport, impl Implementation) (Server,
 	})
 	e.GET(ListPath, func(c echo.Context) error {
 		return h.List(c)
+	})
+	e.GET(DumpStatePath, func(c echo.Context) error {
+		return h.DumpState(c)
 	})
 
 	return h, nil
@@ -169,6 +175,15 @@ func (h *httpServer) UnexposePipe(c echo.Context) error {
 		return c.JSON(400, "exposed pipes can only have proto=Unix")
 	}
 	return h.impl.Unexpose(context.Background(), &port)
+}
+
+func (h *httpServer) DumpState(c echo.Context) error {
+	r, w := io.Pipe()
+	go func() {
+		h.impl.DumpState(context.Background(), w)
+		w.Close()
+	}()
+	return c.Stream(200, "test/plain", r)
 }
 
 func (h *httpServer) Start() {
@@ -254,4 +269,18 @@ func (h *httpClient) ListExposed(context.Context) ([]Port, error) {
 		return nil, err
 	}
 	return ports, nil
+}
+
+func (h *httpClient) DumpState(_ context.Context, w io.Writer) error {
+	res, err := h.client.Get("http://unix" + DumpStatePath)
+	if err != nil {
+		fmt.Printf("GET failed with %v\n", err)
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf(DumpStatePath+" returned unexpected status: %d", res.StatusCode)
+	}
+	_, err = io.Copy(w, res.Body)
+	return err
 }

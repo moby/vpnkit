@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"strconv"
@@ -221,6 +222,12 @@ func (c *Connection) Unexpose(ctx context.Context, p *Port) error {
 	// Any clunk frees the port
 	ctl.Close(ctx)
 	return nil
+}
+
+// DumpState dumps debugging state
+func (c *Connection) DumpState(_ context.Context, w io.Writer) error {
+	_, err := io.WriteString(w, "No debug information available\n")
+	return err
 }
 
 var enoent = p9p.MessageRerror{Ename: "file not found"}

@@ -107,6 +107,12 @@ func (c *Control) ListExposed(_ context.Context) ([]vpnkit.Port, error) {
 	return results, nil
 }
 
+func (c *Control) DumpState(_ context.Context, w io.Writer) error {
+	m := c.Mux()
+	m.DumpState(w)
+	return nil
+}
+
 var _ vpnkit.Implementation = &Control{}
 var _ vpnkit.Control = &Control{}
 

@@ -312,6 +312,8 @@ type Multiplexer interface {
 	Accept() (Conn, *Destination, error) // Accept a connection from a remote Destination
 
 	Close() error // Close the multiplexer
+
+	DumpState(w io.Writer) // WriteState dumps debug state to the writer
 }
 
 type multiplexer struct {
@@ -481,6 +483,23 @@ func (m *multiplexer) Run() {
 			m.decrChannelRef(channel.ID)
 		}
 	}()
+}
+
+// DumpState writes internal multiplexer state
+func (m *multiplexer) DumpState(w io.Writer) {
+	io.WriteString(w, "Event trace:\n")
+	m.events.Do(func(p interface{}) {
+		if e, ok := p.(*event); ok {
+			io.WriteString(w, e.String())
+			io.WriteString(w, "\n")
+		}
+	})
+	io.WriteString(w, "Active channels:\n")
+	for _, c := range m.channels {
+		io.WriteString(w, c.String())
+		io.WriteString(w, "\n")
+	}
+	io.WriteString(w, "End of state dump\n")
 }
 
 // IsRunning returns whether the multiplexer is running or not

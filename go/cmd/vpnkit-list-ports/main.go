@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	vpnkit "github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
@@ -16,6 +17,8 @@ import (
 var (
 	controlVsock string
 	controlPipe  string
+
+	debug bool
 )
 
 func connectClient() (vpnkit.Client, error) {
@@ -33,6 +36,7 @@ func connectClient() (vpnkit.Client, error) {
 func main() {
 	flag.StringVar(&controlVsock, "control-vsock", "", "AF_VSOCK port to listen for control connections on")
 	flag.StringVar(&controlPipe, "control-pipe", "", "Unix domain socket or Windows named pipe to listen for control connections on")
+	flag.BoolVar(&debug, "debug", false, "also include debugging information")
 	flag.Parse()
 
 	c, err := connectClient()
@@ -45,5 +49,10 @@ func main() {
 	}
 	for _, p := range ports {
 		fmt.Println(p.String())
+	}
+	if debug {
+		if err := c.DumpState(context.Background(), os.Stderr); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
