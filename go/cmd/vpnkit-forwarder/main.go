@@ -6,6 +6,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"runtime/pprof"
+	"syscall"
 
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/control"
@@ -61,6 +64,25 @@ func main() {
 			}
 		}()
 	}
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGHUP)
+		for {
+			<-c
+			log.Println("Writing profiles to current directory")
+			for _, profile := range pprof.Profiles() {
+				filename := filepath.Join(os.TempDir(), profile.Name()+".profile")
+				log.Printf("Writing %s", filename)
+				f, err := os.Create(filename)
+				if err != nil {
+					log.Fatalf("unable to create %s: %v", filename, err)
+				}
+				profile.WriteTo(f, 2)
+				f.Close()
+			}
+		}
+	}()
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
