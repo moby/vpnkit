@@ -27,3 +27,7 @@ func (_ *unix) Listen(path string) (net.Listener, error) {
 		OutputBufferSize: 65536,
 	})
 }
+
+func (_ *unix) String() string {
+	return "Windows named pipe"
+}

@@ -10,43 +10,24 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/pkg/errors"
-
 	vpnkit "github.com/moby/vpnkit/go/pkg/vpnkit"
-	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
 	"github.com/spf13/viper"
 )
 
 // Expose ports via the control interface
 
 var (
-	controlVsock string
-	controlPipe  string
+	control string
 
 	debug       bool
 	interactive bool
 )
 
-func connectClient() (vpnkit.Client, error) {
-	if controlPipe != "" {
-		t := transport.NewUnixTransport()
-		return vpnkit.NewClient(t, controlPipe)
-	}
-
-	if controlVsock != "" {
-		t := transport.NewVsockTransport()
-		return vpnkit.NewClient(t, controlVsock)
-
-	}
-	return nil, errors.New("Please supply either -control-vsock or -control-pipe arguments")
-}
-
 func main() {
 	viper.SetConfigName("vpnkit-expose-port")
 	viper.AddConfigPath("/etc/")
 	viper.AddConfigPath(".")
-	viper.SetDefault("control-vsock", fmt.Sprintf("%d", vpnkit.DefaultControlVsock))
-	viper.SetDefault("control-pipe", "")
+	viper.SetDefault("control", fmt.Sprintf("%d", vpnkit.DefaultControlVsock))
 	if err := viper.ReadInConfig(); err != nil {
 		log.Printf("unable to read config file: %s", err)
 	}
@@ -62,18 +43,12 @@ func main() {
 	flag.BoolVar(&debug, "debug", false, "debug interaction with docker")
 	flag.BoolVar(&interactive, "i", false, "print success/failure to stdout/stderr")
 
-	defaultControlVsock, ok := viper.Get("control-vsock").(string)
+	defaultControl, ok := viper.Get("control").(string)
 	if !ok {
-		log.Printf("In config file, control-vsock should be a string\n")
+		log.Printf("In config file, control should be a string\n")
 		os.Exit(1)
 	}
-	flag.StringVar(&controlVsock, "control-vsock", defaultControlVsock, "AF_VSOCK port to connect to the Host control-plane")
-	defaultControlPipe, ok := viper.Get("control-pipe").(string)
-	if !ok {
-		log.Printf("In config file, control-pipe should be a string\n")
-		os.Exit(1)
-	}
-	flag.StringVar(&controlPipe, "control-pipe", defaultControlPipe, "Unix domain socket or Windows named pipe to connect to the Host control-plane")
+	flag.StringVar(&control, "control", defaultControl, "AF_VSOCK port or socket/Pipe path to connect to the Host control-plane")
 
 	localBind := bestEffortLocalBind // default
 	// Attempt to remain backwards compatible for existing scripts which have `-no-local-ip` as a flag.
@@ -103,7 +78,7 @@ func main() {
 		log.Fatal("-local-bind argument must be 'best-effort' or 'always' or 'never'")
 	}
 
-	c, err := connectClient()
+	c, err := vpnkit.NewClient(control)
 	if err != nil {
 		log.Fatal(err)
 	}

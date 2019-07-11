@@ -36,3 +36,7 @@ func (_ *vs) Listen(path string) (net.Listener, error) {
 	}
 	return vsock.Listen(vsock.CIDAny, addr.port)
 }
+
+func (_ *vs) String() string {
+	return "Linux AF_VSOCK"
+}

@@ -118,20 +118,20 @@ var _ vpnkit.Control = &Control{}
 
 // Listen for incoming data connections
 func (c *Control) Listen(path string, quit <-chan struct{}) {
-	t := transport.NewVsockTransport()
+	t := transport.Choose(path)
 	l, err := t.Listen(path)
 	if err != nil {
-		log.Fatalf("unable to create a data server on AF_VSOCK port %s: %s", path, err)
+		log.Fatalf("unable to create a data server on %s %s: %s", t.String(), path, err)
 	}
 	for {
 		// listen for one connection at a time
-		log.Printf("listening on AF_VSOCK port %s for data connection", path)
+		log.Printf("listening on %s for data connection", path)
 		conn, err := l.Accept()
 		if err != nil {
-			log.Printf("unable to accept connection on AF_VSOCK port %s: %s", path, err)
+			log.Printf("unable to accept connection on %s %s: %s", t.String(), path, err)
 			continue
 		}
-		log.Printf("accepted data connection on AF_VSOCK port: %s", path)
+		log.Printf("accepted data connection on %s %s", t.String(), path)
 		c.handleDataConn(conn, quit)
 	}
 }
@@ -139,16 +139,16 @@ func (c *Control) Listen(path string, quit <-chan struct{}) {
 // Connect a data connection
 func (c *Control) Connect(path string, quit <-chan struct{}) error {
 	for {
-		t := transport.NewVsockTransport()
-		log.Printf("dialing AF_VSOCK port %s for data connection", path)
+		t := transport.Choose(path)
+		log.Printf("dialing %s %s for data connection", t.String(), path)
 		conn, err := t.Dial(context.Background(), path)
 		if err != nil {
 			// This can happen if the server is restarting
-			log.Printf("unable to connect data on AF_VSOCK port %s: %s. Is the server restarting? Will retry in 1s.", path, err)
+			log.Printf("unable to connect data on %s %s: %s. Is the server restarting? Will retry in 1s.", t.String(), path, err)
 			time.Sleep(time.Second)
 			continue
 		}
-		log.Printf("connected data connection on AF_VSOCK port: %s", path)
+		log.Printf("connected data connection on %s %s", t.String(), path)
 		c.handleDataConn(conn, quit)
 	}
 }

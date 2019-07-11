@@ -27,3 +27,7 @@ func (_ *unix) Listen(path string) (net.Listener, error) {
 	}
 	return net.Listen("unix", path)
 }
+
+func (_ *unix) String() string {
+	return "Unix domain socket"
+}

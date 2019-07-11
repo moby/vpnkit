@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -46,6 +47,13 @@ func (_ *hvs) Listen(path string) (net.Listener, error) {
 		return nil, err
 	}
 	return hvsock.Listen(hvsock.Addr{VMID: hvsock.GUIDWildcard, ServiceID: addr.svcID})
+}
+
+func (_ *hvs) String() string {
+	if runtime.GOOS == "linux" {
+		return "Legacy Linux AF_HVSOCK"
+	}
+	return "Windows AF_HYPERV"
 }
 
 // addr is a union of hvsock.HypervAddr and vsock.VsockAddr addresses

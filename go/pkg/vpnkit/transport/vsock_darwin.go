@@ -41,6 +41,10 @@ func (_ *vs) Listen(path string) (net.Listener, error) {
 	return net.Listen("unix", p)
 }
 
+func (_ *vs) String() string {
+	return "Hyperkit AF_VSOCK"
+}
+
 func parsePath(cid int, path string) (string, error) {
 	port, err := strconv.ParseUint(path, 10, 32)
 	if err != nil {

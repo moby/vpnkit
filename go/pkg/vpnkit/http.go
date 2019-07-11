@@ -25,7 +25,8 @@ const (
 )
 
 // NewClient can be used to manipulated exposed ports.
-func NewClient(t transport.Transport, path string) (Client, error) {
+func NewClient(path string) (Client, error) {
+	t := transport.Choose(path)
 	return &httpClient{
 		client: http.Client{
 			Timeout: httpTimeout,
@@ -65,7 +66,8 @@ func (e *ExposeError) Error() string {
 }
 
 // NewServer handles requests to manipulate exposed ports.
-func NewServer(path string, t transport.Transport, impl Implementation) (Server, error) {
+func NewServer(path string, impl Implementation) (Server, error) {
+	t := transport.Choose(path)
 	l, err := t.Listen(path)
 	if err != nil {
 		return nil, err
