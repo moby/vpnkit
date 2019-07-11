@@ -141,6 +141,11 @@ func (c *channel) Write(p []byte) (int, error) {
 			if toWrite > len(p) {
 				toWrite = len(p)
 			}
+			// Don't block holding the metadata mutex.
+			// Note this would allow concurrent calls to Write on the same channel
+			// to conflict, but we regard that as user error.
+			c.m.Unlock()
+
 			// need to write the header and the payload together
 			c.multiplexer.writeMutex.Lock()
 			f := NewData(c.ID, uint32(toWrite))
@@ -150,6 +155,7 @@ func (c *channel) Write(p []byte) (int, error) {
 			err3 := c.multiplexer.connW.Flush()
 			c.multiplexer.writeMutex.Unlock()
 
+			c.m.Lock()
 			if err1 != nil {
 				return written, err1
 			}
