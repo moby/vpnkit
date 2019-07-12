@@ -19,7 +19,7 @@ type Dialer struct {
 	HyperVVMID          string // HyperkitVMVMID is the GUID of the VM running vpnkit-forwarder
 	Port                int    // Port is the AF_VSOCK port where vpnkit-forwarder is listening
 	m                   sync.Mutex
-	mux                 *libproxy.Multiplexer
+	mux                 libproxy.Multiplexer
 }
 
 func (d *Dialer) setupMultiplexer() error {

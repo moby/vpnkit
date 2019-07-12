@@ -3,73 +3,80 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
-	"net"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime/pprof"
+	"syscall"
 
-	"github.com/linuxkit/virtsock/pkg/hvsock"
-	"github.com/linuxkit/virtsock/pkg/vsock"
-	"github.com/moby/vpnkit/go/pkg/libproxy"
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/control"
+)
+
+var (
+	controlListen string
+	dataListen    string
+	dataConnect   string
+	debug         bool
 )
 
 // Listen on either AF_VSOCK or AF_HVSOCK (depending on the kernel) for multiplexed connections
 func main() {
-	var (
-		port     int
-		listener net.Listener
-	)
-	flag.IntVar(&port, "port", 0, "AF_VSOCK port")
+	flag.StringVar(&controlListen, "control-listen", "", "AF_VSOCK port or socket/Pipe path to listen for control connections")
+	flag.StringVar(&dataListen, "data-listen", "", "AF_VSOCK port or socket/Pipe path to listen for data connections on")
+	flag.StringVar(&dataConnect, "data-connect", "", "AF_VSOCK port or socket/Pipe path to connect to on the host for data connections")
+	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 	flag.Parse()
-
+	if dataListen == "" && dataConnect == "" {
+		log.Fatal("You must provide either -data-listen or -data-connect to establish a data connection")
+	}
 	quit := make(chan struct{})
 	defer close(quit)
 
-	if HvsockSupported() {
-		listener = hyperVListener(port)
+	ctrl := control.Make()
+
+	if controlListen != "" {
+		s, err := vpnkit.NewServer(controlListen, ctrl)
+		if err != nil {
+			log.Fatalf("unable to create a control server on %s: %s", controlListen, err)
+		}
+		s.Start()
 	} else {
-		listener = vsockListener(port)
+		log.Println("Not starting a control server")
 	}
 
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("Error accepting connection: %v", err)
-			return // no more listening
+	if dataListen != "" {
+		go ctrl.Listen(dataListen, quit)
+	}
+	if dataConnect != "" {
+		go func() {
+			if err := ctrl.Connect(dataConnect, quit); err != nil {
+				fmt.Printf("unable to connect data on %s: %s\n", dataConnect, err)
+			}
+		}()
+	}
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGHUP)
+		for {
+			<-c
+			log.Println("Writing profiles to current directory")
+			for _, profile := range pprof.Profiles() {
+				filename := filepath.Join(os.TempDir(), profile.Name()+".profile")
+				log.Printf("Writing %s", filename)
+				f, err := os.Create(filename)
+				if err != nil {
+					log.Fatalf("unable to create %s: %v", filename, err)
+				}
+				profile.WriteTo(f, 2)
+				f.Close()
+			}
 		}
-		go handleConn(conn, quit)
-	}
-}
+	}()
 
-func hyperVListener(port int) net.Listener {
-	serviceID := fmt.Sprintf("%08x-FACB-11E6-BD58-64006A7986D3", port)
-	svcid, _ := hvsock.GUIDFromString(serviceID)
-	l, err := hvsock.Listen(hvsock.Addr{VMID: hvsock.GUIDWildcard, ServiceID: svcid})
-	if err != nil {
-		log.Fatalf("Failed to bind AF_HVSOCK guid: %s: %v", serviceID, err)
-	}
-	return l
-}
-
-func vsockListener(port int) net.Listener {
-	l, err := vsock.Listen(vsock.CIDAny, uint32(port))
-	if err != nil {
-		log.Fatalf("Failed to bind to AF_VSOCK port %d: %v", port, err)
-	}
-	return l
-}
-
-// handle every AF_VSOCK connection to the multiplexer
-func handleConn(rw io.ReadWriteCloser, quit chan struct{}) {
-	defer rw.Close()
-
-	mux := libproxy.NewMultiplexer("local", rw)
-	mux.Run()
-	for {
-		conn, destination, err := mux.Accept()
-		if err != nil {
-			log.Printf("Error accepting subconnection: %v", err)
-			return
-		}
-		go libproxy.Forward(conn, *destination, quit)
-	}
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	<-c
+	log.Println("Interrupt received, shutting down")
 }

@@ -4,25 +4,22 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 )
 
 // Conn defines a network connection
 type Conn interface {
 	net.Conn
-	CloseRead() error
 	CloseWrite() error
 }
 
-func proxy(client, backend Conn, quit chan struct{}) error {
+// ProxyStream data between client and backend, until both are at EOF or quit is closed.
+func ProxyStream(client, backend Conn, quit <-chan struct{}) error {
 	event := make(chan int64)
 	var broker = func(to, from Conn) {
 		written, err := io.Copy(to, from)
 		if err != nil {
 			log.Println("error copying:", err)
-		}
-		err = from.CloseRead()
-		if err != nil {
-			log.Println("error CloseRead from:", err)
 		}
 		err = to.CloseWrite()
 		if err != nil {
@@ -50,4 +47,12 @@ func proxy(client, backend Conn, quit chan struct{}) error {
 	}
 	backend.Close()
 	return nil
+}
+
+func errIsNotConnected(err error) bool {
+	return strings.HasSuffix(err.Error(), "is not connected")
+}
+
+func errIsConnectionRefused(err error) bool {
+	return strings.HasSuffix(err.Error(), "connection refused")
 }

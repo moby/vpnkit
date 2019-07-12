@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"io"
 	"net"
 	"testing"
 
@@ -41,11 +42,12 @@ func TestNodePortService(t *testing.T) {
 
 	assert.EqualValues(t, client.exposed, []vpnkit.Port{
 		{
-			Proto:   vpnkit.TCP,
-			OutIP:   net.ParseIP("0.0.0.0"),
-			OutPort: 8080,
-			InIP:    net.ParseIP("10.0.0.1"),
-			InPort:  8080,
+			Proto:      vpnkit.TCP,
+			OutIP:      net.ParseIP("0.0.0.0"),
+			OutPort:    8080,
+			InIP:       net.ParseIP("10.0.0.1"),
+			InPort:     8080,
+			Annotation: annotation,
 		},
 	})
 	assert.Contains(t, kubeClient.Fake.Actions(), core.NewUpdateSubresourceAction(
@@ -107,11 +109,12 @@ func TestLoadBalancerService(t *testing.T) {
 	controller.OnAdd(&service)
 	assert.EqualValues(t, client.exposed, []vpnkit.Port{
 		{
-			Proto:   vpnkit.TCP,
-			OutIP:   net.ParseIP("0.0.0.0"),
-			OutPort: 80,
-			InIP:    net.ParseIP("10.96.48.189"),
-			InPort:  80,
+			Proto:      vpnkit.TCP,
+			OutIP:      net.ParseIP("0.0.0.0"),
+			OutPort:    80,
+			InIP:       net.ParseIP("10.96.48.189"),
+			InPort:     80,
+			Annotation: annotation,
 		},
 	})
 }
@@ -192,24 +195,32 @@ func TestOverlappingPorts(t *testing.T) {
 
 	assert.EqualValues(t, client.exposed, []vpnkit.Port{
 		{
-			Proto:   vpnkit.TCP,
-			OutIP:   net.ParseIP("0.0.0.0"),
-			OutPort: 80,
-			InIP:    net.ParseIP("10.96.48.189"),
-			InPort:  80,
+			Proto:      vpnkit.TCP,
+			OutIP:      net.ParseIP("0.0.0.0"),
+			OutPort:    80,
+			InIP:       net.ParseIP("10.96.48.189"),
+			InPort:     80,
+			Annotation: annotation,
 		},
 		{
-			Proto:   vpnkit.TCP,
-			OutIP:   net.ParseIP("0.0.0.0"),
-			OutPort: 443,
-			InIP:    net.ParseIP("10.96.48.190"),
-			InPort:  443,
+			Proto:      vpnkit.TCP,
+			OutIP:      net.ParseIP("0.0.0.0"),
+			OutPort:    443,
+			InIP:       net.ParseIP("10.96.48.190"),
+			InPort:     443,
+			Annotation: annotation,
 		},
 	})
 }
 
 func TestControllerDispose(t *testing.T) {
 	client := mockVpnKitClient{}
+	otherPort := vpnkit.Port{
+		Proto:   "unix",
+		InPath:  "/run/docker.sock",
+		OutPath: "/var/run/docker.sock",
+	}
+	client.Expose(context.Background(), &otherPort)
 	controller := New(&client, kubernetes.NewSimpleClientset().CoreV1())
 
 	controller.OnAdd(&v1.Service{
@@ -226,11 +237,12 @@ func TestControllerDispose(t *testing.T) {
 		},
 	})
 
-	assert.Equal(t, 1, len(client.exposed))
+	assert.Equal(t, 2, len(client.exposed))
 
 	controller.Dispose()
 
-	assert.Equal(t, 0, len(client.exposed))
+	assert.Equal(t, 1, len(client.exposed))
+	assert.EqualValues(t, client.exposed, []vpnkit.Port{otherPort})
 }
 
 func TestDiscardClusterIPService(t *testing.T) {
@@ -298,11 +310,12 @@ func TestCloseUnusedPortsAfterUpdate(t *testing.T) {
 
 	assert.EqualValues(t, client.exposed, []vpnkit.Port{
 		{
-			Proto:   vpnkit.TCP,
-			OutIP:   net.ParseIP("0.0.0.0"),
-			OutPort: 9090,
-			InIP:    net.ParseIP("10.0.0.2"),
-			InPort:  9090,
+			Proto:      vpnkit.TCP,
+			OutIP:      net.ParseIP("0.0.0.0"),
+			OutPort:    9090,
+			InIP:       net.ParseIP("10.0.0.2"),
+			InPort:     9090,
+			Annotation: annotation,
 		},
 	})
 }
@@ -329,4 +342,8 @@ func (c *mockVpnKitClient) Unexpose(_ context.Context, port *vpnkit.Port) error 
 
 func (c *mockVpnKitClient) ListExposed(_ context.Context) ([]vpnkit.Port, error) {
 	return c.exposed, nil
+}
+
+func (c *mockVpnKitClient) DumpState(_ context.Context, _ io.Writer) error {
+	return nil
 }

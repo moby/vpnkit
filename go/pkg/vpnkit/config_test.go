@@ -8,13 +8,13 @@ import (
 
 func TestGatewayForwards(t *testing.T) {
 	forwards := GatewayForwards([]Forward{
-		Forward{
+		{
 			Protocol:     TCP,
 			ExternalPort: 53,
 			InternalIP:   "127.0.0.1",
 			InternalPort: 5353,
 		},
-		Forward{
+		{
 			Protocol:     UDP,
 			ExternalPort: 53,
 			InternalIP:   "127.0.0.1",

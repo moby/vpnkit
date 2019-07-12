@@ -40,7 +40,7 @@ build/vpnkit-expose-port.linux: build/vpnkit-forwarder.linux
 	cp -v build/vpnkit-forwarder.linux build/vpnkit-expose-port.linux
 
 build/dial-example.linux: $(DEPS_DIAL_EXAMPLE)
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 \
 	go build -o $@ --ldflags '-s -w' --buildmode pie \
 	$(DEPS_DIAL_EXAMPLE)
 

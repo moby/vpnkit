@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"strconv"
@@ -28,31 +29,25 @@ const (
 
 // Port describes a UDP, TCP port forward or a Unix domain socket forward.
 type Port struct {
-	// Proto is the protocol used by the exposed port.
-	Proto Protocol
-	// OutIP is the external IP address.
-	OutIP net.IP
-	// OutPort is the external port number.
-	OutPort uint16
-	// OutPath is the external Unix domain socket.
-	OutPath string
-	// InIP is the internal IP address.
-	InIP net.IP
-	// InPort is the internal port number.
-	InPort uint16
-	// InPath is the internal Unix domain socket.
-	InPath string
-	handle *datakit.File
+	Proto      Protocol `json:"proto",omitempty`    // Proto is the protocol used by the exposed port.
+	OutIP      net.IP   `json:"out_ip",omitempty`   // OutIP is the external IP address.
+	OutPort    uint16   `json:"out_port",omitempty` // OutPort is the external port number.
+	OutPath    string   `json:"out_path",omitempty` // OutPath is the external Unix domain socket.
+	InIP       net.IP   `json:"in_ip",omitempty`    // InIP is the internal IP address.
+	InPort     uint16   `json:"in_port",omitempty`  // InPort is the internal port number.
+	InPath     string   `json:"in_path",omitempty`  // InPath is the internal Unix domain socket.
+	Annotation string   `json:"annotation",omitempty`
+	handle     *datakit.File
 }
 
 // NewPort constructs an instance of a TCP or UDP Port
 func NewPort(connection *Connection, proto Protocol, outIP net.IP, outPort uint16, inIP net.IP, inPort uint16) *Port {
-	return &Port{proto, outIP, outPort, "", inIP, inPort, "", nil}
+	return &Port{proto, outIP, outPort, "", inIP, inPort, "", "", nil}
 }
 
 // NewPath constructs an instance of a forwarded Unix path
 func NewPath(connection *Connection, outPath, inPath string) *Port {
-	return &Port{Unix, nil, uint16(0), outPath, nil, uint16(0), inPath, nil}
+	return &Port{Unix, nil, uint16(0), outPath, nil, uint16(0), inPath, "", nil}
 }
 
 // ListExposed returns a list of currently exposed ports.
@@ -77,10 +72,14 @@ func (c *Connection) ListExposed(ctx context.Context) ([]Port, error) {
 
 // String returns a human-readable string
 func (p *Port) String() string {
-	if p.Proto == Unix {
-		return fmt.Sprintf("%s forward from %s to %s", p.Proto, p.OutPath, p.InPath)
+	annotation := ""
+	if p.Annotation != "" {
+		annotation = p.Annotation + " "
 	}
-	return fmt.Sprintf("%s forward from %s:%d to %s:%d", p.Proto, p.OutIP.String(), p.OutPort, p.InIP.String(), p.InPort)
+	if p.Proto == Unix {
+		return fmt.Sprintf("%s%s forward from %s to %s", annotation, p.Proto, p.OutPath, p.InPath)
+	}
+	return fmt.Sprintf("%s%s forward from %s:%d to %s:%d", annotation, p.Proto, p.OutIP.String(), p.OutPort, p.InIP.String(), p.InPort)
 }
 
 // spec returns a string of the form proto:outIP:outPort:proto:inIP:inPort as
@@ -115,7 +114,7 @@ func parse(name string) (*Port, error) {
 		if outProto != inProto {
 			return nil, errors.New("Failed to parse port: external proto is " + outProto + " but internal proto is " + inProto)
 		}
-		return &Port{Protocol(outProto), outIP, uint16(outPort), "", inIP, uint16(inPort), "", nil}, nil
+		return &Port{Protocol(outProto), outIP, uint16(outPort), "", inIP, uint16(inPort), "", "", nil}, nil
 	case 4:
 		outProto := bits[0]
 		outPathEnc := bits[1]
@@ -132,7 +131,7 @@ func parse(name string) (*Port, error) {
 		if outProto != "unix" || inProto != "unix" {
 			return nil, errors.New("Failed to parse path: external proto is " + outProto + " and internal proto is " + inProto)
 		}
-		return &Port{Protocol(outProto), nil, uint16(0), string(outPath), nil, uint16(0), string(inPath), nil}, nil
+		return &Port{Protocol(outProto), nil, uint16(0), string(outPath), nil, uint16(0), string(inPath), "", nil}, nil
 	default:
 		return nil, errors.New("Failed to parse port spec: " + name)
 	}
@@ -223,6 +222,12 @@ func (c *Connection) Unexpose(ctx context.Context, p *Port) error {
 	// Any clunk frees the port
 	ctl.Close(ctx)
 	return nil
+}
+
+// DumpState dumps debugging state
+func (c *Connection) DumpState(_ context.Context, w io.Writer) error {
+	_, err := io.WriteString(w, "No debug information available\n")
+	return err
 }
 
 var enoent = p9p.MessageRerror{Ename: "file not found"}

@@ -5,17 +5,28 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	vpnkit "github.com/moby/vpnkit/go/pkg/vpnkit"
 )
 
 // List currently exposed ports
 
+var (
+	control string
+
+	debug bool
+)
+
 func main() {
-	path := flag.String("vpnkit", "", "path to vpnkit's control socket")
+	flag.StringVar(&control, "control", "", "AF_VSOCK port or socket/Pipe path to connect to")
+	flag.BoolVar(&debug, "debug", false, "also include debugging information")
 	flag.Parse()
 
-	c, err := vpnkit.NewConnection(context.Background(), *path)
+	if control == "" {
+		log.Fatal("Please supply a -control argument")
+	}
+	c, err := vpnkit.NewClient(control)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -25,5 +36,10 @@ func main() {
 	}
 	for _, p := range ports {
 		fmt.Println(p.String())
+	}
+	if debug {
+		if err := c.DumpState(context.Background(), os.Stderr); err != nil {
+			log.Fatal(err)
+		}
 	}
 }

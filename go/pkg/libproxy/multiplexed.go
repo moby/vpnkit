@@ -42,7 +42,7 @@ func (w *windowState) advance() {
 type channel struct {
 	m             *sync.Mutex
 	c             *sync.Cond
-	multiplexer   *Multiplexer
+	multiplexer   *multiplexer
 	destination   Destination
 	ID            uint32
 	read          *windowState
@@ -58,6 +58,8 @@ type channel struct {
 }
 
 func (c *channel) String() string {
+	c.m.Lock()
+	defer c.m.Unlock()
 	closeReceived := ""
 	if c.closeReceived {
 		closeReceived = "closeReceived "
@@ -74,7 +76,7 @@ func (c *channel) String() string {
 }
 
 // newChannel registers a channel through the multiplexer
-func newChannel(multiplexer *Multiplexer, ID uint32, d Destination) *channel {
+func newChannel(multiplexer *multiplexer, ID uint32, d Destination) *channel {
 	var m sync.Mutex
 	c := sync.NewCond(&m)
 	readPipe := newBufferedPipe()
@@ -139,6 +141,11 @@ func (c *channel) Write(p []byte) (int, error) {
 			if toWrite > len(p) {
 				toWrite = len(p)
 			}
+			// Don't block holding the metadata mutex.
+			// Note this would allow concurrent calls to Write on the same channel
+			// to conflict, but we regard that as user error.
+			c.m.Unlock()
+
 			// need to write the header and the payload together
 			c.multiplexer.writeMutex.Lock()
 			f := NewData(c.ID, uint32(toWrite))
@@ -148,6 +155,7 @@ func (c *channel) Write(p []byte) (int, error) {
 			err3 := c.multiplexer.connW.Flush()
 			c.multiplexer.writeMutex.Unlock()
 
+			c.m.Lock()
 			if err1 != nil {
 				return written, err1
 			}
@@ -263,25 +271,15 @@ func (c *channel) SetDeadline(timeout time.Time) error {
 }
 
 func (c *channel) RemoteAddr() net.Addr {
-	return &channelAddr{
-		d: c.destination,
-	}
+	return c
 }
 
 func (c *channel) LocalAddr() net.Addr {
 	return c.RemoteAddr() // There is no local address
 }
 
-type channelAddr struct {
-	d Destination
-}
-
-func (a *channelAddr) Network() string {
+func (c *channel) Network() string {
 	return "channel"
-}
-
-func (a *channelAddr) String() string {
-	return a.d.String()
 }
 
 const (
@@ -314,7 +312,19 @@ func (e *event) String() string {
 }
 
 // Multiplexer muxes and demuxes sub-connections over a single connection
-type Multiplexer struct {
+type Multiplexer interface {
+	Run()            // Run the multiplexer (otherwise Dial, Accept will not work)
+	IsRunning() bool // IsRunning is true if the multiplexer is running normally, false if it has failed
+
+	Dial(d Destination) (Conn, error)    // Dial a remote Destination
+	Accept() (Conn, *Destination, error) // Accept a connection from a remote Destination
+
+	Close() error // Close the multiplexer
+
+	DumpState(w io.Writer) // WriteState dumps debug state to the writer
+}
+
+type multiplexer struct {
 	label         string
 	conn          io.Closer
 	connR         io.Reader // with buffering
@@ -331,14 +341,14 @@ type Multiplexer struct {
 }
 
 // NewMultiplexer constructs a multiplexer from a channel
-func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
+func NewMultiplexer(label string, conn io.ReadWriteCloser) Multiplexer {
 	var writeMutex, metadataMutex, eventsM sync.Mutex
 	acceptCond := sync.NewCond(&metadataMutex)
 	channels := make(map[uint32]*channel)
 	connR := bufio.NewReader(conn)
 	connW := bufio.NewWriter(conn)
 	events := ring.New(500)
-	return &Multiplexer{
+	return &multiplexer{
 		label:         label,
 		conn:          conn,
 		connR:         connR,
@@ -354,18 +364,18 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) *Multiplexer {
 }
 
 // Close the underlying transport.
-func (m *Multiplexer) Close() error {
+func (m *multiplexer) Close() error {
 	return m.conn.Close()
 }
 
-func (m *Multiplexer) appendEvent(e *event) {
+func (m *multiplexer) appendEvent(e *event) {
 	m.eventsM.Lock()
 	defer m.eventsM.Unlock()
 	m.events.Value = e
 	m.events = m.events.Next()
 }
 
-func (m *Multiplexer) send(f *Frame) error {
+func (m *multiplexer) send(f *Frame) error {
 	m.writeMutex.Lock()
 	defer m.writeMutex.Unlock()
 	if err := f.Write(m.connW); err != nil {
@@ -375,7 +385,7 @@ func (m *Multiplexer) send(f *Frame) error {
 	return m.connW.Flush()
 }
 
-func (m *Multiplexer) findFreeChannelID() uint32 {
+func (m *multiplexer) findFreeChannelID() uint32 {
 	// the metadataMutex is already held
 	id := m.nextChannelID
 	for {
@@ -387,7 +397,7 @@ func (m *Multiplexer) findFreeChannelID() uint32 {
 	}
 }
 
-func (m *Multiplexer) decrChannelRef(ID uint32) {
+func (m *multiplexer) decrChannelRef(ID uint32) {
 	m.metadataMutex.Lock()
 	defer m.metadataMutex.Unlock()
 	if channel, ok := m.channels[ID]; ok {
@@ -401,7 +411,7 @@ func (m *Multiplexer) decrChannelRef(ID uint32) {
 }
 
 // Dial opens a connection to the given destination
-func (m *Multiplexer) Dial(d Destination) (Conn, error) {
+func (m *multiplexer) Dial(d Destination) (Conn, error) {
 	m.metadataMutex.Lock()
 	if !m.isRunning {
 		m.metadataMutex.Unlock()
@@ -418,19 +428,29 @@ func (m *Multiplexer) Dial(d Destination) (Conn, error) {
 	if err := channel.sendWindowUpdate(); err != nil {
 		return nil, err
 	}
+	if d.Proto == UDP {
+		// remove encapsulation
+		return newUDPConn(channel), nil
+	}
 	return channel, nil
 }
 
 // Accept returns the next client connection
-func (m *Multiplexer) Accept() (Conn, *Destination, error) {
+func (m *multiplexer) Accept() (Conn, *Destination, error) {
 	m.metadataMutex.Lock()
 	defer m.metadataMutex.Unlock()
 	for {
+		if !m.isRunning {
+			return nil, nil, errors.New("accept: multiplexer is not running")
+		}
 		if len(m.pendingAccept) > 0 {
 			first := m.pendingAccept[0]
 			m.pendingAccept = m.pendingAccept[1:]
 			if err := first.sendWindowUpdate(); err != nil {
 				return nil, nil, err
+			}
+			if first.destination.Proto == UDP {
+				return newUDPConn(first), &first.destination, nil
 			}
 			return first, &first.destination, nil
 		}
@@ -439,7 +459,7 @@ func (m *Multiplexer) Accept() (Conn, *Destination, error) {
 }
 
 // Run starts handling the requests from the other side
-func (m *Multiplexer) Run() {
+func (m *multiplexer) Run() {
 	m.metadataMutex.Lock()
 	m.isRunning = true
 	m.metadataMutex.Unlock()
@@ -447,39 +467,69 @@ func (m *Multiplexer) Run() {
 		if err := m.run(); err != nil {
 			log.Printf("Multiplexer main loop failed with %v", err)
 			log.Printf("Event trace:")
+			m.eventsM.Lock()
 			m.events.Do(func(p interface{}) {
 				if e, ok := p.(*event); ok {
 					log.Print(e.String())
 				}
 			})
+			m.eventsM.Unlock()
+
+			m.metadataMutex.Lock()
 			log.Printf("Active channels:")
 			for _, c := range m.channels {
 				log.Printf("%s", c.String())
 			}
+			m.metadataMutex.Unlock()
 		}
 		m.metadataMutex.Lock()
 		m.isRunning = false
+		m.acceptCond.Broadcast()
+		var channels []*channel
+		for _, channel := range m.channels {
+			channels = append(channels, channel)
+		}
 		m.metadataMutex.Unlock()
 
 		// close all open channels
-		for _, channel := range m.channels {
+		for _, channel := range channels {
 			// this will unblock waiting Read calls
 			channel.readPipe.closeWriteNoErr()
 			// this will unblock waiting Write calls
 			channel.recvClose()
 			m.decrChannelRef(channel.ID)
 		}
+
 	}()
 }
 
+// DumpState writes internal multiplexer state
+func (m *multiplexer) DumpState(w io.Writer) {
+	m.eventsM.Lock()
+	defer m.eventsM.Unlock()
+	io.WriteString(w, "Event trace:\n")
+	m.events.Do(func(p interface{}) {
+		if e, ok := p.(*event); ok {
+			io.WriteString(w, e.String())
+			io.WriteString(w, "\n")
+		}
+	})
+	io.WriteString(w, "Active channels:\n")
+	for _, c := range m.channels {
+		io.WriteString(w, c.String())
+		io.WriteString(w, "\n")
+	}
+	io.WriteString(w, "End of state dump\n")
+}
+
 // IsRunning returns whether the multiplexer is running or not
-func (m *Multiplexer) IsRunning() bool {
+func (m *multiplexer) IsRunning() bool {
 	m.metadataMutex.Lock()
 	defer m.metadataMutex.Unlock()
 	return m.isRunning
 }
 
-func (m *Multiplexer) run() error {
+func (m *multiplexer) run() error {
 	for {
 		f, err := unmarshalFrame(m.connR)
 		if err != nil {
@@ -556,42 +606,5 @@ func (m *Multiplexer) run() error {
 		default:
 			return fmt.Errorf("Unknown command type: %v", f)
 		}
-	}
-}
-
-// Forward runs the TCP/UDP forwarder over a sub-connection
-func Forward(conn Conn, destination Destination, quit chan struct{}) {
-	defer conn.Close()
-
-	switch destination.Proto {
-	case TCP:
-		backendAddr := net.TCPAddr{IP: destination.IP, Port: int(destination.Port), Zone: ""}
-		if err := HandleTCPConnection(conn, &backendAddr, quit); err != nil {
-			log.Printf("Error setting up TCP proxy subconnection: %v", err)
-			return
-		}
-	case Unix:
-		backendAddr, err := net.ResolveUnixAddr("unix", destination.Path)
-		if err != nil {
-			log.Printf("Error resolving Unix address %s", destination.Path)
-			return
-		}
-		if err := HandleUnixConnection(conn, backendAddr, quit); err != nil {
-			log.Printf("Error setting up Unix proxy subconnection: %v", err)
-			return
-		}
-	case UDP:
-		backendAddr := &net.UDPAddr{IP: destination.IP, Port: int(destination.Port), Zone: ""}
-
-		proxy, err := NewUDPProxy(backendAddr, NewUDPConn(conn), backendAddr)
-		if err != nil {
-			log.Printf("Failed to setup UDP proxy for %s: %#v", backendAddr, err)
-			return
-		}
-		proxy.Run()
-		return
-	default:
-		log.Printf("Unknown protocol: %d", destination.Proto)
-		return
 	}
 }
