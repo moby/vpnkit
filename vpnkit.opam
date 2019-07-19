@@ -27,7 +27,7 @@ depends: [
   "alcotest"   {test}
   "result"
   "tar" {>= "0.8.0"}
-  "ipaddr"
+  "ipaddr" {< "3.0.0"}
   "lwt" {>= "2.7.0"}
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "3.3.0"}
