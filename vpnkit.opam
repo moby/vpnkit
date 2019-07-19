@@ -27,7 +27,7 @@ depends: [
   "alcotest"   {test}
   "result"
   "tar" {>= "0.8.0"}
-  "ipaddr" {< "3.0.0"}
+  "ipaddr" {= "2.8.0"}
   "lwt" {= "4.1.0"}
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "3.3.0"}
@@ -35,7 +35,7 @@ depends: [
   "dns-lwt"
   "dnssd" {>= "0.2"}
   "dns-forward" {>= "0.10.0"}
-  "cstruct-lwt" {>= "3.0.0"}
+  "cstruct-lwt" {= "3.2.1"}
   "datakit-server" {>= "0.11.0"}
   "datakit-server-9p" {>= "0.11.0"}
   "hashcons" {>= "1.0.1"}
