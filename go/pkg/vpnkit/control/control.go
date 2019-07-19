@@ -15,6 +15,7 @@ import (
 )
 
 type Control struct {
+	Forwarder forward.Maker // Forwarder makes local port forwards
 	mux       libproxy.Multiplexer
 	muxM      *sync.Mutex
 	muxC      *sync.Cond
@@ -68,7 +69,7 @@ func (c *Control) Expose(_ context.Context, port *vpnkit.Port) error {
 	if _, ok := c.forwards[key]; ok {
 		return errors.New("port already exposed: " + port.String())
 	}
-	forward, err := forward.Make(c, *port)
+	forward, err := c.Forwarder.Make(c, *port)
 	if err != nil {
 		// This error (e.g. EADDRINUSE) is special and we want to show it to the user
 		return &vpnkit.ExposeError{
