@@ -28,7 +28,7 @@ depends: [
   "result"
   "tar" {>= "0.8.0"}
   "ipaddr" {< "3.0.0"}
-  "lwt" {>= "2.7.0"}
+  "lwt" {= "4.1.0"}
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "3.3.0"}
   "dns" {>= "0.19.1"}
@@ -50,6 +50,10 @@ depends: [
   "logs"
   "fmt"
   "astring"
+  "mirage-kv" {= "1.1.1"}
+  "mirage-kv-lwt" {= "1.1.0"}
+  "mirage-net" {= "1.1.1"}
+  "mirage-net-lwt" {= "1.1.0"}
   "mirage-flow-lwt" {>= "1.4.0"}
   "mirage-time-lwt" {>= "1.1.0"}
   "mirage-protocols" {>= "1.1.0"}
