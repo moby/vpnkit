@@ -35,6 +35,8 @@ depends: [
   "dns-lwt"
   "dnssd" {>= "0.2"}
   "dns-forward" {>= "0.10.0"}
+  "base64" {= "2.2.0"}
+  "cstruct" {= "3.2.1"}
   "cstruct-lwt" {= "3.2.1"}
   "datakit-server" {>= "0.11.0"}
   "datakit-server-9p" {>= "0.11.0"}
