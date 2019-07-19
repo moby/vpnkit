@@ -1,4 +1,4 @@
-FROM ocaml/opam2:alpine as build
+FROM ocaml/opam2:alpine-3.10-ocaml-4.07 as build
 ADD . /home/opam/src
 # Latest packages plus some overrides are in this repo:
 RUN opam remote add vpnkit /home/opam/src/repo/darwin
