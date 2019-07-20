@@ -27,15 +27,17 @@ depends: [
   "alcotest"   {test}
   "result"
   "tar" {>= "0.8.0"}
-  "ipaddr"
-  "lwt" {>= "2.7.0"}
+  "ipaddr" {= "2.8.0"}
+  "lwt" {= "4.1.0"}
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "3.3.0"}
   "dns" {>= "0.19.1"}
   "dns-lwt"
   "dnssd" {>= "0.2"}
   "dns-forward" {>= "0.10.0"}
-  "cstruct-lwt" {>= "3.0.0"}
+  "base64" {= "2.2.0"}
+  "cstruct" {= "3.2.1"}
+  "cstruct-lwt" {= "3.2.1"}
   "datakit-server" {>= "0.11.0"}
   "datakit-server-9p" {>= "0.11.0"}
   "hashcons" {>= "1.0.1"}
@@ -50,6 +52,10 @@ depends: [
   "logs"
   "fmt"
   "astring"
+  "mirage-kv" {= "1.1.1"}
+  "mirage-kv-lwt" {= "1.1.0"}
+  "mirage-net" {= "1.1.1"}
+  "mirage-net-lwt" {= "1.1.0"}
   "mirage-flow-lwt" {>= "1.4.0"}
   "mirage-time-lwt" {>= "1.1.0"}
   "mirage-protocols" {>= "1.1.0"}

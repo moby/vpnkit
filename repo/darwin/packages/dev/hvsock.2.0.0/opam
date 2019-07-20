@@ -27,7 +27,7 @@ depends: [
   "cmdliner"
   "sha"
   "uri"
-  "base64"
+  "base64" {< "3.0.0"}
   "uuidm"
   "uutf"
   "mirage-flow-lwt" {>= "1.2.0"}
