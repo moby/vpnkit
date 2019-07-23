@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
 )
 
@@ -49,6 +48,8 @@ type Server interface {
 	UnexposePort(echo.Context) error
 	UnexposePipe(echo.Context) error
 	DumpState(echo.Context) error
+
+	Echo() *echo.Echo
 }
 
 // Implementation of the control interface.
@@ -75,7 +76,6 @@ func NewServer(path string, impl Implementation) (Server, error) {
 	e := echo.New()
 	e.HideBanner = true
 	e.Listener = l
-	e.Use(middleware.Logger())
 	h := &httpServer{
 		e,
 		impl,
@@ -106,6 +106,11 @@ func NewServer(path string, impl Implementation) (Server, error) {
 type httpServer struct {
 	e    *echo.Echo
 	impl Implementation
+}
+
+// Echo returns the server so logging can be customised.
+func (h *httpServer) Echo() *echo.Echo {
+	return h.e
 }
 
 // List ports HTTP handler

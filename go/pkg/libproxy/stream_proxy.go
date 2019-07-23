@@ -2,7 +2,6 @@ package libproxy
 
 import (
 	"io"
-	"log"
 	"net"
 	"strings"
 )

@@ -1,10 +1,9 @@
 package forward
 
 import (
-	"log"
-
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 )
 
 // Listen on stream sockets and forward to a remote multiplexer.

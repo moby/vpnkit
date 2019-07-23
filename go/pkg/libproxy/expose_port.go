@@ -3,7 +3,6 @@ package libproxy
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strings"

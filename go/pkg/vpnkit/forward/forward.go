@@ -4,10 +4,10 @@ package forward
 
 import (
 	"errors"
-	"log"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 )
 
 // Forward listens for incoming connections from the "outside" and forwards them to a remote.

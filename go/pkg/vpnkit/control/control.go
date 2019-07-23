@@ -3,13 +3,13 @@ package control
 import (
 	"context"
 	"io"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/forward"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
 	"github.com/pkg/errors"
 )

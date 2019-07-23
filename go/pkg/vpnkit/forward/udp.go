@@ -2,11 +2,11 @@ package forward
 
 import (
 	"fmt"
-	"log"
 	"net"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 	"github.com/pkg/errors"
 )
 

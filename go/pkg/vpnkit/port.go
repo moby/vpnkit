@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 
 	p9p "github.com/docker/go-p9p"
 	datakit "github.com/moby/datakit/api/go-datakit"
