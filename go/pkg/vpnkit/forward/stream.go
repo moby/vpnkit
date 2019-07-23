@@ -63,7 +63,7 @@ func (s *stream) Run() {
 }
 
 func (s *stream) Stop() {
-	log.Printf("Removing %s", s.port.String())
+	log.Printf("removing %s", s.port.String())
 	s.l.close()
 	close(s.quit)
 }

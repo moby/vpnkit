@@ -25,7 +25,7 @@ type Maker struct {
 
 // Make a Forward from a Port description.
 func (f Maker) Make(ctrl vpnkit.Control, port vpnkit.Port) (Forward, error) {
-	log.Printf("Adding %s", port.String())
+	log.Printf("adding %s", port.String())
 	dest := &libproxy.Destination{
 		IP:   port.InIP,
 		Port: port.InPort,

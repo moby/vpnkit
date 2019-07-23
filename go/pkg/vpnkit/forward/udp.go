@@ -72,7 +72,7 @@ func (u *udpDialer) Dial(a *net.UDPAddr) (net.Conn, error) {
 }
 
 func (u *udp) Stop() {
-	log.Printf("Removing %s", u.port.String())
+	log.Printf("removing %s", u.port.String())
 	close(u.quit)
 	if u.inside != nil {
 		// only if Run() has been called
