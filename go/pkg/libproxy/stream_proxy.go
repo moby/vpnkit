@@ -22,7 +22,7 @@ func ProxyStream(client, backend Conn, quit <-chan struct{}) error {
 			log.Println("error copying:", err)
 		}
 		err = to.CloseWrite()
-		if err != nil {
+		if err != nil && !errIsNotConnected(err) {
 			log.Println("error CloseWrite to:", err)
 		}
 		event <- written
