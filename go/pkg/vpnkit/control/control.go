@@ -159,6 +159,7 @@ func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}) {
 	mux := libproxy.NewMultiplexer("local", rw)
 	mux.Run()
 	c.SetMux(mux)
+	defer c.SetMux(nil)
 	for {
 		conn, destination, err := mux.Accept()
 		if err != nil {
