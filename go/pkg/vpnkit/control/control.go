@@ -39,7 +39,7 @@ func Make() *Control {
 func (c *Control) SetMux(m libproxy.Multiplexer) {
 	c.muxM.Lock()
 	defer c.muxM.Unlock()
-	log.Println("ready to forward incoming data connections")
+	log.Println("established connection to vpnkit-forwarder")
 	c.mux = m
 	c.muxC.Broadcast()
 }
