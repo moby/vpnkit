@@ -162,7 +162,7 @@ func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}) {
 	for {
 		conn, destination, err := mux.Accept()
 		if err != nil {
-			log.Printf("Error accepting subconnection: %v", err)
+			log.Errorf("error accepting subconnection: %v", err)
 			return
 		}
 		go libproxy.Forward(conn, *destination, quit)

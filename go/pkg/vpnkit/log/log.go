@@ -19,6 +19,10 @@ func Printf(format string, args ...interface{}) {
 	log.Printf(format, args...)
 }
 
+func Errorf(format string, args ...interface{}) {
+	log.Errorf(format, args...)
+}
+
 func Println(s string) {
 	log.Println(s)
 }
