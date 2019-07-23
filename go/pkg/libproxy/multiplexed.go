@@ -465,21 +465,7 @@ func (m *multiplexer) Run() {
 	go func() {
 		if err := m.run(); err != nil {
 			log.Printf("Multiplexer main loop failed with %v", err)
-			log.Printf("Event trace:")
-			m.eventsM.Lock()
-			m.events.Do(func(p interface{}) {
-				if e, ok := p.(*event); ok {
-					log.Print(e.String())
-				}
-			})
-			m.eventsM.Unlock()
-
-			m.metadataMutex.Lock()
-			log.Printf("Active channels:")
-			for _, c := range m.channels {
-				log.Printf("%s", c.String())
-			}
-			m.metadataMutex.Unlock()
+			m.DumpState(log.Writer())
 		}
 		m.metadataMutex.Lock()
 		m.isRunning = false
@@ -505,7 +491,6 @@ func (m *multiplexer) Run() {
 // DumpState writes internal multiplexer state
 func (m *multiplexer) DumpState(w io.Writer) {
 	m.eventsM.Lock()
-	defer m.eventsM.Unlock()
 	io.WriteString(w, "Event trace:\n")
 	m.events.Do(func(p interface{}) {
 		if e, ok := p.(*event); ok {
@@ -513,12 +498,15 @@ func (m *multiplexer) DumpState(w io.Writer) {
 			io.WriteString(w, "\n")
 		}
 	})
+	m.eventsM.Unlock()
+	m.metadataMutex.Lock()
 	io.WriteString(w, "Active channels:\n")
 	for _, c := range m.channels {
 		io.WriteString(w, c.String())
 		io.WriteString(w, "\n")
 	}
 	io.WriteString(w, "End of state dump\n")
+	m.metadataMutex.Unlock()
 }
 
 // IsRunning returns whether the multiplexer is running or not
