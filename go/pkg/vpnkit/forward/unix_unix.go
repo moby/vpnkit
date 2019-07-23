@@ -3,18 +3,20 @@
 package forward
 
 import (
-	"github.com/moby/vpnkit/go/pkg/libproxy"
-	"github.com/moby/vpnkit/go/pkg/vpnkit"
-	"github.com/pkg/errors"
 	"net"
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"github.com/moby/vpnkit/go/pkg/libproxy"
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/pkg/errors"
 )
 
-type unixNetwork struct{}
+// UnixNetwork specifies common parameters for Unix domain socket forwards.
+type UnixNetwork struct{}
 
-func (t *unixNetwork) listen(port vpnkit.Port) (listener, error) {
+func (t UnixNetwork) listen(port vpnkit.Port) (listener, error) {
 	if err := removeExistingSocket(port.OutPath); err != nil {
 		return nil, err
 	}
@@ -44,8 +46,8 @@ func (l unixListener) close() error {
 	return l.l.Close()
 }
 
-func makeUnix(c common) (Forward, error) {
-	return makeStream(c, &unixNetwork{})
+func makeUnix(c common, n UnixNetwork) (Forward, error) {
+	return makeStream(c, n)
 }
 
 func removeExistingSocket(path string) error {

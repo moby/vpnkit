@@ -9,22 +9,23 @@ import (
 
 // Listen on TCP sockets and forward to a remote multiplexer.
 
-type tcpNetwork struct{}
+// TCPNetwork specifies common parameters for TCP-based port forwards.
+type TCPNetwork struct{}
 
-func (t *tcpNetwork) listen(port vpnkit.Port) (listener, error) {
+func (t TCPNetwork) listen(port vpnkit.Port) (listener, error) {
 	l, err := listenTCP(port)
 	if err != nil {
 		return nil, err
 	}
 	wrapped := &tcpListener{
-		l : l,
+		l:    l,
 		port: port,
 	}
 	return wrapped, nil
 }
 
 type tcpListener struct {
-	l *net.TCPListener
+	l    *net.TCPListener
 	port vpnkit.Port
 }
 
@@ -36,6 +37,6 @@ func (l *tcpListener) close() error {
 	return closeTCP(l.port, l.l)
 }
 
-func makeTCP(c common) (Forward, error) {
-	return makeStream(c, &tcpNetwork{})
+func makeTCP(c common, n TCPNetwork) (Forward, error) {
+	return makeStream(c, n)
 }

@@ -42,7 +42,8 @@ func (m *mockMux) DumpState(_ io.Writer) {
 }
 
 type mockControl struct {
-	mux libproxy.Multiplexer
+	mux       libproxy.Multiplexer
+	Forwarder Maker
 }
 
 func (m *mockControl) Mux() libproxy.Multiplexer {
@@ -99,7 +100,7 @@ func TestTCP(t *testing.T) {
 		InPort:  inPort,
 		Proto:   vpnkit.TCP,
 	}
-	f, err := Make(ctrl, port)
+	f, err := ctrl.Forwarder.Make(ctrl, port)
 	assert.Nil(t, err)
 	f.Stop()
 }
@@ -122,7 +123,7 @@ func TestUDP(t *testing.T) {
 		InPort:  inPort,
 		Proto:   vpnkit.UDP,
 	}
-	f, err := Make(ctrl, port)
+	f, err := ctrl.Forwarder.Make(ctrl, port)
 	assert.Nil(t, err)
 	go f.Run()
 	f.Stop()
@@ -148,7 +149,7 @@ func TestUnixForward(t *testing.T) {
 		InPath:  inPath,
 		Proto:   vpnkit.Unix,
 	}
-	f, err := Make(ctrl, port)
+	f, err := ctrl.Forwarder.Make(ctrl, port)
 	assert.Nil(t, err)
 	a, err := net.Dial("unix", outPath)
 	assert.Nil(t, err)
@@ -178,7 +179,7 @@ func TestUnixForwardAlreadyExists(t *testing.T) {
 		InPath:  inPath,
 		Proto:   vpnkit.Unix,
 	}
-	_, err = Make(ctrl, port)
+	_, err = ctrl.Forwarder.Make(ctrl, port)
 	assert.NotNil(t, err)
 }
 
@@ -200,7 +201,7 @@ func TestUnixForwardAlreadyExists2(t *testing.T) {
 		InPath:  inPath,
 		Proto:   vpnkit.Unix,
 	}
-	f, err := Make(ctrl, port)
+	f, err := ctrl.Forwarder.Make(ctrl, port)
 	assert.Nil(t, err)
 	a, err := net.Dial("unix", outPath)
 	assert.Nil(t, err)
@@ -228,7 +229,7 @@ func TestUnixForwardDirNotExist(t *testing.T) {
 		InPath:  inPath,
 		Proto:   vpnkit.Unix,
 	}
-	f, err := Make(ctrl, port)
+	f, err := ctrl.Forwarder.Make(ctrl, port)
 	assert.Nil(t, err)
 	a, err := net.Dial("unix", outPath)
 	assert.Nil(t, err)
@@ -253,9 +254,9 @@ func TestAddressInUse(t *testing.T) {
 		InPort:  inPort,
 		Proto:   vpnkit.TCP,
 	}
-	f1, err := Make(ctrl, port)
+	f1, err := ctrl.Forwarder.Make(ctrl, port)
 	assert.Nil(t, err)
-	f2, err := Make(ctrl, port)
+	f2, err := ctrl.Forwarder.Make(ctrl, port)
 	if !strings.HasSuffix(err.Error(), "bind: address already in use") {
 		t.Errorf("expected an address-already-in-use type of error: %v", err)
 	}
@@ -273,7 +274,7 @@ func TestInterfaceDoesNotExist(t *testing.T) {
 		InPort:  inPort,
 		Proto:   vpnkit.TCP,
 	}
-	f, err := Make(ctrl, port)
+	f, err := ctrl.Forwarder.Make(ctrl, port)
 	if !strings.HasSuffix(err.Error(), "assign requested address") {
 		t.Errorf("expected an no-such-address type of error: %v", err)
 	}

@@ -9,13 +9,17 @@ import (
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
 )
 
-type unixNetwork struct{}
+// UnixNetwork specifies common parameters for Windows named pipe forwards.
+type UnixNetwork struct {
+	SecurityDescriptor string // SecurityDescriptor will apply to all the pipes.
+}
 
-func (t *unixNetwork) listen(port vpnkit.Port) (listener, error) {
+func (t UnixNetwork) listen(port vpnkit.Port) (listener, error) {
 	l, err := winio.ListenPipe(port.OutPath, &winio.PipeConfig{
-		MessageMode:      true,  // Use message mode so that CloseWrite() is supported
-		InputBufferSize:  65536, // Use 64KB buffers to improve performance
-		OutputBufferSize: 65536,
+		SecurityDescriptor: t.SecurityDescriptor,
+		MessageMode:        true,  // Use message mode so that CloseWrite() is supported
+		InputBufferSize:    65536, // Use 64KB buffers to improve performance
+		OutputBufferSize:   65536,
 	})
 	if err != nil {
 		return nil, err
@@ -44,6 +48,6 @@ func (l unixListener) close() error {
 	return l.l.Close()
 }
 
-func makeUnix(c common) (Forward, error) {
-	return makeStream(c, &unixNetwork{})
+func makeUnix(c common, n UnixNetwork) (Forward, error) {
+	return makeStream(c, n)
 }
