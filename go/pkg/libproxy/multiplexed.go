@@ -464,8 +464,13 @@ func (m *multiplexer) Run() {
 	m.metadataMutex.Unlock()
 	go func() {
 		if err := m.run(); err != nil {
-			log.Printf("Multiplexer main loop failed with %v", err)
-			m.DumpState(log.Writer())
+			if err == io.EOF {
+				// This is expected when the data connection is broken
+				log.Infof("disconnected data connection: multiplexer is offline")
+			} else {
+				log.Printf("Multiplexer main loop failed with %v", err)
+				m.DumpState(log.Writer())
+			}
 		}
 		m.metadataMutex.Lock()
 		m.isRunning = false
@@ -520,7 +525,7 @@ func (m *multiplexer) run() error {
 	for {
 		f, err := unmarshalFrame(m.connR)
 		if err != nil {
-			return fmt.Errorf("Failed to unmarshal command frame: %v", err)
+			return err
 		}
 		m.appendEvent(&event{eventType: eventRecv, frame: f})
 		switch payload := f.Payload().(type) {
