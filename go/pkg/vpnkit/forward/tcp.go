@@ -13,20 +13,22 @@ import (
 type TCPNetwork struct{}
 
 func (t TCPNetwork) listen(port vpnkit.Port) (listener, error) {
-	l, err := listenTCP(port)
+	l, vmnetd, err := listenTCP(port)
 	if err != nil {
 		return nil, err
 	}
 	wrapped := &tcpListener{
-		l:    l,
-		port: port,
+		l:      l,
+		vmnetd: vmnetd,
+		port:   port,
 	}
 	return wrapped, nil
 }
 
 type tcpListener struct {
-	l    *net.TCPListener
-	port vpnkit.Port
+	l      *net.TCPListener
+	vmnetd bool
+	port   vpnkit.Port
 }
 
 func (l *tcpListener) accept() (libproxy.Conn, error) {
@@ -34,7 +36,7 @@ func (l *tcpListener) accept() (libproxy.Conn, error) {
 }
 
 func (l *tcpListener) close() error {
-	return closeTCP(l.port, l.l)
+	return closeTCP(l.port, l.vmnetd, l.l)
 }
 
 func makeTCP(c common, n TCPNetwork) (Forward, error) {

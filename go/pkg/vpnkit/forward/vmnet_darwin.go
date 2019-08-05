@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"strings"
 	"syscall"
 	"time"
 
@@ -383,4 +384,8 @@ func readBytes(conn io.Reader, length int) ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+func isPermissionDenied(err error) bool {
+	return strings.HasSuffix(err.Error(), "permission denied")
 }

@@ -10,17 +10,19 @@ import (
 )
 
 func listenUDP(port vpnkit.Port) (libproxy.UDPListener, error) {
-	if port.OutPort > 1024 {
-		return net.ListenUDP("udp", &net.UDPAddr{
-			IP:   port.OutIP,
-			Port: int(port.OutPort),
-		})
+	l, err := net.ListenUDP("udp", &net.UDPAddr{
+		IP:   port.OutIP,
+		Port: int(port.OutPort),
+	})
+	if err != nil && isPermissionDenied(err) {
+		// fall back to vmnetd
+		l, err := listenUDPVmnet(port.OutIP, port.OutPort)
+		if err != nil {
+			return nil, err
+		}
+		return &wrappedCloser{port, l}, nil
 	}
-	l, err := listenUDPVmnet(port.OutIP, port.OutPort)
-	if err != nil {
-		return nil, err
-	}
-	return &wrappedCloser{port, l}, nil
+	return l, err
 }
 
 type wrappedCloser struct {

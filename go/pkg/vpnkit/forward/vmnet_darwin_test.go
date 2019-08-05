@@ -7,6 +7,7 @@ import (
 	"net"
 	"syscall"
 
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/stretchr/testify/assert"
 
 	"testing"
@@ -169,4 +170,46 @@ func TestBindUDPVmnetdCloseLeak(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		TestBindUDPVmnetdClose(t)
 	}
+}
+
+func TestListenUDPMojave1(t *testing.T) {
+	// On Mojave this will not need vmnetd
+	l, err := listenUDP(vpnkit.Port{
+		OutIP:   net.ParseIP("0.0.0.0"),
+		OutPort: 80,
+	})
+	assert.Nil(t, err)
+	assert.Nil(t, l.Close())
+}
+
+func TestListenUDPMojave2(t *testing.T) {
+	// On Mojave this will need vmnetd
+	l, err := listenUDP(vpnkit.Port{
+		OutIP:   net.ParseIP("127.0.0.1"),
+		OutPort: 80,
+	})
+	assert.Nil(t, err)
+	assert.Nil(t, l.Close())
+}
+
+func TestListenTCPMojave1(t *testing.T) {
+	// On Mojave this will not need vmnetd
+	l, vmnetd, err := listenTCP(vpnkit.Port{
+		OutIP:   net.ParseIP("0.0.0.0"),
+		OutPort: 80,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, false, vmnetd)
+	assert.Nil(t, l.Close())
+}
+
+func TestListenTCPMojave2(t *testing.T) {
+	// On Mojave this will need vmnetd
+	l, vmnetd, err := listenTCP(vpnkit.Port{
+		OutIP:   net.ParseIP("127.0.0.1"),
+		OutPort: 80,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, true, vmnetd)
+	assert.Nil(t, l.Close())
 }

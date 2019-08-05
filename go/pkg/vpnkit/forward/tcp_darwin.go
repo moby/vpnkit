@@ -3,23 +3,28 @@
 package forward
 
 import (
-	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"net"
+
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
 )
 
-func listenTCP(port vpnkit.Port) (*net.TCPListener, error) {
-	if port.OutPort > 1024 {
-		return net.ListenTCP("tcp", &net.TCPAddr{
-			IP:   port.OutIP,
-			Port: int(port.OutPort),
-		})
+func listenTCP(port vpnkit.Port) (*net.TCPListener, bool, error) {
+	l, err := net.ListenTCP("tcp", &net.TCPAddr{
+		IP:   port.OutIP,
+		Port: int(port.OutPort),
+	})
+
+	if err != nil && isPermissionDenied(err) {
+		// fall back to vmnetd
+		l, err := listenTCPVmnet(port.OutIP, port.OutPort)
+		return l, true, err
 	}
-	return listenTCPVmnet(port.OutIP, port.OutPort)
+	return l, false, err
 }
 
-func closeTCP(port vpnkit.Port, l *net.TCPListener) error {
-	if port.OutPort > 1024 {
-		return l.Close()
+func closeTCP(port vpnkit.Port, vmnetd bool, l *net.TCPListener) error {
+	if vmnetd {
+		return closeTCPVmnet(port.OutIP, port.OutPort, l)
 	}
-	return closeTCPVmnet(port.OutIP, port.OutPort, l)
+	return l.Close()
 }
