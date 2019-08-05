@@ -2,6 +2,7 @@ package forward
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net"
 	"syscall"
@@ -52,7 +53,45 @@ func TestBindVmnetdLow(t *testing.T) {
 	}
 }
 
-func TestBindVmnetd(t *testing.T) {
+func TestBindUDPVmnetd(t *testing.T) {
+	localhost := net.ParseIP("127.0.0.1")
+	addr := &net.UDPAddr{
+		IP:   localhost,
+		Port: 8081,
+	}
+	all := net.ParseIP("0.0.0.0")
+	f, err := listenUDPVmnet(all, uint16(addr.Port))
+	assert.Nil(t, err)
+	defer f.Close()
+	hello := []byte("hello\n")
+	done := make(chan struct{})
+
+	go func() {
+		client, err := net.DialUDP("udp", nil, addr)
+		assert.Nil(t, err)
+		assert.NotNil(t, client)
+		defer client.Close()
+		for i := 0; i < 100; i++ {
+			n, err := client.Write(hello)
+			assert.Nil(t, err)
+			select {
+			case <-done:
+				return
+			default:
+				fmt.Printf("sent %d bytes, sleeping for 0.1s\n", n)
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+		t.FailNow()
+	}()
+	result := make([]byte, 1024)
+	n, err := f.Read(result)
+	assert.Nil(t, err)
+	assert.Equal(t, string(hello), string(result[0:n]))
+	done <- struct{}{}
+}
+
+func TestBindTCPVmnetd(t *testing.T) {
 	localhost := net.ParseIP("127.0.0.1")
 	f, err := listenTCPVmnet(localhost, 8081)
 	assert.Nil(t, err)
@@ -80,13 +119,19 @@ func TestBindVmnetd(t *testing.T) {
 	<-done
 }
 
-func TestBindVmnetdLeak(t *testing.T) {
+func TestBindTCPVmnetdLeak(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		TestBindVmnetd(t)
+		TestBindTCPVmnetd(t)
 	}
 }
 
-func TestBindVmnetdClose(t *testing.T) {
+func TestBindUDPVmnetdLeak(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		TestBindUDPVmnetd(t)
+	}
+}
+
+func TestBindTCPVmnetdClose(t *testing.T) {
 	localhost := net.ParseIP("127.0.0.1")
 	f, err := listenTCPVmnet(localhost, 8081)
 	assert.Nil(t, err)
@@ -101,8 +146,27 @@ func TestBindVmnetdClose(t *testing.T) {
 	assert.Nil(t, closeTCPVmnet(localhost, 8081, f))
 }
 
-func TestBindVmnetdCloseLeak(t *testing.T) {
+func TestBindUDPVmnetdClose(t *testing.T) {
+	localhost := net.ParseIP("127.0.0.1")
+	f, err := listenUDPVmnet(localhost, 8081)
+	assert.Nil(t, err)
+	go func() {
+		buf := make([]byte, 1024)
+		_, err := f.Read(buf)
+		assert.Nil(t, err)
+	}()
+	time.Sleep(10 * time.Millisecond)
+	assert.Nil(t, closeUDPVmnet(localhost, 8081, f))
+}
+
+func TestBindTCPVmnetdCloseLeak(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		TestBindVmnetdClose(t)
+		TestBindTCPVmnetdClose(t)
+	}
+}
+
+func TestBindUDPVmnetdCloseLeak(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		TestBindUDPVmnetdClose(t)
 	}
 }
