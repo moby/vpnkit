@@ -3,11 +3,12 @@ package forward
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/pkg/errors"
 	"io"
 	"net"
 	"syscall"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 func listenTCPVmnet(IP net.IP, Port uint16) (*net.TCPListener, error) {
@@ -45,26 +46,25 @@ func listenTCPVmnet(IP net.IP, Port uint16) (*net.TCPListener, error) {
 	return l, err
 }
 
-
 func closeTCPVmnet(IP net.IP, Port uint16, l *net.TCPListener) error {
 	errCh := make(chan error)
-	go func(){
+	go func() {
 		errCh <- l.Close()
-	} ()
+	}()
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		conn, _ := net.DialTCP("tcp", nil, &net.TCPAddr{
-			IP: IP,
+			IP:   IP,
 			Port: int(Port),
 		})
 		if conn != nil {
 			conn.Close()
 		}
 		select {
-		case err := <- errCh:
+		case err := <-errCh:
 			return err
-		case <- ticker.C:
+		case <-ticker.C:
 		}
 	}
 }

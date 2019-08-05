@@ -2,10 +2,11 @@ package forward
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net"
 	"syscall"
+
+	"github.com/stretchr/testify/assert"
 
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ func TestMarshalBindIpv4(t *testing.T) {
 }
 
 func TestBindVmnetdLow(t *testing.T) {
-	for i := 0; i < 10; i ++ {
+	for i := 0; i < 10; i++ {
 		fd, err := listenVmnet(localhost, 8081, true)
 		assert.Nil(t, err)
 		assert.Nil(t, syscall.Close(int(fd)))
@@ -76,11 +77,11 @@ func TestBindVmnetd(t *testing.T) {
 	assert.Nil(t, conn.Close())
 	assert.Nil(t, f.Close())
 	time.Sleep(time.Second)
-	<- done
+	<-done
 }
 
-func TestBindVmnetdLeak(t *testing.T){
-	for i :=0; i < 10; i ++{
+func TestBindVmnetdLeak(t *testing.T) {
+	for i := 0; i < 10; i++ {
 		TestBindVmnetd(t)
 	}
 }
@@ -89,19 +90,19 @@ func TestBindVmnetdClose(t *testing.T) {
 	localhost := net.ParseIP("127.0.0.1")
 	f, err := listenTCPVmnet(localhost, 8081)
 	assert.Nil(t, err)
-	go func(){
+	go func() {
 		c, err := f.Accept()
 		if c != nil {
 			c.Close()
 		}
 		assert.Nil(t, err)
-	} ()
+	}()
 	time.Sleep(10 * time.Millisecond)
 	assert.Nil(t, closeTCPVmnet(localhost, 8081, f))
 }
 
-func TestBindVmnetdCloseLeak(t *testing.T){
-	for i := 0; i < 10; i ++{
+func TestBindVmnetdCloseLeak(t *testing.T) {
+	for i := 0; i < 10; i++ {
 		TestBindVmnetdClose(t)
 	}
 }
