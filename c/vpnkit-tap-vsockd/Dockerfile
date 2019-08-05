@@ -8,4 +8,4 @@ RUN make -C /build sbin/vpnkit-tap-vsockd
 FROM alpine:3.8
 
 COPY --from=build /build/sbin/vpnkit-tap-vsockd /sbin/vpnkit-tap-vsockd
-CMD [ "/sbin/vpnkit-tap-vsockd", "--tap", "eth0", "--message-size", "8192", "--buffer-size", "262144", "--listen" ]
+CMD [ "/sbin/vpnkit-tap-vsockd", "--tap", "eth0", "--message-size", "8192", "--buffer-size", "262144", "--path", "/run/host-services/vpnkit.sock" ]
