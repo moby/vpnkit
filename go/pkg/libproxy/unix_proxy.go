@@ -2,8 +2,8 @@ package libproxy
 
 import (
 	"fmt"
-	"log"
 	"net"
+	"time"
 )
 
 // UnixProxy is a proxy for Unix connections. It implements the Proxy interface to
@@ -26,14 +26,23 @@ func NewUnixProxy(listener net.Listener, backendAddr *net.UnixAddr) (*UnixProxy,
 
 // HandleUnixConnection forwards the Unix traffic to a specified backend address
 func HandleUnixConnection(client Conn, backendAddr *net.UnixAddr, quit <-chan struct{}) error {
-	backend, err := net.DialUnix("unix", nil, backendAddr)
-	if err != nil {
-		if errIsConnectionRefused(err) {
-			return err
+	start := time.Now()
+	for {
+		backend, err := net.DialUnix("unix", nil, backendAddr)
+		if err != nil {
+			if errIsConnectionRefused(err) {
+				if time.Since(start) > 120*time.Second {
+					log.Errorf("failed to connect to %s after 120s. The server appears to be down.", backendAddr.String())
+					return err
+				}
+				log.Infof("%s appears to not be started yet: will retry in 5s", backendAddr.String())
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			return fmt.Errorf("can't forward traffic to backend unix/%v: %s", backendAddr, err)
 		}
-		return fmt.Errorf("can't forward traffic to backend unix/%v: %s", backendAddr, err)
+		return ProxyStream(client, backend, quit)
 	}
-	return ProxyStream(client, backend, quit)
 }
 
 // Run starts forwarding the traffic using Unix.

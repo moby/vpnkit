@@ -4,7 +4,6 @@ package libproxy
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"syscall"

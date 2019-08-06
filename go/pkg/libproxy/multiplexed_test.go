@@ -6,7 +6,6 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"sync"
 	"testing"

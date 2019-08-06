@@ -1,10 +1,9 @@
 package forward
 
 import (
-	"log"
-
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 )
 
 // Listen on stream sockets and forward to a remote multiplexer.
@@ -39,24 +38,24 @@ func (s *stream) Run() {
 	for {
 		src, err := s.l.accept()
 		if err != nil {
-			log.Printf("Stopping accepting connections on %s", s.port.String())
+			log.Printf("stopping accepting connections on %s", s.port.String())
 			return
 		}
 		mux := s.ctrl.Mux()
 		dest, err := mux.Dial(*s.dest)
 		if err != nil {
-			log.Printf("unable to connect on %s: %s", s.port.String(), err)
+			log.Errorf("unable to connect on %s: %s", s.port.String(), err)
 			if err := src.Close(); err != nil {
-				log.Printf("unable to Close on %s: %s", s.port.String(), err)
+				log.Errorf("unable to Close on %s: %s", s.port.String(), err)
 			}
 			continue // Multiplexer could be disconnected
 		}
 		go func() {
 			if err := libproxy.ProxyStream(src, dest, s.quit); err != nil {
-				log.Printf("unable to proxy on %s: %s", s.port.String(), err)
+				log.Errorf("unable to proxy on %s: %s", s.port.String(), err)
 			}
 			if err := src.Close(); err != nil {
-				log.Printf("unable to Close on %s: %s", s.port.String(), err)
+				log.Errorf("unable to Close on %s: %s", s.port.String(), err)
 			}
 		}()
 
@@ -64,7 +63,7 @@ func (s *stream) Run() {
 }
 
 func (s *stream) Stop() {
-	log.Printf("Removing %s", s.port.String())
+	log.Printf("removing %s", s.port.String())
 	s.l.close()
 	close(s.quit)
 }

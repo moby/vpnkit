@@ -2,7 +2,6 @@ package libproxy
 
 import (
 	"io"
-	"log"
 	"net"
 	"strings"
 )
@@ -18,11 +17,11 @@ func ProxyStream(client, backend Conn, quit <-chan struct{}) error {
 	event := make(chan int64)
 	var broker = func(to, from Conn) {
 		written, err := io.Copy(to, from)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			log.Println("error copying:", err)
 		}
 		err = to.CloseWrite()
-		if err != nil {
+		if err != nil && !errIsNotConnected(err) {
 			log.Println("error CloseWrite to:", err)
 		}
 		event <- written

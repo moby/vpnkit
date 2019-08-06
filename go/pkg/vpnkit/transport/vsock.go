@@ -3,12 +3,13 @@ package transport
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 
 	"github.com/linuxkit/virtsock/pkg/hvsock"
 	"github.com/linuxkit/virtsock/pkg/vsock"

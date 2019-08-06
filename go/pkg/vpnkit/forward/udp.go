@@ -2,11 +2,11 @@ package forward
 
 import (
 	"fmt"
-	"log"
 	"net"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 	"github.com/pkg/errors"
 )
 
@@ -72,7 +72,7 @@ func (u *udpDialer) Dial(a *net.UDPAddr) (net.Conn, error) {
 }
 
 func (u *udp) Stop() {
-	log.Printf("Removing %s", u.port.String())
+	log.Printf("removing %s", u.port.String())
 	close(u.quit)
 	if u.inside != nil {
 		// only if Run() has been called

@@ -2,7 +2,6 @@ package libproxy
 
 import (
 	"encoding/binary"
-	"log"
 	"net"
 	"strings"
 	"sync"

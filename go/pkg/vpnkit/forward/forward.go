@@ -4,10 +4,10 @@ package forward
 
 import (
 	"errors"
-	"log"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 )
 
 // Forward listens for incoming connections from the "outside" and forwards them to a remote.
@@ -25,7 +25,7 @@ type Maker struct {
 
 // Make a Forward from a Port description.
 func (f Maker) Make(ctrl vpnkit.Control, port vpnkit.Port) (Forward, error) {
-	log.Printf("Adding %s", port.String())
+	log.Printf("adding %s", port.String())
 	dest := &libproxy.Destination{
 		IP:   port.InIP,
 		Port: port.InPort,

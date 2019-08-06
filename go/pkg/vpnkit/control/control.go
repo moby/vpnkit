@@ -3,13 +3,13 @@ package control
 import (
 	"context"
 	"io"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/forward"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
 	"github.com/pkg/errors"
 )
@@ -39,7 +39,7 @@ func Make() *Control {
 func (c *Control) SetMux(m libproxy.Multiplexer) {
 	c.muxM.Lock()
 	defer c.muxM.Unlock()
-	log.Println("ready to forward incoming data connections")
+	log.Println("established connection to vpnkit-forwarder")
 	c.mux = m
 	c.muxC.Broadcast()
 }
@@ -77,7 +77,6 @@ func (c *Control) Expose(_ context.Context, port *vpnkit.Port) error {
 		}
 	}
 	c.forwards[key] = forward
-	log.Printf("adding port-forward %s\n", port.String())
 	go forward.Run()
 	return nil
 }
@@ -94,7 +93,6 @@ func (c *Control) Unexpose(_ context.Context, port *vpnkit.Port) error {
 		// make it idempotent
 		return nil
 	}
-	log.Printf("stopping port-forward %s\n", port.String())
 	forward.Stop()
 	delete(c.forwards, key)
 	return nil
@@ -161,10 +159,11 @@ func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}) {
 	mux := libproxy.NewMultiplexer("local", rw)
 	mux.Run()
 	c.SetMux(mux)
+	defer c.SetMux(nil)
 	for {
 		conn, destination, err := mux.Accept()
 		if err != nil {
-			log.Printf("Error accepting subconnection: %v", err)
+			log.Errorf("error accepting subconnection: %v", err)
 			return
 		}
 		go libproxy.Forward(conn, *destination, quit)
