@@ -1,17 +1,19 @@
 package forward
 
 import (
-	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"net"
+
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
 )
 
-func listenTCP(port vpnkit.Port) (*net.TCPListener, error) {
-	return net.ListenTCP("tcp", &net.TCPAddr{
+func listenTCP(port vpnkit.Port) (*net.TCPListener, bool, error) {
+	l, err := net.ListenTCP("tcp", &net.TCPAddr{
 		IP:   port.OutIP,
 		Port: int(port.OutPort),
 	})
+	return l, false, err
 }
 
-func closeTCP(port vpnkit.Port, l *net.TCPListener) error {
+func closeTCP(port vpnkit.Port, _ bool, l *net.TCPListener) error {
 	return l.Close()
 }

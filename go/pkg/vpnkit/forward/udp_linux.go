@@ -1,8 +1,9 @@
 package forward
 
 import (
-	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"net"
+
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
 )
 
 func listenUDP(port vpnkit.Port) (*net.UDPConn, error) {
