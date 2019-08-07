@@ -12,4 +12,5 @@ before_install: # update to 17.05 to get multistage builds
   - sudo apt-get -y install docker-ce
 
 script:
+  - make e2e-vpnkit-tap-vsockd
   - cd go && make build-in-container

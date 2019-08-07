@@ -6,6 +6,6 @@ RUN make -C /build sbin/vpnkit-tap-vsockd
 
 # Using alpine rather than scratch allows us to support post-up scripts
 FROM alpine:3.8
-
+RUN apk add dhclient
 COPY --from=build /build/sbin/vpnkit-tap-vsockd /sbin/vpnkit-tap-vsockd
 CMD [ "/sbin/vpnkit-tap-vsockd", "--tap", "eth0", "--message-size", "8192", "--buffer-size", "262144", "--path", "/run/host-services/vpnkit.sock" ]
