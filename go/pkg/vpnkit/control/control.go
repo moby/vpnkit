@@ -2,7 +2,9 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net"
 	"sync"
 	"time"
 
@@ -122,15 +124,20 @@ func (c *Control) Listen(path string, quit <-chan struct{}) {
 	if err != nil {
 		log.Fatalf("unable to create a data server on %s %s: %s", t.String(), path, err)
 	}
+	c.ListenOnListener(l, fmt.Sprintf("%s %s", t.String(), path), quit)
+}
+
+// ListenOnListener listen for incoming data connections on an already setup listener
+func (c *Control) ListenOnListener(l net.Listener, listenerName string, quit <-chan struct{}) {
 	for {
 		// listen for one connection at a time
-		log.Printf("listening on %s for data connection", path)
+		log.Printf("listening on %s for data connection", listenerName)
 		conn, err := l.Accept()
 		if err != nil {
-			log.Printf("unable to accept connection on %s %s: %s", t.String(), path, err)
+			log.Printf("unable to accept connection on %s: %s", listenerName, err)
 			continue
 		}
-		log.Printf("accepted data connection on %s %s", t.String(), path)
+		log.Printf("accepted data connection on %s", listenerName)
 		c.handleDataConn(conn, quit)
 	}
 }
