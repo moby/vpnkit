@@ -340,13 +340,26 @@ type multiplexer struct {
 }
 
 // NewMultiplexer constructs a multiplexer from a channel
-func NewMultiplexer(label string, conn io.ReadWriteCloser) Multiplexer {
+func NewMultiplexer(label string, conn io.ReadWriteCloser) (Multiplexer, error) {
 	var writeMutex, metadataMutex, eventsM sync.Mutex
 	acceptCond := sync.NewCond(&metadataMutex)
 	channels := make(map[uint32]*channel)
 	connR := bufio.NewReader(conn)
 	connW := bufio.NewWriter(conn)
 	events := ring.New(500)
+
+	// Perform the handshake
+	localH := &handshake{}
+
+	err := localH.Write(conn)
+	if err != nil {
+		return nil, err
+	}
+	_, err = unmarshalHandshake(connR)
+	if err != nil {
+		return nil, err
+	}
+
 	return &multiplexer{
 		label:         label,
 		conn:          conn,
@@ -359,7 +372,7 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) Multiplexer {
 		nextChannelID: ^uint32(0),
 		events:        events,
 		eventsM:       &eventsM,
-	}
+	}, nil
 }
 
 // Close the underlying transport.

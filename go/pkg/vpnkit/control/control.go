@@ -156,7 +156,11 @@ func (c *Control) Connect(path string, quit <-chan struct{}) error {
 func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}) {
 	defer rw.Close()
 
-	mux := libproxy.NewMultiplexer("local", rw)
+	mux, err := libproxy.NewMultiplexer("local", rw)
+	if err != nil {
+		log.Errorf("error accepting multiplexer data connection: %v", err)
+		return
+	}
 	mux.Run()
 	c.SetMux(mux)
 	defer c.SetMux(nil)
