@@ -34,14 +34,6 @@
   version = "v1.1.0"
 
 [[projects]]
-  digest = "1:7a6852b35eb5bbc184561443762d225116ae630c26a7c4d90546619f1e7d2ad2"
-  name = "github.com/dgrijalva/jwt-go"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "06ea1031745cb8b3dab3f6a236daf2b0aa468b7e"
-  version = "v3.2.0"
-
-[[projects]]
   digest = "1:00eb5bc7f8611e1c6383a3d040143e494f45e71e89790fc8691e30b9a6ac542e"
   name = "github.com/docker/go-p9p"
   packages = ["."]
@@ -249,24 +241,19 @@
   version = "v1.0.1"
 
 [[projects]]
-  digest = "1:e1a4a004e1797b96ee265d52809696ef6101fb7830aa50bd9ffc331e535f1956"
+  digest = "1:c808522797f265404c9b34cf9044a0951a52b76a00138f4e4db69f0e50a465c8"
   name = "github.com/labstack/echo"
-  packages = [
-    ".",
-    "middleware",
-  ]
+  packages = ["."]
   pruneopts = "NUT"
   revision = "38772c686c76b501f94bd6cd5b77f5842e93b559"
   version = "v3.3.10"
 
 [[projects]]
-  digest = "1:2e6a3cff55f83d7237f12b4cd95b599a4ca6582ada8016919473dcf6acf2d532"
+  digest = "1:e9cb57fc3c5d6c53e190eee739dbe0c778e27be9039d0b60d9c9bf6993e8b8b6"
   name = "github.com/labstack/gommon"
   packages = [
-    "bytes",
     "color",
     "log",
-    "random",
   ]
   pruneopts = "NUT"
   revision = "ab0bfd9a5eba33a8c364bf3390d809ed23c31f97"
@@ -328,7 +315,7 @@
   version = "v1.1.2"
 
 [[projects]]
-  digest = "1:d60bfd52a6eeba7d3f630516e08a70bbfc3c845d02bab40748a5a526925de457"
+  digest = "1:57b24a2e561bcd1004a26ba84618fbf778881e1e0047ce4f884f3f6010e52a24"
   name = "github.com/moby/datakit"
   packages = ["api/go-datakit"]
   pruneopts = "NUT"
@@ -490,6 +477,14 @@
   ]
   pruneopts = "NUT"
   revision = "0744d001aa8470aaa53df28d32e5ceeb8af9bd70"
+
+[[projects]]
+  branch = "master"
+  digest = "1:b521f10a2d8fa85c04a8ef4e62f2d1e14d303599a55d64dabf9f5a02f84d35eb"
+  name = "golang.org/x/sync"
+  packages = ["errgroup"]
+  pruneopts = "NUT"
+  revision = "112230192c580c3556b8cee6403af37a4fc5f28c"
 
 [[projects]]
   branch = "master"
@@ -715,7 +710,6 @@
     "github.com/docker/go-p9p",
     "github.com/google/uuid",
     "github.com/labstack/echo",
-    "github.com/labstack/echo/middleware",
     "github.com/linuxkit/virtsock/pkg/hvsock",
     "github.com/linuxkit/virtsock/pkg/vsock",
     "github.com/moby/datakit/api/go-datakit",
@@ -724,6 +718,7 @@
     "github.com/spf13/viper",
     "github.com/stretchr/testify/assert",
     "golang.org/x/crypto/ssh/terminal",
+    "golang.org/x/sync/errgroup",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/fields",

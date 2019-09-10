@@ -10,6 +10,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -351,12 +353,15 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) (Multiplexer, error) 
 	// Perform the handshake
 	localH := &handshake{}
 
-	err := localH.Write(conn)
-	if err != nil {
-		return nil, err
-	}
-	_, err = unmarshalHandshake(connR)
-	if err != nil {
+	g := &errgroup.Group{}
+
+	g.Go(func() error { return localH.Write(conn) })
+	g.Go(func() error {
+		_, err := unmarshalHandshake(connR)
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
