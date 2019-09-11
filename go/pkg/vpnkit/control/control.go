@@ -138,7 +138,7 @@ func (c *Control) ListenOnListener(l net.Listener, listenerName string, quit <-c
 			continue
 		}
 		log.Printf("accepted data connection on %s", listenerName)
-		c.handleDataConn(conn, quit)
+		c.handleDataConn(conn, quit, false)
 	}
 }
 
@@ -155,15 +155,15 @@ func (c *Control) Connect(path string, quit <-chan struct{}) error {
 			continue
 		}
 		log.Printf("connected data connection on %s %s", t.String(), path)
-		c.handleDataConn(conn, quit)
+		c.handleDataConn(conn, quit, true)
 	}
 }
 
 // handle data-plane forwarding
-func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}) {
+func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}, allocateBackward bool) {
 	defer rw.Close()
 
-	mux, err := libproxy.NewMultiplexer("local", rw)
+	mux, err := libproxy.NewMultiplexer("local", rw, allocateBackward)
 	if err != nil {
 		log.Errorf("error accepting multiplexer data connection: %v", err)
 		return

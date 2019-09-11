@@ -4,18 +4,21 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha1"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // create a pair of connected multiplexers
 func newLoopbackMultiplexer(t *testing.T, loopback *loopback) (Multiplexer, Multiplexer) {
-	localMuxC, localErrC := newMultiplexer("local", loopback)
-	remoteMuxC, remoteErrC := newMultiplexer("remote", loopback.OtherEnd())
+	localMuxC, localErrC := newMultiplexer("local", loopback, false)
+	remoteMuxC, remoteErrC := newMultiplexer("remote", loopback.OtherEnd(), true)
 	if err := <-localErrC; err != nil {
 		t.Fatal(err)
 	}
@@ -30,11 +33,11 @@ func newLoopbackMultiplexer(t *testing.T, loopback *loopback) (Multiplexer, Mult
 }
 
 // start a multiplexer asynchronously
-func newMultiplexer(name string, conn io.ReadWriteCloser) (<-chan Multiplexer, <-chan error) {
+func newMultiplexer(name string, conn io.ReadWriteCloser, allocateBackwards bool) (<-chan Multiplexer, <-chan error) {
 	m := make(chan Multiplexer)
 	e := make(chan error)
 	go func() {
-		mux, err := NewMultiplexer(name, conn)
+		mux, err := NewMultiplexer(name, conn, allocateBackwards)
 		e <- err
 		m <- mux
 	}()
@@ -630,8 +633,84 @@ func TestEOF(t *testing.T) {
 	if err := loopback.OtherEnd().Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, err := NewMultiplexer("test", loopback)
+	_, err := NewMultiplexer("test", loopback, false)
 	if err != io.EOF {
 		t.Fatal(err)
 	}
+}
+
+func TestCrossChannelOpening(t *testing.T) {
+	loopback := newLoopback()
+	muxHost, muxGuest := newLoopbackMultiplexer(t, loopback)
+	acceptG := &errgroup.Group{}
+	acceptG.Go(func() error {
+		for {
+			c, _, err := muxHost.Accept()
+			if err != nil {
+				return err
+			}
+			var m int32
+			if err := binary.Read(c, binary.LittleEndian, &m); err != nil {
+				return err
+			}
+			if err := binary.Write(c, binary.LittleEndian, m); err != nil {
+				return err
+			}
+			_ = c.Close()
+		}
+	})
+	acceptG.Go(func() error {
+		for {
+			c, _, err := muxGuest.Accept()
+			if err != nil {
+				return err
+			}
+			var m int32
+			if err := binary.Read(c, binary.LittleEndian, &m); err != nil {
+				return err
+			}
+			if err := binary.Write(c, binary.LittleEndian, m); err != nil {
+				return err
+			}
+			_ = c.Close()
+		}
+	})
+	g := &errgroup.Group{}
+	for i := 0; i < 20; i++ {
+		g.Go(func() error {
+			c, err := muxHost.Dial(Destination{Proto: Unix, Path: "/test"})
+			if err != nil {
+				return err
+			}
+			m := int32(42)
+
+			if err := binary.Write(c, binary.LittleEndian, m); err != nil {
+				return err
+			}
+			if err := binary.Read(c, binary.LittleEndian, &m); err != nil {
+				return err
+			}
+			_ = c.Close()
+			log.Print("muxHost negociation succeeded")
+			return nil
+		})
+		g.Go(func() error {
+			c, err := muxGuest.Dial(Destination{Proto: Unix, Path: "/test"})
+			if err != nil {
+				return err
+			}
+			m := int32(42)
+
+			if err := binary.Write(c, binary.LittleEndian, m); err != nil {
+				return err
+			}
+			if err := binary.Read(c, binary.LittleEndian, &m); err != nil {
+				return err
+			}
+			_ = c.Close()
+			log.Print("muxGuest negociation succeeded")
+			return nil
+		})
+	}
+	_ = g.Wait()
 }
