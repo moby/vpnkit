@@ -326,23 +326,24 @@ type Multiplexer interface {
 }
 
 type multiplexer struct {
-	label         string
-	conn          io.Closer
-	connR         io.Reader // with buffering
-	connW         *bufio.Writer
-	writeMutex    *sync.Mutex // hold when writing on the channel
-	channels      map[uint32]*channel
-	nextChannelID uint32
-	metadataMutex *sync.Mutex // hold when reading/modifying this structure
-	pendingAccept []*channel  // incoming connections
-	acceptCond    *sync.Cond
-	isRunning     bool
-	events        *ring.Ring // log of packetEvents
-	eventsM       *sync.Mutex
+	label             string
+	conn              io.Closer
+	connR             io.Reader // with buffering
+	connW             *bufio.Writer
+	writeMutex        *sync.Mutex // hold when writing on the channel
+	channels          map[uint32]*channel
+	nextChannelID     uint32
+	metadataMutex     *sync.Mutex // hold when reading/modifying this structure
+	pendingAccept     []*channel  // incoming connections
+	acceptCond        *sync.Cond
+	isRunning         bool
+	events            *ring.Ring // log of packetEvents
+	eventsM           *sync.Mutex
+	allocateBackwards bool
 }
 
 // NewMultiplexer constructs a multiplexer from a channel
-func NewMultiplexer(label string, conn io.ReadWriteCloser) (Multiplexer, error) {
+func NewMultiplexer(label string, conn io.ReadWriteCloser, allocateBackwards bool) (Multiplexer, error) {
 	var writeMutex, metadataMutex, eventsM sync.Mutex
 	acceptCond := sync.NewCond(&metadataMutex)
 	channels := make(map[uint32]*channel)
@@ -365,18 +366,23 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser) (Multiplexer, error) 
 		return nil, err
 	}
 
+	nextId := uint32(0)
+	if allocateBackwards {
+		nextId = ^nextId
+	}
 	return &multiplexer{
-		label:         label,
-		conn:          conn,
-		connR:         connR,
-		connW:         connW,
-		writeMutex:    &writeMutex,
-		channels:      channels,
-		metadataMutex: &metadataMutex,
-		acceptCond:    acceptCond,
-		nextChannelID: ^uint32(0),
-		events:        events,
-		eventsM:       &eventsM,
+		label:             label,
+		conn:              conn,
+		connR:             connR,
+		connW:             connW,
+		writeMutex:        &writeMutex,
+		channels:          channels,
+		metadataMutex:     &metadataMutex,
+		acceptCond:        acceptCond,
+		nextChannelID:     nextId,
+		events:            events,
+		eventsM:           &eventsM,
+		allocateBackwards: allocateBackwards,
 	}, nil
 }
 
@@ -404,6 +410,16 @@ func (m *multiplexer) send(f *Frame) error {
 
 func (m *multiplexer) findFreeChannelID() uint32 {
 	// the metadataMutex is already held
+	if m.allocateBackwards {
+		id := m.nextChannelID
+		for {
+			if _, ok := m.channels[id]; !ok {
+				m.nextChannelID = id - 1
+				return id
+			}
+			id--
+		}
+	}
 	id := m.nextChannelID
 	for {
 		if _, ok := m.channels[id]; !ok {

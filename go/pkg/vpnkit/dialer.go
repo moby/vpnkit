@@ -34,7 +34,7 @@ func (d *Dialer) setupMultiplexer() error {
 		if err != nil {
 			return err
 		}
-		d.mux, err = libproxy.NewMultiplexer("host", conn)
+		d.mux, err = libproxy.NewMultiplexer("host", conn, true)
 		if err != nil {
 			return err
 		}
