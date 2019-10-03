@@ -190,7 +190,7 @@ func (h *httpServer) DumpState(c echo.Context) error {
 		h.impl.DumpState(context.Background(), w)
 		w.Close()
 	}()
-	return c.Stream(200, "test/plain", r)
+	return c.Stream(200, "text/plain", r)
 }
 
 func (h *httpServer) Start() {

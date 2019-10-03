@@ -248,6 +248,9 @@ func readResult(conn *net.UnixConn) (uintptr, error) {
 	results := make([]byte, 100)
 	oob := make([]byte, syscall.CmsgSpace(1*4))
 	n, _, _, _, err := syscall.Recvmsg(unixConnFd, results, oob, 0)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to receive message")
+	}
 
 	code := uint8(0)
 	buf := bytes.NewBuffer(results[0:n])

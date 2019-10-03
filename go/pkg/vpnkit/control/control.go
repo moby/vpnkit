@@ -101,7 +101,7 @@ func (c *Control) Unexpose(_ context.Context, port *vpnkit.Port) error {
 }
 
 func (c *Control) ListExposed(_ context.Context) ([]vpnkit.Port, error) {
-	var results []vpnkit.Port
+	results := make([]vpnkit.Port, len(c.forwards))
 	for _, forward := range c.forwards {
 		results = append(results, forward.Port())
 	}

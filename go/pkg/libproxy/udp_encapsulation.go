@@ -121,8 +121,7 @@ type udpDatagram struct {
 func (u *udpDatagram) Marshal(w io.Writer) error {
 	// marshal the variable length header to a temporary buffer
 	var header bytes.Buffer
-	var length uint16
-	length = uint16(len(*u.IP))
+	length := uint16(len(*u.IP))
 	if err := binary.Write(&header, binary.LittleEndian, &length); err != nil {
 		return err
 	}
