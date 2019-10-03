@@ -45,7 +45,7 @@ build/dial-example.linux: $(DEPS_DIAL_EXAMPLE)
 	$(DEPS_DIAL_EXAMPLE)
 
 build/kube-vpnkit-forwarder.linux: $(DEPS_KUBE_FORWARDER)
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 \
 	go build -o $@ --ldflags '-s -w' --buildmode pie \
 	$(DEPS_KUBE_FORWARDER)
 
