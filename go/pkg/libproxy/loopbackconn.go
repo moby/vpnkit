@@ -143,7 +143,6 @@ func (pipe *bufferedPipe) CloseWrite() error {
 type loopback struct {
 	write           *bufferedPipe
 	read            *bufferedPipe
-	closed          bool
 	simulateLatency time.Duration
 }
 

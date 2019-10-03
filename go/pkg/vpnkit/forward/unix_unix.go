@@ -67,10 +67,7 @@ func removeExistingSocket(path string) error {
 func isSafeToRemove(path string) bool {
 	var statT syscall.Stat_t
 	if err := syscall.Stat(path, &statT); err != nil {
-		if os.IsNotExist(err) {
-			return true
-		}
-		return false // cannot stat suggests something is wrong
+		return os.IsNotExist(err)
 	}
 	return statT.Mode&syscall.S_IFMT == syscall.S_IFSOCK
 }

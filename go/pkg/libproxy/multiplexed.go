@@ -27,15 +27,14 @@ func (w *windowState) String() string {
 	return fmt.Sprintf("current %d, allowed %d", w.current, w.allowed)
 }
 
-func newWindowState() *windowState {
-	return &windowState{}
-}
 func (w *windowState) size() int {
 	return int(w.allowed - w.current)
 }
+
 func (w *windowState) isAlmostClosed() bool {
 	return w.size() < maxBufferSize/2
 }
+
 func (w *windowState) advance() {
 	w.allowed = w.current + uint64(maxBufferSize)
 }

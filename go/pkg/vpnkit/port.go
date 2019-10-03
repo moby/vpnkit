@@ -230,5 +230,3 @@ func (c *Connection) DumpState(_ context.Context, w io.Writer) error {
 	_, err := io.WriteString(w, "No debug information available\n")
 	return err
 }
-
-var enoent = p9p.MessageRerror{Ename: "file not found"}

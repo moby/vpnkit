@@ -2,7 +2,6 @@ package libproxy
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -22,7 +21,7 @@ func ExposePort(host net.Addr, container net.Addr) (*os.File, error) {
 		log.Printf("Failed to open /port/%s/ctl: %#v\n", name, err)
 		return nil, err
 	}
-	_, err = ctl.WriteString(fmt.Sprintf("%s", name))
+	_, err = ctl.WriteString(name)
 	if err != nil {
 		log.Printf("Failed to open /port/%s/ctl: %#v\n", name, err)
 		return nil, err
