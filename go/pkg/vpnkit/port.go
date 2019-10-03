@@ -30,14 +30,14 @@ const (
 
 // Port describes a UDP, TCP port forward or a Unix domain socket forward.
 type Port struct {
-	Proto      Protocol `json:"proto",omitempty`    // Proto is the protocol used by the exposed port.
-	OutIP      net.IP   `json:"out_ip",omitempty`   // OutIP is the external IP address.
-	OutPort    uint16   `json:"out_port",omitempty` // OutPort is the external port number.
-	OutPath    string   `json:"out_path",omitempty` // OutPath is the external Unix domain socket.
-	InIP       net.IP   `json:"in_ip",omitempty`    // InIP is the internal IP address.
-	InPort     uint16   `json:"in_port",omitempty`  // InPort is the internal port number.
-	InPath     string   `json:"in_path",omitempty`  // InPath is the internal Unix domain socket.
-	Annotation string   `json:"annotation",omitempty`
+	Proto      Protocol `json:"proto,omitempty"`    // Proto is the protocol used by the exposed port.
+	OutIP      net.IP   `json:"out_ip,omitempty"`   // OutIP is the external IP address.
+	OutPort    uint16   `json:"out_port,omitempty"` // OutPort is the external port number.
+	OutPath    string   `json:"out_path,omitempty"` // OutPath is the external Unix domain socket.
+	InIP       net.IP   `json:"in_ip,omitempty"`    // InIP is the internal IP address.
+	InPort     uint16   `json:"in_port,omitempty"`  // InPort is the internal port number.
+	InPath     string   `json:"in_path,omitempty"`  // InPath is the internal Unix domain socket.
+	Annotation string   `json:"annotation,omitempty"`
 	handle     *datakit.File
 }
 
