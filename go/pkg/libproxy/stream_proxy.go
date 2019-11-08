@@ -21,7 +21,7 @@ func ProxyStream(client, backend Conn, quit <-chan struct{}) error {
 			log.Println("error copying:", err)
 		}
 		err = to.CloseWrite()
-		if err != nil && !errIsNotConnected(err) {
+		if err != nil && !errIsNotConnected(err) && !errIsBeingClosed(err) {
 			log.Println("error CloseWrite to:", err)
 		}
 		event <- written
@@ -54,4 +54,8 @@ func errIsNotConnected(err error) bool {
 
 func errIsConnectionRefused(err error) bool {
 	return strings.HasSuffix(err.Error(), "connection refused")
+}
+
+func errIsBeingClosed(err error) bool {
+	return strings.HasSuffix(err.Error(), "is being closed.")
 }
