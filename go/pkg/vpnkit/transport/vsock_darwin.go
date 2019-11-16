@@ -23,7 +23,12 @@ type vs struct {
 const CIDVM0 = 3
 
 func (_ *vs) Dial(_ context.Context, path string) (net.Conn, error) {
-	p, err := parsePath(CIDVM0, path)
+	addr, err := parseAddr(path)
+	if err != nil {
+		return nil, err
+	}
+	addr.cid = CIDVM0
+	p, err := toPath(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +36,12 @@ func (_ *vs) Dial(_ context.Context, path string) (net.Conn, error) {
 }
 
 func (_ *vs) Listen(path string) (net.Listener, error) {
-	p, err := parsePath(vsock.CIDHost, path)
+	addr, err := parseAddr(path)
+	if err != nil {
+		return nil, err
+	}
+	addr.cid = vsock.CIDHost
+	p, err := toPath(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -45,14 +55,25 @@ func (_ *vs) String() string {
 	return "Hyperkit AF_VSOCK"
 }
 
-func parsePath(cid int, path string) (string, error) {
-	port, err := strconv.ParseUint(path, 10, 32)
-	if err != nil {
-		return "", errors.Wrapf(err, "AF_VSOCK port number is an integer")
-	}
+func toPath(a *addr) (string, error) {
 	user, err := user.Current()
 	if err != nil {
 		return "", errors.New("Unable to determine current user")
 	}
-	return filepath.Join(user.HomeDir, "Library", "Containers", "com.docker.docker", "Data", "vms", "0", fmt.Sprintf("%08x.%08x", cid, port)), nil
+	return filepath.Join(user.HomeDir, "Library", "Containers", "com.docker.docker", "Data", "vms", "0", fmt.Sprintf("%08x.%08x", a.cid, a.port)), nil
+}
+
+type addr struct {
+	cid  uint32
+	port uint32
+}
+
+func parseAddr(path string) (*addr, error) {
+	port, err := strconv.ParseUint(path, 10, 32)
+	if err != nil {
+		return nil, errors.Wrapf(err, "AF_VSOCK port number is an integer")
+	}
+	return &addr{
+		port: uint32(port),
+	}, nil
 }
