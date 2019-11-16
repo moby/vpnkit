@@ -4,32 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
-
-	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 
 	"github.com/linuxkit/virtsock/pkg/hvsock"
 	"github.com/linuxkit/virtsock/pkg/vsock"
 	"github.com/pkg/errors"
 )
-
-// hvsockSupported returns true if the kernel has been patched to use AF_HVSOCK.
-func hvsockSupported() bool {
-	// Try opening  a hvsockAF socket. If it works we are on older, i.e. 4.9.x kernels.
-	// 4.11 defines AF_SMC as 43 but it doesn't support protocol 1 so the
-	// socket() call should fail.
-	fd, err := syscall.Socket(43, syscall.SOCK_STREAM, 1)
-	if err != nil {
-		return false
-	}
-	if err := syscall.Close(fd); err != nil {
-		log.Printf("cannot close AF_HVSOCK socket: %v", err)
-	}
-	return true
-}
 
 type hvs struct {
 }
@@ -51,9 +32,6 @@ func (_ *hvs) Listen(path string) (net.Listener, error) {
 }
 
 func (_ *hvs) String() string {
-	if runtime.GOOS == "linux" {
-		return "Legacy Linux AF_HVSOCK"
-	}
 	return "Windows AF_HYPERV"
 }
 

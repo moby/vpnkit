@@ -8,9 +8,6 @@ import (
 )
 
 func NewVsockTransport() Transport {
-	if hvsockSupported() {
-		return &hvs{}
-	}
 	return &vs{}
 }
 
