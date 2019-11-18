@@ -17,7 +17,7 @@ func ProxyStream(client, backend Conn, quit <-chan struct{}) error {
 	event := make(chan int64)
 	var broker = func(to, from Conn) {
 		written, err := io.Copy(to, from)
-		if err != nil && err != io.EOF {
+		if err != nil && err != io.EOF && !errIsBeingClosed(err) {
 			log.Println("error copying:", err)
 		}
 		err = to.CloseWrite()
