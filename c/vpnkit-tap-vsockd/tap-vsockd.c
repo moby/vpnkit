@@ -413,8 +413,10 @@ static int connect_unix_socket(char *path)
 	strncpy(sa.sun_path, path, sizeof(sa.sun_path)-1);
 
 	res = connect(sock, (const struct sockaddr *)&sa, sizeof(sa));
-	if (res == -1)
-		return -1; /* ignore the fd leak */
+	if (res == -1) {
+		close(sock);
+		return -1;
+	}
 
 	return sock;
 }
@@ -584,6 +586,10 @@ int main(int argc, char **argv)
 		}
 
 		sock = connect_unix_socket(path);
+		if (sock == -1){
+			sleep(0.1);
+			continue;
+		}
 
 		connection.fd = sock;
 		if (negotiate(sock, &connection.vif) != 0) {
