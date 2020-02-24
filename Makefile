@@ -50,6 +50,7 @@ vpnkit.tgz: vpnkit.exe
 
 .PHONY: vpnkit.exe
 vpnkit.exe: $(OPAMROOT)
+	opam config --root $(OPAMROOT) --switch $(OPAM_COMP) exec -- sh -c 'dune upgrade'
 	opam config --root $(OPAMROOT) --switch $(OPAM_COMP) exec -- sh -c 'jbuilder build --dev src/bin/main.exe'
 	cp _build/default/src/bin/main.exe vpnkit.exe
 
