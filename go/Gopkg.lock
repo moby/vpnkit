@@ -34,13 +34,6 @@
   version = "v1.1.0"
 
 [[projects]]
-  digest = "1:00eb5bc7f8611e1c6383a3d040143e494f45e71e89790fc8691e30b9a6ac542e"
-  name = "github.com/docker/go-p9p"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "87ae8514a3a2d9684994a6c319f96ba9e18a062e"
-
-[[projects]]
   digest = "1:7676e46aef968ee20c6c129f9df2a4fa11ed1428e0acb5a98d91a41b468b5d96"
   name = "github.com/emicklei/go-restful"
   packages = [
@@ -313,14 +306,6 @@
   pruneopts = "NUT"
   revision = "3536a929edddb9a5b34bd6861dc4a9647cb459fe"
   version = "v1.1.2"
-
-[[projects]]
-  digest = "1:57b24a2e561bcd1004a26ba84618fbf778881e1e0047ce4f884f3f6010e52a24"
-  name = "github.com/moby/datakit"
-  packages = ["api/go-datakit"]
-  pruneopts = "NUT"
-  revision = "8a6c7f7b4f3158a58074993babb543f1f7b53c2f"
-  version = "0.12.2"
 
 [[projects]]
   digest = "1:2f42fa12d6911c7b7659738758631bec870b7e9b4c6be5444f963cdcfccc191f"
@@ -707,12 +692,10 @@
   analyzer-version = 1
   input-imports = [
     "github.com/Microsoft/go-winio",
-    "github.com/docker/go-p9p",
     "github.com/google/uuid",
     "github.com/labstack/echo",
     "github.com/linuxkit/virtsock/pkg/hvsock",
     "github.com/linuxkit/virtsock/pkg/vsock",
-    "github.com/moby/datakit/api/go-datakit",
     "github.com/pkg/errors",
     "github.com/sirupsen/logrus",
     "github.com/spf13/viper",
