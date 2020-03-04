@@ -1,0 +1,4 @@
+(library
+ (name cstructs)
+ (libraries cstruct fmt)
+ (wrapped false))
