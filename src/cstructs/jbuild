@@ -1,8 +1,0 @@
-(jbuild_version 1)
-
-(library
-  ((name        cstructs)
-   (libraries (
-    cstruct fmt
-   ))
-   (wrapped false)))

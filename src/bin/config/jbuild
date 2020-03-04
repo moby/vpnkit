@@ -1,4 +1,0 @@
-(executable
- ((name discover)
- (libraries (sexplib))
-))

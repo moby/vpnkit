@@ -1,9 +1,0 @@
-(jbuild_version 1)
-
-(library
-  ((name        forwarder)
-   (libraries (
-    cstruct cstructs ipaddr mirage-flow-lwt mirage-channel-lwt
-   ))
-  )
-)
