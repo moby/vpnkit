@@ -10,8 +10,8 @@ import (
 	"runtime/pprof"
 	"syscall"
 
-	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/control"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/http"
 )
 
 var (
@@ -37,7 +37,7 @@ func main() {
 	ctrl := control.Make()
 
 	if controlListen != "" {
-		s, err := vpnkit.NewServer(controlListen, ctrl)
+		s, err := http.NewServer(controlListen, ctrl)
 		if err != nil {
 			log.Fatalf("unable to create a control server on %s: %s", controlListen, err)
 		}
