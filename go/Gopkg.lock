@@ -253,15 +253,14 @@
   version = "v0.2.9"
 
 [[projects]]
-  digest = "1:baa349928d0d929a9f007afee2b1f52fdaeb0b5798864d89168ea077e26fb314"
+  digest = "1:71f099e06b92187612832766c80a4bc4c8641b1a5cd262778c8b5716cb63fc4d"
   name = "github.com/linuxkit/virtsock"
   packages = [
     "pkg/hvsock",
     "pkg/vsock",
   ]
   pruneopts = "NUT"
-  revision = "4813e31717edd6d27179715ce5c919091f349892"
-  source = "github.com/djs55/virtsock"
+  revision = "8e79449dea0735c1c056d814934dd035734cc97c"
 
 [[projects]]
   digest = "1:802689c84994b7f2e41ffe7e39d29a8d8227f2121938dc025db44dfaa9633b15"
