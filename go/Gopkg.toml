@@ -21,8 +21,7 @@
 
 [[constraint]]
   name = "github.com/linuxkit/virtsock"
-  source = "github.com/djs55/virtsock"
-  revision = "4813e31717edd6d27179715ce5c919091f349892"
+  revision = "8e79449dea0735c1c056d814934dd035734cc97c"
 
 [[constraint]]
   name = "github.com/google/uuid"
