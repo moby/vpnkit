@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	vpnkit "github.com/moby/vpnkit/go/pkg/vpnkit"
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
 )
 
 // List currently exposed ports

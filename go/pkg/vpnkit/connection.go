@@ -5,6 +5,11 @@ import (
 	"io"
 )
 
+// Implementation of the control interface.
+type Implementation interface {
+	Client
+}
+
 // Client exposes and unexposes ports on vpnkit.
 type Client interface {
 	Expose(context.Context, *Port) error

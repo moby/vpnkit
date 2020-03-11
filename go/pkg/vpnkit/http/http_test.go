@@ -1,4 +1,4 @@
-package vpnkit
+package http
 
 import (
 	"context"
@@ -9,15 +9,16 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/stretchr/testify/assert"
 )
 
 type mockImpl struct {
-	exposed     []Port
-	exposeError *ExposeError
+	exposed     []vpnkit.Port
+	exposeError *vpnkit.ExposeError
 }
 
-func (m *mockImpl) Expose(_ context.Context, p *Port) error {
+func (m *mockImpl) Expose(_ context.Context, p *vpnkit.Port) error {
 	if p == nil {
 		return errors.New("cannot expose a nil port")
 	}
@@ -28,11 +29,11 @@ func (m *mockImpl) Expose(_ context.Context, p *Port) error {
 	return nil
 }
 
-func (m *mockImpl) Unexpose(_ context.Context, p *Port) error {
+func (m *mockImpl) Unexpose(_ context.Context, p *vpnkit.Port) error {
 	if p == nil {
 		return errors.New("cannot unexpose a nil port")
 	}
-	var exposed []Port
+	var exposed []vpnkit.Port
 	for _, port := range m.exposed {
 		if port.String() == p.String() {
 			continue
@@ -43,7 +44,7 @@ func (m *mockImpl) Unexpose(_ context.Context, p *Port) error {
 	return nil
 }
 
-func (m *mockImpl) ListExposed(_ context.Context) ([]Port, error) {
+func (m *mockImpl) ListExposed(_ context.Context) ([]vpnkit.Port, error) {
 	return m.exposed, nil
 }
 
@@ -59,7 +60,7 @@ func TestEmptyList(t *testing.T) {
 	assert.NotNil(t, s)
 	s.Start()
 	defer s.Stop()
-	c, err := NewClient(path)
+	c, err := vpnkit.NewClient(path)
 	assert.Nil(t, err)
 	ctx := context.Background()
 	ports, err := c.ListExposed(ctx)
@@ -75,16 +76,16 @@ func TestNonEmpyList(t *testing.T) {
 	assert.NotNil(t, s)
 	s.Start()
 	defer s.Stop()
-	c, err := NewClient(path)
+	c, err := vpnkit.NewClient(path)
 	assert.Nil(t, err)
 	ctx := context.Background()
-	assert.Nil(t, c.Expose(ctx, &Port{
-		Proto:   TCP,
+	assert.Nil(t, c.Expose(ctx, &vpnkit.Port{
+		Proto:   vpnkit.TCP,
 		InPort:  1,
 		OutPort: 1,
 	}))
-	assert.Nil(t, c.Expose(ctx, &Port{
-		Proto:   UDP,
+	assert.Nil(t, c.Expose(ctx, &vpnkit.Port{
+		Proto:   vpnkit.UDP,
 		InPort:  2,
 		OutPort: 2,
 	}))
@@ -101,17 +102,17 @@ func TestUnexpose(t *testing.T) {
 	assert.NotNil(t, s)
 	s.Start()
 	defer s.Stop()
-	c, err := NewClient(path)
+	c, err := vpnkit.NewClient(path)
 	assert.Nil(t, err)
 	ctx := context.Background()
-	p := &Port{
-		Proto:   TCP,
+	p := &vpnkit.Port{
+		Proto:   vpnkit.TCP,
 		InPort:  1,
 		OutPort: 1,
 	}
 	assert.Nil(t, c.Expose(ctx, p))
-	q := &Port{
-		Proto:   UDP,
+	q := &vpnkit.Port{
+		Proto:   vpnkit.UDP,
 		InPort:  2,
 		OutPort: 2,
 	}
@@ -131,14 +132,14 @@ func TestExposeError(t *testing.T) {
 	assert.NotNil(t, s)
 	s.Start()
 	defer s.Stop()
-	c, err := NewClient(path)
+	c, err := vpnkit.NewClient(path)
 	assert.Nil(t, err)
-	impl.exposeError = &ExposeError{
+	impl.exposeError = &vpnkit.ExposeError{
 		Message: "EADDRESSINUSE",
 	}
 	ctx := context.Background()
-	err = c.Expose(ctx, &Port{
-		Proto:   TCP,
+	err = c.Expose(ctx, &vpnkit.Port{
+		Proto:   vpnkit.TCP,
 		InPort:  1,
 		OutPort: 1,
 	})
