@@ -39,3 +39,8 @@
 	Name = "Thomas Gazagnaire"
 	Email = "thomas@gazagnaire.org"
 	GitHub = "samoht"
+
+	[people.guillaumerose]
+	Name = "Guillaume Rose"
+	Email = "guillaume.rose@gmail.com"
+	GitHub = "guillaumerose"
