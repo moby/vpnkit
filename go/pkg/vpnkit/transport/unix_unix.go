@@ -20,14 +20,22 @@ type unix struct {
 }
 
 func (_ *unix) Dial(_ context.Context, path string) (net.Conn, error) {
-	return net.Dial("unix", path)
+	shorter, err := shortenUnixSocketPath(path)
+	if err != nil {
+		return nil, err
+	}
+	return net.Dial("unix", shorter)
 }
 
 func (_ *unix) Listen(path string) (net.Listener, error) {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return nil, errors.Wrap(err, "removing "+path)
 	}
-	return net.Listen("unix", path)
+	shorter, err := shortenUnixSocketPath(path)
+	if err != nil {
+		return nil, err
+	}
+	return net.Listen("unix", shorter)
 }
 
 func (_ *unix) String() string {
