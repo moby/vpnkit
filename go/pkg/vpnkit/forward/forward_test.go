@@ -280,3 +280,19 @@ func TestInterfaceDoesNotExist(t *testing.T) {
 	}
 	assert.Nil(t, f)
 }
+
+func TestRandomPortsTCP(t *testing.T) {
+	maker := Maker{}
+	f, err := maker.Make(nil, vpnkit.Port{InIP: net.IPv4(127, 0, 0, 1), InPort: 2, OutIP: net.IPv4(127, 0, 0, 1), OutPort: 0, Proto: vpnkit.TCP})
+	assert.NoError(t, err)
+	defer f.Stop()
+	assert.NotEqual(t, uint16(0), f.Port().OutPort)
+}
+
+func TestRandomPortsUDP(t *testing.T) {
+	maker := Maker{}
+	f, err := maker.Make(nil, vpnkit.Port{InIP: net.IPv4(127, 0, 0, 1), InPort: 2, OutIP: net.IPv4(127, 0, 0, 1), OutPort: 0, Proto: vpnkit.UDP})
+	assert.NoError(t, err)
+	defer f.Stop()
+	assert.NotEqual(t, uint16(0), f.Port().OutPort)
+}

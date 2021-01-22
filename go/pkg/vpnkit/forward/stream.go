@@ -15,6 +15,7 @@ type network interface {
 type listener interface {
 	accept() (libproxy.Conn, error)
 	close() error
+	port() vpnkit.Port
 }
 
 func makeStream(c common, n network) (*stream, error) {
@@ -66,4 +67,8 @@ func (s *stream) Stop() {
 	log.Printf("removing %s", s.port.String())
 	s.l.close()
 	close(s.quit)
+}
+
+func (s *stream) Port() vpnkit.Port {
+	return s.l.port()
 }

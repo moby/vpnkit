@@ -17,10 +17,16 @@ func (t TCPNetwork) listen(port vpnkit.Port) (listener, error) {
 	if err != nil {
 		return nil, err
 	}
+	if port.OutPort == 0 {
+		addr, ok := l.Addr().(*net.TCPAddr)
+		if ok {
+			port.OutPort = uint16(addr.Port)
+		}
+	}
 	wrapped := &tcpListener{
 		l:      l,
 		vmnetd: vmnetd,
-		port:   port,
+		p:      port,
 	}
 	return wrapped, nil
 }
@@ -28,7 +34,7 @@ func (t TCPNetwork) listen(port vpnkit.Port) (listener, error) {
 type tcpListener struct {
 	l      *net.TCPListener
 	vmnetd bool
-	port   vpnkit.Port
+	p      vpnkit.Port
 }
 
 func (l *tcpListener) accept() (libproxy.Conn, error) {
@@ -36,9 +42,13 @@ func (l *tcpListener) accept() (libproxy.Conn, error) {
 }
 
 func (l *tcpListener) close() error {
-	return closeTCP(l.port, l.vmnetd, l.l)
+	return closeTCP(l.p, l.vmnetd, l.l)
 }
 
 func makeTCP(c common, n TCPNetwork) (Forward, error) {
 	return makeStream(c, n)
+}
+
+func (l *tcpListener) port() vpnkit.Port {
+	return l.p
 }
