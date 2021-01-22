@@ -14,6 +14,7 @@ type UDPListener interface {
 	ReadFromUDP(b []byte) (int, *net.UDPAddr, error)
 	WriteToUDP(b []byte, addr *net.UDPAddr) (int, error)
 	Close() error
+	LocalAddr() net.Addr
 }
 
 // UDPEncapsulator implements net.Conn and reads and writes UDP datagrams framed within a stream connection

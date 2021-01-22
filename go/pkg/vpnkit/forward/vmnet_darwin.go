@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/pkg/errors"
 )
 
@@ -70,15 +71,16 @@ func closeTCPVmnet(IP net.IP, Port uint16, l *net.TCPListener) error {
 	}
 }
 
-func listenUDPVmnet(IP net.IP, Port uint16) (*net.UDPConn, error) {
+func listenUDPVmnet(IP net.IP, Port uint16) (libproxy.UDPListener, error) {
+	localAddress := &net.UDPAddr{
+		IP:   IP,
+		Port: 0,
+	}
 	// I don't think it's possible to make a net.UDPConn from a raw file descriptor
 	// so we use a hack: we create a net.UDPConn listening on a random port and then
 	// use the `SyscallConn` low-level interface to replace the file descriptor with a
 	// clone of the one which is listening on the privileged port.
-	l, err := net.ListenUDP("udp", &net.UDPAddr{
-		IP:   IP,
-		Port: 0,
-	})
+	l, err := net.ListenUDP("udp", localAddress)
 	if err != nil {
 		// IP address invalid? Fail early
 		return nil, err
@@ -103,7 +105,16 @@ func listenUDPVmnet(IP net.IP, Port uint16) (*net.UDPConn, error) {
 		return nil, err
 	}
 	_ = syscall.Close(int(newFD))
-	return l, err
+	return vmnetdUdpWrapper{l, localAddress}, err
+}
+
+type vmnetdUdpWrapper struct {
+	*net.UDPConn
+	localAddr *net.UDPAddr
+}
+
+func (w vmnetdUdpWrapper) LocalAddr() net.Addr {
+	return w.localAddr
 }
 
 func closeUDPVmnet(IP net.IP, Port uint16, l *net.UDPConn) error {
