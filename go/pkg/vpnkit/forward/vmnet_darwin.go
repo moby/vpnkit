@@ -109,7 +109,7 @@ func listenUDPVmnet(IP net.IP, Port uint16) (libproxy.UDPListener, error) {
 }
 
 type vmnetdUdpWrapper struct {
-	*net.UDPConn
+	libproxy.UDPListener
 	localAddr *net.UDPAddr
 }
 
@@ -117,7 +117,7 @@ func (w vmnetdUdpWrapper) LocalAddr() net.Addr {
 	return w.localAddr
 }
 
-func closeUDPVmnet(IP net.IP, Port uint16, l *net.UDPConn) error {
+func closeUDPVmnet(IP net.IP, Port uint16, l libproxy.UDPListener) error {
 	errCh := make(chan error)
 	go func() {
 		errCh <- l.Close()
