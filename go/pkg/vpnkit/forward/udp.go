@@ -22,9 +22,17 @@ func makeUDP(c common) (*udp, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to resolve backend address for port %s", c.port.String())
 	}
-	l, err := listenUDP(c.Port())
+	port := c.Port()
+	l, err := listenUDP(port)
 	if err != nil {
 		return nil, err
+	}
+	if port.OutPort == 0 {
+		addr, ok := l.LocalAddr().(*net.UDPAddr)
+		if ok {
+			port.OutPort = uint16(addr.Port)
+		}
+		c.port = port
 	}
 	dialer := &udpDialer{
 		ctrl: c.ctrl,

@@ -24,12 +24,13 @@ func (t UnixNetwork) listen(port vpnkit.Port) (listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	wrapped := unixListener{l}
+	wrapped := unixListener{l, port}
 	return &wrapped, nil
 }
 
 type unixListener struct {
 	l net.Listener
+	p vpnkit.Port
 }
 
 func (l unixListener) accept() (libproxy.Conn, error) {
@@ -46,6 +47,10 @@ func (l unixListener) accept() (libproxy.Conn, error) {
 
 func (l unixListener) close() error {
 	return l.l.Close()
+}
+
+func (l unixListener) port() vpnkit.Port {
+	return l.p
 }
 
 func makeUnix(c common, n UnixNetwork) (Forward, error) {
