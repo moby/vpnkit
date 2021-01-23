@@ -86,7 +86,7 @@ func TestBindUDPVmnetd(t *testing.T) {
 		t.FailNow()
 	}()
 	result := make([]byte, 1024)
-	n, err := f.Read(result)
+	n, _, err := f.ReadFromUDP(result)
 	assert.Nil(t, err)
 	assert.Equal(t, string(hello), string(result[0:n]))
 	done <- struct{}{}
@@ -153,7 +153,7 @@ func TestBindUDPVmnetdClose(t *testing.T) {
 	assert.Nil(t, err)
 	go func() {
 		buf := make([]byte, 1024)
-		_, err := f.Read(buf)
+		_, _, err := f.ReadFromUDP(buf)
 		assert.Nil(t, err)
 	}()
 	time.Sleep(10 * time.Millisecond)

@@ -27,7 +27,7 @@ func listenUDP(port vpnkit.Port) (libproxy.UDPListener, error) {
 
 type wrappedCloser struct {
 	port vpnkit.Port
-	l    *net.UDPConn
+	l    libproxy.UDPListener
 }
 
 func (w *wrappedCloser) ReadFromUDP(b []byte) (int, *net.UDPAddr, error) {
@@ -40,4 +40,8 @@ func (w *wrappedCloser) WriteToUDP(b []byte, addr *net.UDPAddr) (int, error) {
 
 func (w *wrappedCloser) Close() error {
 	return closeUDPVmnet(w.port.OutIP, w.port.OutPort, w.l)
+}
+
+func (w *wrappedCloser) LocalAddr() net.Addr {
+	return w.l.LocalAddr()
 }
