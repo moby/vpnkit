@@ -92,7 +92,7 @@ Licensing
 ---------
 
 VPNKit is licensed under the Apache License, Version 2.0. See
-[LICENSE](https://github.com/moby/vpnkit/blob/master/LICENSE.md) for the full
+[LICENSE](https://github.com/moby/vpnkit/blob/master/LICENSE) for the full
 license text.
 
 Contributions are welcome under the terms of this license. You may wish to browse
