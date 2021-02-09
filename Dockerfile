@@ -5,6 +5,10 @@ RUN opam remote add vpnkit /home/opam/src/repo/darwin
 RUN opam pin add -y -n vpnkit /home/opam/src
 RUN opam depext vpnkit -y
 RUN opam pin add -y -n tcpip https://github.com/djs55/mirage-tcpip.git#vpnkit-20180607
+# Work around uri build failure
+ENV OPAMJOBS=1
+RUN opam install re.1.9.0
+RUN opam install uri.2.2.1
 RUN opam install --deps-only vpnkit -y
 RUN opam pin remove vpnkit
 WORKDIR /home/opam/src
