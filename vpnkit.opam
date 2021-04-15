@@ -18,7 +18,6 @@ dev-repo:     "https://github.com/moby/vpnkit.git"
 doc:          "https://moby.github.io/vpnkit/"
 
 build: [
-  ["jbuilder" "subst"] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
 
