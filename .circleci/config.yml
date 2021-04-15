@@ -19,9 +19,10 @@ jobs:
       - run: brew install pkg-config
       - run: brew install dylibbundler
       - run: brew install opam
+      - run: make -f Makefile.darwin depends
       - run: make -f Makefile.darwin
-      - run: make artefacts
-      - run: make test
+      - run: make -f Makefile.darwin artefacts
+      - run: make -f Makefile.darwin test
       - store_artifacts:
           path: vpnkit.tgz
       - store_artifacts:
