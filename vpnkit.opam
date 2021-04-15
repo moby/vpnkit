@@ -44,7 +44,7 @@ depends: [
   "cmdliner"
   "charrua-core" {>= "0.9"}
   "charrua-client-mirage" {test & = "0.9"}
-  "hvsock" {>= "1.0.1"}
+  "hvsock" {>= "2.0.0"}
   "asl"
   "win-eventlog"
   "fd-send-recv" {>= "1.0.3"}
