@@ -3,7 +3,7 @@
 build: vpnkit.exe
 
 vpnkit.exe:
-	dune build --profile release
+	opam exec -- dune build --profile release
 
 depends:
 	opam install vpnkit --deps-only -y
