@@ -55,7 +55,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   module Connect_hvsock = Connect.Hvsock
   module Bind = Bind.Make(Host.Sockets)
   module Dns_policy = Hostnet_dns.Policy(Host.Files)
-  module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
   module Forward_unix = Forward.Make(Mclock)(Connect_unix)(Bind)
   module Forward_hvsock = Forward.Make(Mclock)(Connect_hvsock)(Bind)
   module HV = Hvsock_lwt.Flow.Make(Host.Time)(Host.Fn)(Hvsock.Af_hyperv)
@@ -347,7 +346,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let main_t
       configuration
       socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
-      port_forwards db_path db_branch hosts
+      port_forwards hosts
       listen_backlog gc_compact
     =
     Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
@@ -389,37 +388,20 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     Mclock.connect () >>= fun clock ->
     let vnet_switch = Vnet.create () in
 
-    let config = match db_path with
-    | Some db_path ->
-      let reconnect () =
-        let open Lwt_result.Infix in
-        Log.info (fun f -> f "Connecting to database on %s" db_path);
-        Host.Sockets.Stream.Unix.connect db_path >>= fun x ->
-        Lwt_result.return x
-      in
-      Some (Config.create ~reconnect ~branch:db_branch ())
-    | None ->
-      Log.warn (fun f ->
-          f "There is no database: using hardcoded network configuration values");
-      None
-    in
-
     let uri = Uri.of_string socket_url in
 
     match Uri.scheme uri with
     | Some ("hyperv-connect"|"hyperv-listen") ->
       let module Slirp_stack =
-        Slirp.Make(Config)(Vmnet.Make(HV))(Dns_policy)
+        Slirp.Make(Vmnet.Make(HV))(Dns_policy)
           (Mclock)(Stdlibrandom)(Vnet)
       in
       let sockaddr =
         hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid
           (Uri.of_string socket_url)
       in
-      ( match config with
-      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
-      | None -> Slirp_stack.create_static clock vnet_switch configuration
-      ) >>= fun stack_config ->
+      Slirp_stack.create_static clock vnet_switch configuration
+      >>= fun stack_config ->
       let callback fd =
         let conn = HV.connect fd in
         Slirp_stack.connect stack_config conn >>= fun stack ->
@@ -440,7 +422,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       else hvsock_listen sockaddr callback
     | Some "fd" | None ->
       let module Slirp_stack =
-        Slirp.Make(Config)(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
+        Slirp.Make(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
           (Mclock)(Stdlibrandom)(Vnet)
       in
       begin unix_listen socket_url
@@ -449,10 +431,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           Log.err (fun f -> f "Failed to listen on ethernet socket because: %s" m);
           Lwt.return_unit
         | Ok server ->
-        ( match config with
-        | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
-        | None -> Slirp_stack.create_static clock vnet_switch configuration
-        ) >>= fun stack_config ->
+        Slirp_stack.create_static clock vnet_switch configuration
+        >>= fun stack_config ->
         Host.Sockets.Stream.Unix.listen server (fun conn ->
             Slirp_stack.connect stack_config conn >>= fun stack ->
             Log.info (fun f -> f "TCP/IP stack connected");
@@ -473,13 +453,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       end
     | _ ->
       let module Slirp_stack =
-        Slirp.Make(Config)(Vmnet.Make(HV_generic))(Dns_policy)
+        Slirp.Make(Vmnet.Make(HV_generic))(Dns_policy)
           (Mclock)(Stdlibrandom)(Vnet)
       in
-      ( match config with
-      | Some config -> Slirp_stack.create_from_active_config clock vnet_switch configuration config
-      | None -> Slirp_stack.create_static clock vnet_switch configuration
-      ) >>= fun stack_config ->
+      Slirp_stack.create_static clock vnet_switch configuration
+      >>= fun stack_config ->
       let callback fd =
         let conn = HV_generic.connect fd in
         Slirp_stack.connect stack_config conn >>= fun stack ->
@@ -499,7 +477,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main
       socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls pcap_snaplen
-      max_connections port_forwards db_path db_branch dns http hosts host_names gateway_names
+      max_connections port_forwards dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
       dhcp_json_path mtu udpv4_forwards tcpv4_forwards gateway_forwards_path gc_compact log_destination
@@ -574,7 +552,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     try
       Host.Main.run
         (main_t configuration socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
-          port_forwards db_path db_branch hosts
+          port_forwards hosts
           listen_backlog gc_compact);
     with e ->
       Log.err (fun f -> f "Host.Main.run caught exception %s: %s" (Printexc.to_string e) (Printexc.get_backtrace ()))
@@ -676,27 +654,6 @@ let port_forwards =
        to the VM." [ "vsock-path"; "port-forwards" ] ~docv:"VSOCK"
   in
   Arg.(value & opt string "" doc)
-
-let db_path =
-  let doc =
-    Arg.info ~doc:
-      "The address on the host for the datakit database. \
-       Possible values include: \
-       file:///var/tmp/foo to connect to Unix domain socket /var/tmp/foo; \
-       tcp://host:port to connect to over TCP/IP; \
-       \\\\\\\\.\\\\pipe\\\\irmin to connect to a named pipe on Windows."
-      ["db"]
-  in
-  Arg.(value & opt (some string) None doc)
-
-let db_branch =
-  let doc =
-    Arg.info ~doc:
-      "The database branch which contains the configuration information. \
-       The default is `master`."
-      ["branch"]
-  in
-  Arg.(value & opt string "master" doc)
 
 let dns =
   let doc =
@@ -876,7 +833,7 @@ let command =
   in
   Term.(pure main
         $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls $ pcap_urls $ pcap_snaplen
-        $ max_connections $ port_forwards $ db_path $ db_branch $ dns $ http $ hosts
+        $ max_connections $ port_forwards $ dns $ http $ hosts
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ tcpv4_forwards

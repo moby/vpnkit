@@ -5,7 +5,6 @@ type pcap = (string * int64 option) option
     bigger than the given limit. *)
 
 module Make
-    (Config: Active_config.S)
     (Vmnet: Sig.VMNET)
     (Dns_policy: Sig.DNS_POLICY)
     (Clock: sig
@@ -21,10 +20,6 @@ sig
 
   val create_static: Clock.t -> Vnet.t -> Configuration.t -> stack Lwt.t
   (** Initialise a TCP/IP stack, with a static configuration *)
-
-  val create_from_active_config: Clock.t -> Vnet.t -> Configuration.t -> Config.t -> stack Lwt.t
-  (** Initialise a TCP/IP stack, allowing the dynamic Config.t to override
-      the static Configuration.t *)
 
   type connection
   (** An ethernet connection to a stack *)
