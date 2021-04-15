@@ -15,7 +15,7 @@ artefacts: vpnkit.tgz
 
 vpnkit.tgz: vpnkit.exe
 	mkdir -p _build/root/Contents/Resources/bin
-	cp vpnkit.exe _build/root/Contents/Resources/bin/vpnkit
+	cp ./_build/install/default/bin/vpnkit _build/root/Contents/Resources/bin/vpnkit
 	dylibbundler -od -b \
                 -x _build/root/Contents/Resources/bin/vpnkit \
                 -d _build/root/Contents/Resources/lib \
