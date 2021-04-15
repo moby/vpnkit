@@ -37,13 +37,14 @@ jobs:
            key: depends-cache-{{ checksum "vpnkit.opam" }}
       - run: make -f Makefile.darwin build
       - run: make -f Makefile.darwin artefacts
-      - run: make -f Makefile.darwin test
       - store_artifacts:
           path: vpnkit.tgz
       - store_artifacts:
           path: COMMIT
       - store_artifacts:
           path: OSS-LICENSES
+      - run: make -f Makefile.darwin test
+
 workflows:
   version: 2
   build-test-vpnkit:

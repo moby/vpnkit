@@ -6,7 +6,7 @@ vpnkit.exe:
 	opam exec -- dune build --profile release
 
 depends:
-	opam install vpnkit --deps-only -y
+	opam install vpnkit charrua-client-mirage alcotest -y
 
 ocaml:
 	ocaml -version || opam init --compiler=4.10.0
@@ -24,3 +24,7 @@ vpnkit.tgz: vpnkit.exe
                 -d _build/root/Contents/Resources/lib \
                 -p @executable_path/../lib
 	tar -C _build/root -cvzf vpnkit.tgz Contents
+
+test:
+	opam exec dune build --profile release src/hostnet_test/main.exe
+	./_build/default/src/hostnet_test/main.exe
