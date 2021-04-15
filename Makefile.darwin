@@ -1,0 +1,32 @@
+# This is work in progress
+
+build: vpnkit.exe
+
+vpnkit.exe:
+	opam exec -- dune build --profile release
+
+depends:
+	opam install vpnkit charrua-client-mirage alcotest -y
+
+ocaml:
+	ocaml -version || opam init --compiler=4.10.0
+	opam pin add tcpip.3.3.0 "https://github.com/djs55/mirage-tcpip.git#vpnkit-20180607" -n
+	opam pin add hvsock.1.0.1 "git://github.com/djs55/ocaml-hvsock.git#relative-paths" -n
+	opam pin add vpnkit . -n
+
+artefacts: vpnkit.tgz
+
+vpnkit.tgz: vpnkit.exe
+	mkdir -p _build/root/Contents/Resources/bin
+	cp ./_build/install/default/bin/vpnkit _build/root/Contents/Resources/bin/vpnkit
+	dylibbundler -od -b \
+                -x _build/root/Contents/Resources/bin/vpnkit \
+                -d _build/root/Contents/Resources/lib \
+                -p @executable_path/../lib
+	tar -C _build/root -cvzf vpnkit.tgz Contents
+
+test:
+	opam exec -- dune build --profile release src/hostnet_test/main.exe
+	cp -r go/test_inputs _build/default/src/hostnet_test/
+	# One test requires 1026 file descriptors
+	ulimit -n 1500 && ./_build/default/src/hostnet_test/main.exe

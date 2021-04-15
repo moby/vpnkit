@@ -18,7 +18,6 @@ dev-repo:     "https://github.com/moby/vpnkit.git"
 doc:          "https://moby.github.io/vpnkit/"
 
 build: [
-  ["jbuilder" "subst"] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
 
@@ -28,7 +27,7 @@ depends: [
   "result"
   "tar" {>= "0.8.0"}
   "ipaddr" {= "2.8.0"}
-  "lwt" {= "4.1.0"}
+  "lwt" {= "4.2.0"}
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "3.3.0"}
   "dns" {>= "0.19.1"}
@@ -70,7 +69,7 @@ depends: [
   "ezjsonm"
   "sha"
   "stringext"
-  "mirage-clock" {= "2.0.0"}
+  "mirage-clock" {= "1.3.0"}
   "mirage-clock-lwt" {= "2.0.0"}
   "mirage-clock-unix" {= "2.0.0"}
   "mirage-random" {= "1.1.0"}

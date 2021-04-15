@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     macos:
-      xcode: "9.0"
+      xcode: "12.0"
     environment:
       OPAMYES: "1"
       OPAMJOBS: "2"
@@ -14,18 +14,37 @@ jobs:
       TERM: vt100
     steps:
       - checkout
-      - run: brew uninstall python # remove files in /usr/local/bin
-      - run: brew install wget pkg-config dylibbundler
-      - run: brew install https://gist.githubusercontent.com/djs55/7a94ee5aeb882ef5399c0485d2affdda/raw/bc04ff96e0082d7ee07642337dbb77c51b93d678/opam.rb
-      - run: make
-      - run: make artefacts
-      - run: make test
+      - run: brew update
+      - run: brew install wget
+      - run: brew install pkg-config
+      - run: brew install dylibbundler
+      - run: brew install opam
+      # Build the OCaml compiler
+      - restore_cache:
+           key: ocaml-cache
+      - run: make -f Makefile.darwin ocaml
+      - save_cache:
+           paths:
+             - /Users/distiller/.opam
+           key: ocaml-cache
+      # Build the OCaml dependencies, make sure the cache is cleared if the dependencies change.
+      - restore_cache:
+           key: depends-cache-{{ checksum "vpnkit.opam" }}
+      - run: make -f Makefile.darwin depends
+      - save_cache:
+           paths:
+             - /Users/distiller/.opam
+           key: depends-cache-{{ checksum "vpnkit.opam" }}
+      - run: make -f Makefile.darwin build
+      - run: make -f Makefile.darwin artefacts
       - store_artifacts:
           path: vpnkit.tgz
       - store_artifacts:
           path: COMMIT
       - store_artifacts:
           path: OSS-LICENSES
+      - run: make -f Makefile.darwin test
+
 workflows:
   version: 2
   build-test-vpnkit:
