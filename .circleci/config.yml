@@ -19,7 +19,7 @@ jobs:
       - run: brew install pkg-config
       - run: brew install dylibbundler
       - run: brew install opam
-      - run: make
+      - run: make -f Makefile.darwin
       - run: make artefacts
       - run: make test
       - store_artifacts:
