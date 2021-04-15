@@ -64,16 +64,16 @@ module Make(Socket: Sig.SOCKETS) = struct
     Channel.write_buffer t.c buf;
     with_flush (Channel.flush t.c) @@ fun () ->
     let rawfd = Socket.Stream.Unix.unsafe_get_raw_fd t.fd in
-    let result = String.make 8 '\000' in
+    let result = Bytes.make 8 '\000' in
     let n, _, fd = Fd_send_recv.recv_fd rawfd result 0 8 [] in
 
     (if n <> 8 then failf "Message only contained %d bytes" n else
        let buf = Cstruct.create 8 in
-       Cstruct.blit_from_string result 0 buf 0 8;
+       Cstruct.blit_from_bytes result 0 buf 0 8;
        Log.debug (fun f ->
            let b = Buffer.create 16 in
            Cstruct.hexdump_to_buffer b buf;
-           f "received result bytes: %s which is %s" (String.escaped result)
+           f "received result bytes: %s which is %s" (String.escaped (Bytes.to_string result))
              (Buffer.contents b));
        match Cstruct.LE.get_uint64 buf 0 with
        | 0L  -> Lwt_result.return fd
