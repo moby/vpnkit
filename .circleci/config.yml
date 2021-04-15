@@ -14,7 +14,6 @@ jobs:
       TERM: vt100
     steps:
       - checkout
-      - run: brew update
       - run: brew install wget
       - run: brew install pkg-config
       - run: brew install dylibbundler
