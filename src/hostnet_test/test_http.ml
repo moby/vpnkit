@@ -44,7 +44,7 @@ module Exclude = struct
   let test_domain_no_match () =
     let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
     assert (not(Hostnet_http.Exclude.matches
-                  "dave.recoil.org"
+                  "www.mobyproject.org"
                   exclude))
 
   let test_list () =
@@ -59,7 +59,7 @@ module Exclude = struct
                   "10.0.0.1"
                   exclude));
     assert (not(Hostnet_http.Exclude.matches
-                  "dave.recoil.org"
+                  "www.mobyproject.org"
                   exclude))
 
   let tests = [
@@ -163,7 +163,7 @@ let test_interception proxy () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
-        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+        (Uri.make ~scheme:"http" ~host:"www.mobyproject.org" ~path:"/" ())
     in
     intercept ~pcap:"test_interception.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
@@ -180,7 +180,7 @@ let test_interception proxy () =
       (Cohttp.Code.string_of_version result.Cohttp.Request.version);
     (* a request to a proxy must have an absolute URI *)
     Alcotest.check Alcotest.string "uri"
-      "http://dave.recoil.org:80/"
+      "http://www.mobyproject.org:80/"
       result.Cohttp.Request.resource;
     Alcotest.check Alcotest.(list(pair string string)) "headers"
       (Cohttp.Header.to_list request.Cohttp.Request.headers)
@@ -193,7 +193,7 @@ let test_uri_relative proxy () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
-        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+        (Uri.make ~scheme:"http" ~host:"www.mobyproject.org" ~path:"/" ())
     in
     intercept ~pcap:"test_uri_relative.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
@@ -214,7 +214,7 @@ let test_uri_absolute proxy () =
   Host.Main.run begin
     let request =
       Cohttp.Request.make
-        (Uri.make ~host:"dave.recoil.org" ~path:"/" ())
+        (Uri.make ~host:"www.mobyproject.org" ~path:"/" ())
     in
     intercept ~pcap:"test_uri_absolute.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
@@ -237,7 +237,7 @@ let test_x_header_preserved proxy () =
     in
     let request =
       Cohttp.Request.make ~headers
-        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+        (Uri.make ~scheme:"http" ~host:"www.mobyproject.org" ~path:"/" ())
     in
     intercept ~pcap:"test_x_header_preserved.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
@@ -261,7 +261,7 @@ let test_user_agent_preserved proxy () =
     in
     let request =
       Cohttp.Request.make ~headers
-        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+        (Uri.make ~scheme:"http" ~host:"www.mobyproject.org" ~path:"/" ())
     in
     intercept ~pcap:"test_user_agent_preserved.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
@@ -283,7 +283,7 @@ let test_authorization_preserved proxy () =
     in
     let request =
       Cohttp.Request.make ~headers
-        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+        (Uri.make ~scheme:"http" ~host:"www.mobyproject.org" ~path:"/" ())
     in
     intercept ~pcap:"test_authorization_preserved.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
@@ -305,7 +305,7 @@ let test_proxy_authorization proxy () =
     in
     let request =
       Cohttp.Request.make ~headers
-        (Uri.make ~scheme:"http" ~host:"dave.recoil.org" ~path:"/" ())
+        (Uri.make ~scheme:"http" ~host:"www.mobyproject.org" ~path:"/" ())
     in
     intercept ~pcap:"test_proxy_authorization.pcap" proxy request >>= fun result ->
     Log.info (fun f ->
@@ -671,7 +671,7 @@ let test_http_connect_tunnel proxy () =
         | Ok flow ->
           Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
-          let host = "dave.recoil.org" in
+          let host = "www.mobyproject.org" in
           let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ()) in
           Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
           >>= fun () ->
@@ -902,7 +902,7 @@ let test_http_connect_tunnel proxy () =
         | Ok flow ->
           Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
-          let host = "dave.recoil.org" in
+          let host = "www.mobyproject.org" in
           let request = Cohttp.Request.make ~meth:`HEAD (Uri.make ~host ()) in
           Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
           >>= fun () ->
