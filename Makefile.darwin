@@ -3,7 +3,7 @@
 build: vpnkit.exe
 
 vpnkit.exe:
-	opam install vpnkit
+	dune build --profile release
 
 depends:
 	ocaml -version || opam init --compiler=4.10.0
