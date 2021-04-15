@@ -26,5 +26,7 @@ vpnkit.tgz: vpnkit.exe
 	tar -C _build/root -cvzf vpnkit.tgz Contents
 
 test:
-	opam exec dune build --profile release src/hostnet_test/main.exe
-	./_build/default/src/hostnet_test/main.exe
+	opam exec -- dune build --profile release src/hostnet_test/main.exe
+	cp -r go/test_inputs _build/default/src/hostnet_test/
+	# One test requires 1026 file descriptors
+	ulimit -n 1500 && ./_build/default/src/hostnet_test/main.exe
