@@ -65,10 +65,9 @@ module Dns_policy = struct
 end
 
 module VMNET = Vmnet.Make(Host.Sockets.Stream.Tcp)
-module Config = Active_config.Make(Host.Time)(Host.Sockets.Stream.Unix)
 module Vnet = Basic_backend.Make
 module Slirp_stack =
-  Slirp.Make(Config)(VMNET)(Dns_policy)(Mclock)(Stdlibrandom)(Vnet)
+  Slirp.Make(VMNET)(Dns_policy)(Mclock)(Stdlibrandom)(Vnet)
 
 module Client = struct
   module Netif = VMNET

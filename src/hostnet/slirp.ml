@@ -51,7 +51,6 @@ type uuid_table = {
 }
 
 module Make
-    (Config: Active_config.S)
     (Vmnet: Sig.VMNET)
     (Dns_policy: Sig.DNS_POLICY)
     (Clock: sig
@@ -1256,19 +1255,6 @@ struct
       Log.info (fun f -> f "TCP/IP ready");
       Lwt.return t
 
-  let on_change settings f =
-    let rec loop settings =
-      f (Active_config.hd settings)
-      >>= fun () ->
-      Active_config.tl settings
-      >>= fun settings ->
-      loop settings in
-    Lwt.async (fun () ->
-      log_exception_continue "monitor database settings" (fun () ->
-          loop settings
-      )
-    )
-
   let update_dns c clock =
     let config = match c.Configuration.resolver, c.Configuration.dns with
     | `Upstream, servers -> `Upstream servers
@@ -1493,97 +1479,6 @@ struct
     update_dns c clock
     >>= fun () ->
     create_common clock vnet_switch c
-
-  let create_from_active_config clock vnet_switch static_configuration config =
-    let c = ref static_configuration in
-    let update f =
-      let c' = f (!c) in
-      c := c';      
-      Host.Sockets.set_max_connections c'.Configuration.max_connections;
-      update_http c'
-      >>= fun () ->
-      update_dns c' clock
-      in
-
-    let driver = [ "com.docker.driver.amd64-linux" ] in
-    let max_connections_path = driver @ [ "slirp"; "max-connections" ] in
-    Config.string_option config max_connections_path
-    >>= fun string_max_connections ->
-    Active_config.map Configuration.Parse.int string_max_connections
-    >>= fun max_connections ->
-    on_change max_connections (fun max_connections -> update (fun c -> { c with max_connections }));
-    let lowest_ips_path = driver @ [ "slirp"; "docker" ] in
-    Config.string config ~default:"" lowest_ips_path
-    >>= fun string_lowest_ips ->
-    Active_config.map (Configuration.Parse.ipv4 Configuration.default_lowest_ip)
-      string_lowest_ips
-    >>= fun lowest_ips ->
-    on_change lowest_ips (fun lowest_ip -> update (fun c -> { c with lowest_ip }));
-    let host_ips_path = driver @ [ "slirp"; "host" ] in
-    Config.string config ~default:"" host_ips_path
-    >>= fun string_host_ips ->
-    Active_config.map (Configuration.Parse.ipv4 Configuration.default_gateway_ip)
-      string_host_ips
-    >>= fun gateway_ips ->
-    on_change gateway_ips (fun gateway_ip -> update (fun c -> { c with gateway_ip }));
-    let highest_ips_path = driver @ [ "slirp"; "highest-ip" ] in
-    Config.string config ~default:"" highest_ips_path
-    >>= fun string_highest_ips ->
-    Active_config.map (Configuration.Parse.ipv4 Configuration.default_highest_ip) string_highest_ips
-    >>= fun highest_ips ->
-    on_change highest_ips (fun highest_ip -> update (fun c -> { c with highest_ip }));
-    let resolver_path = driver @ [ "slirp"; "resolver" ] in
-    Config.string_option config resolver_path
-    >>= fun string_resolver_settings ->
-    Active_config.map Configuration.Parse.resolver string_resolver_settings
-    >>= fun resolver_settings ->
-    on_change resolver_settings (fun resolver -> update (fun c -> { c with resolver }));
-    let bind_path = driver @ [ "allowed-bind-address" ] in
-    Config.string ~default:"" config bind_path
-    >>= fun string_allowed_bind_address ->
-    Active_config.map (fun x -> Lwt.return @@ Configuration.Parse.ipv4_list [] x) string_allowed_bind_address
-    >>= fun allowed_bind_address ->
-    on_change allowed_bind_address (fun allowed_bind_addresses -> update (fun c -> { c with allowed_bind_addresses }));
-    let mtu_path = driver @ [ "slirp"; "mtu" ] in
-    Config.int config ~default:Configuration.default_mtu mtu_path
-    >>= fun mtus ->
-    on_change mtus (fun mtu -> update (fun c -> { c with mtu }));
-    let dns_path = driver @ [ "slirp"; "dns" ] in
-    Config.string_option config dns_path
-    >>= fun string_dns_settings ->
-    Active_config.map
-      (function
-        | None -> Lwt.return Configuration.no_dns_servers
-        | Some x ->
-          begin match Configuration.Parse.dns x with
-          | None -> Lwt.return Configuration.no_dns_servers
-          | Some x -> Lwt.return x
-          end
-      ) string_dns_settings
-    >>= fun dns_settings ->
-    on_change dns_settings (fun dns -> update (fun c -> { c with dns }));
-    let http_intercept_path = driver @ [ "slirp"; "http-intercept" ] in
-    Config.string_option config http_intercept_path
-    >>= fun string_http_intercept_settings ->
-    Active_config.map
-      (function
-        | None -> Lwt.return None
-        | Some txt ->
-          match Ezjsonm.from_string txt with
-          | exception _ ->
-            Log.err (fun f -> f "Failed to parse http-intercept json: %s" txt);
-            Lwt.return None
-          | j ->
-            Lwt.return (Some j)
-      ) string_http_intercept_settings
-    >>= fun http_intercept_settings ->
-    on_change http_intercept_settings (fun http_intercept -> update (fun c -> { c with http_intercept }));
-    let port_max_idle_time_path = driver @ [ "slirp"; "port-max-idle-time" ] in
-    Config.int config ~default:Configuration.default_port_max_idle_time port_max_idle_time_path
-    >>= fun port_max_idle_times ->
-    on_change port_max_idle_times (fun port_max_idle_time -> update (fun c -> { c with port_max_idle_time }));
-
-    create_common clock vnet_switch (!c)
 
   let connect_client_by_uuid_ip t (uuid:Uuidm.t) (preferred_ip:Ipaddr.V4.t option) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
