@@ -4,7 +4,7 @@
    pcap-format tcpip.ethif tcpip.arpv4 tcpip.ipv4 tcpip.icmpv4 tcpip.udp
    tcpip.tcp tcpip.stack-direct charrua-core.server dns dns-lwt ofs uwt
    uwt.ext uwt.preemptive threads astring datakit-server dns-forward tar
-   mirage-vnetif dnssd uuidm cohttp-lwt mirage-channel ezjsonm
+   mirage-vnetif uuidm cohttp-lwt mirage-channel ezjsonm
    mirage-protocols-lwt duration mirage-time-lwt mirage-clock-lwt
    mirage-random tcpip.unix forwarder cstructs)
  (c_names stubs_utils)
