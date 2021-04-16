@@ -1136,33 +1136,41 @@ module Dns = struct
     let query_one name ty =
       let query = Dnssd.LowLevel.query (Dns.Name.to_string name) ty in
       let socket = Dnssd.LowLevel.socket query in
-      let t, u = Lwt.task () in
-      match Uwt.Poll.start socket [ Uwt.Poll.Readable ]
-        ~cb:(fun _poll events ->
-          match events with
-          | Error error ->
-            Log.err (fun f -> f "Uwt.Poll callback failed with %s" (Uwt.strerror error))
-          | Ok events ->
-            List.iter (fun event ->
-              if event = Uwt.Poll.Readable then Lwt.wakeup_later u ()
-            ) events
-        ) with
-      | Error error ->
-        Log.err (fun f -> f "Uwt.Poll.start failed with %s" (Uwt.strerror error));
-        Lwt.return (Ok [])
-      | Ok poll ->
-        t >>= fun () ->
-        let result = Uwt.Poll.close poll in
-        if not (Uwt.Int_result.is_ok result) then begin
-          let error = Uwt.Int_result.to_error result in
-          Log.err (fun f -> f "Uwt.Poll.close failed with %s" (Uwt.strerror error));
-          Lwt.return (Ok [])
-        end else begin
-          Uwt_preemptive.detach
-            (fun () ->
-              Dnssd.LowLevel.response query
-            ) ()
-        end in
+      let one () =
+        let t, u = Lwt.task () in
+        match Uwt.Poll.start socket [ Uwt.Poll.Readable ]
+          ~cb:(fun _poll events ->
+            match events with
+            | Error error ->
+              Log.err (fun f -> f "Uwt.Poll callback failed with %s" (Uwt.strerror error))
+            | Ok events ->
+              List.iter (fun event ->
+                if event = Uwt.Poll.Readable then Lwt.wakeup_later u ()
+              ) events
+          ) with
+        | Error error ->
+          Log.err (fun f -> f "Uwt.Poll.start failed with %s" (Uwt.strerror error));
+          Lwt.return (Ok ([], false))
+        | Ok poll ->
+          t >>= fun () ->
+          let result = Uwt.Poll.close poll in
+          if not (Uwt.Int_result.is_ok result) then begin
+            let error = Uwt.Int_result.to_error result in
+            Log.err (fun f -> f "Uwt.Poll.close failed with %s" (Uwt.strerror error));
+            Lwt.return (Ok ([], false))
+          end else begin
+            Uwt_preemptive.detach
+              (fun () ->
+                Dnssd.LowLevel.response query
+              ) ()
+          end in
+      let rec loop acc =
+        one ()
+        >>= function
+        | Error e -> Lwt.return (Error e)
+        | Ok (rrs, true) -> loop (acc @ rrs)
+        | Ok (rrs, false) -> Lwt.return (Ok (acc @ rrs)) in
+      loop [] in
 
     let query requested_name ty =
       (* The DNSServiceRef API will return CNAMEs first, without resolving to
