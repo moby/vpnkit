@@ -47,7 +47,7 @@ depends: [
   "hvsock" {>= "1.0.1"}
   "asl"
   "win-eventlog"
-  "fd-send-recv" {>= "1.0.3"}
+  "fd-send-recv" {>= "2.0.0"}
   "logs"
   "fmt"
   "astring"
