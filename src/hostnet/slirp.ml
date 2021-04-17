@@ -1581,19 +1581,21 @@ struct
   let connect t client =
     Log.debug (fun f -> f "accepted vmnet connection");
     begin
-      or_failwith "vmnet" @@
       Vmnet.of_fd
         ~connect_client_fn:(connect_client_by_uuid_ip t)
         ~server_macaddr:t.configuration.Configuration.server_macaddr
         ~mtu:t.configuration.Configuration.mtu client
-      >>= fun x ->
-      let client_macaddr = Vmnet.get_client_macaddr x in
-      let client_uuid = Vmnet.get_client_uuid x in
-      get_client_ip_id t client_uuid
-      >>= fun (client_ip, vnet_client_id) ->
-      connect x t.vnet_switch vnet_client_id
-        client_macaddr { t.configuration with lowest_ip = client_ip }
-        t.global_arp_table t.clock
+      >>= function
+      | Error (`Msg x) ->
+        Lwt.fail_with ("rejected ethernet connection: " ^ x)
+      | Ok x ->
+        let client_macaddr = Vmnet.get_client_macaddr x in
+        let client_uuid = Vmnet.get_client_uuid x in
+        get_client_ip_id t client_uuid
+        >>= fun (client_ip, vnet_client_id) ->
+        connect x t.vnet_switch vnet_client_id
+          client_macaddr { t.configuration with lowest_ip = client_ip }
+          t.global_arp_table t.clock
     end
 
 end

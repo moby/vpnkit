@@ -16,9 +16,9 @@ module Make(Socket: Sig.SOCKETS) = struct
 
   module Channel = Mirage_channel_lwt.Make(Socket.Stream.Unix)
 
-  let err_eof = Lwt_result.fail (`Msg "error: got EOF")
-  let err_read e = failf "error while reading: %a" Channel.pp_error e
-  let err_flush e = failf "error while flushing: %a" Channel.pp_write_error e
+  let err_eof = Lwt_result.fail (`Msg "EOF")
+  let err_read e = failf "while reading: %a" Channel.pp_error e
+  let err_flush e = failf "while flushing: %a" Channel.pp_write_error e
 
   let with_read x f =
     x >>= function
