@@ -13,7 +13,7 @@ let log_exception_continue description f =
   Lwt.catch
     (fun () -> f ())
     (fun e ->
-       Log.err (fun f -> f "%s: caught %a" description Fmt.exn e);
+       Log.warn (fun f -> f "%s: caught %a" description Fmt.exn e);
        Lwt.return ())
 
 let allowed_addresses = ref None

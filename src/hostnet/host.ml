@@ -10,10 +10,13 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let default_read_buffer_size = 65536
 
 let log_exception_continue description f =
+  let to_string = function
+    | Failure x -> x
+    | e -> Printexc.to_string e in
   Lwt.catch
     (fun () -> f ())
     (fun e ->
-       Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
+       Log.warn (fun f -> f "%s: %s" description (to_string e));
        Lwt.return ()
     )
 

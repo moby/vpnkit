@@ -91,6 +91,8 @@ module Policy(Files: Sig.FILES) = struct
               add ~priority:2 ~config:(`Upstream servers)
           )
       ) with
+    | Error (`Msg "ENOENT") ->
+      Log.info (fun f -> f "Not watching %s because it does not exist" resolv_conf)
     | Error (`Msg m) ->
       Log.info (fun f -> f "Cannot watch %s: %s" resolv_conf m)
     | Ok _watch ->

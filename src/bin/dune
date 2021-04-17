@@ -1,7 +1,7 @@
 (executable
  (name main)
  (libraries cmdliner ofs logs.fmt hostnet hvsock hvsock.lwt datakit-server-9p
-   win-eventlog asl fd-send-recv duration mirage-clock-unix mirage-random)
+   fd-send-recv duration mirage-clock-unix mirage-random)
  (flags
   :standard
   (:include flags.sexp))
