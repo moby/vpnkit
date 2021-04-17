@@ -1418,6 +1418,9 @@ struct
       Log.info (fun f -> f "Reading gateway forwards file from %s" path);
       Host.Files.read_file path
       >>= function
+      | Error (`Msg "ENOENT") ->
+        Log.info (fun f -> f "Not reading gateway forwards file %s becuase it does not exist" path);
+        Lwt.return_unit
       | Error (`Msg m) ->
         Log.err (fun f -> f "Failed to read gateway forwards from %s: %s." path m);
         Gateway_forwards.update [];
@@ -1444,6 +1447,8 @@ struct
               )
           )
         ) with
+      | Error (`Msg "ENOENT") ->
+        Log.info (fun f -> f "Not watching gateway forwards file %s because it does not exist" path)
       | Error (`Msg m) ->
         Log.err (fun f -> f "Failed to watch gateway forwards file %s for changes: %s" path m)
       | Ok _watch ->

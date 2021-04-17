@@ -369,12 +369,13 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     Host.start_background_gc gc_compact;
 
-    let () = match HostsFile.watch ~path:hosts () with
-    | Ok _       -> ()
-    | Error (`Msg m) ->
-      Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
-      ()
-    in
+    if hosts <> "" then begin
+      match HostsFile.watch ~path:hosts () with
+      | Ok _       -> ()
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
+        ()
+    end;
 
     List.iter
       (fun url ->
