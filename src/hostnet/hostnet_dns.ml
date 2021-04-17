@@ -82,14 +82,21 @@ module Policy(Files: Sig.FILES) = struct
   let () =
     match Files.watch_file resolv_conf (fun () ->
         Lwt.async (fun () ->
-            let open Lwt_result.Infix in
-            Files.read_file resolv_conf >|= fun txt ->
-            match Dns_forward.Config.Unix.of_resolv_conf txt with
+            Files.read_file resolv_conf
+            >>= function
             | Error (`Msg m) ->
-              Log.err (fun f -> f "Failed to parse %s: %s" resolv_conf m)
-            | Ok servers ->
-              add ~priority:2 ~config:(`Upstream servers)
-          )
+              Log.warn (fun f -> f "reading %s: %s" resolv_conf m);
+              Lwt.return_unit
+            | Ok txt ->
+              begin match Dns_forward.Config.Unix.of_resolv_conf txt with
+              | Error (`Msg m) ->
+                Log.warn (fun f -> f "parsing %s: %s" resolv_conf m);
+                Lwt.return_unit
+              | Ok servers ->
+                add ~priority:2 ~config:(`Upstream servers);
+                Lwt.return_unit
+              end
+        )
       ) with
     | Error (`Msg "ENOENT") ->
       Log.info (fun f -> f "Not watching %s because it does not exist" resolv_conf)
