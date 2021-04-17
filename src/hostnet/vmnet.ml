@@ -518,7 +518,7 @@ module Make(C: Sig.CONN) = struct
       )
 
   let err_eof t =
-    Log.err (fun f -> f "%s.listen: read EOF so closing connection" t.log_prefix);
+    Log.info (fun f -> f "%s.listen: read EOF so closing connection" t.log_prefix);
     disconnect t >>= fun () ->
     Lwt.return false
 
