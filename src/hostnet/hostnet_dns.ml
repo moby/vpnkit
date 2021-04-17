@@ -41,7 +41,7 @@ module Policy(Files: Sig.FILES) = struct
   module IntMap =
     Map.Make(struct
       type t = int
-      let compare (a: int) (b: int) = Pervasives.compare a b
+      let compare (a: int) (b: int) = Stdlib.compare a b
     end)
 
   let google_dns =
