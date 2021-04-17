@@ -13,7 +13,7 @@ let log_exception_continue description f =
   Lwt.catch
     (fun () -> f ())
     (fun e ->
-       Log.err (fun f -> f "%s: caught %s" description (Printexc.to_string e));
+       Log.warn (fun f -> f "%s: caught %s" description (Printexc.to_string e));
        Lwt.return ()
     )
 
