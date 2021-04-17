@@ -34,7 +34,7 @@ depends: [
   "dns-lwt"
   "dnssd" {>= "0.2"}
   "dns-forward" {>= "0.10.0"}
-  "base64" {= "2.2.0"}
+  "base64" {>= "3.0.0"}
   "cstruct" {= "3.2.1"}
   "cstruct-lwt" {= "3.2.1"}
   "datakit-server" {>= "0.11.0"}
@@ -44,7 +44,7 @@ depends: [
   "cmdliner"
   "charrua-core" {>= "0.9"}
   "charrua-client-mirage" {test & = "0.9"}
-  "hvsock" {>= "1.0.1"}
+  "hvsock" {>= "2.0.0"}
   "fd-send-recv" {>= "2.0.0"}
   "logs"
   "fmt"

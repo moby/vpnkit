@@ -322,7 +322,7 @@ let test_proxy_authorization proxy () =
     | Some username, Some password ->
       Alcotest.check Alcotest.(list string) proxy_authorization
         (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
-        [ "Basic " ^ (B64.encode (username ^ ":" ^ password)) ]
+        [ "Basic " ^ (Base64.encode_exn (username ^ ":" ^ password)) ]
     | _, _ ->
       Alcotest.check Alcotest.(list string) proxy_authorization
         (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
@@ -371,7 +371,7 @@ let test_http_connect_tunnel proxy () =
               | Some username, Some password ->
                 Alcotest.check Alcotest.(list string) proxy_authorization
                   (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
-                  [ "Basic " ^ (B64.encode (username ^ ":" ^ password)) ]
+                  [ "Basic " ^ (Base64.encode_exn (username ^ ":" ^ password)) ]
               | _, _ ->
                 Alcotest.check Alcotest.(list string) proxy_authorization
                   (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
@@ -450,7 +450,7 @@ let test_http_connect_tunnel proxy () =
                 begin match Uri.user proxy, Uri.password proxy with
                 | Some username, Some password ->
                   Alcotest.check Alcotest.(list string) proxy_authorization
-                    [ "Basic " ^ (B64.encode (username ^ ":" ^ password)) ]
+                    [ "Basic " ^ (Base64.encode_exn (username ^ ":" ^ password)) ]
                     (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
                 | _, _ ->
                   Alcotest.check Alcotest.(list string) proxy_authorization

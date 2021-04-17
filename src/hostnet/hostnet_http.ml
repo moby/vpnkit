@@ -412,7 +412,7 @@ module Make
     let headers = Cohttp.Header.remove headers proxy_authorization in
     match Uri.userinfo proxy with
       | None -> headers
-      | Some s -> Cohttp.Header.add headers proxy_authorization ("Basic " ^ (B64.encode s))
+      | Some s -> Cohttp.Header.add headers proxy_authorization ("Basic " ^ (Base64.encode_exn s))
 
   let address_of_proxy ~localhost_names ~localhost_ips proxy =
     match Uri.host proxy, Uri.port proxy with
