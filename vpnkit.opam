@@ -18,11 +18,11 @@ dev-repo:     "https://github.com/moby/vpnkit.git"
 doc:          "https://moby.github.io/vpnkit/"
 
 build: [
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["dune" "build" "-p" name "-j" jobs]
 ]
 
 depends: [
-  "jbuilder" {build & >="1.0+beta10"}
+  "dune" {build}
   "alcotest"   {test}
   "result"
   "tar" {>= "0.8.0"}
