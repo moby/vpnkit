@@ -480,7 +480,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections port_forwards dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
-      dhcp_json_path mtu udpv4_forwards tcpv4_forwards gateway_forwards_path gc_compact log_destination
+      dhcp_json_path mtu udpv4_forwards tcpv4_forwards gateway_forwards_path gc_compact
     =
     let level =
       let env_debug =
@@ -488,7 +488,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         with Not_found -> false
       in
       if debug || env_debug then Some Logs.Debug else Some Logs.Info in
-    Logging.setup log_destination level;
+    Logging.setup level;
 
     if Sys.os_type = "Unix" then begin
       Log.info (fun f -> f "Increasing preemptive thread pool size to 1024 threads");
@@ -837,7 +837,7 @@ let command =
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ tcpv4_forwards
-        $ gateway_forwards_path $ gc_compact $ Logging.log_destination),
+        $ gateway_forwards_path $ gc_compact),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Version.git ~doc ~man
 
 let () =

@@ -45,8 +45,6 @@ depends: [
   "charrua-core" {>= "0.9"}
   "charrua-client-mirage" {test & = "0.9"}
   "hvsock" {>= "1.0.1"}
-  "asl"
-  "win-eventlog"
   "fd-send-recv" {>= "2.0.0"}
   "logs"
   "fmt"
