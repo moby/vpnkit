@@ -1,6 +1,6 @@
 # This is work in progress
 
-build: vpnkit.exe
+build: vpnkit.exe COMMIT
 
 vpnkit.exe:
 	opam exec -- dune build --profile release
@@ -23,6 +23,13 @@ vpnkit.tgz: vpnkit.exe
                 -d _build/root/Contents/Resources/lib \
                 -p @executable_path/../lib
 	tar -C _build/root -cvzf vpnkit.tgz Contents
+
+# Published as an artifact.
+.PHONY: COMMIT
+COMMIT:
+	@echo "  GEN     " $@
+	@git rev-parse HEAD > $@.tmp
+	@mv $@.tmp $@
 
 test:
 	opam exec -- dune build --profile release src/hostnet_test/main.exe
