@@ -21,20 +21,20 @@ jobs:
       - run: brew install opam
       # Build the OCaml compiler
       - restore_cache:
-           key: ocaml-cache
+           key: ocaml-cache-{{ checksum "Makefile.darwin"}}
       - run: make -f Makefile.darwin ocaml
       - save_cache:
            paths:
              - /Users/distiller/.opam
-           key: ocaml-cache
+           key: ocaml-cache-{{ checksum "Makefile.darwin"}}
       # Build the OCaml dependencies, make sure the cache is cleared if the dependencies change.
       - restore_cache:
-           key: depends-cache-{{ checksum "vpnkit.opam" }}
+           key: depends-cache-{{ checksum "vpnkit.opam" }}-{{ checksum "Makefile.darwin"}}
       - run: make -f Makefile.darwin depends
       - save_cache:
            paths:
              - /Users/distiller/.opam
-           key: depends-cache-{{ checksum "vpnkit.opam" }}
+           key: depends-cache-{{ checksum "vpnkit.opam" }}-{{ checksum "Makefile.darwin"}}
       - run: make -f Makefile.darwin build
       - run: make -f Makefile.darwin artefacts
       - store_artifacts:
