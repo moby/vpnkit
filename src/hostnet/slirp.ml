@@ -192,16 +192,24 @@ struct
       (** An established flow *)
 
       type t = {
+        clock: Clock.t;
         id: Stack_tcp_wire.t;
         mutable socket: Host.Sockets.Stream.Tcp.flow option;
-        mutable last_active_time: float;
+        mutable last_active_time_ns: int64;
       }
 
+      (* Consider the case when a computer is sleep for several hours and then powered on.
+         If we use the wall clock: we would conclude that all flows have been idle for hours
+         and possibly terminate them.
+         If we use a monotonic clock driven from a CPU counter: the clock will be paused while the
+         computer is asleep so we will conclude the flows are still active. *)
+      let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns t.clock) t.last_active_time_ns
+
       let to_string t =
-        Printf.sprintf "%s socket = %s last_active_time = %.1f"
+        Printf.sprintf "%s socket = %s last_active = %s"
           (string_of_id t.id)
           (match t.socket with None -> "closed" | _ -> "open")
-          (Unix.gettimeofday ())
+          (Duration.pp Format.str_formatter (idle_time t); Format.flush_str_formatter ())
 
       (* Global table of active flows *)
       let all : t Id.Map.t ref = ref Id.Map.empty
@@ -210,10 +218,10 @@ struct
         let flows = Id.Map.fold (fun _ t acc -> to_string t :: acc) !all [] in
         Vfs.File.ro_of_string (String.concat "\n" flows)
 
-      let create id socket =
+      let create clock id socket =
         let socket = Some socket in
-        let last_active_time = Unix.gettimeofday () in
-        let t = { id; socket; last_active_time } in
+        let last_active_time_ns = Clock.elapsed_ns clock in
+        let t = { clock; id; socket; last_active_time_ns } in
         all := Id.Map.add id t !all;
         t
       let remove id =
@@ -221,8 +229,10 @@ struct
       let mem id = Id.Map.mem id !all
       let find id = Id.Map.find id !all
       let touch id =
-        if Id.Map.mem id !all
-        then (Id.Map.find id !all).last_active_time <- Unix.gettimeofday ()
+        if Id.Map.mem id !all then begin
+          let flow = Id.Map.find id !all in
+          flow.last_active_time_ns <- Clock.elapsed_ns flow.clock
+        end
     end
   end
 
@@ -239,14 +249,16 @@ struct
       tcp4:                     Stack_tcp.t;
       clock:                    Clock.t;
       mutable pending:          Tcp.Id.Set.t;
-      mutable last_active_time: float;
+      mutable last_active_time_ns: int64;
       (* Used to shutdown connections when the endpoint is removed from the switch. *)
       mutable established:      Tcp.Id.Set.t;
     }
     (** A generic TCP/IP endpoint *)
 
     let touch t =
-      t.last_active_time <- Unix.gettimeofday ()
+      t.last_active_time_ns <- Clock.elapsed_ns t.clock
+
+    let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns t.clock) t.last_active_time_ns
 
     let create recorder switch arp_table ip mtu clock =
       let netif = Switch.port switch ip in
@@ -263,11 +275,11 @@ struct
       Stack_tcp.connect ipv4 clock >>= fun tcp4 ->
 
       let pending = Tcp.Id.Set.empty in
-      let last_active_time = Unix.gettimeofday () in
+      let last_active_time_ns = Clock.elapsed_ns clock in
       let established = Tcp.Id.Set.empty in
       let tcp_stack =
         { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; pending;
-          last_active_time; clock; established }
+          last_active_time_ns; clock; established }
       in
       Lwt.return tcp_stack
 
@@ -358,7 +370,7 @@ struct
                   Ipaddr.pp_hum ip port m);
             Lwt.return (fun _ -> None)
           | Ok socket ->
-            let tcp = Tcp.Flow.create id socket in
+            let tcp = Tcp.Flow.create t.clock id socket in
             let listeners port =
               Log.debug (fun f ->
                   f "%a:%d handshake complete" Ipaddr.pp_hum ip port);
@@ -778,8 +790,9 @@ struct
       let xs =
         IPMap.fold
           (fun ip t acc ->
-             Fmt.strf "%a last_active_time = %.1f"
-               Ipaddr.V4.pp_hum ip t.Endpoint.last_active_time
+             Fmt.strf "%a last_active_time = %s"
+               Ipaddr.V4.pp_hum ip
+               (Duration.pp Format.str_formatter (Endpoint.idle_time t); Format.flush_str_formatter ())
              :: acc
           ) t.endpoints [] in
       Vfs.File.ro_of_string (String.concat "\n" xs) in
@@ -939,12 +952,19 @@ struct
     else begin
       Host.Time.sleep_ns (Duration.of_sec 30)
       >>= fun () ->
+      let max_age = Duration.of_sec port_max_idle_time in
       Lwt_mutex.with_lock t.endpoints_m
         (fun () ->
-          let now = Unix.gettimeofday () in
           let old_ips = IPMap.fold (fun ip endpoint acc ->
-              let age = now -. endpoint.Endpoint.last_active_time in
-              if age > (float_of_int port_max_idle_time) then (ip, endpoint) :: acc else acc
+              let idle_time = Endpoint.idle_time endpoint in
+              if idle_time > max_age then begin
+                Log.info (fun f -> f "expiring endpoint %s with idle time %s > %s"
+                  (Ipaddr.V4.to_string ip)
+                  (Duration.pp Format.str_formatter idle_time; Format.flush_str_formatter ())
+                  (Duration.pp Format.str_formatter max_age; Format.flush_str_formatter ())
+                );
+                (ip, endpoint) :: acc
+              end else acc
             ) t.endpoints [] in
           Lwt_list.iter_s (fun (ip, endpoint) ->
               Switch.remove t.switch ip;
