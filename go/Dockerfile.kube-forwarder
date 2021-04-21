@@ -2,7 +2,7 @@ FROM linuxkit/alpine:77f48acc94bdda04e7be1e501a234c2b5c0d6593 AS mirror
 
 RUN apk add --no-cache go musl-dev gcc
 
-ADD . /go/src/github.com/moby/vpnkit/go
+COPY . /go/src/github.com/moby/vpnkit
 WORKDIR /go/src/github.com/moby/vpnkit/go
 RUN go-compile.sh /go/src/github.com/moby/vpnkit/go/cmd/kube-vpnkit-forwarder
 

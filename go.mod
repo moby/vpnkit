@@ -1,4 +1,4 @@
-module github.com/moby/vpnkit/go
+module github.com/moby/vpnkit
 
 go 1.16
 
