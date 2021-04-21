@@ -64,7 +64,8 @@ func (c *Control) Expose(_ context.Context, port *vpnkit.Port) error {
 	c.forwardsM.Lock()
 	defer c.forwardsM.Unlock()
 	if _, ok := c.forwards[key]; ok {
-		return errors.New("port already exposed: " + port.String())
+		// ensure Expose is idempotent
+		return nil
 	}
 	forward, err := c.Forwarder.Make(c, *port)
 	if err != nil {
