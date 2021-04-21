@@ -7,14 +7,11 @@ jobs:
       OPAMYES: "1"
       OPAMJOBS: "2"
       MACOSX_DEPLOYMENT_TARGET: "10.10"
-      CUSTOM_OPAM: "1"
-      OPAM_REPO: repo/darwin
-      OPAM_COMP: "4.07.0"
       OPAMVERBOSE: 1
       TERM: vt100
+      HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
       - checkout
-      - run: brew update
       - run: brew install wget
       - run: brew install pkg-config
       - run: brew install dylibbundler
@@ -40,8 +37,20 @@ jobs:
       - run: make -f Makefile.darwin artefacts
       - store_artifacts:
           path: vpnkit.tgz
+      - run: make -f Makefile.darwin COMMIT
       - store_artifacts:
           path: COMMIT
+      # The {{ checksum }} only works for files, not directories
+      - run:
+          name: Generate cache key for OSS-LICENSES
+          command: git ls-tree HEAD repo -- repo | awk '{print $3}' > repo.hash
+      - restore_cache:
+          key: license-cache-{{ checksum "repo.hash" }}-{{ checksum "vpnkit.opam"}}
+      - run: make -f Makefile.darwin OSS-LICENSES
+      - save_cache:
+          paths:
+              - OSS-LICENSES
+          key: license-cache-{{ checksum "repo.hash" }}-{{ checksum "vpnkit.opam"}}
       - store_artifacts:
           path: OSS-LICENSES
       - run: make -f Makefile.darwin test

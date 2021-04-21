@@ -3,7 +3,7 @@
 REPO_ROOT=$(shell git rev-parse --show-toplevel)
 LICENSEDIRS=$(REPO_ROOT)/repo/licenses
 
-build: vpnkit.exe COMMIT OSS-LICENSES
+build: vpnkit.exe
 
 vpnkit.exe:
 	opam exec -- dune build --profile release
@@ -34,7 +34,6 @@ vpnkit.tgz: vpnkit.exe
 	tar -C _build/root -cvzf vpnkit.tgz Contents
 
 # Published as an artifact.
-.PHONY: OSS-LICENSES
 OSS-LICENSES:
 	echo "  GEN     " $@
 	mkdir -p $(LICENSEDIRS)
