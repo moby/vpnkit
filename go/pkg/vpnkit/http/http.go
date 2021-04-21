@@ -38,9 +38,17 @@ func NewServer(path string, impl vpnkit.Implementation) (Server, error) {
 		impl,
 	}
 
+	e.PUT(vpnkit.ExposePortPath, func(c echo.Context) error {
+		return h.ExposePort(c)
+	})
+	// for backwards compat
 	e.POST(vpnkit.ExposePortPath, func(c echo.Context) error {
 		return h.ExposePort(c)
 	})
+	e.PUT(vpnkit.ExposePipePath, func(c echo.Context) error {
+		return h.ExposePipe(c)
+	})
+	// for backwards compat
 	e.POST(vpnkit.ExposePipePath, func(c echo.Context) error {
 		return h.ExposePipe(c)
 	})
