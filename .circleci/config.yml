@@ -40,8 +40,10 @@ jobs:
       - run: make -f Makefile.darwin artefacts
       - store_artifacts:
           path: vpnkit.tgz
+      - run: make -f Makefile.darwin COMMIT
       - store_artifacts:
           path: COMMIT
+      - run: make -f Makefile.darwin OSS-LICENSES
       - store_artifacts:
           path: OSS-LICENSES
       - run: make -f Makefile.darwin test
