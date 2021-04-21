@@ -19,23 +19,18 @@ import (
 type Control struct {
 	Forwarder forward.Maker // Forwarder makes local port forwards
 	mux       libproxy.Multiplexer
-	muxM      *sync.Mutex
+	muxM      sync.Mutex
 	muxC      *sync.Cond
 	forwards  map[string]forward.Forward
-	forwardsM *sync.Mutex
+	forwardsM sync.Mutex
 }
 
 func Make() *Control {
-	var muxM sync.Mutex
-	muxC := sync.NewCond(&muxM)
-	var outsidesM sync.Mutex
-	outsides := make(map[string]forward.Forward)
-	return &Control{
-		muxM:      &muxM,
-		muxC:      muxC,
-		forwards:  outsides,
-		forwardsM: &outsidesM,
+	c := &Control{
+		forwards: make(map[string]forward.Forward),
 	}
+	c.muxC = sync.NewCond(&c.muxM)
+	return c
 }
 
 func (c *Control) SetMux(m libproxy.Multiplexer) {

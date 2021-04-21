@@ -40,7 +40,7 @@ func (w *windowState) advance() {
 }
 
 type channel struct {
-	m             *sync.Mutex
+	m             sync.Mutex
 	c             *sync.Cond
 	multiplexer   *multiplexer
 	destination   Destination
@@ -77,12 +77,8 @@ func (c *channel) String() string {
 
 // newChannel registers a channel through the multiplexer
 func newChannel(multiplexer *multiplexer, ID uint32, d Destination) *channel {
-	var m sync.Mutex
-	c := sync.NewCond(&m)
 	readPipe := newBufferedPipe()
-	return &channel{
-		m:           &m,
-		c:           c,
+	c := &channel{
 		multiplexer: multiplexer,
 		destination: d,
 		ID:          ID,
@@ -91,6 +87,8 @@ func newChannel(multiplexer *multiplexer, ID uint32, d Destination) *channel {
 		readPipe:    readPipe,
 		refCount:    2,
 	}
+	c.c = sync.NewCond(&c.m)
+	return c
 }
 
 func (c *channel) sendWindowUpdate() error {
@@ -329,22 +327,20 @@ type multiplexer struct {
 	conn              io.Closer
 	connR             io.Reader // with buffering
 	connW             *bufio.Writer
-	writeMutex        *sync.Mutex // hold when writing on the channel
+	writeMutex        sync.Mutex // hold when writing on the channel
 	channels          map[uint32]*channel
 	nextChannelID     uint32
-	metadataMutex     *sync.Mutex // hold when reading/modifying this structure
+	metadataMutex     sync.Mutex // hold when reading/modifying this structure
 	pendingAccept     []*channel  // incoming connections
 	acceptCond        *sync.Cond
 	isRunning         bool
 	events            *ring.Ring // log of packetEvents
-	eventsM           *sync.Mutex
+	eventsM           sync.Mutex
 	allocateBackwards bool
 }
 
 // NewMultiplexer constructs a multiplexer from a channel
 func NewMultiplexer(label string, conn io.ReadWriteCloser, allocateBackwards bool) (Multiplexer, error) {
-	var writeMutex, metadataMutex, eventsM sync.Mutex
-	acceptCond := sync.NewCond(&metadataMutex)
 	channels := make(map[uint32]*channel)
 	connR := bufio.NewReader(conn)
 	connW := bufio.NewWriter(conn)
@@ -369,20 +365,18 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser, allocateBackwards boo
 	if allocateBackwards {
 		nextId = ^nextId
 	}
-	return &multiplexer{
+	m := &multiplexer{
 		label:             label,
 		conn:              conn,
 		connR:             connR,
 		connW:             connW,
-		writeMutex:        &writeMutex,
 		channels:          channels,
-		metadataMutex:     &metadataMutex,
-		acceptCond:        acceptCond,
 		nextChannelID:     nextId,
 		events:            events,
-		eventsM:           &eventsM,
 		allocateBackwards: allocateBackwards,
-	}, nil
+	}
+	m.acceptCond = sync.NewCond(&m.metadataMutex)
+	return m, nil
 }
 
 // Close the underlying transport.

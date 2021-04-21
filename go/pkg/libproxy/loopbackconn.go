@@ -19,18 +19,15 @@ import (
 type bufferedPipe struct {
 	bufs         [][]byte
 	eof          bool
-	m            *sync.Mutex
+	m            sync.Mutex
 	c            *sync.Cond
 	readDeadline time.Time
 }
 
 func newBufferedPipe() *bufferedPipe {
-	var m sync.Mutex
-	c := sync.NewCond(&m)
-	return &bufferedPipe{
-		m: &m,
-		c: c,
-	}
+	b := &bufferedPipe{}
+	b.c = sync.NewCond(&b.m)
+	return b
 }
 
 func (pipe *bufferedPipe) TryReadLocked(p []byte) (n int, err error) {
