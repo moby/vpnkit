@@ -1,11 +1,15 @@
-FROM golang:1.13-alpine3.10 AS mirror
-RUN apk add --update build-base
+FROM linuxkit/alpine:77f48acc94bdda04e7be1e501a234c2b5c0d6593 AS mirror
 
-ADD . /go/src/github.com/moby/vpnkit/go
+RUN apk add --no-cache go musl-dev gcc
+
+COPY . /go/src/github.com/moby/vpnkit
 WORKDIR /go/src/github.com/moby/vpnkit/go
+RUN go-compile.sh /go/src/github.com/moby/vpnkit/go/cmd/kube-vpnkit-forwarder
 
-RUN make build/kube-vpnkit-forwarder.linux
-
-FROM alpine:3.10
-COPY --from=mirror /go/src/github.com/moby/vpnkit/go/build/kube-vpnkit-forwarder.linux /kube-vpnkit-forwarder
-CMD ["/kube-vpnkit-forwarder"]
+FROM scratch
+ENTRYPOINT []
+CMD []
+WORKDIR /
+COPY --from=mirror /go/bin/kube-vpnkit-forwarder /usr/bin/kube-vpnkit-forwarder
+COPY --from=mirror /go/bin/kube-vpnkit-forwarder /usr/bin/kube-vpnkit-forwarder
+CMD ["/usr/bin/kube-vpnkit-forwarder"]

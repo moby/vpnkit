@@ -20,16 +20,16 @@ test:
 build-in-container: build-forwarder-in-container build-expose-port-in-container build-kube-forwarder-in-container build-dial-example-in-container
 
 build-forwarder-in-container: $(DEPS_FORWARDER)
-	docker build -t $(ORG)/vpnkit-forwarder:$(HASH) -f Dockerfile .
+	docker build -t $(ORG)/vpnkit-forwarder:$(HASH) -f Dockerfile ..
 
 build-expose-port-in-container: $(DEPS)
-	docker build -t $(ORG)/vpnkit-expose-port:$(HASH) -f Dockerfile.expose-port .
+	docker build -t $(ORG)/vpnkit-expose-port:$(HASH) -f Dockerfile.expose-port ..
 
 build-kube-forwarder-in-container: $(DEPS_KUBE_FORWARDER)
-	docker build -t $(ORG)/kube-vpnkit-forwarder:$(HASH) -f Dockerfile.kube-forwarder .
+	docker build -t $(ORG)/kube-vpnkit-forwarder:$(HASH) -f Dockerfile.kube-forwarder ..
 
 build-dial-example-in-container: $(DEPS_DIAL_EXAMPLE)
-	docker build -t $(ORG)/dial-example:$(HASH) -f Dockerfile.dial-example .
+	docker build -t $(ORG)/dial-example:$(HASH) -f Dockerfile.dial-example ..
 
 build/vpnkit-forwarder.linux: $(DEPS_FORWARDER)
 	GOOS=linux \
