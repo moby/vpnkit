@@ -489,7 +489,7 @@ func TestMuxReadWrite(t *testing.T) {
 func TestMuxConcurrent(t *testing.T) {
 	loopback := newLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
-	numConcurrent := 1000
+	numConcurrent := 500 // limited by the race detector
 	toWrite := 65536 * 2 // 2 * Window size
 	wg := &sync.WaitGroup{}
 	serverWriteSha := make(map[uint16]string)
