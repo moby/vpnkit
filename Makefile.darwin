@@ -34,7 +34,6 @@ vpnkit.tgz: vpnkit.exe
 	tar -C _build/root -cvzf vpnkit.tgz Contents
 
 # Published as an artifact.
-.PHONY: OSS-LICENSES
 OSS-LICENSES:
 	echo "  GEN     " $@
 	mkdir -p $(LICENSEDIRS)

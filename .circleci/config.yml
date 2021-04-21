@@ -40,7 +40,17 @@ jobs:
       - run: make -f Makefile.darwin COMMIT
       - store_artifacts:
           path: COMMIT
+      # The {{ checksum }} only works for files, not directories
+      - run:
+          name: Generate cache key for OSS-LICENSES
+          command: git ls-tree HEAD repo -- repo | awk '{print $3}' > repo.hash
+      - restore_cache:
+          key: license-cache-{{ checksum "repo.hash" }}-{{ checksum "vpnkit.opam"}}
       - run: make -f Makefile.darwin OSS-LICENSES
+      - save_cache:
+          paths:
+              - OSS-LICENSES
+          key: license-cache-{{ checksum "repo.hash" }}-{{ checksum "vpnkit.opam"}}
       - store_artifacts:
           path: OSS-LICENSES
       - run: make -f Makefile.darwin test
