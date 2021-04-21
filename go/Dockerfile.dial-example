@@ -1,4 +1,4 @@
-FROM linuxkit/alpine:630ee558e4869672fae230c78364e367b8ea67a9 AS mirror
+FROM linuxkit/alpine:77f48acc94bdda04e7be1e501a234c2b5c0d6593 AS mirror
 
 RUN apk add --no-cache go musl-dev build-base
 
