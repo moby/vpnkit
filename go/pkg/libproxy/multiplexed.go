@@ -461,13 +461,15 @@ func (m *multiplexer) Dial(d Destination) (Conn, error) {
 	return channel, nil
 }
 
+var ErrNotRunning = errors.New("multiplexer is not running")
+
 // Accept returns the next client connection
 func (m *multiplexer) Accept() (Conn, *Destination, error) {
 	m.metadataMutex.Lock()
 	defer m.metadataMutex.Unlock()
 	for {
 		if !m.isRunning {
-			return nil, nil, errors.New("accept: multiplexer is not running")
+			return nil, nil, ErrNotRunning
 		}
 		if len(m.pendingAccept) > 0 {
 			first := m.pendingAccept[0]

@@ -2,10 +2,12 @@ package control
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
@@ -13,7 +15,6 @@ import (
 	"github.com/moby/vpnkit/go/pkg/vpnkit/forward"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
-	"github.com/pkg/errors"
 )
 
 type Control struct {
@@ -162,6 +163,10 @@ func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}, al
 	defer rw.Close()
 
 	mux, err := libproxy.NewMultiplexer("local", rw, allocateBackward)
+	if err == io.EOF || errors.Is(err, syscall.EPIPE) {
+		// EOF is uninteresting: probably someone connected to the socket and disconnected again.
+		return
+	}
 	if err != nil {
 		log.Errorf("error accepting multiplexer data connection: %v", err)
 		return
@@ -171,6 +176,15 @@ func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}, al
 	defer c.SetMux(nil)
 	for {
 		conn, destination, err := mux.Accept()
+		if err == io.EOF || errors.Is(err, syscall.EPIPE) {
+			// Not an error because this happens when we're shutting everything down.
+			return
+		}
+		if err == libproxy.ErrNotRunning {
+			// Not an error because this happens when we're shutting everything down.
+			log.Println("connection multiplexer has shutdown")
+			return
+		}
 		if err != nil {
 			log.Errorf("error accepting subconnection: %v", err)
 			return
