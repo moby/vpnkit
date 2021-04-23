@@ -75,6 +75,10 @@ func (c *Control) Expose(_ context.Context, port *vpnkit.Port) error {
 			Message: err.Error(),
 		}
 	}
+	// If the request port was 0 (meaning any) we should use the concrete port
+	// in the table so that we can `Unexpose()` the results of `ListExposed()`.
+	resolvedPort := forward.Port()
+	key = portKey(&resolvedPort)
 	c.forwards[key] = forward
 	go forward.Run()
 	return nil
