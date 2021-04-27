@@ -17,16 +17,7 @@ environment:
   BINDIR: 'C:\projects\vpnkit'
 
 install:
-  - cmd: git config core.symlinks true
-  - cmd: git reset --hard
-  - 'appveyor DownloadFile http://cygwin.com/setup-%CYG_ARCH%.exe -FileName setup.exe'
-  - 'setup.exe -gqnNdO -R "%CYG_ROOT%" -s "%CYG_MIRROR%" -l "%CYG_CACHE%" -P make,git,rsync,perl,gcc-core,gcc-g++,libncurses-devel,unzip,libmpfr-devel,patch,flexdll,libglpk-devel'
-  - '%CYG_ROOT%/bin/bash -lc "cygcheck -dc cygwin gcc-core"'
+  - cmd: echo Windows build is disabled until we can remove cygwin.
 
 build_script:
   - "%CYG_BASH% '${APPVEYOR_BUILD_FOLDER}/scripts/appveyor.sh'"
-
-artifacts:
-  - path: "vpnkit.exe"
-  - path: "OSS-LICENSES"
-  - path: "COMMIT"
