@@ -14,7 +14,7 @@ all: build/vpnkit-iptables-wrapper.linux build/vpnkit-forwarder.linux build/vpnk
 
 # Test
 test:
-	go test -v ./cmd/... ./pkg/...
+	go test -race -v ./cmd/... ./pkg/...
 
 # Build in linux container
 build-in-container: build-forwarder-in-container build-expose-port-in-container build-kube-forwarder-in-container build-dial-example-in-container

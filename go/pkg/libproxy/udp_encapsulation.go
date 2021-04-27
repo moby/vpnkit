@@ -27,9 +27,9 @@ type uDPEncapsulator interface {
 // udpEncapsulator encapsulates a UDP connection and listener
 type udpEncapsulator struct {
 	conn net.Conn
-	m    *sync.Mutex
-	r    *sync.Mutex
-	w    *sync.Mutex
+	m    sync.Mutex
+	r    sync.Mutex
+	w    sync.Mutex
 	addr *net.UDPAddr
 }
 
@@ -100,14 +100,8 @@ func (u *udpEncapsulator) Connect(a *net.UDPAddr) {
 
 // newUDPConn initializes a new UDP connection
 func newUDPConn(conn net.Conn) uDPEncapsulator {
-	var m sync.Mutex
-	var r sync.Mutex
-	var w sync.Mutex
 	return &udpEncapsulator{
 		conn: conn,
-		m:    &m,
-		r:    &r,
-		w:    &w,
 	}
 }
 

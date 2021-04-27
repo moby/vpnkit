@@ -2,10 +2,12 @@ package control
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
@@ -13,29 +15,23 @@ import (
 	"github.com/moby/vpnkit/go/pkg/vpnkit/forward"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
-	"github.com/pkg/errors"
 )
 
 type Control struct {
 	Forwarder forward.Maker // Forwarder makes local port forwards
 	mux       libproxy.Multiplexer
-	muxM      *sync.Mutex
+	muxM      sync.Mutex
 	muxC      *sync.Cond
 	forwards  map[string]forward.Forward
-	forwardsM *sync.Mutex
+	forwardsM sync.Mutex
 }
 
 func Make() *Control {
-	var muxM sync.Mutex
-	muxC := sync.NewCond(&muxM)
-	var outsidesM sync.Mutex
-	outsides := make(map[string]forward.Forward)
-	return &Control{
-		muxM:      &muxM,
-		muxC:      muxC,
-		forwards:  outsides,
-		forwardsM: &outsidesM,
+	c := &Control{
+		forwards: make(map[string]forward.Forward),
 	}
+	c.muxC = sync.NewCond(&c.muxM)
+	return c
 }
 
 func (c *Control) SetMux(m libproxy.Multiplexer) {
@@ -69,7 +65,8 @@ func (c *Control) Expose(_ context.Context, port *vpnkit.Port) error {
 	c.forwardsM.Lock()
 	defer c.forwardsM.Unlock()
 	if _, ok := c.forwards[key]; ok {
-		return errors.New("port already exposed: " + port.String())
+		// ensure Expose is idempotent
+		return nil
 	}
 	forward, err := c.Forwarder.Make(c, *port)
 	if err != nil {
@@ -78,6 +75,10 @@ func (c *Control) Expose(_ context.Context, port *vpnkit.Port) error {
 			Message: err.Error(),
 		}
 	}
+	// If the request port was 0 (meaning any) we should use the concrete port
+	// in the table so that we can `Unexpose()` the results of `ListExposed()`.
+	resolvedPort := forward.Port()
+	key = portKey(&resolvedPort)
 	c.forwards[key] = forward
 	go forward.Run()
 	return nil
@@ -166,6 +167,10 @@ func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}, al
 	defer rw.Close()
 
 	mux, err := libproxy.NewMultiplexer("local", rw, allocateBackward)
+	if err == io.EOF || errors.Is(err, syscall.EPIPE) {
+		// EOF is uninteresting: probably someone connected to the socket and disconnected again.
+		return
+	}
 	if err != nil {
 		log.Errorf("error accepting multiplexer data connection: %v", err)
 		return
@@ -175,6 +180,15 @@ func (c *Control) handleDataConn(rw io.ReadWriteCloser, quit <-chan struct{}, al
 	defer c.SetMux(nil)
 	for {
 		conn, destination, err := mux.Accept()
+		if err == io.EOF || errors.Is(err, syscall.EPIPE) {
+			// Not an error because this happens when we're shutting everything down.
+			return
+		}
+		if err == libproxy.ErrNotRunning {
+			// Not an error because this happens when we're shutting everything down.
+			log.Println("connection multiplexer has shutdown")
+			return
+		}
 		if err != nil {
 			log.Errorf("error accepting subconnection: %v", err)
 			return

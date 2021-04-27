@@ -1,5 +1,8 @@
 #!/usr/bin/env sh
 
+echo Build is disabled.
+exit 0
+
 set -eu
 
 cd "${APPVEYOR_BUILD_FOLDER}"

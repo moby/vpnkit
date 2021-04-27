@@ -27,7 +27,7 @@ ENV OPAMJOBS=8
 
 RUN opam install --deps-only vpnkit -y
 
-WORKDIR /home/opam/src
+WORKDIR /home/opam/vpnkit
 RUN opam exec -- sudo dune build --profile release
 
 FROM alpine:latest

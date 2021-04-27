@@ -60,7 +60,12 @@ func (h *httpClient) Expose(_ context.Context, port *Port) error {
 	if port.Proto == Unix {
 		path = ExposePipePath
 	}
-	res, err := h.client.Post("http://unix"+path, "application/json", &buf)
+	request, err := http.NewRequest("PUT", "http://unix"+path, &buf)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	res, err := h.client.Do(request)
 	if err != nil {
 		return err
 	}
@@ -90,7 +95,12 @@ func (h *httpClient) Unexpose(_ context.Context, port *Port) error {
 	if port.Proto == Unix {
 		path = UnexposePipePath
 	}
-	res, err := h.client.Post("http://unix"+path, "application/json", &buf)
+	request, err := http.NewRequest("DELETE", "http://unix"+path, &buf)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	res, err := h.client.Do(request)
 	if err != nil {
 		return err
 	}
