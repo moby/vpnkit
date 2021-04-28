@@ -1,6 +1,6 @@
 module github.com/moby/vpnkit
 
-go 1.16
+go 1.16 
 
 require (
 	github.com/Microsoft/go-winio v0.4.11
