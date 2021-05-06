@@ -51,7 +51,7 @@ func (l *tcpListener) accept() (libproxy.Conn, error) {
 }
 
 func (l *tcpListener) close() error {
-	return closeTCP(l.p, l.vmnetd, l.l)
+	return l.l.Close()
 }
 
 func makeTCP(c common, n TCPNetwork) (Forward, error) {

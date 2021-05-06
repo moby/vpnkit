@@ -21,10 +21,3 @@ func listenTCP(port vpnkit.Port) (net.Listener, bool, error) {
 	}
 	return l, false, err
 }
-
-func closeTCP(port vpnkit.Port, vmnetd bool, l net.Listener) error {
-	if vmnetd {
-		return closeTCPVmnet(port.OutIP, port.OutPort, l)
-	}
-	return l.Close()
-}
