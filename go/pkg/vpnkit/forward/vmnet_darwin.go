@@ -142,14 +142,36 @@ func closeUDPVmnet(IP net.IP, Port uint16, l libproxy.UDPListener) error {
 }
 
 func switchFDs(raw syscall.RawConn, newFD uintptr) error {
-	var dupErr error
+	var controlErr error
 	err := raw.Control(func(fd uintptr) {
-		dupErr = syscall.Dup2(int(newFD), int(fd))
+		controlErr = syscall.Dup2(int(newFD), int(fd))
+		if controlErr != nil {
+			return
+		}
+		// Go normally opens file descriptors with O_CLOEXEC. This prevents races where
+		// a background goroutine forks and execs a process and accidentally inherits the fd.
+		// Unfortunately Darwin doesn't support MSG_CMSG_CLOEXEC so we can't do this atomically
+		// and have to take the risk.
+		controlErr = setCloseOnExec(int(fd))
 	})
-	if dupErr != nil {
-		return errors.Wrap(dupErr, "unable to dup2")
+	if controlErr != nil {
+		return errors.Wrap(controlErr, "switching FDs for the received one")
 	}
 	return errors.Wrap(err, "unable to use RawConn.Control")
+}
+
+func setCloseOnExec(fd int) error {
+	_, err := fcntl(fd, syscall.F_SETFD, syscall.FD_CLOEXEC)
+	return errors.Wrap(err, "setting FD_CLOEXEC")
+}
+
+func fcntl(fd int, cmd int, arg int) (val int, err error) {
+	r0, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), uintptr(cmd), uintptr(arg))
+	val = int(r0)
+	if e1 != 0 {
+		err = e1
+	}
+	return
 }
 
 func listenVmnet(IP net.IP, Port uint16, TCP bool) (uintptr, error) {

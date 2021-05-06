@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os/exec"
 	"syscall"
 
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"testing"
 	"time"
@@ -145,6 +147,30 @@ func TestBindTCPVmnetdClose(t *testing.T) {
 	}()
 	time.Sleep(10 * time.Millisecond)
 	assert.Nil(t, closeTCPVmnet(localhost, 8081, f))
+}
+
+func TestBindTCPForkExec(t *testing.T) {
+	localhost := net.ParseIP("127.0.0.1")
+	f, err := listenTCPVmnet(localhost, 8081)
+	require.Nil(t, err)
+	// Port is in use:
+	_, err = listenTCPVmnet(localhost, 8081)
+	assert.NotNil(t, err)
+	// A subprocess should not capture the fd:
+	cat := exec.Command("cat")
+	input, err := cat.StdinPipe()
+	require.Nil(t, err)
+	require.Nil(t, cat.Start())
+
+	// Close the port in the parent
+	require.Nil(t, f.Close())
+	// Reopen the port in the parent. If the child has captured the fd this should fail
+	f, err = listenTCPVmnet(localhost, 8081)
+	require.Nil(t, err)
+	assert.Nil(t, f.Close())
+	require.Nil(t, input.Close())
+	// This should allow the cat process to terminate.
+	assert.Nil(t, cat.Wait())
 }
 
 func TestBindUDPVmnetdClose(t *testing.T) {
