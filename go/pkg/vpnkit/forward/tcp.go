@@ -1,6 +1,7 @@
 package forward
 
 import (
+	"errors"
 	"net"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
@@ -32,13 +33,21 @@ func (t TCPNetwork) listen(port vpnkit.Port) (listener, error) {
 }
 
 type tcpListener struct {
-	l      *net.TCPListener
+	l      net.Listener
 	vmnetd bool
 	p      vpnkit.Port
 }
 
 func (l *tcpListener) accept() (libproxy.Conn, error) {
-	return l.l.AcceptTCP()
+	c, err := l.l.Accept()
+	if err != nil {
+		return nil, err
+	}
+	c2, ok := c.(libproxy.Conn)
+	if !ok {
+		return nil, errors.New("accepted connection is not a libproxy.Conn")
+	}
+	return c2, nil
 }
 
 func (l *tcpListener) close() error {

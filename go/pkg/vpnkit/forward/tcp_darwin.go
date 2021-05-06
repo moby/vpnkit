@@ -8,7 +8,7 @@ import (
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
 )
 
-func listenTCP(port vpnkit.Port) (*net.TCPListener, bool, error) {
+func listenTCP(port vpnkit.Port) (net.Listener, bool, error) {
 	l, err := net.ListenTCP("tcp", &net.TCPAddr{
 		IP:   port.OutIP,
 		Port: int(port.OutPort),
@@ -22,7 +22,7 @@ func listenTCP(port vpnkit.Port) (*net.TCPListener, bool, error) {
 	return l, false, err
 }
 
-func closeTCP(port vpnkit.Port, vmnetd bool, l *net.TCPListener) error {
+func closeTCP(port vpnkit.Port, vmnetd bool, l net.Listener) error {
 	if vmnetd {
 		return closeTCPVmnet(port.OutIP, port.OutPort, l)
 	}

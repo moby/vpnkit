@@ -16,7 +16,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func listenTCPVmnet(IP net.IP, Port uint16) (*net.TCPListener, error) {
+func listenTCPVmnet(IP net.IP, Port uint16) (net.Listener, error) {
 	// I don't think it's possible to make a net.TCPListener from a raw file descriptor
 	// so we use a hack: we create a net.TCPListener listening on a random port and then
 	// use the `SyscallConn` low-level interface to replace the file descriptor with a
@@ -51,7 +51,7 @@ func listenTCPVmnet(IP net.IP, Port uint16) (*net.TCPListener, error) {
 	return l, err
 }
 
-func closeTCPVmnet(IP net.IP, Port uint16, l *net.TCPListener) error {
+func closeTCPVmnet(IP net.IP, Port uint16, l net.Listener) error {
 	errCh := make(chan error)
 	go func() {
 		errCh <- l.Close()
