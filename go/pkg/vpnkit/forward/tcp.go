@@ -14,7 +14,7 @@ import (
 type TCPNetwork struct{}
 
 func (t TCPNetwork) listen(port vpnkit.Port) (listener, error) {
-	l, vmnetd, err := listenTCP(port)
+	l, err := listenTCP(port)
 	if err != nil {
 		return nil, err
 	}
@@ -25,17 +25,15 @@ func (t TCPNetwork) listen(port vpnkit.Port) (listener, error) {
 		}
 	}
 	wrapped := &tcpListener{
-		l:      l,
-		vmnetd: vmnetd,
-		p:      port,
+		l: l,
+		p: port,
 	}
 	return wrapped, nil
 }
 
 type tcpListener struct {
-	l      net.Listener
-	vmnetd bool
-	p      vpnkit.Port
+	l net.Listener
+	p vpnkit.Port
 }
 
 func (l *tcpListener) accept() (libproxy.Conn, error) {
