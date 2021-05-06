@@ -17,38 +17,13 @@ import (
 )
 
 func listenTCPVmnet(IP net.IP, Port uint16) (net.Listener, error) {
-	// I don't think it's possible to make a net.TCPListener from a raw file descriptor
-	// so we use a hack: we create a net.TCPListener listening on a random port and then
-	// use the `SyscallConn` low-level interface to replace the file descriptor with a
-	// clone of the one which is listening on the privileged port.
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{
-		IP:   IP,
-		Port: 0,
-	})
-	if err != nil {
-		// IP address invalid? Fail early
-		return nil, err
-	}
-	raw, err := l.SyscallConn()
-	if err != nil {
-		_ = l.Close()
-		return nil, err
-	}
 	newFD, err := listenVmnet(IP, Port, true)
 	if err != nil {
-		_ = l.Close()
 		return nil, err
 	}
-	// Unfortunately setting non-blocking mode seems to break I/O in interesting ways,
-	// we we have to leave it in blocking mode. Unfortunately this makes `Close` more complicated,
-	// see below.
-	if err := switchFDs(raw, newFD); err != nil {
-		_ = l.Close()
-		_ = syscall.Close(int(newFD))
-		return nil, err
-	}
-	_ = syscall.Close(int(newFD))
-	return l, err
+	f := os.NewFile(newFD, fmt.Sprintf("tcp:%s:%d", IP, Port))
+	defer f.Close()
+	return net.FileListener(f)
 }
 
 func closeTCPVmnet(IP net.IP, Port uint16, l net.Listener) error {

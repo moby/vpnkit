@@ -139,14 +139,13 @@ func TestBindTCPVmnetdClose(t *testing.T) {
 	f, err := listenTCPVmnet(localhost, 8081)
 	assert.Nil(t, err)
 	go func() {
-		c, err := f.Accept()
+		c, _ := f.Accept()
 		if c != nil {
 			c.Close()
 		}
-		assert.Nil(t, err)
 	}()
 	time.Sleep(10 * time.Millisecond)
-	assert.Nil(t, closeTCPVmnet(localhost, 8081, f))
+	assert.Nil(t, f.Close())
 }
 
 func TestBindTCPForkExec(t *testing.T) {
