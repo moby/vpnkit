@@ -3,13 +3,16 @@ package forward
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
+	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
 	"github.com/pkg/errors"
 )
 
@@ -74,71 +77,45 @@ func closeTCPVmnet(IP net.IP, Port uint16, l *net.TCPListener) error {
 func listenUDPVmnet(IP net.IP, Port uint16) (libproxy.UDPListener, error) {
 	localAddress := &net.UDPAddr{
 		IP:   IP,
-		Port: 0,
-	}
-	// I don't think it's possible to make a net.UDPConn from a raw file descriptor
-	// so we use a hack: we create a net.UDPConn listening on a random port and then
-	// use the `SyscallConn` low-level interface to replace the file descriptor with a
-	// clone of the one which is listening on the privileged port.
-	l, err := net.ListenUDP("udp", localAddress)
-	if err != nil {
-		// IP address invalid? Fail early
-		return nil, err
-	}
-	raw, err := l.SyscallConn()
-	if err != nil {
-		_ = l.Close()
-		return nil, err
+		Port: int(Port),
 	}
 	newFD, err := listenVmnet(IP, Port, false)
 	if err != nil {
-		_ = l.Close()
 		return nil, err
 	}
-
-	// Unfortunately setting non-blocking mode seems to break I/O in interesting ways,
-	// we we have to leave it in blocking mode. Unfortunately this makes `Close` more complicated,
-	// see below.
-	if err := switchFDs(raw, newFD); err != nil {
-		_ = l.Close()
-		_ = syscall.Close(int(newFD))
+	f := os.NewFile(newFD, fmt.Sprintf("udp:%s:%d", IP, Port))
+	defer f.Close()
+	c, err := net.FilePacketConn(f)
+	if err != nil {
 		return nil, err
 	}
-	_ = syscall.Close(int(newFD))
-	return vmnetdUdpWrapper{l, localAddress}, err
+	return udpPacketConnWrapper{c, localAddress}, nil
 }
 
-type vmnetdUdpWrapper struct {
-	libproxy.UDPListener
-	localAddr *net.UDPAddr
+type udpPacketConnWrapper struct {
+	c         net.PacketConn
+	localAddr net.Addr
 }
 
-func (w vmnetdUdpWrapper) LocalAddr() net.Addr {
-	return w.localAddr
+func (u udpPacketConnWrapper) Close() error {
+	return u.c.Close()
 }
 
-func closeUDPVmnet(IP net.IP, Port uint16, l libproxy.UDPListener) error {
-	errCh := make(chan error)
-	go func() {
-		errCh <- l.Close()
-	}()
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		conn, _ := net.DialUDP("udp", nil, &net.UDPAddr{
-			IP:   IP,
-			Port: int(Port),
-		})
-		if conn != nil {
-			conn.Write([]byte{})
-			conn.Close()
-		}
-		select {
-		case err := <-errCh:
-			return err
-		case <-ticker.C:
-		}
+func (u udpPacketConnWrapper) LocalAddr() net.Addr {
+	return u.localAddr
+}
+
+func (u udpPacketConnWrapper) ReadFromUDP(b []byte) (int, *net.UDPAddr, error) {
+	n, addr, err := u.c.ReadFrom(b)
+	from, ok := addr.(*net.UDPAddr)
+	if !ok {
+		log.Printf("UDP packet from address %v was not a *net.UDPAddr", addr)
 	}
+	return n, from, err
+}
+
+func (u udpPacketConnWrapper) WriteToUDP(b []byte, to *net.UDPAddr) (int, error) {
+	return u.c.WriteTo(b, to)
 }
 
 func switchFDs(raw syscall.RawConn, newFD uintptr) error {

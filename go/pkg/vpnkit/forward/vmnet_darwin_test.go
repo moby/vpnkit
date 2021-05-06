@@ -177,13 +177,7 @@ func TestBindUDPVmnetdClose(t *testing.T) {
 	localhost := net.ParseIP("127.0.0.1")
 	f, err := listenUDPVmnet(localhost, 8081)
 	assert.Nil(t, err)
-	go func() {
-		buf := make([]byte, 1024)
-		_, _, err := f.ReadFromUDP(buf)
-		assert.Nil(t, err)
-	}()
-	time.Sleep(10 * time.Millisecond)
-	assert.Nil(t, closeUDPVmnet(localhost, 8081, f))
+	assert.Nil(t, f.Close())
 }
 
 func TestBindTCPVmnetdCloseLeak(t *testing.T) {
