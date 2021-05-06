@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/moby/vpnkit/go/pkg/libproxy"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/log"
@@ -24,29 +23,6 @@ func listenTCPVmnet(IP net.IP, Port uint16) (net.Listener, error) {
 	f := os.NewFile(newFD, fmt.Sprintf("tcp:%s:%d", IP, Port))
 	defer f.Close()
 	return net.FileListener(f)
-}
-
-func closeTCPVmnet(IP net.IP, Port uint16, l net.Listener) error {
-	errCh := make(chan error)
-	go func() {
-		errCh <- l.Close()
-	}()
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		conn, _ := net.DialTCP("tcp", nil, &net.TCPAddr{
-			IP:   IP,
-			Port: int(Port),
-		})
-		if conn != nil {
-			conn.Close()
-		}
-		select {
-		case err := <-errCh:
-			return err
-		case <-ticker.C:
-		}
-	}
 }
 
 func listenUDPVmnet(IP net.IP, Port uint16) (libproxy.UDPListener, error) {
@@ -91,39 +67,6 @@ func (u udpPacketConnWrapper) ReadFromUDP(b []byte) (int, *net.UDPAddr, error) {
 
 func (u udpPacketConnWrapper) WriteToUDP(b []byte, to *net.UDPAddr) (int, error) {
 	return u.c.WriteTo(b, to)
-}
-
-func switchFDs(raw syscall.RawConn, newFD uintptr) error {
-	var controlErr error
-	err := raw.Control(func(fd uintptr) {
-		controlErr = syscall.Dup2(int(newFD), int(fd))
-		if controlErr != nil {
-			return
-		}
-		// Go normally opens file descriptors with O_CLOEXEC. This prevents races where
-		// a background goroutine forks and execs a process and accidentally inherits the fd.
-		// Unfortunately Darwin doesn't support MSG_CMSG_CLOEXEC so we can't do this atomically
-		// and have to take the risk.
-		controlErr = setCloseOnExec(int(fd))
-	})
-	if controlErr != nil {
-		return errors.Wrap(controlErr, "switching FDs for the received one")
-	}
-	return errors.Wrap(err, "unable to use RawConn.Control")
-}
-
-func setCloseOnExec(fd int) error {
-	_, err := fcntl(fd, syscall.F_SETFD, syscall.FD_CLOEXEC)
-	return errors.Wrap(err, "setting FD_CLOEXEC")
-}
-
-func fcntl(fd int, cmd int, arg int) (val int, err error) {
-	r0, _, e1 := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), uintptr(cmd), uintptr(arg))
-	val = int(r0)
-	if e1 != 0 {
-		err = e1
-	}
-	return
 }
 
 func listenVmnet(IP net.IP, Port uint16, TCP bool) (uintptr, error) {
