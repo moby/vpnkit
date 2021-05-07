@@ -42,6 +42,8 @@ func (_ *unix) String() string {
 	return "Unix domain socket"
 }
 
+func (_ *unix) SetSecurityDescriptor(string) {}
+
 // shortenUnixSocketPath returns a path shortened so it fits inside a socket address.
 // This is needed because paths can be much larger than the space available inside a
 // socket address.

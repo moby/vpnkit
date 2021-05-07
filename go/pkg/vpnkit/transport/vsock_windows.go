@@ -38,6 +38,8 @@ func (_ *hvs) String() string {
 	return "Windows AF_HYPERV"
 }
 
+func (_ *hvs) SetSecurityDescriptor(string) {}
+
 type addr struct {
 	vmID  hvsock.GUID
 	svcID hvsock.GUID

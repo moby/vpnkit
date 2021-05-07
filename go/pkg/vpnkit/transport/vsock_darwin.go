@@ -55,6 +55,8 @@ func (_ *vs) String() string {
 	return "Hyperkit AF_VSOCK"
 }
 
+func (_ *vs) SetSecurityDescriptor(string) {}
+
 func toPath(a *addr) (string, error) {
 	user, err := user.Current()
 	if err != nil {

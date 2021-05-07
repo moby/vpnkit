@@ -42,6 +42,8 @@ func (_ *vs) String() string {
 	return "Linux AF_VSOCK"
 }
 
+func (_ *vs) SetSecurityDescriptor(string) {}
+
 type addr struct {
 	cid  uint32
 	port uint32
