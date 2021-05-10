@@ -79,8 +79,8 @@ module Policy(Files: Sig.FILES) = struct
 
   (* Watch for the /etc/resolv.file *)
   let resolv_conf = "/etc/resolv.conf"
-  let () =
-    match Files.watch_file resolv_conf (fun () ->
+  let _ : unit Lwt.t =
+    Files.watch_file resolv_conf (fun () ->
         Lwt.async (fun () ->
             Files.read_file resolv_conf
             >>= function
@@ -97,13 +97,17 @@ module Policy(Files: Sig.FILES) = struct
                 Lwt.return_unit
               end
         )
-      ) with
+      )
+    >>= function
     | Error (`Msg "ENOENT") ->
-      Log.info (fun f -> f "Not watching %s because it does not exist" resolv_conf)
+      Log.info (fun f -> f "Not watching %s because it does not exist" resolv_conf);
+      Lwt.return_unit
     | Error (`Msg m) ->
-      Log.info (fun f -> f "Cannot watch %s: %s" resolv_conf m)
+      Log.info (fun f -> f "Cannot watch %s: %s" resolv_conf m);
+      Lwt.return_unit
     | Ok _watch ->
-      Log.info (fun f -> f "Will watch %s for changes" resolv_conf)
+      Log.info (fun f -> f "Will watch %s for changes" resolv_conf);
+      Lwt.return_unit
 
 end
 

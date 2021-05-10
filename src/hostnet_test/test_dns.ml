@@ -180,7 +180,8 @@ module Server = struct
             Lwt.return_unit
           end
       );
-    let _, realport = Udp.getsockname server in
+    Udp.getsockname server
+    >>= fun (_, realport) ->
     let t = { ip; port = realport; server } in
     Lwt.finalize (fun () -> f t.port) (fun () -> Udp.shutdown t.server)
 end

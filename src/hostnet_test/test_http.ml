@@ -82,7 +82,8 @@ module Server = struct
   let create on_accept =
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
     >>= fun server ->
-    let _, port = Host.Sockets.Stream.Tcp.getsockname server in
+    Host.Sockets.Stream.Tcp.getsockname server
+    >>= fun (_, port) ->
     Host.Sockets.Stream.Tcp.listen server on_accept;
     Lwt.return { server; port }
   let destroy t =

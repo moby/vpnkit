@@ -26,7 +26,7 @@ module Make
   type t
   (** An ICMP NAT implementation *)
 
-  val create: ?max_idle_time:int64 -> unit -> t
+  val create: ?max_idle_time:int64 -> unit -> t Lwt.t
   (** Create an ICMP NAT implementation which will keep "NAT rules" alive until
       they become idle for the given [?max_idle_time] *)
 

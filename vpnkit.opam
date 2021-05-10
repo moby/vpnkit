@@ -30,7 +30,8 @@ depends: [
   "tar" {>= "1.0.1"}
   "ipaddr" {>= "5.0.1"}
   "lwt" {>= "5.4.0"}
-  "uwt" {>= "0.0.4"}
+  "luv"
+  "luv_unix"
   "tcpip" {>= "7.0.0"}
   "base64" {>= "3.5.0"}
   "cstruct" {>= "6.0.0"}
@@ -58,17 +59,14 @@ depends: [
   "io-page-unix"
   "uuidm"
   "ezjsonm" {>= "0.4.0"}
-  "sha"
+  "sha" {with-test}
   "stringext"
   "mirage-clock" {>= "4.0.0"}
   "mirage-clock-unix" {>= "4.0.0"}
   "mirage-random" {>= "3.0.0"}
   "mirage-random-stdlib"
   "re" {>= "1.9.0"}
-]
-pin-depends: [
- [ "uwt.0.3.4~dev" "git+https://github.com/fdopen/uwt.git#c43349bf3689181756feb341e3896d4a0a695523" ]
- [ "omake.0.10.4~dev" "git+https://github.com/avsm/omake.git#34d4fefaece04f166267f593eb79bd6fd53bb1ec" ]
+  "ppx_inline_test"
 ]
 synopsis: "VPN-friendly networking devices for HyperKit"
 description: """
