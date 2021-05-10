@@ -13,6 +13,7 @@ func NewUnixTransport() Transport {
 }
 
 type unix struct {
+	securityDescriptor string // SecurityDescriptor will apply to all the pipes.
 }
 
 func (_ *unix) Dial(_ context.Context, path string) (net.Conn, error) {
@@ -20,14 +21,19 @@ func (_ *unix) Dial(_ context.Context, path string) (net.Conn, error) {
 	return winio.DialPipe(path, &timeout)
 }
 
-func (_ *unix) Listen(path string) (net.Listener, error) {
+func (u *unix) Listen(path string) (net.Listener, error) {
 	return winio.ListenPipe(path, &winio.PipeConfig{
-		MessageMode:      true,  // Use message mode so that CloseWrite() is supported
-		InputBufferSize:  65536, // Use 64KB buffers to improve performance
-		OutputBufferSize: 65536,
+		SecurityDescriptor: u.securityDescriptor,
+		MessageMode:        true,  // Use message mode so that CloseWrite() is supported
+		InputBufferSize:    65536, // Use 64KB buffers to improve performance
+		OutputBufferSize:   65536,
 	})
 }
 
 func (_ *unix) String() string {
 	return "Windows named pipe"
+}
+
+func (u *unix) SetSecurityDescriptor(sddl string) {
+	u.securityDescriptor = sddl
 }
