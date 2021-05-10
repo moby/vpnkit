@@ -1,11 +1,13 @@
 (library
  (name hostnet)
+ (inline_tests)
+ (preprocess (pps ppx_inline_test))
  (libraries base64 cstruct logs ipaddr mirage-flow-lwt ppx_sexp_conv
    pcap-format tcpip.ethif tcpip.arpv4 tcpip.ipv4 tcpip.icmpv4 tcpip.udp
-   tcpip.tcp tcpip.stack-direct charrua-core.server dns dns_lwt ofs uwt
-   uwt.ext uwt.preemptive threads astring datakit-server dns_forward tar
+   tcpip.tcp tcpip.stack-direct charrua-core.server dns dns_lwt ofs luv
+   luv_unix lwt.unix threads astring datakit-server dns_forward tar
    mirage-vnetif uuidm cohttp-lwt mirage-channel ezjsonm
    mirage-protocols-lwt duration mirage-time-lwt mirage-clock-lwt
-   mirage-random tcpip.unix forwarder cstructs)
+   mirage-random tcpip.unix forwarder cstructs sha)
  (foreign_stubs (language c) (names stubs_utils))
  (wrapped false))

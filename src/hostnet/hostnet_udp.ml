@@ -172,11 +172,6 @@ struct
         >>= fun () ->
         Lwt.return true
       ) (function
-      | Unix.Unix_error(e, _, _) when
-          Uwt.of_unix_error e = Uwt.ECANCELED ->
-        Log.debug (fun f ->
-            f "Hostnet_udp %s: shutting down listening thread" (description d));
-        Lwt.return false
       | e ->
         Log.err (fun f ->
             f "Hostnet_udp %s: caught unexpected exception %a"
@@ -234,7 +229,8 @@ struct
                   >>= fun () ->
                   Udp.bind ~description:(description datagram) (Ipaddr.(V4 V4.any), 0)
                   >>= fun server ->
-                  let external_address = Udp.getsockname server in
+                  Udp.getsockname server
+                  >>= fun external_address ->
                   let last_use = Clock.elapsed_ns t.clock in
                   let flow = { description = d; src = datagram.src; server; external_address; last_use } in
                   Hashtbl.replace t.table datagram.src flow;

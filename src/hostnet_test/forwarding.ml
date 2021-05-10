@@ -124,7 +124,8 @@ module ForwardServer = struct
   let port =
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
     >>= fun server ->
-    let _, local_port = Host.Sockets.Stream.Tcp.getsockname server in
+    Host.Sockets.Stream.Tcp.getsockname server
+    >>= fun (_, local_port) ->
     Host.Sockets.Stream.Tcp.listen server accept;
     Lwt.return local_port
 
@@ -158,7 +159,8 @@ module PortsServer = struct
     let ports = Ports.make clock in
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
     >>= fun server ->
-    let _, port = Host.Sockets.Stream.Tcp.getsockname server in
+    Host.Sockets.Stream.Tcp.getsockname server
+    >>= fun (_, port) ->
     Host.Sockets.Stream.Tcp.listen server
       (fun conn ->
          Server.connect ports conn ()
@@ -263,8 +265,9 @@ module LocalTCPServer = struct
 
   let create () =
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
-    >|= fun server ->
-    let _, local_port = Host.Sockets.Stream.Tcp.getsockname server in
+    >>= fun server ->
+    Host.Sockets.Stream.Tcp.getsockname server
+    >|= fun (_, local_port) ->
     Host.Sockets.Stream.Tcp.listen server accept;
     { local_port; server }
 
@@ -304,8 +307,9 @@ module LocalUDPServer = struct
 
   let create () =
     Host.Sockets.Datagram.Udp.bind (Ipaddr.V4 localhost, 0)
-    >|= fun server ->
-    let _, local_port = Host.Sockets.Datagram.Udp.getsockname server in
+    >>= fun server ->
+    Host.Sockets.Datagram.Udp.getsockname server
+    >|= fun (_, local_port) ->
     Log.info (fun f -> f "UDP local_port=%d" local_port);
     echo server;
     { local_port; server }

@@ -61,7 +61,7 @@ module Hvsock = struct
   let set_port_forward_addr x = hvsockaddr := Some x
 
   let close flow =
-    Host.Sockets.deregister_connection flow.idx;
+    Connection_limit.deregister flow.idx;
     F.close flow.flow
 
   let connect () = match !hvsockaddr with
@@ -71,11 +71,14 @@ module Hvsock = struct
     failwith "Hyper-V socket forwarding not initialised"
   | Some sockaddr ->
     let description = "hvsock" in
-    Host.Sockets.register_connection description >>= fun idx ->
-    let fd = F.Socket.create () in
-    F.Socket.connect fd sockaddr >|= fun () ->
-    let flow = F.connect fd in
-    { idx; flow }
+    begin match Connection_limit.register description with
+    | Error (`Msg m) -> Lwt.fail_with m
+    | Ok idx ->
+      let fd = F.Socket.create () in
+      F.Socket.connect fd sockaddr >|= fun () ->
+      let flow = F.connect fd in
+      { idx; flow }
+    end
 
   let read_into t = F.read_into t.flow
   let read t = F.read t.flow

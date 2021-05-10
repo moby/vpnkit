@@ -36,7 +36,7 @@ let test_max_connections () =
         >>= function
         | Ipaddr.V4 ip :: _ ->
           Log.info (fun f -> f "Setting max connections to 0");
-          Host.Sockets.set_max_connections (Some 0);
+          Connection_limit.set_max (Some 0);
           begin
             Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
             >|= function
@@ -50,7 +50,7 @@ let test_max_connections () =
           end
           >>= fun () ->
           Log.info (fun f -> f "Removing connection limit");
-          Host.Sockets.set_max_connections None;
+          Connection_limit.set_max None;
           (* Check that connections work again *)
           begin
             Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
@@ -69,7 +69,7 @@ let test_max_connections () =
           failwith "http_fetch dns"
       ) (fun () ->
         Log.info (fun f -> f "Removing connection limit");
-        Host.Sockets.set_max_connections None;
+        Connection_limit.set_max None;
         Lwt.return_unit
       )
   in
@@ -156,8 +156,9 @@ module DevNullServer = struct
 
   let create () =
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 Ipaddr.V4.localhost, 0)
-    >|= fun server ->
-    let _, local_port = Host.Sockets.Stream.Tcp.getsockname server in
+    >>= fun server ->
+    Host.Sockets.Stream.Tcp.getsockname server
+    >|= fun (_, local_port) ->
     Host.Sockets.Stream.Tcp.listen server accept;
     { local_port; server }
 
@@ -185,7 +186,7 @@ let test_many_connections n () =
        calculate overheads, we connect until the system tells us
        we've hit the target number of connections. *)
     let rec loop acc i =
-      if Host.Sockets.get_num_connections () >= n
+      if Connection_limit.get_num_connections () >= n
       then Lwt.return acc
       else
         Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t)
@@ -194,17 +195,17 @@ let test_many_connections n () =
         | Ok c ->
           Log.info (fun f ->
               f "Connected %d, total tracked connections %d" i
-                (Host.Sockets.get_num_connections ()));
+                (Connection_limit.get_num_connections ()));
           loop (c :: acc) (i + 1)
         | Error _ ->
           Fmt.kstrf failwith
             "Connection %d failed, total tracked connections %d" i
-            (Host.Sockets.get_num_connections ())
+            (Connection_limit.get_num_connections ())
     in
     loop [] 0 >|= fun flows ->
     Log.info (fun f ->
         f "Connected %d, total tracked connections %d"
-          (List.length flows) (Host.Sockets.get_num_connections ()));
+          (List.length flows) (Connection_limit.get_num_connections ()));
     (* How many connections is this? *)
   in
   run' ~timeout:(Duration.of_sec 240) ~pcap:"test_many_connections.pcap" t

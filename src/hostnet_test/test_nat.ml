@@ -35,7 +35,8 @@ module EchoServer = struct
   let create () =
     Host.Sockets.Datagram.Udp.bind (Ipaddr.(V4 V4.localhost), 0)
     >>= fun server ->
-    let _, local_port = Host.Sockets.Datagram.Udp.getsockname server in
+    Host.Sockets.Datagram.Udp.getsockname server
+    >>= fun (_, local_port) ->
     (* Start a background echo thread. This will naturally fail when the
        file descriptor is closed underneath it from `shutdown` *)
     let seen_addresses = [] in
@@ -401,7 +402,8 @@ let test_nat_punch () =
           Cstruct.set_uint8 buffer 0 2;
           Host.Sockets.Datagram.Udp.bind (Ipaddr.(V4 V4.localhost), 0)
           >>= fun client ->
-          let _, source_port = Host.Sockets.Datagram.Udp.getsockname client in
+          Host.Sockets.Datagram.Udp.getsockname client
+          >>= fun (_, source_port) ->
           let address = List.hd (EchoServer.get_seen_addresses echoserver) in
           let _, dest_port = address in
           let rec loop remaining =

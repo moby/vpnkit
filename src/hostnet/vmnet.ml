@@ -564,9 +564,6 @@ module Make(C: Sig.CONN) = struct
        let callback buf =
          Lwt.catch (fun () -> t.callback buf)
            (function
-           | Host.Sockets.Too_many_connections ->
-             (* No need to log this again *)
-             Lwt.return_unit
            | e ->
              let now = Unix.gettimeofday () in
              if (now -. !last_error_log) > 30. then begin

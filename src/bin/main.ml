@@ -77,7 +77,9 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       let i = String.sub path 3 (String.length path - 3) in
       try
         let fd = file_descr_of_int @@ int_of_string i in
-        Lwt.return (Ok (Host.Sockets.Stream.Unix.of_bound_fd fd))
+        Host.Sockets.Stream.Unix.of_bound_fd fd
+        >>= fun x ->
+        Lwt.return (Ok x)
       with _ ->
         Log.err (fun f -> f "Failed to parse command-line argument [%s] expected fd:<int>" path);
         Lwt.return (Error (`Msg "Failed to parase command-line argument"))
@@ -291,7 +293,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       Log.warn (fun f ->
           f "The argument max-connections is nolonger supported, use the \
              database key slirp/max-connections instead"));
-    Host.Sockets.set_max_connections max_connections;
+    Connection_limit.set_max max_connections;
 
     Log.info (fun f -> f "Starting port forwarding control 9P server on %s" port_control_url);
     let uri = Uri.of_string port_control_url in
@@ -370,11 +372,14 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     Host.start_background_gc gc_compact;
 
     if hosts <> "" then begin
-      match HostsFile.watch ~path:hosts () with
-      | Ok _       -> ()
-      | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
-        ()
+      Lwt.async (fun () ->
+        HostsFile.watch ~path:hosts ()
+        >>= function
+        | Ok _       -> Lwt.return_unit
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to watch hosts file %s: %s" hosts m);
+          Lwt.return_unit
+      )
     end;
 
     List.iter
@@ -491,10 +496,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       if debug || env_debug then Some Logs.Debug else Some Logs.Info in
     Logging.setup level;
 
-    if Sys.os_type = "Unix" then begin
-      Log.info (fun f -> f "Increasing preemptive thread pool size to 1024 threads");
-      Uwt_preemptive.set_bounds (0, 1024);
-    end;
 
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
     let gateway_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," gateway_names in

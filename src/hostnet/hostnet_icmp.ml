@@ -103,13 +103,15 @@ module Make
   let create ?(max_idle_time = Duration.(of_sec 60)) clock =
     let phys_to_flow = Hashtbl.create 7 in
     let virt_to_flow = Hashtbl.create 7 in
-    let server_fd = Unix.socket Unix.PF_INET sock_icmp ipproto_icmp in
-    let server = Icmp.of_bound_fd server_fd in
+    (try Lwt.return @@ Unix.socket Unix.PF_INET sock_icmp ipproto_icmp with e -> Lwt.fail e)
+    >>= fun server_fd ->
+    Icmp.of_bound_fd server_fd
+    >>= fun server ->
     let ids_in_use = ref IntSet.empty in
     let next_id = 0 in
     let send_reply = None in
     let _background_gc_t = start_background_gc clock phys_to_flow virt_to_flow ids_in_use max_idle_time in
-    { clock; server; server_fd; phys_to_flow; virt_to_flow; ids_in_use; next_id; send_reply }
+    Lwt.return { clock; server; server_fd; phys_to_flow; virt_to_flow; ids_in_use; next_id; send_reply }
 
   let start_receiver t =
     let buf = Cstruct.create 4096 in

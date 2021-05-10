@@ -23,14 +23,16 @@ build: [
 
 depends: [
   "dune" {build}
-  "alcotest"
-  "ounit"
-  "charrua-client-mirage" { = "0.9"}
+  "alcotest" {build}
+  "ounit" {build}
+  "ppx_inline_test" {build}
+  "charrua-client-mirage" { = "0.9" }
   "result"
   "tar" {>= "0.8.0"}
   "ipaddr" {= "2.9.0"}
   "lwt" {= "5.4.0"}
-  "uwt" {>= "0.0.4"}
+  "luv"
+  "luv_unix"
   "tcpip" {>= "3.3.0"}
   "base64" {>= "3.0.0"}
   "cstruct" {= "3.7.0"}
@@ -60,7 +62,7 @@ depends: [
   "mirage-vnetif" {>= "0.4.0"}
   "uuidm"
   "ezjsonm"
-  "sha"
+  "sha" {test}
   "stringext"
   "mirage-clock" {= "1.3.0"}
   "mirage-clock-lwt" {= "2.0.0"}

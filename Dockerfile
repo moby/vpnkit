@@ -7,11 +7,8 @@ RUN opam pin add hvsock.2.0.0 https://github.com/mirage/ocaml-hvsock/archive/2.0
 
 # Can be removed after we upgrade tcpip
 RUN opam pin configurator --dev-repo -n
-# Fix for Apple Silicon codesign issue
-RUN opam pin add omake "https://github.com/ocaml-omake/omake.git#gerd/disable-parallel-bootstrap" -n
-# Fix for OCaml 4.12 build
-RUN opam pin add uwt "https://github.com/fdopen/uwt.git#c43349bf3689181756feb341e3896d4a0a695523" -n
-RUN sudo apk add libtool autoconf automake # missing depexts
+RUN opam pin add luv.0.5.8 https://github.com/aantron/luv/releases/download/0.5.8/luv-0.5.8.tar.gz -n
+RUN opam pin add luv_unix.0.5.8 https://github.com/aantron/luv/releases/download/0.5.8/luv-0.5.8.tar.gz -n
 # A small fork of the tcpip stack
 RUN opam pin add tcpip.3.3.0 "https://github.com/djs55/mirage-tcpip.git#vpnkit-20210417" -n
 

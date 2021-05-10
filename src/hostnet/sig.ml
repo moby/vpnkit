@@ -32,14 +32,14 @@ module type FLOW_SERVER = sig
 
   type address
 
-  val of_bound_fd: ?read_buffer_size:int -> Unix.file_descr -> server
+  val of_bound_fd: ?read_buffer_size:int -> Unix.file_descr -> server Lwt.t
   (** Create a server from a file descriptor bound to a Unix domain socket
       by some other process and passed to us. *)
 
   val bind: ?description:string -> address -> server Lwt.t
   (** Bind a server to an address *)
 
-  val getsockname: server -> address
+  val getsockname: server -> address Lwt.t
   (** Query the address the server is bound to *)
 
   val disable_connection_tracking: server -> unit
@@ -57,23 +57,15 @@ module type FLOW_SERVER = sig
   (** Stop accepting connections on the given server *)
 end
 
+module type FLOW_CLIENT_SERVER = sig
+  include FLOW_CLIENT
+  include FLOW_SERVER
+    with type address := address
+    and type flow := flow
+end
+
 module type SOCKETS = sig
   (* An OS-based BSD sockets implementation *)
-
-  val set_max_connections: int option -> unit
-  (** Set the maximum number of connections we permit ourselves to use. This
-      is to prevent starving global OS resources, particularly on OSX *)
-
-  (** TODO: hide these by refactoring Hyper-V sockets stuff *)
-  val register_connection: string -> int Lwt.t
-  val deregister_connection: int -> unit
-  val get_num_connections: unit -> int
-
-  (** Fetch the number of tracked connections *)
-  val connections: unit -> Vfs.File.t
-  (** A filesystem which allows the connections to be introspected *)
-
-  exception Too_many_connections
 
   module Datagram: sig
 
@@ -82,12 +74,8 @@ module type SOCKETS = sig
     module Udp: sig
       type address = Ipaddr.t * int
 
-      include FLOW_CLIENT
+      include FLOW_CLIENT_SERVER
         with type address := address
-
-      include FLOW_SERVER
-        with type address := address
-         and type flow := flow
 
       val recvfrom: server -> Cstruct.t -> (int * address) Lwt.t
 
@@ -98,31 +86,23 @@ module type SOCKETS = sig
     module Tcp: sig
       type address = Ipaddr.t * int
 
-      include FLOW_CLIENT
+      include FLOW_CLIENT_SERVER
         with type address := address
 
       include READ_INTO
         with type flow := flow
          and type error := error
-
-      include FLOW_SERVER
-        with type address := address
-         and type flow := flow
     end
 
     module Unix: sig
       type address = string
 
-      include FLOW_CLIENT
+      include FLOW_CLIENT_SERVER
         with type address := address
 
       include READ_INTO
         with type flow := flow
          and type error := error
-
-      include FLOW_SERVER
-        with type address := address
-         and type flow := flow
 
       val unsafe_get_raw_fd: flow -> Unix.file_descr
       (** Return the underlying fd. This is intended for careful integration
@@ -141,11 +121,11 @@ module type FILES = sig
 
   type watch
 
-  val watch_file: string -> (unit -> unit) -> (watch, [ `Msg of string ]) result
+  val watch_file: string -> (unit -> unit) -> (watch, [ `Msg of string ]) result Lwt.t
   (** [watch_file path callback] executes [callback] whenever the contents of
       [path] may have changed. *)
 
-  val unwatch: watch -> unit
+  val unwatch: watch -> unit Lwt.t
   (** [unwatch watch] stops watching the path(s) associated with [watch] *)
 end
 
