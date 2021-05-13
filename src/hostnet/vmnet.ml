@@ -324,7 +324,7 @@ module Make(C: Sig.CONN) = struct
       Lwt_result.fail (`Msg "Client requested unsupported protocol version")
 
 
-  let client_negotiate ~uuid ?preferred_ip ~fd =
+  let client_negotiate ~uuid ?preferred_ip ~fd () =
     let buf = Cstruct.create Init.sizeof in
     let (_: Cstruct.t) = Init.marshal Init.default buf in
     Channel.write_buffer fd buf;
@@ -436,7 +436,7 @@ module Make(C: Sig.CONN) = struct
   let client_of_fd ~uuid ?preferred_ip ~server_macaddr flow =
     let open Lwt_result.Infix in
     let channel = Channel.create flow in
-    client_negotiate ~uuid ?preferred_ip ~fd:channel
+    client_negotiate ~uuid ?preferred_ip ~fd:channel ()
     >>= fun vif ->
     let t =
       make ~client_macaddr:server_macaddr
