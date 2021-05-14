@@ -81,7 +81,7 @@ module Static = struct
    return (Hashtbl.find_all s.rev addr)
 end
 
-module Make(Time:Mirage_time_lwt.S)(S:Mirage_stack_lwt.V4) = struct
+module Make(Time:Mirage_time.S)(S:Mirage_stack.V4) = struct
 
   type stack = S.t
   type endp = Ipaddr.V4.t * int

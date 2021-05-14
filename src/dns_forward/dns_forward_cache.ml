@@ -37,7 +37,7 @@ type answer = {
   timeout: unit Lwt.t;
 }
 
-module Make(Time: Mirage_time_lwt.S) = struct
+module Make(Time: Mirage_time.S) = struct
   type t = {
     max_bindings: int;
     (* For every question we store a mapping of server address to the answer *)

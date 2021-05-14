@@ -5,7 +5,7 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make (Flow : Mirage_flow_lwt.S) = struct
+module Make (Flow : Mirage_flow.S) = struct
   module Window = struct
     type t =
       { mutable current_seq: int64
@@ -61,7 +61,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
       ; ref_count= 2 (* sender + receiver *) }
   end
 
-  module C = Mirage_channel_lwt.Make (Flow)
+  module C = Mirage_channel.Make (Flow)
 
   exception Multiplexer_failed
 
@@ -269,10 +269,6 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
 
     let pp_write_error = Flow.pp_write_error
 
-    type 'a io = 'a Flow.io
-
-    type buffer = Flow.buffer
-
     type error = Flow.error
 
     type write_error = Flow.write_error
@@ -282,7 +278,7 @@ module Make (Flow : Mirage_flow_lwt.S) = struct
 
   let is_running flow = flow.running
 
-  type listen_cb = Channel.flow -> Frame.Destination.t -> unit Channel.io
+  type listen_cb = Channel.flow -> Frame.Destination.t -> unit Lwt.t
 
   let connect flow label listen_cb =
     let channel = C.create flow in

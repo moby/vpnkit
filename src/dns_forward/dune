@@ -1,7 +1,7 @@
 (library
  (name dns_forward)
  (libraries lwt logs dns astring result cstruct fmt rresult ipaddr
-   mirage-flow-lwt mirage-time-lwt mirage-channel-lwt mirage-clock-lwt
+   mirage-flow mirage-flow-combinators mirage-time mirage-channel mirage-clock
    sexplib duration)
  (preprocess
   (pps ppx_sexp_conv)))
