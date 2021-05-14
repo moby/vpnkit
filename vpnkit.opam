@@ -28,7 +28,7 @@ depends: [
   "charrua-client-mirage" { = "0.9"}
   "result"
   "tar" {>= "0.8.0"}
-  "ipaddr" {= "2.8.0"}
+  "ipaddr" {= "2.9.0"}
   "lwt" {= "5.4.0"}
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "3.3.0"}
