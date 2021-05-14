@@ -25,10 +25,7 @@ RUN opam install re.1.9.0
 RUN opam install uri.2.2.1
 ENV OPAMJOBS=8
 
-RUN opam install --deps-only vpnkit -y
-
-WORKDIR /home/opam/vpnkit
-RUN opam exec -- sudo dune build --profile release
+RUN opam install vpnkit -y
 
 FROM alpine:latest
-COPY --from=build /home/opam/vpnkit/_build/default/src/bin/main.exe /vpnkit
+COPY --from=build /home/opam/.opam/4.12/bin/vpnkit /vpnkit
