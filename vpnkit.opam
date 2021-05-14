@@ -33,8 +33,8 @@ depends: [
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "3.3.0"}
   "base64" {>= "3.0.0"}
-  "cstruct" {= "3.2.1"}
-  "cstruct-lwt" {= "3.2.1"}
+  "cstruct" {= "3.7.0"}
+  "cstruct-lwt"
   "datakit-server" {>= "0.11.0"}
   "datakit-server-9p" {>= "0.11.0"}
   "pcap-format" {>= "0.4.0"}
