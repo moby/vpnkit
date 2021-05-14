@@ -1,0 +1,7 @@
+(library
+  (name        dns)
+  (libraries   re re.str ipaddr uri uri.services base64 hashcons cstruct result)
+  (preprocess (pps ppx_cstruct)))
+
+(ocamllex  zone_lexer)
+(ocamlyacc zone_parser)

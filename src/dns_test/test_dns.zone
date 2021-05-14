@@ -1,0 +1,89 @@
+; <<>> DiG 9.2.5 <<>> phlegethon.org axfr +vc @bright.asuk.net
+; (1 server found)
+
+; This file is like ../unit/test.zone but with warnings/errors fixed.
+
+;; global options:  printcmd
+$ORIGIN d1.signpo.st.
+$TTL 604800 
+
+;; SOA, including parentheses and comments and an embedded dot
+d1.signpo.st.		604800	IN	 SOA   ( 
+	ns0.d1.signpo.st. john\.doe.d1.signpo.st. 1136975101 ; hello!
+	3600 1800 3024000 1800  
+)
+
+;; Various ways of expressing RRs
+d1.signpo.st.		604800	IN	MX	10 mail.d1.signpo.st.
+@			604800	IN	MX	20 bright.isp.net.
+			604800	IN	MX	30 newton.isp.net.
+d1.signpo.st.		IN  604800	NS	ns0
+d1.sign\112o.st.			IN	NS	ns.isp.net.
+d1.SiGnPo.St.		604800 		NS	ns2.isp.net.
+d1.signpo.st.				NS	ns3.isp.net.
+					NS	ns4.isp.net.
+mail			172800	IN	A	127.0.0.94
+lists.d1.signpo.st.	604800	IN	MX	10 mail.d1.signpo.st.
+lists.d1.signpo.st.  	172800	IN	A	127.0.0.94
+ns0.d1.signpo.st.	172800	IN	A	127.0.0.94
+www.d1.signpo.st.	172800	IN	A	127.0.0.94
+uk.			1000	IN	NS	ns1.nic.uk.
+
+;; Multi-label name: two.one and one will "exist" with no RRs
+three.two.one 				A	127.3.2.1
+
+;; Delegation
+delegated		IN	NS	ns1.elsewhere.com.
+delegated		IN	NS	ns2.elsewhere.com.
+delegated		IN	NS	ns3.elsewhere.com.
+
+;; CNAMES, and a CNAME loop
+real			IN	TXT	"Hello, world!"
+alias			IN 	CNAME	real
+one.loop		IN	CNAME 	two.loop
+two.loop		IN	CNAME 	three.loop
+three.loop		IN	CNAME 	four.loop
+four.loop		IN	CNAME 	one.loop
+
+;; One of everything we support
+types	IN 	A	127.0.0.1
+;	IN	MD	md-target
+;	IN	MF 	mf-target
+	IN	NS 	ns-target
+;; Not CNAME!
+	IN	SOA 	master owner 2012062702 3600 1800 302400 1800
+	IN	MB	mb-target
+	IN	MG 	mg-target
+	IN	MR 	mr-target
+;	IN	WKS 	127.0.0.1 udp domain ntp 1600 
+;	IN	WKS 	127.0.0.1 6 22 25 chargen
+	IN	WKS 	127.0.0.1 6 22 25 10
+	IN	PTR 	ptr-target
+	IN	HINFO 	"CPU" "Operating \"System\""
+	IN	MINFO 	rmailbx emailbx
+	IN	MX 	0 mx-target-0 
+	IN	MX 	10 mx-target-10 
+	IN	MX 	65535 mx-target-65535
+	IN	TXT 	"TXT RR 1"
+	IN	TXT 	"TXT RR 2" "(haha!)"	
+	IN	RP 	rp-mbox rp-txt
+	IN	AFSDB   12 afsdb-target
+	IN	X25 	12345678
+	IN	ISDN    150862028003217
+	IN	ISDN	150862028003217 004
+	IN	RT 	1 rt-target-1
+	IN	SRV	1 0 9 srv-target
+	IN	AAAA 	1080:0000:0000:0000:0008:0800:200C:417A
+	IN	AAAA 	1080:0:0:0:8:800:200C:417A
+	IN	AAAA 	FF01::101
+	IN	AAAA	1::
+	IN	AAAA	::1
+	IN	AAAA	::
+	IN	AAAA	::13.1.68.3
+	IN	AAAA	0:0:0:0:0:FFFF:129.144.52.38
+        IN      AAAA    2001:7b8:206:1::1
+;; Dig's UNSPEC output is a wierd checksummed thing :(
+;;	IN	UNSPEC 	\# 7 55 6E73 706563 21
+        IN      DNSKEY  256 3 7 "AwEAAcAVwjuzHUCfFs7/U1BynkB/kGS37d3bXf8rBdeJul1F9I6nRD4mGyNNZOmgUis1QHxIoA5/xnI5Otsd0B3OcToie4UjFynnuibEcreT+GeakxskTbSbPyW4jdxshHeQ562Y1o0DZKOhHpDoD2q3uCJieBWABG5z7hm/TxSPBYN7"
+        IN      RRSIG   A 8 4 7200 1351598296 1351698296 20331 types.d1.signpo.st. "aLpJmI5FeJcivzcpqzZZPfkGbcqO5I/MXTl0j8eJ3h9yTUnjwutwCj2tsE6E1sV6+Ppxuj5PDom2YFcSOFJ6hTQWF/2fF4jN20ivs4zWYN/ll8FMV92PHGRjJtNV99Sy+6qe94TeN47wbBKeNV3GploOR0/OR3qysK3vUVU2HcE="
+        IN      RRSIG   NS 8 4 7200 1351598296 1351698296 20331 types.d1.signpo.st. "aLpJmI5FeJcivzcpqzZZPfkGbcqO5I/MXTl0j8eJ3h9yTUnjwutwCj2tsE6E1sV6+Ppxuj5PDom2YFcSOFJ6hTQWF/2fF4jN20ivs4zWYN/ll8FMV92PHGRjJtNV99Sy+6qe94TeN47wbBKeNV3GploOR0/OR3qysK3vUVU2HcE="
