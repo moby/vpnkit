@@ -68,7 +68,7 @@ end
 
 module UdpServer = struct
   module PortSet =
-    Set.Make(struct type t = int let compare = Pervasives.compare end)
+    Set.Make(struct type t = int let compare = Stdlib.compare end)
 
   type t = {
     port: int;

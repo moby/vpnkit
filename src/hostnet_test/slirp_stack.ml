@@ -34,7 +34,7 @@ module Dns_policy = struct
   module IntMap =
     Map.Make(struct
       type t = int let
-      compare (a: int) (b: int) = Pervasives.compare a b
+      compare (a: int) (b: int) = Stdlib.compare a b
     end)
 
   let t = ref (IntMap.add 0 google_dns IntMap.empty)
