@@ -40,8 +40,8 @@ module Destination = struct
 
     let write_ip ip buf =
       let ip = match ip with
-        | Ipaddr.V4 ip -> Ipaddr.V4.to_bytes ip
-        | Ipaddr.V6 ip -> Ipaddr.V6.to_bytes ip in
+        | Ipaddr.V4 ip -> Ipaddr.V4.to_octets ip
+        | Ipaddr.V6 ip -> Ipaddr.V6.to_octets ip in
       write_string ip buf in
 
     match t with
@@ -62,8 +62,8 @@ module Destination = struct
     let read_ip rest =
       let str, rest = read_string rest in
       match String.length str with
-      | 4 -> Ipaddr.V4 (Ipaddr.V4.of_bytes_exn @@ str), rest
-      | 16 -> Ipaddr.V6 (Ipaddr.V6.of_bytes_exn @@ str), rest
+      | 4 -> Ipaddr.V4 (Ipaddr.V4.of_octets_exn @@ str), rest
+      | 16 -> Ipaddr.V6 (Ipaddr.V6.of_octets_exn @@ str), rest
       | _ -> failwith (Printf.sprintf "Failed to parse IP address of length %d: %s" (String.length str) (String.escaped str)) in
 
     let rest = Cstruct.shift buf 1 in
@@ -103,8 +103,8 @@ module Udp = struct
     (* uint16 IP address length *)
     let ip_bytes =
       match t.ip with
-      | Ipaddr.V4 ipv4 -> Ipaddr.V4.to_bytes ipv4
-      | Ipaddr.V6 ipv6 -> Ipaddr.V6.to_bytes ipv6
+      | Ipaddr.V4 ipv4 -> Ipaddr.V4.to_octets ipv4
+      | Ipaddr.V6 ipv6 -> Ipaddr.V6.to_octets ipv6
     in
     let ip_bytes_len = String.length ip_bytes in
     Cstruct.LE.set_uint16 rest 0 ip_bytes_len;
@@ -140,8 +140,8 @@ module Udp = struct
     let ip =
       let open Ipaddr in
       if String.length ip_bytes_string = 4
-      then V4 (V4.of_bytes_exn ip_bytes_string)
-      else V6 (Ipaddr.V6.of_bytes_exn ip_bytes_string)
+      then V4 (V4.of_octets_exn ip_bytes_string)
+      else V6 (Ipaddr.V6.of_octets_exn ip_bytes_string)
     in
     (* uint16 Port *)
     let port = Cstruct.LE.get_uint16 rest 0 in
