@@ -205,12 +205,10 @@ end
 
 module Make(C: Sig.CONN) = struct
 
-  module Channel = Mirage_channel_lwt.Make(C)
+  module Channel = Mirage_channel.Make(C)
 
   type page_aligned_buffer = Io_page.t
   type macaddr = Macaddr.t
-  type 'a io = 'a Lwt.t
-  type buffer = Cstruct.t
   type error = [Mirage_device.error | `Channel of Channel.write_error]
 
   let pp_error ppf = function

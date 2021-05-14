@@ -10,9 +10,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 module Make(Input: Sig.VMNET) = struct
 
   type page_aligned_buffer = Io_page.t
-  type buffer = Cstruct.t
   type macaddr = Macaddr.t
-  type 'a io = 'a Lwt.t
   type fd = Input.fd
   type error = [Mirage_device.error | `Unknown of string]
 

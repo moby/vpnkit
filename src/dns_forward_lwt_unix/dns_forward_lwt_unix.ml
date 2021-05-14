@@ -41,8 +41,6 @@ module Common = struct
 
   type address = Ipaddr.t * int
 
-  type buffer = Cstruct.t
-
   let sockaddr_of_address (dst, dst_port) =
     Unix.ADDR_INET(Unix.inet_addr_of_string @@ Ipaddr.to_string dst, dst_port)
 
@@ -53,8 +51,6 @@ module Common = struct
 
   let string_of_address (dst, dst_port) =
     Ipaddr.to_string dst ^ ":" ^ (string_of_int dst_port)
-
-  type 'a io = 'a Lwt.t
 
   let getsockname fn_name fd_opt = match fd_opt with
   | None -> failwith (fn_name ^ ": socket is closed")
@@ -454,7 +450,6 @@ module Udp = struct
 end
 
 module Time = struct
-  type 'a io = 'a Lwt.t
   let sleep_ns ns = Lwt_unix.sleep (Duration.to_f ns)
 end
 module Clock = Mclock

@@ -85,8 +85,6 @@ module Hvsock = struct
   let shutdown_write t = F.shutdown_write t.flow
   let pp_error = F.pp_error
   let pp_write_error = F.pp_write_error
-  type 'a io = 'a F.io
-  type buffer = F.buffer
   type error = F.error
   type write_error = F.write_error
 end

@@ -16,8 +16,6 @@ module ObviouslyCommon = struct
 
   type page_aligned_buffer = Io_page.t
   type macaddr = Macaddr.t
-  type 'a io = 'a Lwt.t
-  type buffer = Cstruct.t
   type error = [Mirage_device.error | `Unknown of string]
 
   let pp_error ppf = function

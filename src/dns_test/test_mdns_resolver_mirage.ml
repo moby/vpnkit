@@ -15,8 +15,6 @@ module StubIpv4 = struct
   type error = Mirage_protocols.Ip.error
 
   type ethif = unit (*StubEthif.t*)
-  type 'a io = 'a Lwt.t
-  type buffer = Cstruct.t
   type ipaddr = Ipaddr.V4.t
   type prefix = Ipaddr.V4.t
   type callback = src:ipaddr -> dst:ipaddr -> buffer -> unit Lwt.t
@@ -100,8 +98,6 @@ type write_call = {
 }
 
 module MockUdpv4 = struct
-  type 'a io = 'a Lwt.t
-  type buffer = Cstruct.t
   type ip = StubIpv4.t
   type ipaddr = Ipaddr.V4.t
   type ipinput = src:ipaddr -> dst:ipaddr -> buffer -> unit io
@@ -149,9 +145,7 @@ module StubTcpv4 = struct
   type flow = unit (*Pcb.pcb*)
   type ip = StubIpv4.t
   type ipaddr = StubIpv4.ipaddr
-  type buffer = Cstruct.t
-  type +'a io = 'a Lwt.t
-  type ipinput = src:ipaddr -> dst:ipaddr -> buffer -> unit io
+  type ipinput = src:ipaddr -> dst:ipaddr -> buffer -> unit Lwt.t
   type t = ip (*Pcb.t*)
   type callback = flow -> unit Lwt.t
 
@@ -176,12 +170,10 @@ end
 
 
 module MockStack = struct
-  type +'a io = 'a Lwt.t
   type console = unit
-  type 'a config = 'a Mirage_stack_lwt.stackv4_config
+  type 'a config = 'a Mirage_stack.stackv4_config
   type netif = unit
   type id = netif config
-  type buffer = Cstruct.t
   type ipv4addr = Ipaddr.V4.t
   type tcpv4 = StubTcpv4.t
   type udpv4 = MockUdpv4.t
@@ -246,8 +238,7 @@ let create_stack_lwt () =
 let create_stack () =
   Lwt_main.run (create_stack_lwt ())
 
-module MockTime : Mirage_time_lwt.S = struct
-  type 'a io = 'a Lwt.t
+module MockTime : Mirage_time.S = struct
   let sleep_ns _t = return_unit
 end
 

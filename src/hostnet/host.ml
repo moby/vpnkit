@@ -32,8 +32,6 @@ let sockaddr_of_address (dst, dst_port) =
 module Common = struct
   (** FLOW boilerplate *)
 
-  type 'a io = 'a Lwt.t
-  type buffer = Cstruct.t
   type error = [`Msg of string]
   type write_error = [Mirage_flow.write_error | error]
   let pp_error ppf (`Msg x) = Fmt.string ppf x

@@ -32,13 +32,11 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make (Ethif: Mirage_protocols_lwt.ETHIF) = struct
+module Make (Ethif: Mirage_protocols.ETHERNET) = struct
 
   module Table = Map.Make(Ipaddr.V4)
 
-  type 'a io = 'a Lwt.t
   type ipaddr = Ipaddr.V4.t
-  type buffer = Cstruct.t
   type macaddr = Macaddr.t
   type t = { ethif: Ethif.t; mutable table: macaddr Table.t }
   type error = Mirage_protocols.Arp.error

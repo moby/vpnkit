@@ -20,15 +20,12 @@ module Error = Error.Infix
 
 let errorf fmt = Printf.ksprintf (fun s -> Lwt.return (Result.Error (`Msg s))) fmt
 
-type buffer = Cstruct.t
 type address = Ipaddr.t * int
 let string_of_address (ip, port) = Ipaddr.to_string ip ^ ":" ^ (string_of_int port)
 type error = [ `Msg of string ]
 let pp_error ppf (`Msg x) = Fmt.string ppf x
 type write_error = Mirage_flow.write_error
 let pp_write_error = Mirage_flow.pp_write_error
-
-type 'a io = 'a Lwt.t
 
 type flow = {
   l2r: Cstruct.t Lwt_dllist.t; (* pending data from left to right *)
