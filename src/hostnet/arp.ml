@@ -131,7 +131,7 @@ module Make (Ethif: Mirage_protocols_lwt.ETHIF) = struct
         Log.debug (fun f ->
             f "ARP responding to: who-has %s?" (Ipaddr.V4.to_string req_ipv4));
         let sha = Table.find req_ipv4 t.table in
-        let tha = Macaddr.of_bytes_exn (copy_arp_sha frame) in
+        let tha = Macaddr.of_octets_exn (copy_arp_sha frame) in
         (* the requested address *)
         let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
         (* the requesting host IPv4 *)

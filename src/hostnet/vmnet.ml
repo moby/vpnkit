@@ -137,7 +137,7 @@ module Vif = struct
   let marshal t rest =
     Cstruct.LE.set_uint16 rest 0 t.mtu;
     Cstruct.LE.set_uint16 rest 2 t.max_packet_size;
-    Cstruct.blit_from_string (Macaddr.to_bytes t.client_macaddr) 0 rest 4 6;
+    Cstruct.blit_from_string (Macaddr.to_octets t.client_macaddr) 0 rest 4 6;
     Cstruct.shift rest sizeof
 
   let unmarshal rest =
@@ -145,7 +145,7 @@ module Vif = struct
     let max_packet_size = Cstruct.LE.get_uint16 rest 2 in
     let mac = Cstruct.(to_string @@ sub rest 4 6) in
     try
-      let client_macaddr = Macaddr.of_bytes_exn mac in
+      let client_macaddr = Macaddr.of_octets_exn mac in
       Ok ({ mtu; max_packet_size; client_macaddr }, Cstruct.shift rest sizeof)
     with _ ->
       Error (`Msg (Printf.sprintf "Failed to parse MAC: [%s]" mac))
