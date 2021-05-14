@@ -92,7 +92,7 @@ module Client = struct
             Lwt.return_unit
           | Id_and_seq (id, _) ->
             Log.info (fun f ->
-              f "ICMP src:%a dst:%a id:%d" Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum dst id);
+              f "ICMP src:%a dst:%a id:%d" Ipaddr.V4.pp src Ipaddr.V4.pp dst id);
               Queue.push (src, dst, id) packets;
               Lwt.return_unit
         end

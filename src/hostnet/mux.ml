@@ -57,7 +57,7 @@ module Make (Netif: Mirage_net_lwt.S) = struct
     let xs =
       RuleMap.fold
         (fun ip t acc ->
-           Fmt.strf "%a last_active_time = %.1f" Ipaddr.V4.pp_hum ip
+           Fmt.strf "%a last_active_time = %.1f" Ipaddr.V4.pp ip
              t.last_active_time
            :: acc
         ) t.rules []
@@ -80,7 +80,7 @@ module Make (Netif: Mirage_net_lwt.S) = struct
         port.callback buf
       end else begin
         Log.debug (fun f ->
-            f "using default callback for packet for %a" Ipaddr.V4.pp_hum dst);
+            f "using default callback for packet for %a" Ipaddr.V4.pp dst);
         t.default_callback buf
       end
     | _ ->

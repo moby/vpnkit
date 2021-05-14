@@ -135,7 +135,7 @@ struct
     { clock; max_idle_time; max_active_flows; new_flow_lock; background_gc_t; table; by_last_use; send_reply; preserve_remote_port }
 
   let description { src = src, src_port; dst = dst, dst_port; _ } =
-    Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp_hum src src_port Ipaddr.pp_hum
+    Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp src src_port Ipaddr.pp
       dst dst_port
 
   let outside_to_inside t flow server d =

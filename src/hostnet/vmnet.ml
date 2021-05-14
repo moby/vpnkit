@@ -53,9 +53,9 @@ module Command = struct
   let to_string = function
   | Ethernet x -> Fmt.strf "Ethernet %a" Uuidm.pp x
   | Preferred_ipv4 (uuid, ip) ->
-    Fmt.strf "Preferred_ipv4 %a %a" Uuidm.pp uuid Ipaddr.V4.pp_hum ip
+    Fmt.strf "Preferred_ipv4 %a %a" Uuidm.pp uuid Ipaddr.V4.pp ip
   | Bind_ipv4 (ip, port, tcp) ->
-    Fmt.strf "Bind_ipv4 %a %d %b" Ipaddr.V4.pp_hum ip port tcp
+    Fmt.strf "Bind_ipv4 %a %d %b" Ipaddr.V4.pp ip port tcp
 
   let sizeof = 1 + 36 + 4
 

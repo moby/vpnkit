@@ -141,7 +141,7 @@ module Parse = struct
   | None ->
     Log.err (fun f ->
         f "Failed to parse IPv4 address '%s', using default of %a"
-          x Ipaddr.V4.pp_hum default);
+          x Ipaddr.V4.pp default);
     Lwt.return default
   | Some x -> Lwt.return x
 

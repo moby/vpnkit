@@ -154,8 +154,8 @@ struct
     let dst = Stack_tcp_wire.dst id in
     let dst_port = Stack_tcp_wire.dst_port id in
     Fmt.strf "TCP %a:%d > %a:%d"
-      Ipaddr.V4.pp_hum dst dst_port
-      Ipaddr.V4.pp_hum src src_port
+      Ipaddr.V4.pp dst dst_port
+      Ipaddr.V4.pp src src_port
 
   module Tcp = struct
 
@@ -367,13 +367,13 @@ struct
           | Error (`Msg m) ->
             Log.debug (fun f ->
                 f "%a:%d: failed to connect, sending RST: %s"
-                  Ipaddr.pp_hum ip port m);
+                  Ipaddr.pp ip port m);
             Lwt.return (fun _ -> None)
           | Ok socket ->
             let tcp = Tcp.Flow.create t.clock id socket in
             let listeners port =
               Log.debug (fun f ->
-                  f "%a:%d handshake complete" Ipaddr.pp_hum ip port);
+                  f "%a:%d handshake complete" Ipaddr.pp ip port);
               let f flow =
                 match tcp.Tcp.Flow.socket with
                 | None ->
@@ -508,7 +508,7 @@ struct
              payload = Udp { src = src_port; dst = dst_port; len;
                              payload = Payload payload; _ }; _ } ->
       let description =
-        Fmt.strf "%a:%d -> %a:%d" Ipaddr.V4.pp_hum src src_port Ipaddr.V4.pp_hum
+        Fmt.strf "%a:%d -> %a:%d" Ipaddr.V4.pp src src_port Ipaddr.V4.pp
           dst dst_port
       in
       if Cstruct.len payload < len then begin
@@ -791,7 +791,7 @@ struct
         IPMap.fold
           (fun ip t acc ->
              Fmt.strf "%a last_active_time = %s"
-               Ipaddr.V4.pp_hum ip
+               Ipaddr.V4.pp ip
                (Duration.pp Format.str_formatter (Endpoint.idle_time t); Format.flush_str_formatter ())
              :: acc
           ) t.endpoints [] in
@@ -1069,7 +1069,7 @@ struct
         find_endpoint src >>= function
         | Error (`Msg m) ->
           Log.err (fun f ->
-              f "Failed to create an endpoint for %a: %s" Ipaddr.V4.pp_hum dst m);
+              f "Failed to create an endpoint for %a: %s" Ipaddr.V4.pp dst m);
           Lwt.return_unit
         | Ok endpoint ->
           Stack_udp.write ~src_port ~dst ~dst_port endpoint.Endpoint.udp4 payload
@@ -1082,7 +1082,7 @@ struct
     | { Hostnet_udp.src = src, src_port; dst = dst, dst_port; _ } ->
       Log.err (fun f ->
           f "Failed to send non-IPv4 UDP datagram %a:%d -> %a:%d"
-            Ipaddr.pp_hum src src_port Ipaddr.pp_hum dst dst_port);
+            Ipaddr.pp src src_port Ipaddr.pp dst dst_port);
       Lwt.return_unit in
 
     Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
@@ -1092,7 +1092,7 @@ struct
       find_endpoint src >>= function
       | Error (`Msg m) ->
           Log.err (fun f ->
-              f "Failed to create an endpoint for %a: %s" Ipaddr.V4.pp_hum dst m);
+              f "Failed to create an endpoint for %a: %s" Ipaddr.V4.pp dst m);
           Lwt.return_unit
       | Ok endpoint ->
         let ipv4 = endpoint.Endpoint.ipv4 in
@@ -1184,7 +1184,7 @@ struct
               let open Lwt_result.Infix in
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
-                  f "creating gateway TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
+                  f "creating gateway TCP/IP proxy for %a" Ipaddr.V4.pp dst);
               (* The default Udp_nat instance doesn't work for us because
                  - in send_reply the address `localhost` is rewritten to the host address.
                    We need the gateway's address to be used.
@@ -1195,7 +1195,7 @@ struct
                 let open Lwt.Infix in
                 function
                 | { Hostnet_udp.dst = Ipaddr.V6 ipv6, _; _ } ->
-                  Log.err (fun f -> f "Failed to write an IPv6 UDP datagram to: %a" Ipaddr.V6.pp_hum ipv6);
+                  Log.err (fun f -> f "Failed to write an IPv6 UDP datagram to: %a" Ipaddr.V6.pp ipv6);
                   Lwt.return_unit
                 | { Hostnet_udp.src = _, src_port; dst = Ipaddr.V4 dst, dst_port; payload; _ } ->
                   begin find_endpoint c.Configuration.gateway_ip
@@ -1228,7 +1228,7 @@ struct
               let open Lwt_result.Infix in
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
-                  f "creating localhost TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
+                  f "creating localhost TCP/IP proxy for %a" Ipaddr.V4.pp dst);
               Localhost.create clock endpoint udp_nat localhost_ips
             end >>= function
             | Error e ->
@@ -1246,7 +1246,7 @@ struct
               let open Lwt_result.Infix in
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
-                  f "create remote TCP/IP proxy for %a" Ipaddr.V4.pp_hum dst);
+                  f "create remote TCP/IP proxy for %a" Ipaddr.V4.pp dst);
               Remote.create endpoint udp_nat icmp_nat
                 c.Configuration.host_names localhost_ips
             end >>= function

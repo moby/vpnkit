@@ -8,8 +8,8 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let pp_ips = Fmt.(list ~sep:(unit ", ") Ipaddr.pp_hum)
-let pp_ip4s = Fmt.(list ~sep:(unit ", ") Ipaddr.V4.pp_hum)
+let pp_ips = Fmt.(list ~sep:(unit ", ") Ipaddr.pp)
+let pp_ip4s = Fmt.(list ~sep:(unit ", ") Ipaddr.V4.pp)
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
@@ -101,7 +101,7 @@ let test_etc_hosts_priority server config () =
     let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver name >>= function
     | [ ip ] ->
-      Log.info (fun f -> f "%s has single IP: %a" name Ipaddr.pp_hum ip);
+      Log.info (fun f -> f "%s has single IP: %a" name Ipaddr.pp ip);
       if Ipaddr.compare ip builtin_ip = 0
       then Lwt.return ()
       else failwith ("Builtin DNS names should have higher priority than /etc/hosts")

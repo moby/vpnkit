@@ -401,7 +401,7 @@ let test_http_connect_tunnel proxy () =
               | Error _ ->
                 Log.err (fun f ->
                     f "TCPV4.create_connection %a:443 failed"
-                      Ipaddr.V4.pp_hum test_dst_ip);
+                      Ipaddr.V4.pp test_dst_ip);
                 failwith "TCPV4.create_connection"
               | Ok flow ->
                 let ic = Outgoing.C.create flow in
@@ -787,7 +787,7 @@ let test_http_connect_tunnel proxy () =
                 Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
                 failwith "test_connection_close: connect failed"
               | Ok flow ->
-                Log.info (fun f -> f "Connected to %a:3128" Ipaddr.V4.pp_hum primary_dns_ip);
+                Log.info (fun f -> f "Connected to %a:3128" Ipaddr.V4.pp primary_dns_ip);
                 let oc = Outgoing.C.create flow in
                 let request =
                   let uri = Uri.make ~scheme:"http" ~host:"localhost" ~port () in
