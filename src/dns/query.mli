@@ -48,21 +48,6 @@ val response_of_answer : ?mdns:bool ->
 *)
 val answer_of_response : ?preserve_aa:bool -> Packet.t -> answer
 
-(** Answer a query about {! domain_name}, given a query type {! q_type} and a
-    {! Trie} of DNS data.
-
-    @return the {! answer}
-*)
-val answer : ?dnssec:bool -> ?mdns:bool -> ?filter:filter -> ?flush:flush ->
-  Name.t -> Packet.q_type -> Trie.dnstrie -> answer
-
-(** Answer one or more {! questions} given a {! Trie} of DNS data.
-
-    @return the {! answer}
-*)
-val answer_multiple : ?dnssec:bool -> ?mdns:bool -> ?filter:filter -> ?flush:flush ->
-  Packet.question list -> Trie.dnstrie -> answer
-
 (** [create ~id q_class q_type q_name] creates a query for [q_name] with the
     supplied [id], [q_class], and [q_type].
 *)
