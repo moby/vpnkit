@@ -81,16 +81,6 @@ val parse :
 val marshal : ?compress:bool ->
   int Map.t -> int -> Cstruct.t -> t -> int Map.t * int * Cstruct.t
 
-(** Construct a {! Hashcons} character-string from a string. *)
-val hashcons_string : string -> string Hashcons.hash_consed
-
-(** Construct a {! Hashcons} domain name (list of labels) from a {!
-    t}. *)
-val hashcons : t -> t Hashcons.hash_consed
-
-(** Clear the {! Hashcons} tables. *)
-val clear_cons_tables : unit -> unit
-
 (** Malformed input to {! canon2key}. *)
 exception BadDomainName of string
 

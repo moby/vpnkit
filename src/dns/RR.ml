@@ -19,11 +19,11 @@
 
 (* Mnemonicity! *)
 type serial = int32
-type cstr = string Hashcons.hash_consed
+type cstr = string
 
 (* DNS node: everything we know about a domain name *)
 and dnsnode = {
-  owner: Name.t Hashcons.hash_consed;
+  owner: Name.t;
   mutable rrsets: rrset list;
 }
 

@@ -162,42 +162,6 @@ let marshal ?(compress=true) names base buf name =
   if compress then compressed names base buf name
   else not_compressed names base buf name
 
-(* Hash-consing: character strings *)
-module CSH = Hashcons.Make (struct
-  type t = string
-  let equal a b = (a = b)
-  let hash s = Hashtbl.hash s
-end)
-let cstr_hash = ref (CSH.create 101)
-let hashcons_string s = CSH.hashcons !cstr_hash s
-
-(*
-   Hash-consing: domain names (string lists).  This requires a little
-   more subtlety than the Hashcons module gives us directly: we want to
-   merge common suffixes, and we're downcasing everything.
-   N.B. RFC 4343 says we shouldn't do this downcasing.
-*)
-module DNH = Hashcons.Make (struct
-  type x = t
-  type t = x
-  let equal a b = (a = b)
-  let hash s = Hashtbl.hash s
-end)
-let dn_hash = ref (DNH.create 101)
-let rec hashcons (x:t) = match x with
-  | [] -> DNH.hashcons !dn_hash []
-  | h :: t ->
-      let th = hashcons t in
-      DNH.hashcons !dn_hash
-	    (((hashcons_string (String.lowercase_ascii h)).Hashcons.node)
-	     :: (th.Hashcons.node))
-
-let clear_cons_tables () =
-  DNH.clear !dn_hash;
-  CSH.clear !cstr_hash;
-  dn_hash := DNH.create 1;
-  cstr_hash := CSH.create 1
-
 exception BadDomainName of string
 
 let to_key domain_name =

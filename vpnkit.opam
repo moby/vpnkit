@@ -39,7 +39,6 @@ depends: [
   "cstruct-lwt" {= "3.2.1"}
   "datakit-server" {>= "0.11.0"}
   "datakit-server-9p" {>= "0.11.0"}
-  "hashcons" {>= "1.0.1"}
   "pcap-format" {>= "0.4.0"}
   "cmdliner"
   "charrua-core" {>= "0.9"}
