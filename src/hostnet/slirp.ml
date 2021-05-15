@@ -255,7 +255,7 @@ struct
 
     let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns ()) t.last_active_time_ns
 
-    let create recorder switch arp_table ip mtu clock =
+    let create recorder switch arp_table ip mtu =
       let netif = Switch.port switch ip in
       Stack_ethif.connect netif >>= fun ethif ->
       Stack_arpv4.connect ~table:arp_table ethif |>fun arp ->
@@ -540,7 +540,7 @@ struct
       let tcp_stack = { endpoint; udp_nat; dns_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
-      Switch.Port.listen endpoint.Endpoint.netif
+      Switch.Port.listen ~header_size:Ethernet_wire.sizeof_ethernet endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
            match parse [ buf ] with
@@ -559,6 +559,15 @@ struct
       | Error _ as e -> e
 
   end
+
+  let with_no_keepalive handler port =
+    match handler port with
+    | None -> None
+    | Some process ->
+      Some {
+        Stack_tcp.process;
+        keepalive = None
+      }
 
   module Gateway = struct
     type t = {
@@ -627,7 +636,8 @@ struct
       in
       Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun () ->
           !dns >>= fun t ->
-          Dns_forwarder.handle_tcp ~t
+          Dns_forwarder.handle_tcp ~t >|= fun handler ->
+          with_no_keepalive handler
         ) raw
       >|= ok
 
@@ -644,7 +654,8 @@ struct
         begin match Http_forwarder.explicit_proxy_handler ~localhost_names:t.localhost_names ~localhost_ips:t.localhost_ips ~dst:(dst, dst_port) ~t:http with
         | None -> Lwt.return (Ok ())
         | Some cb ->
-          Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
+          cb >>= fun cb ->
+          Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
           >|= ok
         end
       end
@@ -656,7 +667,7 @@ struct
       let tcp_stack = { endpoint; udp_nat; dns_ips; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
-      Switch.Port.listen endpoint.Endpoint.netif
+      Switch.Port.listen ~header_size:Ethernet_wire.sizeof_ethernet endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
            match parse [ buf ] with
@@ -721,7 +732,8 @@ struct
           raw (* common case *)
         >|= ok
       | Some cb ->
-        Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> cb) raw
+        cb >>= fun cb ->
+        Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
         >|= ok
       end
     | Ipv4 { src; dst; ihl; dnf; raw; ttl;
@@ -754,7 +766,7 @@ struct
       let tcp_stack = { endpoint; udp_nat; icmp_nat; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
-      Switch.Port.listen endpoint.Endpoint.netif
+      Switch.Port.listen ~header_size:Ethernet_wire.sizeof_ethernet endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
            match parse [ buf ] with
@@ -1085,9 +1097,7 @@ struct
           Lwt.return_unit
       | Ok endpoint ->
         let ipv4 = endpoint.Endpoint.ipv4 in
-        let buf, n = Stack_ipv4.allocate_frame ~dst ~proto:`ICMP ipv4 in
-        let ip_header = Cstruct.sub buf 0 n in
-        Stack_ipv4.write ipv4 ip_header payload
+        Stack_ipv4.write ipv4 dst `ICMP (fun _buf -> 0) [ payload ]
         >|= function
         | Error e ->
           Log.err (fun f ->
@@ -1106,7 +1116,10 @@ struct
                 vnet_client_id
                 (Macaddr.to_string eth_src)
                 (Macaddr.to_string eth_dst));
-          (Switch.write switch buf >|= function
+          (Switch.write ~size:Ethernet_wire.sizeof_ethernet switch (fun toBuf ->
+            Cstruct.blit buf 0 toBuf 0 (Cstruct.len buf);
+            Cstruct.len buf)
+           >|= function
             | Ok ()   -> ()
             | Error e ->
               Log.err (fun l -> l "switch write failed: %a" Switch.pp_error e))
@@ -1117,7 +1130,7 @@ struct
     Log.info (fun f ->
         f "Client mac: %s server mac: %s"
           (Macaddr.to_string client_macaddr) (Macaddr.to_string c.Configuration.server_macaddr));
-    Switch.listen switch (fun buf ->
+    Switch.listen switch ~header_size:Ethernet_wire.sizeof_ethernet (fun buf ->
         let open Frame in
         match parse [ buf ] with
         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
@@ -1130,10 +1143,13 @@ struct
                 (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
           (* pass to virtual network *)
           begin
-            Vnet.write vnet_switch t.vnet_client_id buf >|= function
+            Vnet.write vnet_switch t.vnet_client_id ~size:Ethernet_wire.sizeof_ethernet (fun toBuf ->
+              Cstruct.blit buf 0 toBuf 0 (Cstruct.len buf);
+              Cstruct.len buf)
+            >|= function
             | Ok ()   -> ()
             | Error e ->
-              Log.err (fun l -> l "Vnet write failed: %a" Mirage_device.pp_error e)
+              Log.err (fun l -> l "Vnet write failed: %a" Mirage_net.Net.pp_error e)
           end
         | Ok (Ethernet { dst = eth_dst ; src = eth_src ;
                          payload = Ipv4 { payload = Udp { dst = 67; _ }; _ };
@@ -1160,7 +1176,7 @@ struct
                 |> Lwt.return)
           end
           >>= fun arp ->
-          Global_arp.input arp (Cstruct.shift buf Ethif_wire.sizeof_ethernet)
+          Global_arp.input arp (Cstruct.shift buf Ethernet_wire.sizeof_ethernet)
         | Ok (Ethernet { payload = Ipv4 ({ dst; _ } as ipv4 ); _ }) ->
           (* For any new IP destination, create a stack to proxy for
             the remote system *)
@@ -1514,8 +1530,8 @@ struct
           (* register new client on bridge *)
           Lwt.catch (fun () -> 
             let vnet_client_id = match Vnet.register t.vnet_switch with
-            | `Ok x    -> Ok x
-            | `Error e -> Error e
+            | Ok x    -> Ok x
+            | Error e -> Error e
             in
             or_failwith "vnet_switch" @@ Lwt.return vnet_client_id
             >>= fun vnet_client_id ->
