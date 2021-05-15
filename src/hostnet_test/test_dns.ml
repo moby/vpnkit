@@ -23,19 +23,17 @@ let run ?timeout ~pcap t = run_test ?timeout (with_stack ~pcap t)
 let default_upstream_dns = Dns_policy.google_dns
 
 let set_dns_policy ?builtin_names config =
-  Mclock.connect () >|= fun clock ->
   Dns_policy.remove ~priority:4;
   Dns_policy.add ~priority:4 ~config;
-  Slirp_stack.Debug.update_dns ?builtin_names clock
+  Slirp_stack.Debug.update_dns ?builtin_names ()
 
 let reset_dns_policy () =
   Dns_policy.clear ();
-  Mclock.connect () >|= fun clock ->
-  Slirp_stack.Debug.update_dns clock
+  Slirp_stack.Debug.update_dns ()
 
 let test_dns_query server config () =
   let t _ stack =
-    set_dns_policy config >>= fun () ->
+    set_dns_policy config;
     let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver "www.google.com" >|= function
     | (_ :: _) as ips ->
@@ -49,8 +47,7 @@ let test_dns_query server config () =
 let test_builtin_dns_query server config () =
   let name = "experimental.host.name.localhost" in
   let t _ stack =
-    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, Ipaddr.V4 (Ipaddr.V4.localhost) ] config
-    >>= fun () ->
+    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, Ipaddr.V4 (Ipaddr.V4.localhost) ] config;
     let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver name >>= function
     | (_ :: _) as ips ->
@@ -65,7 +62,7 @@ let test_builtin_dns_query server config () =
 let test_etc_hosts_query server config () =
   let test_name = "vpnkit.is.cool.yes.really" in
   let t _ stack =
-    set_dns_policy config >>= fun () ->
+    set_dns_policy config;
     let resolver = DNS.create stack.Client.t in
     DNS.gethostbyname ~server resolver test_name >>= function
     | (_ :: _) as ips ->
@@ -93,8 +90,7 @@ let test_etc_hosts_priority server config () =
   let builtin_ip = Ipaddr.of_string_exn "127.0.0.1" in
   let hosts_ip = Ipaddr.of_string_exn "127.0.0.2" in
   let t _ stack =
-    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, builtin_ip ] config
-    >>= fun () ->
+    set_dns_policy ~builtin_names:[ Dns.Name.of_string name, builtin_ip ] config;
     Hosts.etc_hosts := [
       name, hosts_ip;
     ];
@@ -245,8 +241,7 @@ let truncate_big_response () =
           }
         ] in
         let config = `Upstream { servers; search = []; assume_offline_after_drops = None } in
-        set_dns_policy config
-        >>= fun () ->
+        set_dns_policy config;
         Lwt.finalize
           (fun () ->
             udp_rpc client 1024 primary_dns_ip 53 (Dns.Packet.marshal @@ query_a "very.big.name")
@@ -263,7 +258,7 @@ let truncate_big_response () =
             | Some { Dns.Packet.detail = { tc = false; _ }; _ } ->
               failwith "DNS response does not have truncated bit set"
             end
-          ) reset_dns_policy
+          ) (fun () -> reset_dns_policy (); Lwt.return_unit)
       )
       in
   run ~pcap:"truncate_big_response.pcap" t

@@ -71,11 +71,11 @@ module Slirp_stack =
 
 module Client = struct
   module Netif = VMNET
-  module Ethif1 = Ethif.Make(Netif)
-  module Arpv41 = Arpv4.Make(Ethif1)(Mclock)(Host.Time)
+  module Ethif1 = Ethernet.Make(Netif)
+  module Arpv41 = Arp.Make(Ethif1)(Host.Time)
 
-  module Dhcp_client_mirage1 = Dhcp_client_mirage.Make(Host.Time)(Netif)
-  module Ipv41 = Dhcp_ipv4.Make(Dhcp_client_mirage1)(Ethif1)(Arpv41)
+  module Dhcp_client_mirage1 = Dhcp_client_mirage.Make(Mirage_random_stdlib)(Host.Time)(Netif)
+  module Ipv41 = Dhcp_ipv4.Make(Dhcp_client_mirage1)(Mirage_random_stdlib)(Mclock)(Ethif1)(Arpv41)
   module Icmpv41 = struct
     include Icmpv4.Make(Ipv41)
     let packets = Queue.create ()
@@ -115,18 +115,13 @@ module Client = struct
 
   let connect (interface: VMNET.t) =
     Ethif1.connect interface >>= fun ethif ->
-    Mclock.connect () >>= fun clock ->
-    Arpv41.connect ethif clock >>= fun arp ->
+    Arpv41.connect ethif >>= fun arp ->
     Dhcp_client_mirage1.connect interface >>= fun dhcp ->
     Ipv41.connect dhcp ethif arp >>= fun ipv4 ->
     Icmpv41.connect ipv4 >>= fun icmpv4 ->
     Udp1.connect ipv4 >>= fun udp4 ->
-    Tcp1.connect ipv4 clock >>= fun tcp4 ->
-    let cfg = {
-      Mirage_stack.name = "stackv4_ip";
-      interface;
-    } in
-    connect cfg ethif arp ipv4 icmpv4 udp4 tcp4
+    Tcp1.connect ipv4 >>= fun tcp4 ->
+    connect interface ethif arp ipv4 icmpv4 udp4 tcp4
     >>= fun t ->
     Log.info (fun f -> f "Client has connected");
     Lwt.return { t; icmpv4 ; netif=interface }
@@ -156,9 +151,8 @@ let config =
       internal_port = local_tcpv4_forwarded_port;
     } ];
   } in
-  Mclock.connect () >>= fun clock ->
   let vnet = Vnet.create () in
-  Slirp_stack.create_static clock vnet configuration
+  Slirp_stack.create_static vnet configuration
 
 (* This is a hacky way to get a hancle to the server side of the stack. *)
 let slirp_stack = ref None
