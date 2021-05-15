@@ -7,18 +7,15 @@ type pcap = (string * int64 option) option
 module Make
     (Vmnet: Sig.VMNET)
     (Dns_policy: Sig.DNS_POLICY)
-    (Clock: sig
-       include Mirage_clock_lwt.MCLOCK
-       val connect: unit -> t Lwt.t
-     end)
-    (Random: Mirage_random.C)
+    (Clock: Mirage_clock.MCLOCK)
+    (Random: Mirage_random.S)
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) :
 sig
 
   type stack
   (** A TCP/IP stack which may talk to multiple ethernet clients *)
 
-  val create_static: Clock.t -> Vnet.t -> Configuration.t -> stack Lwt.t
+  val create_static: Vnet.t -> Configuration.t -> stack Lwt.t
   (** Initialise a TCP/IP stack, with a static configuration *)
 
   type connection
@@ -57,7 +54,7 @@ sig
     end
 
     val update_dns: ?local_ip:Ipaddr.t -> ?builtin_names:(Dns.Name.t * Ipaddr.t) list ->
-      Clock.t -> unit
+      unit -> unit
     (** Update the DNS forwarder following a configuration change *)
 
     val update_http: ?http:string -> ?https:string -> ?exclude:string

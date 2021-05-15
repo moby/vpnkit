@@ -53,11 +53,8 @@ type uuid_table = {
 module Make
     (Vmnet: Sig.VMNET)
     (Dns_policy: Sig.DNS_POLICY)
-    (Clock: sig
-       include Mirage_clock_lwt.MCLOCK
-       val connect: unit -> t Lwt.t
-     end)
-    (Random: Mirage_random.C)
+    (Clock: Mirage_clock.MCLOCK)
+    (Random: Mirage_random.S)
     (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) =
 struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
@@ -67,7 +64,6 @@ struct
     global_arp_table: arp_table;
     client_uuids: uuid_table;
     vnet_switch: Vnet.t;
-    clock: Clock.t;
   }
 
   module Filteredif = Filter.Make(Vmnet)
@@ -77,13 +73,13 @@ struct
   module Dhcp = Hostnet_dhcp.Make(Clock)(Switch)
 
   (* This ARP implementation will respond to the VM: *)
-  module Global_arp_ethif = Ethif.Make(Switch)
+  module Global_arp_ethif = Ethernet.Make(Switch)
   module Global_arp = Arp.Make(Global_arp_ethif)
 
   (* This stack will attach to a switch port and represent a single remote IP *)
-  module Stack_ethif = Ethif.Make(Switch.Port)
+  module Stack_ethif = Ethernet.Make(Switch.Port)
   module Stack_arpv4 = Arp.Make(Stack_ethif)
-  module Stack_ipv4 = Static_ipv4.Make(Stack_ethif)(Stack_arpv4)
+  module Stack_ipv4 = Static_ipv4.Make(Random)(Clock)(Stack_ethif)(Stack_arpv4)
   module Stack_icmpv4 = Icmpv4.Make(Stack_ipv4)
   module Stack_tcp_wire = Tcp.Wire.Make(Stack_ipv4)
   module Stack_udp = Udp.Make(Stack_ipv4)(Random)
@@ -108,16 +104,15 @@ struct
   module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Clock)(Host.Time)
   module Icmp_nat = Hostnet_icmp.Make(Host.Sockets)(Clock)(Host.Time)
   
-  let dns_forwarder ~local_address ~builtin_names clock =
-    Dns_forwarder.create ~local_address ~builtin_names clock (Dns_policy.config ())
+  let dns_forwarder ~local_address ~builtin_names =
+    Dns_forwarder.create ~local_address ~builtin_names (Dns_policy.config ())
 
   (* Global variable containing the global DNS configuration *)
   let dns =
     let ip = Ipaddr.V4 Configuration.default_gateway_ip in
     let local_address = { Dns_forward.Config.Address.ip; port = 0 } in
     ref (
-      Clock.connect () >>= fun clock ->
-      dns_forwarder ~local_address ~builtin_names:[] clock
+      dns_forwarder ~local_address ~builtin_names:[]
     )
 
   (* Global variable containing the global HTTP proxy configuration *)
@@ -192,7 +187,6 @@ struct
       (** An established flow *)
 
       type t = {
-        clock: Clock.t;
         id: Stack_tcp_wire.t;
         mutable socket: Host.Sockets.Stream.Tcp.flow option;
         mutable last_active_time_ns: int64;
@@ -203,7 +197,7 @@ struct
          and possibly terminate them.
          If we use a monotonic clock driven from a CPU counter: the clock will be paused while the
          computer is asleep so we will conclude the flows are still active. *)
-      let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns t.clock) t.last_active_time_ns
+      let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns ()) t.last_active_time_ns
 
       let to_string t =
         Printf.sprintf "%s socket = %s last_active = %s"
@@ -218,10 +212,10 @@ struct
         let flows = Id.Map.fold (fun _ t acc -> to_string t :: acc) !all [] in
         Vfs.File.ro_of_string (String.concat "\n" flows)
 
-      let create clock id socket =
+      let create id socket =
         let socket = Some socket in
-        let last_active_time_ns = Clock.elapsed_ns clock in
-        let t = { clock; id; socket; last_active_time_ns } in
+        let last_active_time_ns = Clock.elapsed_ns () in
+        let t = { id; socket; last_active_time_ns } in
         all := Id.Map.add id t !all;
         t
       let remove id =
@@ -231,7 +225,7 @@ struct
       let touch id =
         if Id.Map.mem id !all then begin
           let flow = Id.Map.find id !all in
-          flow.last_active_time_ns <- Clock.elapsed_ns flow.clock
+          flow.last_active_time_ns <- Clock.elapsed_ns ()
         end
     end
   end
@@ -247,7 +241,8 @@ struct
       icmpv4:                   Stack_icmpv4.t;
       udp4:                     Stack_udp.t;
       tcp4:                     Stack_tcp.t;
-      clock:                    Clock.t;
+      ip:                       Ipaddr.V4.t;
+      mtu:                      int;
       mutable pending:          Tcp.Id.Set.t;
       mutable last_active_time_ns: int64;
       (* Used to shutdown connections when the endpoint is removed from the switch. *)
@@ -256,30 +251,28 @@ struct
     (** A generic TCP/IP endpoint *)
 
     let touch t =
-      t.last_active_time_ns <- Clock.elapsed_ns t.clock
+      t.last_active_time_ns <- Clock.elapsed_ns ()
 
-    let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns t.clock) t.last_active_time_ns
+    let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns ()) t.last_active_time_ns
 
     let create recorder switch arp_table ip mtu clock =
       let netif = Switch.port switch ip in
-      Stack_ethif.connect ~mtu netif >>= fun ethif ->
+      Stack_ethif.connect netif >>= fun ethif ->
       Stack_arpv4.connect ~table:arp_table ethif |>fun arp ->
       Stack_ipv4.connect
-        ~ip
-        ~gateway:None
-        ~network:Ipaddr.V4.Prefix.global
+        ~cidr:Ipaddr.V4.Prefix.global
         ethif arp
       >>= fun ipv4 ->
       Stack_icmpv4.connect ipv4 >>= fun icmpv4 ->
       Stack_udp.connect ipv4 >>= fun udp4 ->
-      Stack_tcp.connect ipv4 clock >>= fun tcp4 ->
+      Stack_tcp.connect ipv4 >>= fun tcp4 ->
 
       let pending = Tcp.Id.Set.empty in
-      let last_active_time_ns = Clock.elapsed_ns clock in
+      let last_active_time_ns = Clock.elapsed_ns () in
       let established = Tcp.Id.Set.empty in
       let tcp_stack =
-        { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; pending;
-          last_active_time_ns; clock; established }
+        { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; ip; mtu; pending;
+          last_active_time_ns; established }
       in
       Lwt.return tcp_stack
 
@@ -352,7 +345,7 @@ struct
       end
 
     module Proxy =
-      Mirage_flow_lwt.Proxy(Clock)(Stack_tcp)(Host.Sockets.Stream.Tcp)
+      Mirage_flow_combinators.Proxy(Clock)(Stack_tcp)(Host.Sockets.Stream.Tcp)
 
     let input_tcp t ~id ~syn ~rst (ip, port) (buf: Cstruct.t) =
       (* Note that we must cleanup even when the connection is reset before it
@@ -370,7 +363,7 @@ struct
                   Ipaddr.pp ip port m);
             Lwt.return (fun _ -> None)
           | Ok socket ->
-            let tcp = Tcp.Flow.create t.clock id socket in
+            let tcp = Tcp.Flow.create id socket in
             let listeners port =
               Log.debug (fun f ->
                   f "%a:%d handshake complete" Ipaddr.pp ip port);
@@ -383,7 +376,7 @@ struct
                   Lwt.return_unit
                 | Some socket ->
                   Lwt.finalize (fun () ->
-                    Proxy.proxy t.clock flow socket
+                    Proxy.proxy flow socket
                     >>= function
                     | Error e ->
                       Log.debug (fun f ->
@@ -397,7 +390,10 @@ struct
                     close_flow t ~id `Fin
                   )
               in
-              Some f
+              Some {
+                Stack_tcp.process= f;
+                keepalive= None
+              }
             in
             Lwt.return listeners
         ) buf
@@ -429,11 +425,6 @@ struct
         let icmp_packet = Cstruct.append header icmp_payload in
         icmp_packet
       in
-      let ethernet_frame, len =
-        Stack_ipv4.allocate_frame t.ipv4 ~dst:src ~proto:`ICMP
-      in
-      let ethernet_ip_hdr = Cstruct.sub ethernet_frame 0 len in
-
       let reply = would_fragment
           ~ip_header:(Cstruct.sub raw 0 (ihl * 4))
           ~ip_payload:(Some (Cstruct.sub raw (ihl * 4) 8)) in
@@ -443,11 +434,11 @@ struct
          can forward *)
       Log.err (fun f -> f
                   "Sending icmp-dst-unreachable in response to UDP %s:%d -> \
-                   %s:%d with DNF set IPv4 len %d"
+                   %s:%d with DNF set IPv4 "
                   (Ipaddr.V4.to_string src) src_port
                   (Ipaddr.V4.to_string dst) dst_port
-                  len);
-      Stack_ipv4.writev t.ipv4 ethernet_ip_hdr [ reply ];
+              );
+      Stack_ipv4.write t.ipv4 src `ICMP (fun _buf -> 0) [ reply ]
   end
 
   type connection = {
@@ -482,7 +473,6 @@ struct
 
   module Localhost = struct
     type t = {
-      clock: Clock.t;
       endpoint: Endpoint.t;
       udp_nat: Udp_nat.t;
       dns_ips: Ipaddr.t list;
@@ -546,8 +536,8 @@ struct
     | _ ->
       Lwt.return (Ok ())
 
-    let create clock endpoint udp_nat dns_ips =
-      let tcp_stack = { clock; endpoint; udp_nat; dns_ips } in
+    let create endpoint udp_nat dns_ips =
+      let tcp_stack = { endpoint; udp_nat; dns_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -572,7 +562,6 @@ struct
 
   module Gateway = struct
     type t = {
-      clock: Clock.t;
       endpoint: Endpoint.t;
       udp_nat: Udp_nat.t;
       dns_ips: Ipaddr.V4.t list;
@@ -663,8 +652,8 @@ struct
     | _ ->
       Lwt.return (Ok ())
 
-    let create clock endpoint udp_nat dns_ips localhost_names localhost_ips =
-      let tcp_stack = { clock; endpoint; udp_nat; dns_ips; localhost_names; localhost_ips } in
+    let create endpoint udp_nat dns_ips localhost_names localhost_ips =
+      let tcp_stack = { endpoint; udp_nat; dns_ips; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
       Switch.Port.listen endpoint.Endpoint.netif
@@ -809,7 +798,7 @@ struct
       )
 
   let pcap t flow =
-    let module C = Mirage_channel_lwt.Make(Host.Sockets.Stream.Unix) in
+    let module C = Mirage_channel.Make(Host.Sockets.Stream.Unix) in
     let c = C.create flow in
     let stream = Netif.to_pcap t.all_traffic in
     let rec loop () =
@@ -829,7 +818,7 @@ struct
     loop ()
 
   let diagnostics t flow =
-    let module C = Mirage_channel_lwt.Make(Host.Sockets.Stream.Unix) in
+    let module C = Mirage_channel.Make(Host.Sockets.Stream.Unix) in
     let module Writer = Tar.HeaderWriter(Lwt)(struct
         type out_channel = C.t
         type 'a t = 'a Lwt.t
@@ -920,12 +909,12 @@ struct
       let get_max_active_flows t = get_max_active_flows t.udp_nat
     end
     let update_dns
-        ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(builtin_names = []) clock
+        ?(local_ip = Ipaddr.V4 Ipaddr.V4.localhost) ?(builtin_names = []) ()
       =
       let local_address =
         { Dns_forward.Config.Address.ip = local_ip; port = 0 }
       in
-      dns := dns_forwarder ~local_address ~builtin_names clock
+      dns := dns_forwarder ~local_address ~builtin_names
 
     let update_http ?http:http_config ?https ?exclude ?transparent_http_ports ?transparent_https_ports () =
       Http_forwarder.create ?http:http_config ?https ?exclude ?transparent_http_ports ?transparent_https_ports ()
@@ -977,7 +966,7 @@ struct
     end
 
   let connect x vnet_switch vnet_client_id client_macaddr
-      c (global_arp_table:arp_table) clock
+      c (global_arp_table:arp_table)
     =
 
     let valid_subnets = [ Ipaddr.V4.Prefix.global ] in
@@ -1016,12 +1005,12 @@ struct
     Global_arp_ethif.connect switch
     >>= fun global_arp_ethif ->
 
-    let dhcp = Dhcp.make ~configuration:c clock switch in
+    let dhcp = Dhcp.make ~configuration:c switch in
 
     let endpoints = IPMap.empty in
     let endpoints_m = Lwt_mutex.create () in
-    let udp_nat = Udp_nat.create clock in
-    let icmp_nat = match Icmp_nat.create clock with
+    let udp_nat = Udp_nat.create () in
+    let icmp_nat = match Icmp_nat.create () with
       | icmp_nat -> Some icmp_nat
       | exception Unix.Unix_error (Unix.EPERM, _, _) ->
         Log.err (fun f -> f "Permission denied setting up user-space ICMP socket: ping will not work");
@@ -1048,7 +1037,7 @@ struct
            if IPMap.mem ip t.endpoints
            then Lwt.return (Ok (IPMap.find ip t.endpoints))
            else begin
-             Endpoint.create interface switch local_arp_table ip c.Configuration.mtu clock
+             Endpoint.create interface switch local_arp_table ip c.Configuration.mtu
              >|= fun endpoint ->
              t.endpoints <- IPMap.add ip endpoint t.endpoints;
              Ok endpoint
@@ -1190,7 +1179,7 @@ struct
                    We need the gateway's address to be used.
                  - the remote port number is exposed to the container service;
                    we would like to use the listening port instead *)
-              let udp_nat = Udp_nat.create ~preserve_remote_port:false clock in
+              let udp_nat = Udp_nat.create ~preserve_remote_port:false () in
               let send_reply =
                 let open Lwt.Infix in
                 function
@@ -1210,7 +1199,7 @@ struct
                     | Ok () -> ()
                   end in
               Udp_nat.set_send_reply ~t:udp_nat ~send_reply;
-              Gateway.create clock endpoint udp_nat [ c.Configuration.gateway_ip ]
+              Gateway.create endpoint udp_nat [ c.Configuration.gateway_ip ]
                 c.Configuration.host_names localhost_ips
             end >>= function
             | Error e ->
@@ -1229,7 +1218,7 @@ struct
               find_endpoint dst >>= fun endpoint ->
               Log.debug (fun f ->
                   f "creating localhost TCP/IP proxy for %a" Ipaddr.V4.pp dst);
-              Localhost.create clock endpoint udp_nat localhost_ips
+              Localhost.create endpoint udp_nat localhost_ips
             end >>= function
             | Error e ->
               Log.err (fun f ->
@@ -1275,7 +1264,7 @@ struct
       Log.info (fun f -> f "TCP/IP ready");
       Lwt.return t
 
-  let update_dns c clock =
+  let update_dns c =
     let config = match c.Configuration.resolver, c.Configuration.dns with
     | `Upstream, servers -> `Upstream servers
     | `Host, _ -> `Host
@@ -1295,7 +1284,7 @@ struct
       (* FIXME: what to do if there are multiple VMs? *)
       @ (List.map (fun name -> name, Ipaddr.V4 c.Configuration.lowest_ip) c.Configuration.vm_names) in
 
-    dns := dns_forwarder ~local_address ~builtin_names clock
+    dns := dns_forwarder ~local_address ~builtin_names
 
   let update_dhcp c =
     Log.info (fun f ->
@@ -1325,7 +1314,7 @@ struct
         );
         Lwt.return_unit
 
-  let create_common clock vnet_switch c =
+  let create_common vnet_switch c =
     (* If a `dns_path` is provided then watch it for updates *)
     let read_dns_file path =
       Log.info (fun f -> f "Reading DNS configuration from %s" path);
@@ -1333,15 +1322,15 @@ struct
       >>= function
       | Error (`Msg m) ->
         Log.err (fun f -> f "Failed to read DNS configuration file %s: %s. Disabling current configuration." path m);
-        update_dns { c with dns = Configuration.no_dns_servers } clock
+        update_dns { c with dns = Configuration.no_dns_servers }
       | Ok contents ->
         begin match Configuration.Parse.dns contents with
         | None ->
           Log.err (fun f -> f "Failed to parse DNS configuration file %s. Disabling current configuration." path);
-          update_dns { c with dns = Configuration.no_dns_servers } clock
+          update_dns { c with dns = Configuration.no_dns_servers }
         | Some dns ->
           Log.info (fun f -> f "Updating DNS configuration to %s" (Dns_forward.Config.to_string dns));
-          update_dns { c with dns } clock
+          update_dns { c with dns }
         end in
     ( match c.dns_path with
       | None -> Lwt.return_unit
@@ -1494,16 +1483,15 @@ struct
       global_arp_table;
       client_uuids;
       vnet_switch;
-      clock;
     } in
     Lwt.return t
 
-  let create_static clock vnet_switch c =
+  let create_static vnet_switch c =
     update_http c
     >>= fun () ->
-    update_dns c clock
+    update_dns c
     >>= fun () ->
-    create_common clock vnet_switch c
+    create_common vnet_switch c
 
   let connect_client_by_uuid_ip t (uuid:Uuidm.t) (preferred_ip:Ipaddr.V4.t option) =
     Lwt_mutex.with_lock t.client_uuids.mutex (fun () ->
@@ -1620,7 +1608,7 @@ struct
         >>= fun (client_ip, vnet_client_id) ->
         connect x t.vnet_switch vnet_client_id
           client_macaddr { t.configuration with lowest_ip = client_ip }
-          t.global_arp_table t.clock
+          t.global_arp_table
     end
 
 end

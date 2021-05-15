@@ -237,7 +237,7 @@ module Make(C: Sig.CONN) = struct
        Tcp_direct_direct will do the same. This behaviour seems to be
        undefined, but common implementations adopt a last-caller-wins
        semantic. This is the last caller wins callback *)
-    mutable callback: (Cstruct.t -> unit io);
+    mutable callback: (Cstruct.t -> unit Lwt.t);
     log_prefix: string;
   }
 
