@@ -1,8 +1,8 @@
 (library
  (name hostnet)
- (libraries base64 cstruct logs ipaddr mirage-flow ppx_sexp_conv
+ (libraries base64 cstruct logs ipaddr mirage-flow mirage-flow-combinators ppx_sexp_conv
    pcap-format ethernet arp tcpip.ipv4 tcpip.icmpv4 tcpip.udp
-   tcpip.tcp tcpip.stack-direct charrua dns dns_lwt ofs uwt
+   tcpip.tcp tcpip.stack-direct charrua charrua-server dns dns_lwt ofs uwt
    uwt.ext uwt.preemptive threads astring datakit-server dns_forward tar
    mirage-vnetif uuidm cohttp-lwt mirage-channel ezjsonm
    mirage-protocols duration mirage-time mirage-clock
