@@ -19,7 +19,7 @@
 
 (** Cohttp IO implementation using Mirage channels. *)
 
-module Make (Channel: Mirage_channel_lwt.S) : Cohttp.S.IO
+module Make (Channel: Mirage_channel.S) : Cohttp.S.IO
   with type 'a t = 'a Lwt.t
    and type ic = Channel.t
    and type oc = Channel.t
