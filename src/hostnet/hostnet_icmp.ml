@@ -23,8 +23,8 @@ type datagram = {
 
 module Make
     (Sockets: Sig.SOCKETS)
-    (Clock: Mirage_clock_lwt.MCLOCK)
-    (Time: Mirage_time_lwt.S)
+    (Clock: Mirage_clock.MCLOCK)
+    (Time: Mirage_time.S)
 = struct
 
   module Icmp = Sockets.Datagram.Udp
@@ -42,7 +42,6 @@ module Make
   module IntSet = Set.Make(struct type t = int let compare = compare end)
 
   type t = {
-    clock: Clock.t;
     server_fd: Unix.file_descr;
     server: Icmp.server;
     phys_to_flow: (key, flow) Hashtbl.t;
@@ -52,10 +51,10 @@ module Make
     mutable send_reply: (src:address -> dst:address -> payload:Cstruct.t -> unit Lwt.t) option;
   }
 
-  let start_background_gc clock phys_to_flow virt_to_flow ids_in_use max_idle_time =
+  let start_background_gc phys_to_flow virt_to_flow ids_in_use max_idle_time =
     let rec loop () =
       Time.sleep_ns max_idle_time >>= fun () ->
-      let now_ns = Clock.elapsed_ns clock in
+      let now_ns = Clock.elapsed_ns () in
       let to_shutdown =
         Hashtbl.fold (fun phys flow acc ->
             if Int64.(sub now_ns flow.last_use) > max_idle_time then begin
@@ -100,7 +99,7 @@ module Make
   let ipproto_icmp = 1 (* according to BSD /etc/protocols *)
   let _port = 0 (* port isn't meaningful in this context *)
 
-  let create ?(max_idle_time = Duration.(of_sec 60)) clock =
+  let create ?(max_idle_time = Duration.(of_sec 60)) () =
     let phys_to_flow = Hashtbl.create 7 in
     let virt_to_flow = Hashtbl.create 7 in
     let server_fd = Unix.socket Unix.PF_INET sock_icmp ipproto_icmp in
@@ -108,8 +107,8 @@ module Make
     let ids_in_use = ref IntSet.empty in
     let next_id = 0 in
     let send_reply = None in
-    let _background_gc_t = start_background_gc clock phys_to_flow virt_to_flow ids_in_use max_idle_time in
-    { clock; server; server_fd; phys_to_flow; virt_to_flow; ids_in_use; next_id; send_reply }
+    let _background_gc_t = start_background_gc phys_to_flow virt_to_flow ids_in_use max_idle_time in
+    { server; server_fd; phys_to_flow; virt_to_flow; ids_in_use; next_id; send_reply }
 
   let start_receiver t =
     let buf = Cstruct.create 4096 in
@@ -264,7 +263,7 @@ module Make
             let phys = dst, id' in
             let description = Printf.sprintf "%s id=%d -> %s id=%d"
               (Ipaddr.V4.to_string @@ fst virt) (snd virt) (Ipaddr.V4.to_string @@ fst phys) (snd phys) in
-            let last_use = Clock.elapsed_ns t.clock in
+            let last_use = Clock.elapsed_ns () in
             let flow = { description; virt; phys; last_use } in
             Hashtbl.replace t.phys_to_flow phys flow;
             Hashtbl.replace t.virt_to_flow virt flow;
