@@ -13,10 +13,9 @@ let global_dhcp_configuration = ref None
 let update_global_configuration x =
     global_dhcp_configuration := x
 
-module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
+module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
 
   type t = {
-    clock: Clock.t;
     netif: Netif.t;
     server_macaddr: Macaddr.t;
     get_dhcp_configuration: unit -> Dhcp_server.Config.t;
@@ -38,7 +37,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
     List.fold_left (fun acc x -> if compare acc x > 0 then acc else x) hd tl
 
   (* given some MACs and IPs, construct a usable DHCP configuration *)
-  let make ~configuration:c clock netif =
+  let make ~configuration:c netif =
     let open Dhcp_server.Config in
     (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
        intend only to serve IPs to one downstream host.
@@ -99,7 +98,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
         range = Some (c.Configuration.lowest_ip, c.Configuration.lowest_ip); (* allow one dynamic client *)
       } in
 
-    { server_macaddr = c.Configuration.server_macaddr; get_dhcp_configuration; clock; netif }
+    { server_macaddr = c.Configuration.server_macaddr; get_dhcp_configuration; netif }
 
   let of_interest mac dest =
     Macaddr.compare dest mac = 0 || not (Macaddr.is_unicast dest)
@@ -109,7 +108,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
   let logged_bootrequest = ref false
   let logged_bootreply = ref false
 
-  let input clock net (config : Dhcp_server.Config.t) database buf =
+  let input net (config : Dhcp_server.Config.t) database buf =
     let open Dhcp_server in
     match Dhcp_wire.pkt_of_buf buf (Cstruct.len buf) with
     | Error e ->
@@ -117,7 +116,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
       Lwt.return database
     | Ok pkt ->
       let elapsed_seconds =
-        Clock.elapsed_ns clock
+        Clock.elapsed_ns ()
         |> Duration.to_sec
         |> Int32.of_int
       in
@@ -140,7 +139,9 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
               (Macaddr.to_string (pkt.srcmac)));
         logged_bootrequest :=
           !logged_bootrequest || (pkt.op = Dhcp_wire.BOOTREQUEST);
-        Netif.write net (Dhcp_wire.buf_of_pkt reply) >>= function
+        Netif.write net ~size:1500 (fun buf ->
+          Dhcp_wire.pkt_into_buf reply buf
+        ) >>= function
         | Error e ->
           Log.err (fun f -> f "failed to parse DHCP reply: %a" Netif.pp_error e);
           Lwt.return database
@@ -172,13 +173,13 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
        pre-allocated IP anyway, but this will present a problem if
        that assumption ever changes.  *)
     let database = ref (Dhcp_server.Lease.make_db ()) in
-    match Ethif_packet.Unmarshal.of_cstruct buf with
+    match Ethernet_packet.Unmarshal.of_cstruct buf with
     | Ok (pkt, _payload) when
-        of_interest t.server_macaddr pkt.Ethif_packet.destination ->
-      (match pkt.Ethif_packet.ethertype with
-      | Ethif_wire.IPv4 ->
+        of_interest t.server_macaddr pkt.Ethernet_packet.destination ->
+      (match pkt.Ethernet_packet.ethertype with
+      | `IPv4 ->
         if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then begin
-          input t.clock t.netif (t.get_dhcp_configuration ()) !database buf
+          input t.netif (t.get_dhcp_configuration ()) !database buf
           >|= fun db ->
           database := db
         end
