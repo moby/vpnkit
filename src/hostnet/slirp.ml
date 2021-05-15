@@ -74,11 +74,11 @@ struct
 
   (* This ARP implementation will respond to the VM: *)
   module Global_arp_ethif = Ethernet.Make(Switch)
-  module Global_arp = Arp.Make(Global_arp_ethif)
+  module Global_arp = Static_arp.Make(Global_arp_ethif)
 
   (* This stack will attach to a switch port and represent a single remote IP *)
   module Stack_ethif = Ethernet.Make(Switch.Port)
-  module Stack_arpv4 = Arp.Make(Stack_ethif)
+  module Stack_arpv4 = Static_arp.Make(Stack_ethif)
   module Stack_ipv4 = Static_ipv4.Make(Random)(Clock)(Stack_ethif)(Stack_arpv4)
   module Stack_icmpv4 = Icmpv4.Make(Stack_ipv4)
   module Stack_tcp_wire = Tcp.Wire.Make(Stack_ipv4)
