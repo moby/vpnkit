@@ -11,13 +11,13 @@ module Config: sig
 end
 
 module Make
-    (Ip: Mirage_protocols_lwt.IPV4)
-    (Udp: Mirage_protocols_lwt.UDPV4)
-    (Tcp: Mirage_protocols_lwt.TCPV4)
+    (Ip: Mirage_protocols.IPV4)
+    (Udp: Mirage_protocols.UDPV4)
+    (Tcp: Mirage_protocols.TCPV4)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
-    (Time: Mirage_time_lwt.S)
-    (Clock: Mirage_clock_lwt.MCLOCK)
+    (Time: Mirage_time.S)
+    (Clock: Mirage_clock.MCLOCK)
     (Recorder: Sig.RECORDER) :
 sig
 
@@ -27,7 +27,7 @@ sig
   val create:
     local_address:Dns_forward.Config.Address.t ->
     builtin_names:(Dns.Name.t * Ipaddr.t) list ->
-    Clock.t -> Config.t -> t Lwt.t
+    Config.t -> t Lwt.t
   (** Create a DNS forwarding instance based on the given
       configuration, either [`Upstream config]: send DNS requests to
       the given upstream servers [`Host]: use the Host's resolver.
