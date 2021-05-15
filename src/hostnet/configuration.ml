@@ -138,12 +138,12 @@ let default = {
 module Parse = struct
 
   let ipv4 default x = match Ipaddr.V4.of_string @@ String.trim x with
-  | None ->
+  | Error (`Msg m) ->
     Log.err (fun f ->
-        f "Failed to parse IPv4 address '%s', using default of %a"
-          x Ipaddr.V4.pp default);
+        f "Failed to parse IPv4 address '%s', using default of %a: %s"
+          x Ipaddr.V4.pp default m);
     Lwt.return default
-  | Some x -> Lwt.return x
+  | Ok x -> Lwt.return x
 
   let ipv4_list default x =
     let all =
@@ -152,16 +152,16 @@ module Parse = struct
       List.map String.trim @@
       Astring.String.cuts ~sep:"," x
     in
-    let any_none, some = List.fold_left (fun (any_none, some) x -> match x with
-      | None -> true, some
-      | Some x -> any_none, x :: some
+    let any_error, ok = List.fold_left (fun (any_error, ok) x -> match x with
+      | Error _ -> true, ok
+      | Ok x -> any_error, x :: ok
       ) (false, []) all in
-    if any_none then begin
+    if any_error then begin
       Log.err (fun f ->
           f "Failed to parse IPv4 address list '%s', using default of %s" x
             (String.concat "," (List.map Ipaddr.V4.to_string default)));
       default
-    end else some
+    end else ok
 
   let int = function
   | None -> Lwt.return None
