@@ -127,9 +127,9 @@ let parse bufs =
       Cstructs.sub bufs 6 6 |> Cstructs.to_string |> Macaddr.of_octets
     in
     match dst_option, src_option with
-    | None, _ -> errorf "failed to parse ethernet destination MAC"
-    | _, None -> errorf "failed to parse ethernet source MAC"
-    | Some dst, Some src ->
+    | Error (`Msg m), _ -> errorf "failed to parse ethernet destination MAC: %s" m
+    | _, Error (`Msg m) -> errorf "failed to parse ethernet source MAC: %s" m
+    | Ok dst, Ok src ->
       let inner = Cstructs.shift bufs 14 in
       ( match ethertype with
       | 0x0800 ->
