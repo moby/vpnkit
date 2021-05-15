@@ -8,7 +8,7 @@ module type READ_INTO = sig
 end
 
 module type FLOW_CLIENT = sig
-  include Mirage_flow_lwt.SHUTDOWNABLE
+  include Mirage_flow_combinators.SHUTDOWNABLE
 
   type address
 
@@ -19,7 +19,7 @@ module type FLOW_CLIENT = sig
 end
 
 module type CONN = sig
-  include Mirage_flow_lwt.S
+  include Mirage_flow.S
 
   include READ_INTO
     with type flow := flow
@@ -166,7 +166,7 @@ module type HOST = sig
     include FILES
   end
 
-  module Time: Mirage_time_lwt.S
+  module Time: Mirage_time.S
 
   module Dns: sig
     include DNS
@@ -198,7 +198,7 @@ end
 module type VMNET = sig
   (** A virtual ethernet link to the VM *)
 
-  include Mirage_net_lwt.S
+  include Mirage_net.S
 
   val add_listener: t -> (Cstruct.t -> unit Lwt.t) -> unit
   (** Add a callback which will be invoked in parallel with all received packets *)
