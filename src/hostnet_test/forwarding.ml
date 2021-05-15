@@ -18,7 +18,7 @@ let run ?(timeout=Duration.of_sec 60) t =
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
 
-module Channel = Mirage_channel_lwt.Make(Host.Sockets.Stream.Tcp)
+module Channel = Mirage_channel.Make(Host.Sockets.Stream.Tcp)
 
 module ForwardServer = struct
   (** Accept connections, read the forwarding header and run a proxy.
@@ -27,7 +27,7 @@ module ForwardServer = struct
   module Mux = Forwarder.Multiplexer.Make(Host.Sockets.Stream.Tcp)
 
   module Proxy =
-    Mirage_flow_lwt.Proxy
+    Mirage_flow_combinators.Proxy
       (Mclock)(Mux.Channel)(Host.Sockets.Stream.Tcp)
 
   let accept flow =

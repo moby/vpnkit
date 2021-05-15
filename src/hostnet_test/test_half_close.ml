@@ -29,10 +29,10 @@ let with_server on_accept f =
   Lwt.finalize (fun () -> f server) (fun () -> Server.destroy server)
 
 module Outgoing = struct
-  module C = Mirage_channel_lwt.Make(Slirp_stack.Client.TCPV4)
+  module C = Mirage_channel.Make(Slirp_stack.Client.TCPV4)
 end
 module Incoming = struct
-  module C = Mirage_channel_lwt.Make(Host.Sockets.Stream.Tcp)
+  module C = Mirage_channel.Make(Host.Sockets.Stream.Tcp)
 end
 
 let request = "Hello there"

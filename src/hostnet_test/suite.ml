@@ -135,7 +135,7 @@ module DevNullServer = struct
   }
 
   let accept flow =
-    let module Channel = Mirage_channel_lwt.Make(Host.Sockets.Stream.Tcp) in
+    let module Channel = Mirage_channel.Make(Host.Sockets.Stream.Tcp) in
     let ch = Channel.create flow in
     (* XXX: this looks like it isn't tail recursive to me *)
     let rec drop_all_data count =

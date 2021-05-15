@@ -123,7 +123,7 @@ module Client = struct
     Udp1.connect ipv4 >>= fun udp4 ->
     Tcp1.connect ipv4 clock >>= fun tcp4 ->
     let cfg = {
-      Mirage_stack_lwt.name = "stackv4_ip";
+      Mirage_stack.name = "stackv4_ip";
       interface;
     } in
     connect cfg ethif arp ipv4 icmpv4 udp4 tcp4
