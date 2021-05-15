@@ -2,7 +2,7 @@
  (name main)
  (libraries cmdliner ofs logs.fmt hostnet hvsock hvsock.lwt
    fd-send-recv duration mirage-clock-unix mirage-random
-   fs9p)
+   fs9p mirage-random-stdlib)
  (flags
   :standard
   (:include flags.sexp))

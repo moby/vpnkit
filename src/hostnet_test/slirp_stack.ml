@@ -67,7 +67,7 @@ end
 module VMNET = Vmnet.Make(Host.Sockets.Stream.Tcp)
 module Vnet = Basic_backend.Make
 module Slirp_stack =
-  Slirp.Make(VMNET)(Dns_policy)(Mclock)(Stdlibrandom)(Vnet)
+  Slirp.Make(VMNET)(Dns_policy)(Mclock)(Mirage_random_stdlib)(Vnet)
 
 module Client = struct
   module Netif = VMNET
@@ -97,10 +97,10 @@ module Client = struct
               Lwt.return_unit
         end
   end
-  module Udp1 = Udp.Make(Ipv41)(Stdlibrandom)
-  module Tcp1 = Tcp.Flow.Make(Ipv41)(Host.Time)(Mclock)(Stdlibrandom)
+  module Udp1 = Udp.Make(Ipv41)(Mirage_random_stdlib)
+  module Tcp1 = Tcp.Flow.Make(Ipv41)(Host.Time)(Mclock)(Mirage_random_stdlib)
   include Tcpip_stack_direct.Make(Host.Time)
-      (Stdlibrandom)(Netif)(Ethif1)(Arpv41)(Ipv41)(Icmpv41)(Udp1)(Tcp1)
+      (Mirage_random_stdlib)(Netif)(Ethif1)(Arpv41)(Ipv41)(Icmpv41)(Udp1)(Tcp1)
 
   let or_error name m =
     m >>= function
