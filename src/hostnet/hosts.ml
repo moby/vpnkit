@@ -34,10 +34,10 @@ let of_string txt =
           match String.fields ~empty:false ~is_sep:whitespace line with
           | addr :: names ->
             begin match Ipaddr.of_string addr with
-            | Some addr -> List.map (fun name -> (name, addr)) names @ acc
-            | None ->
+            | Ok addr -> List.map (fun name -> (name, addr)) names @ acc
+            | Error (`Msg m) ->
               Log.err (fun f ->
-                  f "Failed to parse address '%s' from hosts file" addr);
+                  f "Failed to parse address '%s' from hosts file: %s" addr m);
               acc
             end
           | _ -> acc
