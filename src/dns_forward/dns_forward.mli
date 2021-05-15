@@ -271,7 +271,6 @@ module Resolver: sig
 
   module type S = sig
     type t
-    type clock
     type address = Config.Address.t
 
     type message_cb = ?src:address -> ?dst:address -> buf:Cstruct.t -> unit -> unit Lwt.t
@@ -283,7 +282,7 @@ module Resolver: sig
       ?local_names_cb:(Dns.Packet.question -> Dns.Packet.rr list option Lwt.t) ->
       gen_transaction_id:(int -> int) ->
       ?message_cb:message_cb ->
-      Config.t -> clock -> t Lwt.t
+      Config.t -> t Lwt.t
     (** Construct a resolver given some configuration *)
 
     val destroy: t -> unit Lwt.t
@@ -301,7 +300,7 @@ module Resolver: sig
       (Client: Rpc.Client.S)
       (Time  : Mirage_time.S)
       (Clock : Mirage_clock.MCLOCK):
-    S with type clock = Clock.t
+    S
   (** Construct a DNS resolver which will use the given [Client] Implementation
       to contact upstream servers, and the given [Time] implementation to handle
       timeouts. *)

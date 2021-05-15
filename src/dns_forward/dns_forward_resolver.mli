@@ -21,4 +21,4 @@ module Make
     (Client: Dns_forward_s.RPC_CLIENT)
     (Time: Mirage_time.S)
     (Clock: Mirage_clock.MCLOCK):
-  S with type clock = Clock.t
+  S

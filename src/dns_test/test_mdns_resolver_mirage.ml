@@ -213,7 +213,7 @@ module MockStack = struct
   let listen t = return_unit
 
   let connect id =
-    let { Mirage_stack_lwt.interface = netif; _ } = id in
+    let { Mirage_stack.interface = netif; _ } = id in
     let udpv4_listeners = Hashtbl.create 7 in
     let ethif = () in
     StubIpv4.connect ethif >>= fun ipv4 ->
@@ -230,7 +230,7 @@ end
 let create_stack_lwt () =
   let interface = () in
   let config = {
-    Mirage_stack_lwt.name = "mockstack";
+    Mirage_stack.name = "mockstack";
     interface;
   } in
   MockStack.connect config
@@ -281,7 +281,7 @@ let tests =
     "gethostbyname-fail" >:: (fun test_ctxt ->
         let stack = create_stack () in
         (* This mock Time module simulates a time-out *)
-        let module T : Mirage_time_lwt.S = struct
+        let module T : Mirage_time.S = struct
           type 'a io = 'a Lwt.t
           let sleep_ns _t = return_unit
         end in
@@ -300,7 +300,7 @@ let tests =
         let stack = create_stack () in
         let u = MockStack.udpv4 stack in
         let cond = Lwt_condition.create () in
-        let module T : Mirage_time_lwt.S = struct
+        let module T : Mirage_time.S = struct
           type 'a io = 'a Lwt.t
           let sleep_ns t = Lwt_condition.wait cond
         end in
@@ -334,7 +334,7 @@ let tests =
         let stack = create_stack () in
         let u = MockStack.udpv4 stack in
         let cond = Lwt_condition.create () in
-        let module T : Mirage_time_lwt.S = struct
+        let module T : Mirage_time.S = struct
           type 'a io = 'a Lwt.t
           let sleep_ns t = Lwt_condition.wait cond
         end in
@@ -387,7 +387,7 @@ let tests =
         let stack = create_stack () in
         let u = MockStack.udpv4 stack in
         let cond = Lwt_condition.create () in
-        let module T : Mirage_time_lwt.S = struct
+        let module T : Mirage_time.S = struct
           type 'a io = 'a Lwt.t
           let sleep_ns t = Lwt_condition.wait cond
         end in
@@ -424,7 +424,7 @@ let tests =
         let stack = create_stack () in
         let u = MockStack.udpv4 stack in
         let cond = Lwt_condition.create () in
-        let module T : Mirage_time_lwt.S = struct
+        let module T : Mirage_time.S = struct
           type 'a io = 'a Lwt.t
           let sleep t = Lwt_condition.wait cond
         end in
