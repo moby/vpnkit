@@ -1078,7 +1078,6 @@ module Files = struct
 end
 
 module Time = struct
-  type 'a io = 'a Lwt.t
   let sleep_ns x = Uwt.Timer.sleep (Duration.to_ms x)
 end
 
@@ -1096,8 +1095,8 @@ module Dns = struct
       List.fold_left (fun acc addr_info -> match addr_info.Uwt.Dns.ai_addr with
         | Unix.ADDR_INET(ip, _) ->
           begin match Ipaddr.of_string @@ Unix.string_of_inet_addr ip with
-          | Some ip -> ip :: acc
-          | None -> acc
+          | Ok ip -> ip :: acc
+          | Error _ -> acc
           end
         | _ -> acc
         ) [] x
