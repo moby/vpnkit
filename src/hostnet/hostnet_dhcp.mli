@@ -1,7 +1,7 @@
-module Make  (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S): sig
+module Make  (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S): sig
   type t
 
-  val make: configuration:Configuration.t -> Clock.t -> Netif.t -> t
+  val make: configuration:Configuration.t -> Netif.t -> t
   (** Create a DHCP server. *)
 
   val callback: t -> Cstruct.t -> unit Lwt.t
