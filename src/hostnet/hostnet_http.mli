@@ -11,9 +11,9 @@ module Exclude: sig
 end
 
 module Make
-    (Ip: Mirage_protocols_lwt.IPV4)
-    (Udp: Mirage_protocols_lwt.UDPV4)
-    (Tcp: Mirage_flow_lwt.SHUTDOWNABLE)
+    (Ip: Mirage_protocols.IPV4)
+    (Udp: Mirage_protocols.UDPV4)
+    (Tcp: Mirage_flow_combinators.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS) :
 sig

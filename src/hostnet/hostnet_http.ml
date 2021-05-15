@@ -37,14 +37,14 @@ module Exclude = struct
 
     let of_string s =
       match Ipaddr.V4.Prefix.of_string s with
-      | None ->
+      | Error _ ->
         begin match Ipaddr.V4.of_string s with
-        | None ->
+        | Error _ ->
           let bits = Astring.String.cuts ~sep:"." s in
           Subdomain (List.map Element.of_string bits)
-        | Some ip -> IP ip
+        | Ok ip -> IP ip
         end
-      | Some prefix -> CIDR prefix
+      | Ok prefix -> CIDR prefix
 
     let to_string = function
     | Subdomain x ->
@@ -70,8 +70,8 @@ module Exclude = struct
 
     let matches thing exclude =
       match Ipaddr.V4.of_string thing with
-      | None -> matches_host thing exclude
-      | Some ip -> matches_ip ip exclude
+      | Error _ -> matches_host thing exclude
+      | Ok ip -> matches_ip ip exclude
   end
 
   type t = One.t list
@@ -108,9 +108,9 @@ let error_html title body =
 " title body
 
 module Make
-    (Ip: Mirage_protocols_lwt.IPV4)
-    (Udp: Mirage_protocols_lwt.UDPV4)
-    (Tcp:Mirage_flow_lwt.SHUTDOWNABLE)
+    (Ip: Mirage_protocols.IPV4)
+    (Udp: Mirage_protocols.UDPV4)
+    (Tcp:Mirage_flow_combinators.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
 = struct
@@ -156,7 +156,7 @@ module Make
 
   let resolve_ip name_or_ip =
     match Ipaddr.of_string name_or_ip with
-    | None ->
+    | Error _ ->
       let open Dns.Packet in
       let question =
         make_question ~q_class:Q_IN Q_A (Dns.Name.of_string name_or_ip)
@@ -170,7 +170,7 @@ module Make
         | _ :: rest -> find_ip rest
         | [] -> errorf "Failed to lookup host: %s" name_or_ip in
       find_ip rrs
-    | Some x -> Lwt.return (Ok x)
+    | Ok x -> Lwt.return (Ok x)
 
   let to_json t =
     let open Ezjsonm in
@@ -222,13 +222,13 @@ module Make
     Lwt.return (Ok t)
 
   module Incoming = struct
-    module C = Mirage_channel_lwt.Make(Tcp)
+    module C = Mirage_channel.Make(Tcp)
     module IO = Cohttp_mirage_io.Make(C)
     module Request = Cohttp.Request.Make(IO)
     module Response = Cohttp.Response.Make(IO)
   end
   module Outgoing = struct
-    module C = Mirage_channel_lwt.Make(Socket.Stream.Tcp)
+    module C = Mirage_channel.Make(Socket.Stream.Tcp)
     module IO = Cohttp_mirage_io.Make(C)
     module Request = Cohttp.Request.Make(IO)
     module Response = Cohttp.Response.Make(IO)
