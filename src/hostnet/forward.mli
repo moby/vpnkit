@@ -7,9 +7,9 @@ module Port : sig
 end
 
 module Make
-    (Clock: Mirage_clock_lwt.MCLOCK)
+    (Clock: Mirage_clock.MCLOCK)
     (Connector: Sig.Connector)
     (Socket: Sig.SOCKETS):
-  Active_list.Instance with type clock = Clock.t
+  Active_list.Instance
 
 val set_allowed_addresses: Ipaddr.t list option -> unit
