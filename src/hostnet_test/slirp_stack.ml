@@ -75,7 +75,7 @@ module Client = struct
   module Arpv41 = Arp.Make(Ethif1)(Host.Time)
 
   module Dhcp_client_mirage1 = Dhcp_client_mirage.Make(Mirage_random_stdlib)(Host.Time)(Netif)
-  module Ipv41 = Dhcp_ipv4.Make(Dhcp_client_mirage1)(Mirage_random_stdlib)(Mclock)(Ethif1)(Arpv41)
+  module Ipv41 = Dhcp_ipv4.Make(Mirage_random_stdlib)(Mclock)(Host.Time)(Netif)(Ethif1)(Arpv41)
   module Icmpv41 = struct
     include Icmpv4.Make(Ipv41)
     let packets = Queue.create ()
@@ -116,8 +116,8 @@ module Client = struct
   let connect (interface: VMNET.t) =
     Ethif1.connect interface >>= fun ethif ->
     Arpv41.connect ethif >>= fun arp ->
-    Dhcp_client_mirage1.connect interface >>= fun dhcp ->
-    Ipv41.connect dhcp ethif arp >>= fun ipv4 ->
+    Dhcp_client_mirage1.connect interface >>= fun _dhcp ->
+    Ipv41.connect interface ethif arp >>= fun ipv4 ->
     Icmpv41.connect ipv4 >>= fun icmpv4 ->
     Udp1.connect ipv4 >>= fun udp4 ->
     Tcp1.connect ipv4 >>= fun tcp4 ->

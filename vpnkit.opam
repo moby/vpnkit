@@ -25,7 +25,6 @@ depends: [
   "dune" {build}
   "alcotest"
   "ounit"
-  "charrua-client-mirage" { = "1.2.2"}
   "result"
   "tar" {>= "1.0.1"}
   "ipaddr" {= "5.0.1"}
@@ -36,10 +35,9 @@ depends: [
   "cstruct" {= "5.2.0"}
   "pcap-format" {>= "0.4.0"}
   "cmdliner"
-  "charrua" {>= "1.2.2"}
+  "charrua" {>= "1.3.0"}
   "charrua-client"
   "charrua-server"
-  "charrua-client-mirage"
   "hvsock" {>= "2.0.0"}
   "fd-send-recv" {>= "2.0.0"}
   "logs"
