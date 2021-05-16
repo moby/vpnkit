@@ -466,7 +466,7 @@ struct
       Log.err (fun f -> f "%s unable to marshal response" (describe buf));
       Lwt.return (Ok ())
     | Ok (Some buffer) ->
-      Udp.write ~src_port:53 ~dst:src ~dst_port:src_port udp buffer
+      Udp.write ~src_port:53 (* ~src:dst *) ~dst:src ~dst_port:src_port udp buffer
 
   let handle_tcp ~t =
     (* FIXME: need to record the upstream request *)
