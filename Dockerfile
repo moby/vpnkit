@@ -23,12 +23,6 @@ ADD . /home/opam/vpnkit
 RUN opam pin add vpnkit /home/opam/vpnkit -n
 RUN opam depext vpnkit -y
 
-# Work around uri build failure (maybe remove when we update jbuilder/dune)
-ENV OPAMJOBS=1
-RUN opam install re.1.9.0
-RUN opam install uri.2.2.1
-ENV OPAMJOBS=8
-
 RUN opam install vpnkit -y
 
 FROM alpine:latest
