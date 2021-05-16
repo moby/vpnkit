@@ -7,7 +7,12 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module IPMap = Map.Make(Ipaddr.V4)
+module IPMap = Map.Make(struct
+  type t = Ipaddr.V4.t * Ipaddr.V4.t
+  let compare (a, c) (b, d) =
+    let x = Ipaddr.V4.compare a b in
+    if x <> 0 then x else Ipaddr.V4.compare c d
+  end)
 
 (* When forwarding TCP, the connection is proxied so the MTU/MSS is
    link-local.  When forwarding UDP, the datagram on the internal link
@@ -241,7 +246,7 @@ struct
       icmpv4:                   Stack_icmpv4.t;
       udp4:                     Stack_udp.t;
       tcp4:                     Stack_tcp.t;
-      ip:                       Ipaddr.V4.t;
+      remote:                   Ipaddr.V4.t;
       mtu:                      int;
       mutable pending:          Tcp.Id.Set.t;
       mutable last_active_time_ns: int64;
@@ -255,12 +260,13 @@ struct
 
     let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns ()) t.last_active_time_ns
 
-    let create recorder switch arp_table ip mtu =
-      let netif = Switch.port switch ip in
+    let create recorder switch arp_table remote local mtu =
+      let netif = Switch.port switch remote in
       Stack_ethif.connect netif >>= fun ethif ->
       Stack_arpv4.connect ~table:arp_table ethif |>fun arp ->
       Stack_ipv4.connect
-        ~cidr:Ipaddr.V4.Prefix.global
+        ~cidr:(Ipaddr.V4.Prefix.of_addr remote)
+        ~gateway:local
         ethif arp
       >>= fun ipv4 ->
       Stack_icmpv4.connect ipv4 >>= fun icmpv4 ->
@@ -271,7 +277,7 @@ struct
       let last_active_time_ns = Clock.elapsed_ns () in
       let established = Tcp.Id.Set.empty in
       let tcp_stack =
-        { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; ip; mtu; pending;
+        { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; remote; mtu; pending;
           last_active_time_ns; established }
       in
       Lwt.return tcp_stack
@@ -790,9 +796,9 @@ struct
     let endpoints =
       let xs =
         IPMap.fold
-          (fun ip t acc ->
-             Fmt.strf "%a last_active_time = %s"
-               Ipaddr.V4.pp ip
+          (fun (remote, local) t acc ->
+             Fmt.strf "%a <-> %a last_active_time = %s"
+               Ipaddr.V4.pp remote Ipaddr.V4.pp local
                (Duration.pp Format.str_formatter (Endpoint.idle_time t); Format.flush_str_formatter ())
              :: acc
           ) t.endpoints [] in
@@ -956,20 +962,20 @@ struct
       let max_age = Duration.of_sec port_max_idle_time in
       Lwt_mutex.with_lock t.endpoints_m
         (fun () ->
-          let old_ips = IPMap.fold (fun ip endpoint acc ->
+          let old_ips = IPMap.fold (fun (remote, local) endpoint acc ->
               let idle_time = Endpoint.idle_time endpoint in
               if idle_time > max_age then begin
-                Log.info (fun f -> f "expiring endpoint %s with idle time %s > %s"
-                  (Ipaddr.V4.to_string ip)
+                Log.info (fun f -> f "expiring endpoint %a <-> %a with idle time %s > %s"
+                  Ipaddr.V4.pp remote Ipaddr.V4.pp local
                   (Duration.pp Format.str_formatter idle_time; Format.flush_str_formatter ())
                   (Duration.pp Format.str_formatter max_age; Format.flush_str_formatter ())
                 );
-                (ip, endpoint) :: acc
+                ((remote, local), endpoint) :: acc
               end else acc
             ) t.endpoints [] in
-          Lwt_list.iter_s (fun (ip, endpoint) ->
-              Switch.remove t.switch ip;
-              t.endpoints <- IPMap.remove ip t.endpoints;
+          Lwt_list.iter_s (fun ((remote, local), endpoint) ->
+              Switch.remove t.switch remote;
+              t.endpoints <- IPMap.remove (remote, local) t.endpoints;
               Endpoint.destroy endpoint
             ) old_ips
         )
@@ -1043,15 +1049,15 @@ struct
     } in
     Lwt.async @@ delete_unused_endpoints ~port_max_idle_time:c.Configuration.port_max_idle_time t;
 
-    let find_endpoint ip =
+    let find_endpoint (remote, local) =
       Lwt_mutex.with_lock t.endpoints_m
         (fun () ->
-           if IPMap.mem ip t.endpoints
-           then Lwt.return (Ok (IPMap.find ip t.endpoints))
+           if IPMap.mem (remote, local) t.endpoints
+           then Lwt.return (Ok (IPMap.find (remote, local) t.endpoints))
            else begin
-             Endpoint.create interface switch local_arp_table ip c.Configuration.mtu
+             Endpoint.create interface switch local_arp_table remote local c.Configuration.mtu
              >|= fun endpoint ->
-             t.endpoints <- IPMap.add ip endpoint t.endpoints;
+             t.endpoints <- IPMap.add (remote, local) endpoint t.endpoints;
              Ok endpoint
            end
         ) in
@@ -1067,7 +1073,7 @@ struct
         then c.Configuration.host_ip
         else src in
       begin
-        find_endpoint src >>= function
+        find_endpoint (src, dst) >>= function
         | Error (`Msg m) ->
           Log.err (fun f ->
               f "Failed to create an endpoint for %a: %s" Ipaddr.V4.pp dst m);
@@ -1090,7 +1096,7 @@ struct
 
     (* Send an ICMP datagram *)
     let send_reply ~src ~dst ~payload =
-      find_endpoint src >>= function
+      find_endpoint (src, dst) >>= function
       | Error (`Msg m) ->
           Log.err (fun f ->
               f "Failed to create an endpoint for %a: %s" Ipaddr.V4.pp dst m);
@@ -1177,7 +1183,7 @@ struct
           end
           >>= fun arp ->
           Global_arp.input arp (Cstruct.shift buf Ethernet_wire.sizeof_ethernet)
-        | Ok (Ethernet { payload = Ipv4 ({ dst; _ } as ipv4 ); _ }) ->
+        | Ok (Ethernet { payload = Ipv4 ({ src; dst; _ } as ipv4 ); _ }) ->
           (* For any new IP destination, create a stack to proxy for
             the remote system *)
           let localhost_ips =
@@ -1187,7 +1193,7 @@ struct
           if dst = c.Configuration.gateway_ip then begin
             begin
               let open Lwt_result.Infix in
-              find_endpoint dst >>= fun endpoint ->
+              find_endpoint (dst, src)  >>= fun endpoint ->
               Log.debug (fun f ->
                   f "creating gateway TCP/IP proxy for %a" Ipaddr.V4.pp dst);
               (* The default Udp_nat instance doesn't work for us because
@@ -1203,7 +1209,7 @@ struct
                   Log.err (fun f -> f "Failed to write an IPv6 UDP datagram to: %a" Ipaddr.V6.pp ipv6);
                   Lwt.return_unit
                 | { Hostnet_udp.src = _, src_port; dst = Ipaddr.V4 dst, dst_port; payload; _ } ->
-                  begin find_endpoint c.Configuration.gateway_ip
+                  begin find_endpoint (c.Configuration.gateway_ip, src)
                   >>= function
                   | Error (`Msg m) ->
                     Log.err (fun f -> f "%s" m);
@@ -1231,7 +1237,7 @@ struct
           end else if dst = c.Configuration.host_ip && Ipaddr.V4.(compare unspecified c.Configuration.host_ip <> 0) then begin
             begin
               let open Lwt_result.Infix in
-              find_endpoint dst >>= fun endpoint ->
+              find_endpoint (dst, src) >>= fun endpoint ->
               Log.debug (fun f ->
                   f "creating localhost TCP/IP proxy for %a" Ipaddr.V4.pp dst);
               Localhost.create endpoint udp_nat localhost_ips
@@ -1249,7 +1255,7 @@ struct
           end else begin
             begin
               let open Lwt_result.Infix in
-              find_endpoint dst >>= fun endpoint ->
+              find_endpoint (dst, src) >>= fun endpoint ->
               Log.debug (fun f ->
                   f "create remote TCP/IP proxy for %a" Ipaddr.V4.pp dst);
               Remote.create endpoint udp_nat icmp_nat
