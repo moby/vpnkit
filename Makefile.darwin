@@ -9,7 +9,7 @@ vpnkit.exe:
 	opam exec -- dune build --profile release
 
 depends:
-	opam install vpnkit charrua-client-mirage alcotest -y
+	opam install vpnkit alcotest -y
 
 ocaml:
 	ocaml -version || opam init --compiler=4.12.0
