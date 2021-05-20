@@ -729,7 +729,7 @@ module Make
                 | `Invalid x ->
                   Log.warn (fun f ->
                       f "Failed to parse HTTP request on port %a:80: %s"
-                        Ipaddr.V4.pp_hum dst x);
+                        Ipaddr.V4.pp dst x);
                   Lwt.return_unit
                 | `Ok req ->
                   (* If there is no Host: header or host in the URI then add a

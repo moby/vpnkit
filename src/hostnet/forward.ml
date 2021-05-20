@@ -33,9 +33,9 @@ module Port = struct
 
   let to_string = function
     | `Tcp (ip, port) ->
-      Fmt.strf "tcp:%a:%d" Ipaddr.pp_hum ip port
+      Fmt.strf "tcp:%a:%d" Ipaddr.pp ip port
     | `Udp (ip, port) ->
-      Fmt.strf "udp:%a:%d" Ipaddr.pp_hum ip port
+      Fmt.strf "udp:%a:%d" Ipaddr.pp ip port
     | `Unix path ->
       Fmt.strf "unix:%s" (Base64.encode_exn path)
 
@@ -295,7 +295,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
     match t.local with
     | `Tcp (local_ip, local_port) ->
       let description =
-        Fmt.strf "forwarding from tcp:%a:%d" Ipaddr.pp_hum local_ip local_port
+        Fmt.strf "forwarding from tcp:%a:%d" Ipaddr.pp local_ip local_port
       in
       Lwt.catch (fun () ->
           check_bind_allowed local_ip  >>= fun () ->
@@ -315,20 +315,20 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
         ) (function
         | Unix.Unix_error(Unix.EADDRINUSE, _, _) ->
           errorf' "Bind for %a:%d failed: port is already allocated"
-            Ipaddr.pp_hum local_ip local_port
+            Ipaddr.pp local_ip local_port
         | Unix.Unix_error(Unix.EADDRNOTAVAIL, _, _) ->
           errorf' "listen tcp %a:%d: bind: cannot assign requested address"
-            Ipaddr.pp_hum local_ip local_port
+            Ipaddr.pp local_ip local_port
         | Unix.Unix_error(Unix.EPERM, _, _) ->
           errorf' "Bind for %a:%d failed: permission denied"
-            Ipaddr.pp_hum local_ip local_port
+            Ipaddr.pp local_ip local_port
         | e ->
-          errorf' "Bind for %a:%d: unexpected error %a" Ipaddr.pp_hum local_ip
+          errorf' "Bind for %a:%d: unexpected error %a" Ipaddr.pp local_ip
             local_port Fmt.exn e
         )
     | `Udp (local_ip, local_port) ->
       let description =
-        Fmt.strf "forwarding from udp:%a:%d" Ipaddr.pp_hum local_ip local_port
+        Fmt.strf "forwarding from udp:%a:%d" Ipaddr.pp local_ip local_port
       in
       Lwt.catch (fun () ->
           check_bind_allowed local_ip >>= fun () ->
@@ -348,15 +348,15 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
         ) (function
         | Unix.Unix_error(Unix.EADDRINUSE, _, _) ->
           errorf' "Bind for %a:%d failed: port is already allocated"
-            Ipaddr.pp_hum local_ip local_port
+            Ipaddr.pp local_ip local_port
         | Unix.Unix_error(Unix.EADDRNOTAVAIL, _, _) ->
           errorf' "listen udp %a:%d: bind: cannot assign requested address"
-            Ipaddr.pp_hum local_ip local_port
+            Ipaddr.pp local_ip local_port
         | Unix.Unix_error(Unix.EPERM, _, _) ->
           errorf' "Bind for %a:%d failed: permission denied"
-            Ipaddr.pp_hum local_ip local_port
+            Ipaddr.pp local_ip local_port
         | e ->
-          errorf' "Bind for %a:%d: unexpected error %a" Ipaddr.pp_hum local_ip
+          errorf' "Bind for %a:%d: unexpected error %a" Ipaddr.pp local_ip
             local_port Fmt.exn e
         )
     | `Unix path ->

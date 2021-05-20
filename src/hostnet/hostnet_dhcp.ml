@@ -158,7 +158,7 @@ module Make (Clock: Mirage_clock_lwt.MCLOCK) (Netif: Mirage_net_lwt.S) = struct
           then Log.info (fun f ->
               f "%s to %s yiddr %a siddr %a dns %s router %s domain %s"
                 (op_to_string reply.op) (Macaddr.to_string (reply.dstmac))
-                Ipaddr.V4.pp_hum reply.yiaddr Ipaddr.V4.pp_hum reply.siaddr
+                Ipaddr.V4.pp reply.yiaddr Ipaddr.V4.pp reply.siaddr
                 dns routers domain
             );
           logged_bootreply :=

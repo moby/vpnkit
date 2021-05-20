@@ -1,0 +1,29 @@
+$ORIGIN local.
+$TTL 4500
+
+fake1.local.            4500    IN  A   127.0.0.94
+fake2.local.            4500    IN  A   127.0.0.95
+fake3.local.            4500    IN  A   127.0.0.96
+fake4.local.            4500    IN  CNAME   fake1.local.
+
+router1                 120     IN  A   192.168.2.1
+laptop1                 120     IN  A   192.168.2.101
+mirage1                 120     IN  A   10.0.0.2
+
+; RFC 2782 service record
+_foobar._tcp            120     IN  SRV 0   0   9    fake1.local.
+
+; RFC 6763 (DNS-SD) service instances
+Tiger._snake._tcp           120     IN  SRV 0   0   33333   fake1.local.
+Dugite._snake._tcp          120     IN  SRV 0   0   33333   fake2.local.
+King\032Brown._snake._tcp     120     IN  SRV 0   0   33333   fake3.local.
+
+Tiger._snake._tcp           120     IN  TXT "txtvers=1" "species=Notechis scutatus"
+Dugite._snake._tcp          120     IN  TXT "txtvers=1" "species=Pseudonaja affinis"
+King\032Brown._snake._tcp     120     IN  TXT "txtvers=1" "species=Pseudechis australis"
+
+; RFC 6763 service pointers
+_snake._tcp             120     IN  PTR Tiger._snake._tcp.local.
+_snake._tcp             120     IN  PTR Dugite._snake._tcp.local.
+_snake._tcp             120     IN  PTR King\032Brown._snake._tcp.local.
+

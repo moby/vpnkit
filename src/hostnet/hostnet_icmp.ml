@@ -151,7 +151,7 @@ module Make
           end else begin
             Log.debug (fun f ->
               f "ICMP dropping (%a, %d) %a"
-              Ipaddr.V4.pp_hum src id Cstruct.hexdump_pp raw);
+              Ipaddr.V4.pp src id Cstruct.hexdump_pp raw);
             Lwt.return_true
           end
         | Ok { src=src'; dst=dst'; payload = Frame.Icmp { raw = icmp_buffer; icmp = Frame.Time_exceeded { ipv4 = Ok { src; dst; raw = original_ipv4; payload = Frame.Icmp { raw = original_icmp; icmp = Frame.Echo { id; _ }; _ }; _ }; _ }; _ }; _ } ->
@@ -174,10 +174,10 @@ module Make
             try_to_send ~src:src' ~dst:(fst flow.virt) ~payload:icmp_buffer
           end else begin
             Log.debug (fun f -> f "Dropping TTL exceeded src' = %a dst' = %a; src = %a; dst = %a; id = %d"
-              Ipaddr.V4.pp_hum src'
-              Ipaddr.V4.pp_hum dst'
-              Ipaddr.V4.pp_hum src
-              Ipaddr.V4.pp_hum dst
+              Ipaddr.V4.pp src'
+              Ipaddr.V4.pp dst'
+              Ipaddr.V4.pp src
+              Ipaddr.V4.pp dst
               id
             );
             Lwt.return_true
@@ -200,10 +200,10 @@ module Make
               Lwt.return_true
           end else begin
             Log.debug (fun f -> f "Dropping TTL exceeded src' = %a dst' = %a; src = %a:%d; dst = %a:%d"
-              Ipaddr.V4.pp_hum src'
-              Ipaddr.V4.pp_hum dst'
-              Ipaddr.V4.pp_hum src src_port
-              Ipaddr.V4.pp_hum dst dst_port
+              Ipaddr.V4.pp src'
+              Ipaddr.V4.pp dst'
+              Ipaddr.V4.pp src src_port
+              Ipaddr.V4.pp dst dst_port
             );
             Lwt.return_true
           end
@@ -213,7 +213,7 @@ module Make
         | Ok { payload = Frame.Icmp { icmp = Frame.Time_exceeded { ipv4 = Ok { src; dst; payload = Frame.Tcp { src = src_port; dst = dst_port; _ }; _ }; _ }; _ }; _ } ->
           (* TODO: implement for TCP *)
           Log.debug (fun f -> f "Dropping TTL exceeeded for TCP %a:%d -> %a%d"
-            Ipaddr.V4.pp_hum src src_port Ipaddr.V4.pp_hum dst dst_port
+            Ipaddr.V4.pp src src_port Ipaddr.V4.pp dst dst_port
           );
           Lwt.return_true
         | Ok { payload = Frame.Icmp { icmp = Frame.Time_exceeded _; _ }; _ } ->
@@ -243,7 +243,7 @@ module Make
   let input ~t ~datagram:{src; dst; ty; code; id; seq; payload} ~ttl () =
     Log.debug (fun f ->
       f "ICMP received %a -> %a ttl=%d ty=%d code=%d id=%d seq=%d payload len %d"
-        Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum dst
+        Ipaddr.V4.pp src Ipaddr.V4.pp dst
         ttl ty code id seq (Cstruct.len payload));
     match Icmpv4_wire.int_to_ty ty with
       | None ->

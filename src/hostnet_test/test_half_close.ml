@@ -50,7 +50,7 @@ let unit = function
 let flow ip port = function
 | Ok flow -> flow
 | Error _ ->
-  Log.err (fun f -> f "Failed to connect to %a:%d" Ipaddr.V4.pp_hum ip port);
+  Log.err (fun f -> f "Failed to connect to %a:%d" Ipaddr.V4.pp ip port);
   failwith "Client.TCPV4.create_connection"
 
 (* Run a simple server on localhost and connect to it via vpnkit.
@@ -86,7 +86,7 @@ let test_mirage_half_close () =
         let port = server.Server.port in
         Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
         >|= flow ip port >>= fun flow ->
-        Log.info (fun f -> f "Connected to %a:%d" Ipaddr.V4.pp_hum ip port);
+        Log.info (fun f -> f "Connected to %a:%d" Ipaddr.V4.pp ip port);
         let oc = Outgoing.C.create flow in
         Outgoing.C.write_line oc request;
         Outgoing.C.flush oc >|= unit >>= fun () ->
@@ -142,7 +142,7 @@ let test_host_half_close () =
         let port = server.Server.port in
         Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
         >|= flow ip port >>= fun flow ->
-        Log.info (fun f -> f "Connected to %a:%d" Ipaddr.V4.pp_hum ip port);
+        Log.info (fun f -> f "Connected to %a:%d" Ipaddr.V4.pp ip port);
         let oc = Outgoing.C.create flow in
         (* Read the request *)
         Outgoing.C.read_line oc >|= data >>= fun bufs ->

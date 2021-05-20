@@ -282,7 +282,7 @@ module Sockets = struct
 
       let bind ?(description="") (ip, port) =
         let description =
-          Fmt.strf "udp:%a:%d %s" Ipaddr.pp_hum ip port description
+          Fmt.strf "udp:%a:%d %s" Ipaddr.pp ip port description
         in
         let sockaddr = make_sockaddr(ip, port) in
         register_connection description >>= fun idx ->
@@ -300,7 +300,7 @@ module Sockets = struct
         if not(Uwt.Int_result.is_ok result) then begin
           let error = Uwt.Int_result.to_error result in
           Log.debug (fun f ->
-              f "Socket.%s.bind(%a, %d): %s" t.label Ipaddr.pp_hum ip port
+              f "Socket.%s.bind(%a, %d): %s" t.label Ipaddr.pp ip port
                 (Uwt.strerror error));
           deregister_connection idx;
           Lwt.fail (Unix.Unix_error(Uwt.to_unix_error error, "bind", ""))
@@ -313,7 +313,7 @@ module Sockets = struct
           | Uwt.Ok sockaddr ->
             begin match ip_port_of_sockaddr sockaddr with
             | Some (ip, port) ->
-              Fmt.strf "udp:%a:%d" Ipaddr.pp_hum ip port,
+              Fmt.strf "udp:%a:%d" Ipaddr.pp ip port,
               begin match ip with
               | Ipaddr.V4 _ -> "UDPv4"
               | Ipaddr.V6 _ -> "UDPv6"
@@ -456,7 +456,7 @@ module Sockets = struct
         { idx; label; description; fd; read_buffer; read_buffer_size; closed }
 
       let connect ?(read_buffer_size = default_read_buffer_size) (ip, port) =
-        let description = Fmt.strf "tcp:%a:%d" Ipaddr.pp_hum ip port in
+        let description = Fmt.strf "tcp:%a:%d" Ipaddr.pp ip port in
         let label = match ip with
         | Ipaddr.V4 _ -> "TCPv4"
         | Ipaddr.V6 _ -> "TCPv6" in
@@ -626,7 +626,7 @@ module Sockets = struct
 
       let bind_one ?(description="") (ip, port) =
         let description =
-          Fmt.strf "tcp:%a:%d %s" Ipaddr.pp_hum ip port description
+          Fmt.strf "tcp:%a:%d %s" Ipaddr.pp ip port description
         in
         register_connection description >>= fun idx ->
         let fd =
@@ -660,7 +660,7 @@ module Sockets = struct
           end
         | Uwt.Error error ->
           let msg =
-            Fmt.strf "Socket.%s.bind(%a, %d): %s" label Ipaddr.pp_hum ip port
+            Fmt.strf "Socket.%s.bind(%a, %d): %s" label Ipaddr.pp ip port
               (Uwt.strerror error)
           in
           Log.debug (fun f -> f "Socket.%s.bind: %s" label msg);

@@ -23,27 +23,23 @@ build: [
 
 depends: [
   "dune" {build}
-  "alcotest"   {test}
+  "alcotest"
+  "ounit"
+  "charrua-client-mirage" { = "0.9"}
   "result"
   "tar" {>= "0.8.0"}
-  "ipaddr" {= "2.8.0"}
+  "ipaddr" {= "2.9.0"}
   "lwt" {= "5.4.0"}
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "3.3.0"}
-  "dns" {>= "0.19.1"}
-  "dns-lwt"
-  "dnssd" {>= "0.2"}
-  "dns-forward" {>= "0.10.0"}
   "base64" {>= "3.0.0"}
-  "cstruct" {= "3.2.1"}
-  "cstruct-lwt" {= "3.2.1"}
+  "cstruct" {= "3.7.0"}
+  "cstruct-lwt"
   "datakit-server" {>= "0.11.0"}
   "datakit-server-9p" {>= "0.11.0"}
-  "hashcons" {>= "1.0.1"}
   "pcap-format" {>= "0.4.0"}
   "cmdliner"
   "charrua-core" {>= "0.9"}
-  "charrua-client-mirage" {test & = "0.9"}
   "hvsock" {>= "2.0.0"}
   "fd-send-recv" {>= "2.0.0"}
   "logs"
@@ -60,7 +56,6 @@ depends: [
   "mirage-protocols" {>= "1.1.0"}
   "mirage-channel" {>= "3.0.1"}
   "cohttp-lwt" {>= "0.99.0"}
-  "mirage-dns"
   "protocol-9p" {>= "0.11.3"}
   "mirage-vnetif" {>= "0.4.0"}
   "uuidm"
@@ -72,5 +67,5 @@ depends: [
   "mirage-clock-unix" {= "2.0.0"}
   "mirage-random" {= "1.1.0"}
   "re" {= "1.9.0"}
-  "uri" {= "2.2.1"}
+  "uri" {= "4.1.0"}
 ]

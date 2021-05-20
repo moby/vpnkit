@@ -8,8 +8,8 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let pp_ips = Fmt.(list ~sep:(unit ", ") Ipaddr.pp_hum)
-let pp_ip4s = Fmt.(list ~sep:(unit ", ") Ipaddr.V4.pp_hum)
+let pp_ips = Fmt.(list ~sep:(unit ", ") Ipaddr.pp)
+let pp_ip4s = Fmt.(list ~sep:(unit ", ") Ipaddr.V4.pp)
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =

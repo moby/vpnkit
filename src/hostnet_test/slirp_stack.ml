@@ -34,7 +34,7 @@ module Dns_policy = struct
   module IntMap =
     Map.Make(struct
       type t = int let
-      compare (a: int) (b: int) = Pervasives.compare a b
+      compare (a: int) (b: int) = Stdlib.compare a b
     end)
 
   let t = ref (IntMap.add 0 google_dns IntMap.empty)
@@ -92,7 +92,7 @@ module Client = struct
             Lwt.return_unit
           | Id_and_seq (id, _) ->
             Log.info (fun f ->
-              f "ICMP src:%a dst:%a id:%d" Ipaddr.V4.pp_hum src Ipaddr.V4.pp_hum dst id);
+              f "ICMP src:%a dst:%a id:%d" Ipaddr.V4.pp src Ipaddr.V4.pp dst id);
               Queue.push (src, dst, id) packets;
               Lwt.return_unit
         end
