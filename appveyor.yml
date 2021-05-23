@@ -33,9 +33,9 @@ install:
 build_script:
   - "%CYG_SH% pwd"
   - "%CYG_SH% ls"
-  - "%CYG_SH% echo ${APPVEYOR_BUILD_FOLDER}"
-  - "%CYG_SH% cygpath --unix C:\\projects\\vpnkit"
-  - "%CYG_SH% make -C ${APPVEYOR_BUILD_FOLDER} -f Makefile.darwin COMMIT"
+  - '%CYG_SH% -c "echo ${APPVEYOR_BUILD_FOLDER}"'
+  - '%CYG_SH% cygpath C:\\projects\\vpnkit'
+  - '%CYG_SH% -c "make -C ${APPVEYOR_BUILD_FOLDER} -f Makefile.darwin COMMIT"'
   - "%CYG_SH% make -f Makefile.darwin ocaml"
   - "%CYG_SH% make -f Makefile.darwin depends"
   - "%CYG_SH% make -f Makefile.darwin build"
