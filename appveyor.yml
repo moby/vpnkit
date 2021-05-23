@@ -5,7 +5,7 @@ environment:
   CYG_ARCH: x86_64
   CYG_ROOT: C:/cygwin64
   CYG_CACHE: C:/cygwin64/var/cache/setup
-  CYG_SH: C:/cygwin64/bin/bash -lc
+  CYG_SH: C:/cygwin64/bin/bash -c
   CYG_INSTALL: C:/cygwin64/setup-x86_64.exe -q -P
   CYG_PATH: C:/cygwin64/bin/cygpath -u
   CYGWIN: "winsymlinks:native"
@@ -31,7 +31,6 @@ install:
   - cmd: echo Windows build is disabled until we can remove cygwin.
 
 build_script:
-  - ps: cd %BINDIR%
   - "%CYG_SH% pwd"
   - "%CYG_SH% ls"
   - "%CYG_SH% make -f Makefile.darwin ocaml"
