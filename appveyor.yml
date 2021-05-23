@@ -31,12 +31,12 @@ install:
   - cmd: echo Windows build is disabled until we can remove cygwin.
 
 build_script:
-  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' ocaml"
-  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' depends"
-  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' build"
-  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' artefacts"
-  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' COMMIT"
-  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' OSS-LICENSES"
+  - "%CYG_SH% make -f Makefile.darwin ocaml"
+  - "%CYG_SH% make -f Makefile.darwin depends"
+  - "%CYG_SH% make -f Makefile.darwin build"
+  - "%CYG_SH% make -f Makefile.darwin artefacts"
+  - "%CYG_SH% make -f Makefile.darwin COMMIT"
+  - "%CYG_SH% make -f Makefile.darwin OSS-LICENSES"
 
 artifacts:
   - path: "vpnkit.exe"
