@@ -36,7 +36,7 @@ build_script:
   - '%CYG_SH% -c "ls /usr/bin"'
   - '%CYG_SH% -c "ls /usr/local/bin"'
   - '%CYG_SH% -c "echo ${APPVEYOR_BUILD_FOLDER}"'
-  - "%CYG_SH% -c "/usr/bin/opam --version"'
+  - '%CYG_SH% -c "/usr/bin/opam --version"'
   - '%CYG_SH% -c "make -C ${APPVEYOR_BUILD_FOLDER} -f Makefile.darwin ocaml"'
   - '%CYG_SH% -c "make -C ${APPVEYOR_BUILD_FOLDER} -f Makefile.darwin depends"'
   - '%CYG_SH% -c "make -C ${APPVEYOR_BUILD_FOLDER} -f Makefile.darwin build"'
