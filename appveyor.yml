@@ -2,22 +2,43 @@ platform:
   - x64
 
 environment:
-  CYG_ROOT: "C:\\cygwin64"
-  CYG_CACHE: C:/cygwin64/var/cache/setup
-  CYG_MIRROR: http://mirrors.kernel.org/sourceware/cygwin/
-  CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
-  CYG_ARCH: "x86_64"
-  CYGWIN: "winsymlinks:native"
-  CUSTOM_OPAM: "1"
-  OPAM_COMP: "4.07.0+mingw64c"
-  OPAM_LINT: "false"
-  OPAMYES: 1
-  OPAMCOLORS: 1
-  OPAMVERBOSE: 1
-  BINDIR: 'C:\projects\vpnkit'
+  - CYG_ARCH: x86_64
+  - CYG_ROOT: C:/cygwin64
+  - CYG_CACHE: C:/cygwin64/var/cache/setup
+  - CYG_SH: C:/cygwin64/bin/bash -lc
+  - CYG_INSTALL: C:/cygwin64/setup-x86_64.exe -q -P
+  - CYG_PATH: C:/cygwin64/bin/cygpath -u
+  - CYGWIN: "winsymlinks:native"
+  - OPAMYES: 1
+  - OPAMCOLORS: 1
+  - OPAMVERBOSE: 1
+  - BINDIR: 'C:\projects\vpnkit'
+
+init:
+  - git config --global core.symlinks true
+  - git config --global core.autocrlf input
+  - '%CYG_SH% "cygcheck -dc cygwin"'
+  - '%CYG_INSTALL% "wget"'
+  - '%CYG_SH% "wget rawgit.com/transcode-open/apt-cyg/master/apt-cyg"'
+  - '%CYG_SH% "install apt-cyg /bin"'
+  - '%CYG_SH% "apt-cyg install make autoconf automake gcc-core opam-installer ocaml"'
+
+cache:
+  - '%CYG_CACHE%'
+  - '%HOME%/.opam' -> vpnkit.opam
 
 install:
   - cmd: echo Windows build is disabled until we can remove cygwin.
 
 build_script:
-  - "%CYG_BASH% '${APPVEYOR_BUILD_FOLDER}/scripts/appveyor.sh'"
+  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' ocaml"
+  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' depends"
+  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' build"
+  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' artefacts"
+  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' COMMIT"
+  - "%CYG_SH% make -f '${APPVEYOR_BUILD_FOLDER}/Makefile.darwin' OSS-LICENSES"
+
+artifacts:
+  - path: "vpnkit.exe"
+  - path: "OSS-LICENSES"
+  - path: "COMMIT"
