@@ -21,7 +21,7 @@ init:
   - '%CYG_INSTALL% "wget"'
   - '%CYG_SH% "wget rawgit.com/transcode-open/apt-cyg/master/apt-cyg"'
   - '%CYG_SH% "install apt-cyg /bin"'
-  - '%CYG_SH% "apt-cyg install make autoconf automake gcc-core opam-installer ocaml"'
+  - '%CYG_SH% "apt-cyg install make autoconf automake gcc-core opam ocaml"'
 
 cache:
   - '%CYG_CACHE%'
@@ -34,7 +34,6 @@ build_script:
   - "%CYG_SH% pwd"
   - "%CYG_SH% ls"
   - '%CYG_SH% -c "echo ${APPVEYOR_BUILD_FOLDER}"'
-  - '%CYG_SH% -c "ln -s /usr/bin/opam-installer.exe /usr/bin/opam.exe"'
   - '%CYG_SH% -c "make -C ${APPVEYOR_BUILD_FOLDER} -f Makefile.darwin ocaml"'
   - '%CYG_SH% -c "make -C ${APPVEYOR_BUILD_FOLDER} -f Makefile.darwin depends"'
   - '%CYG_SH% -c "make -C ${APPVEYOR_BUILD_FOLDER} -f Makefile.darwin build"'
