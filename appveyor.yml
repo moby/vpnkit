@@ -25,7 +25,7 @@ init:
 
 cache:
   - '%CYG_CACHE%'
-  - '%HOME%/.opam' -> vpnkit.opam
+  - '%HOME%\.opam -> vpnkit.opam'
 
 install:
   - cmd: echo Windows build is disabled until we can remove cygwin.
