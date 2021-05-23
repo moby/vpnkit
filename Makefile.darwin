@@ -16,7 +16,7 @@ ocaml:
 	opam init
 	# Can be removed after we upgrade tcpip
 	opam pin configurator --dev-repo -n
-	opam pin add luv.0.5.8 https://https://github.com/djs55/luv.git#mingw32-sa_family_t -n
+	opam pin add luv.0.5.8 https://github.com/djs55/luv.git#mingw32-sa_family_t -n
 	opam pin add luv_unix.0.5.8 https://github.com/djs55/luv.git#mingw32-sa_family_t -n
 	opam pin add tcpip.3.3.0 "https://github.com/djs55/mirage-tcpip.git#vpnkit-20210417" -n
 	opam pin add vpnkit . -n
