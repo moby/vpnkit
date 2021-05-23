@@ -5,7 +5,7 @@ environment:
   CYG_ARCH: x86_64
   CYG_ROOT: C:/cygwin64
   CYG_CACHE: C:/cygwin64/var/cache/setup
-  CYG_SH: C:/cygwin64/bin/bash -c
+  CYG_SH: C:/cygwin64/bin/bash -lc
   CYG_INSTALL: C:/cygwin64/setup-x86_64.exe -q -P
   CYG_PATH: C:/cygwin64/bin/cygpath -u
   CYGWIN: "winsymlinks:native"
@@ -33,6 +33,8 @@ install:
 build_script:
   - "%CYG_SH% pwd"
   - "%CYG_SH% ls"
+  - "%CYG_SH% cygpath --unix %BINDIR%"
+  - "%CYG_SH% make -C $(cygpath --unix %BINDIR%) -f Makefile.darwin COMMIT"
   - "%CYG_SH% make -f Makefile.darwin ocaml"
   - "%CYG_SH% make -f Makefile.darwin depends"
   - "%CYG_SH% make -f Makefile.darwin build"
