@@ -11,49 +11,7 @@ jobs:
       TERM: vt100
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
-      - checkout
-      - run: brew install wget
-      - run: brew install pkg-config
-      - run: brew install dylibbundler
-      - run: brew install opam
-      - run: brew install libtool
-      # Build the OCaml compiler
-      - restore_cache:
-           key: ocaml-cache-{{ checksum "Makefile.darwin"}}
-      - run: make -f Makefile.darwin ocaml
-      - save_cache:
-           paths:
-             - /Users/distiller/.opam
-           key: ocaml-cache-{{ checksum "Makefile.darwin"}}
-      # Build the OCaml dependencies, make sure the cache is cleared if the dependencies change.
-      - restore_cache:
-           key: depends-cache-{{ checksum "vpnkit.opam" }}-{{ checksum "Makefile.darwin"}}
-      - run: make -f Makefile.darwin depends
-      - save_cache:
-           paths:
-             - /Users/distiller/.opam
-           key: depends-cache-{{ checksum "vpnkit.opam" }}-{{ checksum "Makefile.darwin"}}
-      - run: make -f Makefile.darwin build
-      - run: make -f Makefile.darwin artefacts
-      - store_artifacts:
-          path: vpnkit.tgz
-      - run: make -f Makefile.darwin COMMIT
-      - store_artifacts:
-          path: COMMIT
-      # The {{ checksum }} only works for files, not directories
-      - run:
-          name: Generate cache key for OSS-LICENSES
-          command: git ls-tree HEAD repo -- repo | awk '{print $3}' > repo.hash
-      - restore_cache:
-          key: license-cache-{{ checksum "repo.hash" }}-{{ checksum "vpnkit.opam"}}
-      - run: make -f Makefile.darwin OSS-LICENSES
-      - save_cache:
-          paths:
-              - OSS-LICENSES
-          key: license-cache-{{ checksum "repo.hash" }}-{{ checksum "vpnkit.opam"}}
-      - store_artifacts:
-          path: OSS-LICENSES
-      - run: make -f Makefile.darwin test
+      - checkoutt
 
 workflows:
   version: 2
