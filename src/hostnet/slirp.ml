@@ -328,6 +328,14 @@ struct
                       f -> f "%s: connection in progress, ignoring duplicate \
                               SYN" (string_of_id id));
           Lwt.return_unit
+        end else if Tcp.Flow.mem id then begin
+          (* This can happen when receiving a retransmitted SYN.
+             Simply drop it. In many cases, it will be recovered by
+             our SYN+ACK retransmission. *)
+          Log.debug (fun
+                      f -> f "%s: old connection, ignoring duplicate \
+                              SYN" (string_of_id id));
+          Lwt.return_unit
         end else begin
           t.pending <- Tcp.Id.Set.add id t.pending;
           t.established <- Tcp.Id.Set.add id t.established;
