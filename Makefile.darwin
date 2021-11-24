@@ -16,10 +16,10 @@ ocaml:
 	# Can be removed after we upgrade tcpip
 	opam pin configurator --dev-repo -n
 	# Fix for Apple Silicon codesign issue
-	opam pin add omake "https://github.com/ocaml-omake/omake.git#gerd/disable-parallel-bootstrap" -n
+	opam pin add omake "https://github.com/ocaml-omake/omake.git#0e4aef74dfe005b4e880cd13c08f7c57fa4a030b" -n
 	# Fix for OCaml 4.12 build
 	opam pin add uwt "https://github.com/fdopen/uwt.git#c43349bf3689181756feb341e3896d4a0a695523" -n
-	opam pin add tcpip.3.3.0 "https://github.com/djs55/mirage-tcpip.git#vpnkit-20210417" -n
+	opam pin add tcpip.3.3.0 "https://github.com/djs55/mirage-tcpip.git#551a52855ffb6b794b582906fe1fc9c841e0d89b" -n
 	opam pin add vpnkit . -n
 
 artefacts: vpnkit.tgz
