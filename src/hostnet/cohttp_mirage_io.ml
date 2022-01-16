@@ -20,7 +20,7 @@
 open Lwt.Infix
 open Result
 
-module Make (Channel: Mirage_channel_lwt.S) = struct
+module Make (Channel: Mirage_channel.S) = struct
 
   type 'a t = 'a Lwt.t
   type ic = Channel.t

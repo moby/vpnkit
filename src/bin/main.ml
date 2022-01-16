@@ -253,7 +253,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   module type Forwarder = sig
     include Protocol_9p.Filesystem.S
-    val make: Mclock.t -> t
+    val make: unit -> t
   end
 
   (* Create one instance of the Active_list functor per-process. The list of
@@ -295,9 +295,8 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
     Log.info (fun f -> f "Starting port forwarding control 9P server on %s" port_control_url);
     let uri = Uri.of_string port_control_url in
-    Mclock.connect () >>= fun clock ->
     let module Ports = (val port_forwarder: Forwarder) in
-    let fs = Ports.make clock in
+    let fs = Ports.make () in
 
     match Uri.scheme uri with
     | Some ("hyperv-connect" | "hyperv-listen") ->
@@ -386,7 +385,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           )
       ) port_control_urls;
 
-    Mclock.connect () >>= fun clock ->
     let vnet_switch = Vnet.create () in
 
     let uri = Uri.of_string socket_url in
@@ -395,13 +393,13 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     | Some ("hyperv-connect"|"hyperv-listen") ->
       let module Slirp_stack =
         Slirp.Make(Vmnet.Make(HV))(Dns_policy)
-          (Mclock)(Stdlibrandom)(Vnet)
+          (Mclock)(Mirage_random_stdlib)(Vnet)
       in
       let sockaddr =
         hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid
           (Uri.of_string socket_url)
       in
-      Slirp_stack.create_static clock vnet_switch configuration
+      Slirp_stack.create_static vnet_switch configuration
       >>= fun stack_config ->
       let callback fd =
         let conn = HV.connect fd in
@@ -424,7 +422,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     | Some "fd" | None ->
       let module Slirp_stack =
         Slirp.Make(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
-          (Mclock)(Stdlibrandom)(Vnet)
+          (Mclock)(Mirage_random_stdlib)(Vnet)
       in
       begin unix_listen socket_url
       >>= function
@@ -432,7 +430,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           Log.err (fun f -> f "Failed to listen on ethernet socket because: %s" m);
           Lwt.return_unit
         | Ok server ->
-        Slirp_stack.create_static clock vnet_switch configuration
+        Slirp_stack.create_static vnet_switch configuration
         >>= fun stack_config ->
         Host.Sockets.Stream.Unix.listen server (fun conn ->
             Slirp_stack.connect stack_config conn >>= fun stack ->
@@ -455,9 +453,9 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     | _ ->
       let module Slirp_stack =
         Slirp.Make(Vmnet.Make(HV_generic))(Dns_policy)
-          (Mclock)(Stdlibrandom)(Vnet)
+          (Mclock)(Mirage_random_stdlib)(Vnet)
       in
-      Slirp_stack.create_static clock vnet_switch configuration
+      Slirp_stack.create_static vnet_switch configuration
       >>= fun stack_config ->
       let callback fd =
         let conn = HV_generic.connect fd in

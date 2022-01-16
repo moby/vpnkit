@@ -73,12 +73,11 @@ module type S = Dns_forward_s.RESOLVER
 
 module Make
     (Client: Dns_forward_s.RPC_CLIENT)
-    (Time  : Mirage_time_lwt.S)
-    (Clock : Mirage_clock_lwt.MCLOCK) =
+    (Time  : Mirage_time.S)
+    (Clock : Mirage_clock.MCLOCK) =
 struct
 
   module Cache = Dns_forward_cache.Make(Time)
-  type clock = Clock.t
   type address = Dns_forward_config.Address.t
   type message_cb = ?src:address -> ?dst:address -> buf:Cstruct.t -> unit -> unit Lwt.t
 
@@ -95,14 +94,13 @@ struct
   }
 
   type t = {
-    clock: Clock.t;
     connections: connection list;
     local_names_cb: (Dns.Packet.question -> Dns.Packet.rr list option Lwt.t);
     cache: Cache.t;
     config: Dns_forward_config.t;
   }
 
-  let create ?(local_names_cb=fun _ -> Lwt.return_none) ~gen_transaction_id ?message_cb config clock =
+  let create ?(local_names_cb=fun _ -> Lwt.return_none) ~gen_transaction_id ?message_cb config =
     Lwt_list.map_s (fun server ->
         or_fail_msg @@ Client.connect ~gen_transaction_id ?message_cb server.Dns_forward_config.Server.address
         >>= fun client ->
@@ -113,7 +111,7 @@ struct
       ) (Dns_forward_config.Server.Set.elements config.Dns_forward_config.servers)
     >|= fun connections ->
     let cache = Cache.make () in
-    { clock; connections; local_names_cb; cache; config }
+    { connections; local_names_cb; cache; config }
 
   let destroy t =
     Cache.destroy t.cache;
@@ -155,7 +153,7 @@ struct
                 | None ->
                     let c = List.find (fun c -> c.server = server) t.connections in
                     begin
-                      let now_ns = Clock.elapsed_ns t.clock in
+                      let now_ns = Clock.elapsed_ns () in
                       (* If no timeout is configured, we will stop listening after
                          5s to avoid leaking threads if a server is offline *)
                       let timeout_ns =

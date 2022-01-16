@@ -54,7 +54,7 @@ let of_string (s:string) : t =
   Re.Str.split (Re.Str.regexp "\\.") (String.lowercase_ascii s)
 let string_to_domain_name = of_string
 
-let of_ipaddr ip = of_string_list (Ipaddr.to_domain_name ip)
+let of_ipaddr ip = of_string_list @@ Domain_name.to_strings @@ Ipaddr.to_domain_name ip
 
 type label =
   | L of string * int (* string *)

@@ -33,13 +33,12 @@ end
 
 module type Instance = sig
   type t
-  type clock
   val to_string: t -> string
   val of_string: string -> (t, [ `Msg of string ]) result
 
   val description_of_format: string
 
-  val start: clock -> t -> (t, [ `Msg of string ]) result Lwt.t
+  val start: t -> (t, [ `Msg of string ]) result Lwt.t
 
   val stop: t -> unit Lwt.t
 
@@ -52,12 +51,9 @@ module StringMap = Map.Make(String)
 module Make (Instance: Instance) = struct
   open Protocol_9p
 
-  type t = {
-    clock: Instance.clock;
-  }
+  type t = unit
 
-  let make clock =
-    { clock }
+  let make () = ()
 
   (* We manage a list of named entries *)
   type entry = {
@@ -338,7 +334,7 @@ The directory will be deleted and replaced with a file of the same name.
         end else begin match Instance.of_string @@ Cstruct.to_string data with
         | Ok f ->
           let open Lwt.Infix in
-          begin Instance.start connection.t.clock f >>=
+          begin Instance.start f >>=
             function
             | Ok f' -> (* local_port is resolved *)
               entry.instance <- Some f';

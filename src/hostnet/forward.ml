@@ -58,7 +58,7 @@ module Port = struct
 end
 
 module Make
-    (Clock: Mirage_clock_lwt.MCLOCK)
+    (Clock: Mirage_clock.MCLOCK)
     (Connector: Sig.Connector)
     (Socket: Sig.SOCKETS) =
 struct
@@ -78,8 +78,6 @@ struct
   type key = Port.t
 
   let get_key t = t.local
-
-  type clock = Clock.t
 
   let to_string t =
     Fmt.strf "%s:%s" (Port.to_string t.local) (Port.to_string t.remote_port)
@@ -143,14 +141,14 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
     >>= fun mux ->
     Mux.Channel.connect mux destination
 
-  let start_tcp_proxy clock description remote_port server =
-    let module Proxy = Mirage_flow_lwt.Proxy(Clock)(Mux.Channel)(Socket.Stream.Tcp) in
+  let start_tcp_proxy description remote_port server =
+    let module Proxy = Mirage_flow_combinators.Proxy(Clock)(Mux.Channel)(Socket.Stream.Tcp) in
     Socket.Stream.Tcp.listen server (fun local ->
         open_channel remote_port
         >>= fun remote ->
         Lwt.finalize (fun () ->
             Log.debug (fun f -> f "%s: connected" description);
-            Proxy.proxy clock remote local  >|= function
+            Proxy.proxy remote local  >|= function
             | Error e ->
               Log.err (fun f ->
                   f "%s proxy failed with %a" description Proxy.pp_error e)
@@ -166,14 +164,14 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
       );
     Lwt.return ()
 
-  let start_unix_proxy clock description remote_port server =
-    let module Proxy = Mirage_flow_lwt.Proxy(Clock)(Mux.Channel)(Socket.Stream.Unix) in
+  let start_unix_proxy description remote_port server =
+    let module Proxy = Mirage_flow_combinators.Proxy(Clock)(Mux.Channel)(Socket.Stream.Unix) in
     Socket.Stream.Unix.listen server (fun local ->
         open_channel remote_port
         >>= fun remote ->
         Lwt.finalize (fun () ->
             Log.debug (fun f -> f "%s: connected" description);
-            Proxy.proxy clock remote local  >|= function
+            Proxy.proxy remote local  >|= function
             | Error e ->
               Log.err (fun f ->
                   f "%s proxy failed with %a" description Proxy.pp_error e)
@@ -291,7 +289,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
         log_exception_continue "udp handle" (fun () -> handle server));
     Lwt.return ()
 
-  let start state t =
+  let start t =
     match t.local with
     | `Tcp (local_ip, local_port) ->
       let description =
@@ -309,7 +307,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
               `Tcp (ip, port)
             | _ ->
               t.local );
-          start_tcp_proxy state (to_string t) t.remote_port server
+          start_tcp_proxy (to_string t) t.remote_port server
           >|= fun () ->
           Ok t
         ) (function
@@ -367,7 +365,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
           Socket.Stream.Unix.bind ~description path
           >>= fun server ->
           t.server <- Some (`Unix server);
-          start_unix_proxy state (to_string t) t.remote_port server
+          start_unix_proxy (to_string t) t.remote_port server
           >|= fun () ->
           Ok t
         ) (function

@@ -32,29 +32,24 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make (Ethif: Mirage_protocols_lwt.ETHIF) = struct
+module Make (Ethif: Mirage_protocols.ETHERNET) = struct
 
   module Table = Map.Make(Ipaddr.V4)
 
-  type 'a io = 'a Lwt.t
-  type ipaddr = Ipaddr.V4.t
-  type buffer = Cstruct.t
   type macaddr = Macaddr.t
   type t = { ethif: Ethif.t; mutable table: macaddr Table.t }
   type error = Mirage_protocols.Arp.error
   let pp_error = Mirage_protocols.Arp.pp_error
-  type repr = string
 
-  let to_repr t =
+  let to_string t =
     let pp_one (ip, mac) =
       Fmt.strf "%s -> %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac)
     in
     Table.bindings t.table
     |> List.map pp_one
     |> String.concat "; "
-    |> Lwt.return
 
-  let pp fmt repr = Fmt.string fmt repr
+  let pp fmt t = Format.pp_print_string fmt @@ to_string t
 
   let get_ips t = List.map fst (Table.bindings t.table)
 
@@ -81,75 +76,37 @@ module Make (Ethif: Mirage_protocols_lwt.ETHIF) = struct
       Lwt.return (Error `Timeout)
     end
 
-  type arp = {
-    op: [ `Request |`Reply |`Unknown of int ];
-    sha: Macaddr.t;
-    spa: Ipaddr.V4.t;
-    tha: Macaddr.t;
-    tpa: Ipaddr.V4.t;
-  }
+  let output t pkt =
+    Ethif.write t.ethif ~src:pkt.Arp_packet.source_mac pkt.Arp_packet.target_mac `ARP
+      (fun buf ->
+        Arp_packet.encode_into pkt buf;
+        Arp_packet.size
+      )
 
-
-  let output t arp =
-    let open Arpv4_wire in
-    (* Obtain a buffer to write into *)
-    let buf = Io_page.to_cstruct (Io_page.get 1) in
-    (* Write the ARP packet *)
-    let dmac = Macaddr.to_bytes arp.tha in
-    let smac = Macaddr.to_bytes arp.sha in
-    let spa = Ipaddr.V4.to_int32 arp.spa in
-    let tpa = Ipaddr.V4.to_int32 arp.tpa in
-    let op =
-      match arp.op with
-      |`Request -> 1
-      |`Reply -> 2
-      |`Unknown n -> n
-    in
-    Ethif_wire.set_ethernet_dst dmac 0 buf;
-    Ethif_wire.set_ethernet_src smac 0 buf;
-    Ethif_wire.set_ethernet_ethertype buf 0x0806; (* ARP *)
-    let arpbuf = Cstruct.shift buf 14 in
-    set_arp_htype arpbuf 1;
-    set_arp_ptype arpbuf 0x0800; (* IPv4 *)
-    set_arp_hlen arpbuf 6; (* ethernet mac size *)
-    set_arp_plen arpbuf 4; (* ipv4 size *)
-    set_arp_op arpbuf op;
-    set_arp_sha smac 0 arpbuf;
-    set_arp_spa arpbuf spa;
-    set_arp_tha dmac 0 arpbuf;
-    set_arp_tpa arpbuf tpa;
-    (* Resize buffer to sizeof arp packet *)
-    let buf = Cstruct.sub buf 0 (sizeof_arp + Ethif_wire.sizeof_ethernet) in
-    Ethif.write t.ethif buf
-
-  let input t frame =
-    let open Arpv4_wire in
-    match get_arp_op frame with
-    |1 -> (* Request *)
-      let req_ipv4 = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
-      if Table.mem req_ipv4 t.table then begin
+  let input t frame = match Arp_packet.decode frame with
+  | Error err ->
+    Log.err (fun f -> f "error while reading ARP packet: %a" Arp_packet.pp_error err);
+    Lwt.return_unit
+  | Ok ({ Arp_packet.operation = Arp_packet.Reply; _ } as pkt) ->
+    Log.debug (fun f -> f "ARP ignoring reply %a" Arp_packet.pp pkt);
+    Lwt.return_unit
+  | Ok pkt ->
+    if Table.mem pkt.target_ip t.table then begin
         Log.debug (fun f ->
-            f "ARP responding to: who-has %s?" (Ipaddr.V4.to_string req_ipv4));
-        let sha = Table.find req_ipv4 t.table in
-        let tha = Macaddr.of_bytes_exn (copy_arp_sha frame) in
-        (* the requested address *)
-        let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
-        (* the requesting host IPv4 *)
-        let tpa = Ipaddr.V4.of_int32 (get_arp_spa frame) in
-        output t { op=`Reply; sha; tha; spa; tpa } >|= function
+            f "ARP responding to: who-has %s?" (Ipaddr.V4.to_string pkt.target_ip));
+        let sha = Table.find pkt.target_ip t.table in
+        output t {
+          Arp_packet.operation = Arp_packet.Reply;
+          source_mac = sha;
+          source_ip = pkt.target_ip;
+          target_ip = pkt.source_ip;
+          target_mac = pkt.source_mac;
+        } >|= function
         | Ok ()   -> ()
         | Error e ->
           Log.err (fun f ->
               f "error while reading ARP packet: %a" Ethif.pp_error e);
       end else Lwt.return_unit
-    |2 -> (* Reply *)
-      (* the requested address *)
-      let spa = Ipaddr.V4.of_int32 (get_arp_tpa frame) in
-      Log.debug (fun f -> f "ARP ignoring reply %s" (Ipaddr.V4.to_string spa));
-      Lwt.return_unit
-    |n ->
-      Log.debug (fun f -> f "ARP: Unknown message %d ignored" n);
-      Lwt.return_unit
 
   type ethif = Ethif.t
 

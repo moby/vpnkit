@@ -30,8 +30,6 @@ let reset () =
   Lwt_condition.broadcast c ()
 
 module Time = struct
-  type 'a io = 'a Lwt.t
-
   let sleep_ns n =
     let open Lwt.Infix in
     (* All sleeping is relative to the start of the program for now *)
@@ -46,9 +44,6 @@ module Time = struct
 end
 
 module Clock = struct
-  type 'a io = 'a Lwt.t
-  type t = unit
   let elapsed_ns () = !timeofday
-  let disconnect () = Lwt.return ()
   let period_ns () = None
 end

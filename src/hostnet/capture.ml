@@ -9,20 +9,16 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Make(Input: Sig.VMNET) = struct
 
-  type page_aligned_buffer = Io_page.t
-  type buffer = Cstruct.t
-  type macaddr = Macaddr.t
-  type 'a io = 'a Lwt.t
   type fd = Input.fd
-  type error = [Mirage_device.error | `Unknown of string]
+  type error = [Mirage_net.Net.error | `Unknown of string]
 
   let pp_error ppf = function
-  | #Mirage_device.error as e -> Mirage_device.pp_error ppf e
+  | #Mirage_net.Net.error as e -> Mirage_net.Net.pp_error ppf e
   | `Unknown s -> Fmt.pf ppf "unknown: %s" s
 
   let lift_error = function
   | Ok x    -> Ok x
-  | Error (#Mirage_device.error as e) -> Error e
+  | Error (#Mirage_net.Net.error as e) -> Error e
   | Error e -> Fmt.kstrf (fun s -> Error (`Unknown s)) "%a" Input.pp_error e
 
   type packet = {
@@ -237,21 +233,24 @@ module Make(Input: Sig.VMNET) = struct
       let rule = Hashtbl.find t.rules bad_pcap in
       push rule bufs
 
-  let write t buf =
-    record t [ buf ];
-    Input.write t.input buf >|= lift_error
+  let write t ~size fill =
+    Input.write t.input ~size (fun buf ->
+      let n = fill buf in
+      record t [ Cstruct.sub buf 0 n ];
+      n
+    ) >|= lift_error
 
-  let writev t bufs =
-    record t bufs;
-    Input.writev t.input bufs >|= lift_error
-
-  let listen t callback =
-    Input.listen t.input (fun buf -> record t [ buf ]; callback buf)
-    >|= lift_error
+  let listen t ~header_size callback =
+    Input.listen t.input ~header_size (fun buf ->
+        record t [ buf ];
+        callback buf
+    ) >|= lift_error
 
   let add_listener t callback = Input.add_listener t.input callback
 
   let mac t = Input.mac t.input
+
+  let mtu t = Input.mtu t.input
 
   let get_stats_counters t = t.stats
 

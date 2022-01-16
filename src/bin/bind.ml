@@ -14,7 +14,7 @@ let failf fmt = Fmt.kstrf (fun e -> Lwt_result.fail (`Msg e)) fmt
 
 module Make(Socket: Sig.SOCKETS) = struct
 
-  module Channel = Mirage_channel_lwt.Make(Socket.Stream.Unix)
+  module Channel = Mirage_channel.Make(Socket.Stream.Unix)
 
   let err_eof = Lwt_result.fail (`Msg "EOF")
   let err_read e = failf "while reading: %a" Channel.pp_error e

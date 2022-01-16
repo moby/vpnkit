@@ -26,8 +26,8 @@ let external_to_internal = Hashtbl.create 7
 
 module Make
     (Sockets: Sig.SOCKETS)
-    (Clock: Mirage_clock_lwt.MCLOCK)
-    (Time: Mirage_time_lwt.S) =
+    (Clock: Mirage_clock.MCLOCK)
+    (Time: Mirage_time.S) =
 struct
 
   module Udp = Sockets.Datagram.Udp
@@ -50,7 +50,6 @@ struct
      but preserve them on the way in. *)
 
   type t = {
-    clock: Clock.t;
     max_idle_time: int64;
     max_active_flows: int;
     new_flow_lock: Lwt_mutex.t;
@@ -99,17 +98,17 @@ struct
     Lwt.return_unit
 
   let touch t flow =
-    let last_use = Clock.elapsed_ns t.clock in
+    let last_use = Clock.elapsed_ns () in
     (* Remove the old entry t.last_use and add a new one for last_use *)
     t.by_last_use := By_last_use.(add last_use flow @@ remove flow.last_use !(t.by_last_use));
     flow.last_use <- last_use
 
-  let start_background_gc clock table by_last_use max_idle_time new_flow_lock =
+  let start_background_gc table by_last_use max_idle_time new_flow_lock =
     let rec loop () =
       Time.sleep_ns max_idle_time >>= fun () ->
       Lwt_mutex.with_lock new_flow_lock
         (fun () ->
-          let now_ns = Clock.elapsed_ns clock in
+          let now_ns = Clock.elapsed_ns () in
           let to_shutdown =
             Hashtbl.fold (fun _ flow acc ->
                 if Int64.(sub now_ns flow.last_use) > max_idle_time then begin
@@ -126,13 +125,13 @@ struct
     in
     loop ()
 
-  let create ?(max_idle_time = Duration.(of_sec 60)) ?(preserve_remote_port=true) ?(max_active_flows=1024) clock =
+  let create ?(max_idle_time = Duration.(of_sec 60)) ?(preserve_remote_port=true) ?(max_active_flows=1024) () =
     let table = Hashtbl.create 7 in
     let by_last_use = ref By_last_use.empty in
     let new_flow_lock = Lwt_mutex.create () in
-    let background_gc_t = start_background_gc clock table by_last_use max_idle_time new_flow_lock in
+    let background_gc_t = start_background_gc table by_last_use max_idle_time new_flow_lock in
     let send_reply = None in
-    { clock; max_idle_time; max_active_flows; new_flow_lock; background_gc_t; table; by_last_use; send_reply; preserve_remote_port }
+    { max_idle_time; max_active_flows; new_flow_lock; background_gc_t; table; by_last_use; send_reply; preserve_remote_port }
 
   let description { src = src, src_port; dst = dst, dst_port; _ } =
     Fmt.strf "udp:%a:%d-%a:%d" Ipaddr.pp src src_port Ipaddr.pp
@@ -235,7 +234,7 @@ struct
                   Udp.bind ~description:(description datagram) (Ipaddr.(V4 V4.any), 0)
                   >>= fun server ->
                   let external_address = Udp.getsockname server in
-                  let last_use = Clock.elapsed_ns t.clock in
+                  let last_use = Clock.elapsed_ns () in
                   let flow = { description = d; src = datagram.src; server; external_address; last_use } in
                   Hashtbl.replace t.table datagram.src flow;
                   t.by_last_use := By_last_use.add last_use flow !(t.by_last_use);

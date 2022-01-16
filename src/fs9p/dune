@@ -1,0 +1,4 @@
+(library
+ (name fs9p)
+ (wrapped false)
+ (libraries protocol-9p mirage-flow))

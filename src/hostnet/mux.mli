@@ -1,5 +1,5 @@
-module Make(Netif: Mirage_net_lwt.S) : sig
-  include Mirage_net_lwt.S
+module Make(Netif: Mirage_net.S) : sig
+  include Mirage_net.S
 
   (** A simple ethernet multiplexer/demultiplexer
 
@@ -16,12 +16,12 @@ module Make(Netif: Mirage_net_lwt.S) : sig
 
   val connect: Netif.t -> (t, error) result Lwt.t
   (** Connect a multiplexer/demultiplexer and return a [t] which behaves like
-      a V1_LWT.NETWORK representing the multiplexed end. *)
+      a V1.NETWORK representing the multiplexed end. *)
 
   type rule = Ipaddr.V4.t
   (** We currently support matching on IPv4 destination addresses only *)
 
-  module Port : Mirage_net_lwt.S
+  module Port : Mirage_net.S
   (** A network which receives all the traffic matching a specific rule *)
 
   val port: t -> rule -> Port.t

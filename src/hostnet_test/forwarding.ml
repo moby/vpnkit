@@ -18,7 +18,7 @@ let run ?(timeout=Duration.of_sec 60) t =
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
 
-module Channel = Mirage_channel_lwt.Make(Host.Sockets.Stream.Tcp)
+module Channel = Mirage_channel.Make(Host.Sockets.Stream.Tcp)
 
 module ForwardServer = struct
   (** Accept connections, read the forwarding header and run a proxy.
@@ -27,7 +27,7 @@ module ForwardServer = struct
   module Mux = Forwarder.Multiplexer.Make(Host.Sockets.Stream.Tcp)
 
   module Proxy =
-    Mirage_flow_lwt.Proxy
+    Mirage_flow_combinators.Proxy
       (Mclock)(Mux.Channel)(Host.Sockets.Stream.Tcp)
 
   let accept flow =
@@ -41,9 +41,8 @@ module ForwardServer = struct
           Host.Sockets.Stream.Tcp.connect (ip, port) >>= function
           | Error (`Msg x) -> failwith x
           | Ok remote ->
-            Mclock.connect () >>= fun clock ->
             Lwt.finalize (fun () ->
-                Proxy.proxy clock client_flow remote >>= function
+                Proxy.proxy client_flow remote >>= function
                 | Error e -> Fmt.kstrf failwith "%a" Proxy.pp_error e
                 | Ok (_l_stats, _r_stats) -> Lwt.return ()
               ) (fun () ->
@@ -154,8 +153,7 @@ module PortsServer = struct
   module Server = Protocol_9p.Server.Make(Log)(Host.Sockets.Stream.Tcp)(Ports)
 
   let with_server f =
-    Mclock.connect () >>= fun clock ->
-    let ports = Ports.make clock in
+    let ports = Ports.make () in
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
     >>= fun server ->
     let _, port = Host.Sockets.Stream.Tcp.getsockname server in

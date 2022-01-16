@@ -136,17 +136,13 @@ module Shared_memory = struct
   let pp_write_error ppf = function
     | `Closed -> Fmt.pf ppf "attempted to write to a closed flow"
 
-  type 'a io = 'a Lwt.t
-
-  type buffer = Cstruct.t
-
   type error = []
 
   type write_error = Mirage_flow.write_error
 end
 
 (* Check it matches the signature *)
-module Test : Mirage_flow_lwt.SHUTDOWNABLE = Shared_memory
+module Test : Mirage_flow_combinators.SHUTDOWNABLE = Shared_memory
 
 module Mux = Forwarder.Multiplexer.Make (Shared_memory)
 

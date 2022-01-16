@@ -137,7 +137,7 @@ module Vif = struct
   let marshal t rest =
     Cstruct.LE.set_uint16 rest 0 t.mtu;
     Cstruct.LE.set_uint16 rest 2 t.max_packet_size;
-    Cstruct.blit_from_string (Macaddr.to_bytes t.client_macaddr) 0 rest 4 6;
+    Cstruct.blit_from_string (Macaddr.to_octets t.client_macaddr) 0 rest 4 6;
     Cstruct.shift rest sizeof
 
   let unmarshal rest =
@@ -145,7 +145,7 @@ module Vif = struct
     let max_packet_size = Cstruct.LE.get_uint16 rest 2 in
     let mac = Cstruct.(to_string @@ sub rest 4 6) in
     try
-      let client_macaddr = Macaddr.of_bytes_exn mac in
+      let client_macaddr = Macaddr.of_octets_exn mac in
       Ok ({ mtu; max_packet_size; client_macaddr }, Cstruct.shift rest sizeof)
     with _ ->
       Error (`Msg (Printf.sprintf "Failed to parse MAC: [%s]" mac))
@@ -205,16 +205,12 @@ end
 
 module Make(C: Sig.CONN) = struct
 
-  module Channel = Mirage_channel_lwt.Make(C)
+  module Channel = Mirage_channel.Make(C)
 
-  type page_aligned_buffer = Io_page.t
-  type macaddr = Macaddr.t
-  type 'a io = 'a Lwt.t
-  type buffer = Cstruct.t
-  type error = [Mirage_device.error | `Channel of Channel.write_error]
+  type error = [Mirage_net.Net.error | `Channel of Channel.write_error]
 
   let pp_error ppf = function
-  | #Mirage_device.error as e -> Mirage_device.pp_error ppf e
+  | #Mirage_net.Net.error as e -> Mirage_net.Net.pp_error ppf e
   | `Channel e                -> Channel.pp_write_error ppf e
 
   let failf fmt = Fmt.kstrf (fun e -> Lwt_result.fail (`Msg e)) fmt
@@ -239,7 +235,7 @@ module Make(C: Sig.CONN) = struct
        Tcp_direct_direct will do the same. This behaviour seems to be
        undefined, but common implementations adopt a last-caller-wins
        semantic. This is the last caller wins callback *)
-    mutable callback: (Cstruct.t -> unit io);
+    mutable callback: (Cstruct.t -> unit Lwt.t);
     log_prefix: string;
   }
 
@@ -488,35 +484,6 @@ module Make(C: Sig.CONN) = struct
             Lwt.return_unit
         )
 
-  let writev t bufs =
-    Lwt_mutex.with_lock t.write_m (fun () ->
-        capture t bufs >>= fun () ->
-        let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
-        if len > (t.mtu + ethernet_header_length) then begin
-          Log.err (fun f ->
-              f "%s Dropping over-large ethernet frame, length = %d, mtu = \
-                 %d" t.log_prefix len t.mtu
-            );
-          Lwt_result.return ()
-        end else begin
-          let buf = Cstruct.create Packet.sizeof in
-          Packet.marshal len buf;
-          match t.fd with
-          | None    -> Lwt_result.fail `Disconnected
-          | Some fd ->
-            Channel.write_buffer fd buf;
-            Log.debug (fun f ->
-                let b = Buffer.create 128 in
-                List.iter (Cstruct.hexdump_to_buffer b) bufs;
-                f "sending\n%s" (Buffer.contents b)
-              );
-            List.iter (Channel.write_buffer fd) bufs;
-            Channel.flush fd >|= function
-            | Ok ()   -> Ok ()
-            | Error e -> Error (`Channel e)
-        end
-      )
-
   let err_eof t =
     Log.info (fun f -> f "%s.listen: read EOF so closing connection" t.log_prefix);
     disconnect t >>= fun () ->
@@ -604,7 +571,7 @@ module Make(C: Sig.CONN) = struct
     Log.info (fun f -> f "%s.listen returning Ok()" t.log_prefix);
     Lwt.return (Ok ())
 
-  let listen t new_callback =
+  let listen t ~header_size:_ new_callback =
     let task, u = Lwt.task () in
     (* There is a clash over the Netif.listen callbacks between the DHCP client (which
        wants ethernet frames) and the rest of the TCP/IP stack. It seems to work
@@ -623,10 +590,12 @@ module Make(C: Sig.CONN) = struct
     in
     task
 
-  let write t buf =
+  let write t ~size fill =
     Lwt_mutex.with_lock t.write_m (fun () ->
+      let allocated = Cstruct.create (size + t.mtu) in
+      let len = fill allocated in
+      let buf = Cstruct.sub allocated 0 len in
         capture t [ buf ] >>= fun () ->
-        let len = Cstruct.len buf in
         if len > (t.mtu + ethernet_header_length) then begin
           Log.err (fun f ->
               f "%s Dropping over-large ethernet frame, length = %d, mtu = \
@@ -657,6 +626,7 @@ module Make(C: Sig.CONN) = struct
 
   let add_listener t callback = t.listeners <- callback :: t.listeners
   let mac t = t.server_macaddr
+  let mtu t = t.mtu
   let get_stats_counters t = t.stats
   let reset_stats_counters t = Mirage_net.Stats.reset t.stats
 

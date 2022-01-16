@@ -15,7 +15,7 @@
  *
  *)
 
-module Make(Time: Mirage_time_lwt.S): sig
+module Make(Time: Mirage_time.S): sig
   type t
   (** A cache of DNS answers *)
 

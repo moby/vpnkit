@@ -34,8 +34,8 @@ let forward_of_json j =
     let external_port = get_int @@ find j [ "external_port" ] in
     let internal_port = get_int @@ find j [ "internal_port" ] in
     let internal_ip = match Ipaddr.V4.of_string @@ get_string @@ find j [ "internal_ip" ] with
-      | Some x -> x
-      | None -> raise (Parse_error(j, "internal_ip should be an IPv4 address")) in
+      | Error (`Msg m) -> raise (Parse_error(j, "internal_ip should be an IPv4 address: " ^ m))
+      | Ok x -> x in
     {
         protocol; external_port; internal_ip; internal_port;
     }

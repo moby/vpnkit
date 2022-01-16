@@ -37,7 +37,7 @@ module Flow: sig
       on a well-known address (see Server) *)
 
   module type Client = sig
-    include Mirage_flow_lwt.SHUTDOWNABLE
+    include Mirage_flow_combinators.SHUTDOWNABLE
 
     type address
     (** Identifies an endpoint for [connect] *)
@@ -101,10 +101,10 @@ module Framing: sig
     (** Free resources and close the underlying flow *)
   end
 
-  module Tcp(Flow: Mirage_flow_lwt.S): S with type flow = Flow.flow
+  module Tcp(Flow: Mirage_flow.S): S with type flow = Flow.flow
   (** Use TCP framing *)
 
-  module Udp(Flow: Mirage_flow_lwt.S): S with type flow = Flow.flow
+  module Udp(Flow: Mirage_flow.S): S with type flow = Flow.flow
   (** Use UDP framing *)
 end
 
@@ -216,7 +216,7 @@ module Rpc: sig
       module Make
           (Flow: Flow.Client with type address = Ipaddr.t * int)
           (Framing: Framing.S with type flow = Flow.flow)
-          (Time: Mirage_time_lwt.S): S
+          (Time: Mirage_time.S): S
       (** Construct a multiplexing RPC client given a Flow and a method of Framing messages
           over the flow. *)
     end
@@ -224,7 +224,7 @@ module Rpc: sig
       module Make
           (Flow: Flow.Client with type address = Ipaddr.t * int)
           (Framing: Framing.S with type flow = Flow.flow)
-          (Time: Mirage_time_lwt.S): S
+          (Time: Mirage_time.S): S
       (** Construct an RPC client given a Flow which sends one message per fresh connection
           over the flow. *)
     end
@@ -260,7 +260,7 @@ module Rpc: sig
     module Make
         (Flow: Flow.Server with type address = Ipaddr.t * int)
         (Framing: Framing.S with type flow = Flow.flow)
-        (Time: Mirage_time_lwt.S): S
+        (Time: Mirage_time.S): S
     (** Construct an RPC server given a Flow and a method of Framing messages
         over the flow. *)
   end
@@ -271,7 +271,6 @@ module Resolver: sig
 
   module type S = sig
     type t
-    type clock
     type address = Config.Address.t
 
     type message_cb = ?src:address -> ?dst:address -> buf:Cstruct.t -> unit -> unit Lwt.t
@@ -283,7 +282,7 @@ module Resolver: sig
       ?local_names_cb:(Dns.Packet.question -> Dns.Packet.rr list option Lwt.t) ->
       gen_transaction_id:(int -> int) ->
       ?message_cb:message_cb ->
-      Config.t -> clock -> t Lwt.t
+      Config.t -> t Lwt.t
     (** Construct a resolver given some configuration *)
 
     val destroy: t -> unit Lwt.t
@@ -299,9 +298,9 @@ module Resolver: sig
 
   module Make
       (Client: Rpc.Client.S)
-      (Time  : Mirage_time_lwt.S)
-      (Clock : Mirage_clock_lwt.MCLOCK):
-    S with type clock = Clock.t
+      (Time  : Mirage_time.S)
+      (Clock : Mirage_clock.MCLOCK):
+    S
   (** Construct a DNS resolver which will use the given [Client] Implementation
       to contact upstream servers, and the given [Time] implementation to handle
       timeouts. *)

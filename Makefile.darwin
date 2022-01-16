@@ -9,7 +9,7 @@ vpnkit.exe:
 	opam exec -- dune build --profile release
 
 depends:
-	opam install vpnkit charrua-client-mirage alcotest -y
+	opam install vpnkit alcotest -y
 
 ocaml:
 	ocaml -version || opam init --compiler=4.12.0
@@ -19,7 +19,9 @@ ocaml:
 	opam pin add omake "https://github.com/ocaml-omake/omake.git#gerd/disable-parallel-bootstrap" -n
 	# Fix for OCaml 4.12 build
 	opam pin add uwt "https://github.com/fdopen/uwt.git#c43349bf3689181756feb341e3896d4a0a695523" -n
-	opam pin add tcpip.3.3.0 "https://github.com/djs55/mirage-tcpip.git#vpnkit-20210417" -n
+	opam pin add hvsock.3.0.0 "https://github.com/djs55/ocaml-hvsock.git#release.3.0.0" -n
+	opam pin add protocol-9p.2.0.1 "https://github.com/djs55/ocaml-9p.git" -n
+	opam pin add protocol-9p-unix.2.0.1 "https://github.com/djs55/ocaml-9p.git" -n
 	opam pin add vpnkit . -n
 
 artefacts: vpnkit.tgz

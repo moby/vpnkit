@@ -18,9 +18,9 @@
 (** A fake Time and Clock module for testing the timing without having to actually
     wait. *)
 
-module Time: Mirage_time_lwt.S
+module Time: Mirage_time.S
 
-module Clock: Mirage_clock_lwt.MCLOCK with type t = unit
+module Clock: Mirage_clock.MCLOCK
 
 val advance: int64 -> unit
 (** [advance nsecs]: advances the clock by [nsecs]. Note this will make sleeping

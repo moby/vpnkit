@@ -4,7 +4,7 @@ module Make(C: Sig.CONN): sig
 
   type fd = C.flow
 
-  include Mirage_net_lwt.S with type buffer = Cstruct.t
+  include Mirage_net.S
 
   val after_disconnect: t -> unit Lwt.t
   (** [after_disconnect connection] resolves after [connection] has

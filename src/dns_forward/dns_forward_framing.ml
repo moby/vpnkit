@@ -26,10 +26,10 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module type S = Dns_forward_s.READERWRITER
 
-module Tcp (Flow: Mirage_flow_lwt.S) = struct
+module Tcp (Flow: Mirage_flow.S) = struct
   let errorf = Dns_forward_error.errorf
 
-  module C = Mirage_channel_lwt.Make(Flow)
+  module C = Mirage_channel.Make(Flow)
 
   type request = Cstruct.t
   type response = Cstruct.t
@@ -79,7 +79,7 @@ module Tcp (Flow: Mirage_flow_lwt.S) = struct
       )
 end
 
-module Udp (Flow: Mirage_flow_lwt.S) = struct
+module Udp (Flow: Mirage_flow.S) = struct
   module Error = Dns_forward_error.Infix
   let errorf = Dns_forward_error.errorf
 

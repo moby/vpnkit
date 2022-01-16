@@ -22,7 +22,7 @@ module type Comparable = sig
 end
 
 module type FLOW_CLIENT = sig
-  include Mirage_flow_lwt.SHUTDOWNABLE
+  include Mirage_flow_combinators.SHUTDOWNABLE
   type address
   val connect: ?read_buffer_size:int -> address
     -> (flow, [ `Msg of string ]) Lwt_result.t
@@ -62,14 +62,13 @@ end
 
 module type RESOLVER = sig
   type t
-  type clock
   type address = Dns_forward_config.Address.t
   type message_cb = ?src:address -> ?dst:address -> buf:Cstruct.t -> unit -> unit Lwt.t
   val create:
     ?local_names_cb:(Dns.Packet.question -> Dns.Packet.rr list option Lwt.t) ->
     gen_transaction_id:(int -> int) ->
     ?message_cb:message_cb ->
-    Dns_forward_config.t -> clock ->
+    Dns_forward_config.t ->
     t Lwt.t
   val destroy: t -> unit Lwt.t
   val answer: Cstruct.t -> t -> (Cstruct.t, [ `Msg of string ]) Lwt_result.t

@@ -19,14 +19,14 @@ type reply = Cstruct.t -> unit Lwt.t
 
 module Make
     (Sockets: Sig.SOCKETS)
-    (Clock: Mirage_clock_lwt.MCLOCK)
-    (Time: Mirage_time_lwt.S)
+    (Clock: Mirage_clock.MCLOCK)
+    (Time: Mirage_time.S)
 : sig
 
   type t
   (** An ICMP NAT implementation *)
 
-  val create: ?max_idle_time:int64 -> Clock.t -> t
+  val create: ?max_idle_time:int64 -> unit -> t
   (** Create an ICMP NAT implementation which will keep "NAT rules" alive until
       they become idle for the given [?max_idle_time] *)
 

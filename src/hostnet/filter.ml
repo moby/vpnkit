@@ -9,16 +9,17 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Make(Input: Sig.VMNET) = struct
 
-  type page_aligned_buffer = Io_page.t
-  type buffer = Cstruct.t
-  type macaddr = Macaddr.t
-  type 'a io = 'a Lwt.t
   type fd = Input.fd
-  type error = [Mirage_device.error | `Unknown of string]
+  type error = [Mirage_net.Net.error | `Unknown of string]
 
   let pp_error ppf = function
-  | #Mirage_device.error as e -> Mirage_device.pp_error ppf e
+  | #Mirage_net.Net.error as e -> Mirage_net.Net.pp_error ppf e
   | `Unknown s -> Fmt.pf ppf "unknown: %s" s
+
+  let lift_error = function
+  | Ok x    -> Ok x
+  | Error (#Mirage_net.Net.error as e) -> Error e
+  | Error e -> Fmt.kstrf (fun s -> Error (`Unknown s)) "%a" Input.pp_error e
 
   type t = {
     input: Input.t;
@@ -34,16 +35,10 @@ module Make(Input: Sig.VMNET) = struct
   let disconnect t = Input.disconnect t.input
   let after_disconnect t = Input.after_disconnect t.input
 
-  let lift_error = function
-  | Ok x    -> Ok x
-  | Error (#Mirage_device.error as e) -> Error e
-  | Error e -> Fmt.kstrf (fun s -> Error (`Unknown s)) "%a" Input.pp_error e
-
-  let write t buf = Input.write t.input buf >|= lift_error
-  let writev t bufs = Input.writev t.input bufs >|= lift_error
+  let write t ~size fill = Input.write t.input ~size fill >|= lift_error
 
   let filter valid_subnets valid_sources next buf =
-    match Ethif_packet.Unmarshal.of_cstruct buf with
+    match Ethernet_packet.Unmarshal.of_cstruct buf with
     | Ok (_header, payload) ->
       let src = Ipaddr.V4.of_int32 @@ Ipv4_wire.get_ipv4_src payload in
       let from_valid_networks =
@@ -109,14 +104,16 @@ module Make(Input: Sig.VMNET) = struct
       end
     | _ -> next buf
 
-  let listen t callback =
-    Input.listen t.input @@ filter t.valid_subnets t.valid_sources callback
-    >|= lift_error
+  let listen t ~header_size callback =
+    Input.listen t.input ~header_size (fun buf ->
+      filter t.valid_subnets t.valid_sources callback buf
+    ) >|= lift_error
 
   let add_listener t callback =
     Input.add_listener t.input @@ filter t.valid_subnets t.valid_sources callback
 
   let mac t = Input.mac t.input
+  let mtu t = Input.mtu t.input
   let get_stats_counters t = t.stats
   let reset_stats_counters t = Mirage_net.Stats.reset t.stats
 

@@ -112,7 +112,6 @@ let test_local_lookups () =
         | _ ->
             Lwt.return None
       in
-      Mclock.connect () >>=
       R.create ~local_names_cb ~gen_transaction_id:Random.int config
       >>= fun r ->
       let module F = Dns_forward.Server.Make(Rpc)(R) in
@@ -163,7 +162,6 @@ let test_udp_nonpersistent () =
         ] in
       let config = { servers; search = []; assume_offline_after_drops = None } in
       let open Lwt.Infix in
-      Mclock.connect () >>=
       R.create ~gen_transaction_id:Random.int config
       >>= fun r ->
       let module F = Dns_forward.Server.Make(Proto_server)(R) in
@@ -248,7 +246,6 @@ let test_tcp_multiplexing () =
         ] in
       let config = { servers; search = []; assume_offline_after_drops = None } in
       let open Lwt.Infix in
-      Mclock.connect () >>=
       R.create ~gen_transaction_id:Random.int config
       >>= fun r ->
       let module F = Dns_forward.Server.Make(Proto_server)(R) in
@@ -343,7 +340,6 @@ let test_good_bad_server () =
         ] in
       let config = { servers; search = []; assume_offline_after_drops = None } in
       let open Lwt.Infix in
-      Mclock.connect () >>=
       R.create ~gen_transaction_id:Random.int config
       >>= fun r ->
       let request = make_a_query (Dns.Name.of_string "foo") in
@@ -407,7 +403,7 @@ let test_good_dead_server () =
         ] in
       let config = { servers; search = []; assume_offline_after_drops = Some 1 } in
       let open Lwt.Infix in
-      R.create ~gen_transaction_id:Random.int config ()
+      R.create ~gen_transaction_id:Random.int config
       >>= fun r ->
       let request = make_a_query (Dns.Name.of_string "foo") in
       let t = R.answer request r in
@@ -482,7 +478,6 @@ let test_bad_server () =
         ] in
       let config = { servers; search = []; assume_offline_after_drops = None } in
       let open Lwt.Infix in
-      Mclock.connect () >>=
       R.create ~gen_transaction_id:Random.int config
       >>= fun r ->
       let request = make_a_query (Dns.Name.of_string "foo") in
@@ -529,7 +524,6 @@ let test_timeout () =
         ] in
       let config = { servers; search = []; assume_offline_after_drops = None } in
       let open Lwt.Infix in
-      Mclock.connect () >>=
       R.create ~gen_transaction_id:Random.int config
       >>= fun r ->
       let request = make_a_query (Dns.Name.of_string "foo") in
@@ -578,7 +572,6 @@ let test_cache () =
         ] in
       let config = { servers; search = []; assume_offline_after_drops = None } in
       let open Lwt.Infix in
-      Mclock.connect () >>=
       R.create ~gen_transaction_id:Random.int config
       >>= fun r ->
       let request = make_a_query (Dns.Name.of_string "foo") in
@@ -637,7 +630,6 @@ let test_order () =
         ] in
       let config = { servers; search = []; assume_offline_after_drops = None } in
       let open Lwt.Infix in
-      Mclock.connect () >>=
       R.create ~gen_transaction_id:Random.int config
       >>= fun r ->
       let request = make_a_query (Dns.Name.of_string "foo") in
@@ -690,7 +682,6 @@ let test_forwarder_zone () =
         ] in
       let config = { servers; search = []; assume_offline_after_drops = None } in
       let open Lwt.Infix in
-      Mclock.connect () >>=
       R.create ~gen_transaction_id:Random.int config
       >>= fun r ->
       let module F = Dns_forward.Server.Make(Rpc)(R) in

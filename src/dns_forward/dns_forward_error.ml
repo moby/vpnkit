@@ -20,7 +20,7 @@ type 'a t = ('a, [ `Msg of string ]) Lwt_result.t
 
 let errorf fmt = Fmt.kstrf (fun s -> Lwt.return (Error (`Msg s))) fmt
 
-module FromFlowError(Flow: Mirage_flow_lwt.S) = struct
+module FromFlowError(Flow: Mirage_flow.S) = struct
   let (>>=) m f = m >>= function
     | `Eof     -> errorf "Unexpected end of file"
     | `Error e -> errorf "%a" Flow.pp_error e

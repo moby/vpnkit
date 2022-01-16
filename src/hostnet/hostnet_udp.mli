@@ -17,14 +17,14 @@ type reply = Cstruct.t -> unit Lwt.t
 
 module Make
     (Sockets: Sig.SOCKETS)
-    (Clock: Mirage_clock_lwt.MCLOCK)
-    (Time: Mirage_time_lwt.S):
+    (Clock: Mirage_clock.MCLOCK)
+    (Time: Mirage_time.S):
 sig
 
   type t
   (** A UDP NAT implementation *)
 
-  val create: ?max_idle_time:int64 -> ?preserve_remote_port:bool -> ?max_active_flows:int -> Clock.t -> t
+  val create: ?max_idle_time:int64 -> ?preserve_remote_port:bool -> ?max_active_flows:int -> unit -> t
   (** Create a UDP NAT implementation which will keep "NAT rules" alive until
       they become idle for the given [?max_idle_time] or until the number of
       flows hits [?max_active_flows] at which point the oldest will be expired.

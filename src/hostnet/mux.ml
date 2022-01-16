@@ -14,19 +14,15 @@ end
 
 module ObviouslyCommon = struct
 
-  type page_aligned_buffer = Io_page.t
-  type macaddr = Macaddr.t
-  type 'a io = 'a Lwt.t
-  type buffer = Cstruct.t
-  type error = [Mirage_device.error | `Unknown of string]
+  type error = [Mirage_net.Net.error | `Unknown of string]
 
   let pp_error ppf = function
-  | #Mirage_device.error as e -> Mirage_device.pp_error ppf e
+  | #Mirage_net.Net.error as e -> Mirage_net.Net.pp_error ppf e
   | `Unknown s -> Fmt.pf ppf "unknown: %s" s
 
 end
 
-module Make (Netif: Mirage_net_lwt.S) = struct
+module Make (Netif: Mirage_net.S) = struct
 
   include DontCareAboutStats
   include ObviouslyCommon
@@ -50,7 +46,7 @@ module Make (Netif: Mirage_net_lwt.S) = struct
 
   let lift_error: ('a, Netif.error) result -> ('a, error) result = function
   | Ok x    -> Ok x
-  | Error (#Mirage_device.error as e) -> Error e
+  | Error (#Mirage_net.Net.error as e) -> Error e
   | Error e -> Fmt.kstrf (fun s -> Error (`Unknown s)) "%a" Netif.pp_error e
 
   let filesystem t =
@@ -93,7 +89,7 @@ module Make (Netif: Mirage_net_lwt.S) = struct
     let t = { netif; rules; default_callback } in
     Lwt.async
       (fun () ->
-         Netif.listen netif @@ callback t >>= function
+         Netif.listen netif ~header_size:Ethernet_wire.sizeof_ethernet @@ callback t >>= function
          | Ok () -> Lwt.return_unit
          | Error _e ->
            Log.err (fun f -> f "Mux.connect calling Netif.listen: failed");
@@ -101,11 +97,11 @@ module Make (Netif: Mirage_net_lwt.S) = struct
       );
     Lwt.return (Ok t)
 
-  let write t buffer = Netif.write t.netif buffer >|= lift_error
-  let writev t buffers = Netif.writev t.netif buffers >|= lift_error
-  let listen t callback = t.default_callback <- callback; Lwt.return (Ok ())
+  let write t ~size fill = Netif.write t.netif ~size fill >|= lift_error
+  let listen t ~header_size:_ callback = t.default_callback <- callback; Lwt.return (Ok ())
   let disconnect t = Netif.disconnect t.netif
   let mac t = Netif.mac t.netif
+  let mtu t = Netif.mtu t.netif
 
   module Port = struct
     include DontCareAboutStats
@@ -117,10 +113,9 @@ module Make (Netif: Mirage_net_lwt.S) = struct
       rule: rule;
     }
 
-    let write t buffer = Netif.write t.netif buffer >|= lift_error
-    let writev t buffers = Netif.writev t.netif buffers >|= lift_error
+    let write t ~size fill = Netif.write t.netif ~size fill >|= lift_error
 
-    let listen t callback =
+    let listen t ~header_size:_ callback =
       Log.debug (fun f ->
           f "activating switch port for %s" (Ipaddr.V4.to_string t.rule));
       let last_active_time = Unix.gettimeofday () in
@@ -135,6 +130,7 @@ module Make (Netif: Mirage_net_lwt.S) = struct
       Lwt.return_unit
 
     let mac t = Netif.mac t.netif
+    let mtu t = Netif.mtu t.netif
 
     type t = _t
   end
