@@ -81,7 +81,7 @@ module Static = struct
    return (Hashtbl.find_all s.rev addr)
 end
 
-module Make(Time:Mirage_time.S)(S:Mirage_stack.V4) = struct
+module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4) = struct
 
   type stack = S.t
   type endp = Ipaddr.V4.t * int
@@ -106,7 +106,7 @@ module Make(Time:Mirage_time.S)(S:Mirage_stack.V4) = struct
       let src_port = (Random.int 64511) + 1024 in
       let callback ~src:_ ~dst:_ ~src_port:_ buf = Lwt_mvar.put mvar buf in
       let cleanfn () = return () in
-      S.listen_udpv4 s ~port:src_port callback;
+      S.UDPV4.listen (S.udpv4 s) ~port:src_port callback;
       let txfn buf =
         S.UDPV4.write ~src_port ~dst ~dst_port udp buf >>= function
         | Error e ->

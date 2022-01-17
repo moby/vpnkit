@@ -11,8 +11,8 @@ module Exclude: sig
 end
 
 module Make
-    (Ip: Mirage_protocols.IPV4)
-    (Udp: Mirage_protocols.UDPV4)
+    (Ip: Tcpip.Ip.S with type ipaddr = Ipaddr.V4.t)
+    (Udp: Tcpip.Udp.S with type ipaddr = Ipaddr.V4.t)
     (Tcp: Mirage_flow_combinators.SHUTDOWNABLE)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS) :

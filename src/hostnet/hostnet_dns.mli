@@ -11,9 +11,9 @@ module Config: sig
 end
 
 module Make
-    (Ip: Mirage_protocols.IPV4)
-    (Udp: Mirage_protocols.UDPV4)
-    (Tcp: Mirage_protocols.TCPV4)
+    (Ip: Tcpip.Ip.S with type ipaddr = Ipaddr.V4.t)
+    (Udp: Tcpip.Udp.S with type ipaddr = Ipaddr.V4.t)
+    (Tcp: Tcpip.Tcp.S with type ipaddr = Ipaddr.V4.t)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
     (Time: Mirage_time.S)
