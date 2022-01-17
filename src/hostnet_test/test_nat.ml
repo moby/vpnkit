@@ -83,7 +83,7 @@ module UdpServer = struct
     let seen_source_ports = PortSet.empty in
     let num_received = 0 in
     let t = { port; highest; num_received; seen_source_ports; c } in
-    Client.listen_udpv4 stack ~port (fun ~src:_ ~dst:_ ~src_port buffer ->
+    Client.UDPV4.listen (Client.udpv4 stack) ~port (fun ~src:_ ~dst:_ ~src_port buffer ->
         t.highest <- max t.highest (Cstruct.get_uint8 buffer 0);
         t.seen_source_ports <- PortSet.add src_port t.seen_source_ports;
         t.num_received <- t.num_received + 1;

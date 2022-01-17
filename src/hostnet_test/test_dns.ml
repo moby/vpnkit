@@ -196,7 +196,7 @@ let udp_rpc client src_port dst dst_port buffer =
     | Ok ()   -> Lwt.return_unit in
 
   let response = ref None in
-  Client.listen_udpv4 client.Client.t ~port:src_port (fun ~src:_ ~dst:_ ~src_port:remote_src_port buffer ->
+  Client.UDPV4.listen (Client.udpv4 client.Client.t) ~port:src_port (fun ~src:_ ~dst:_ ~src_port:remote_src_port buffer ->
     Log.debug (fun f ->
         f "Received UDP %d -> %d" remote_src_port src_port);
     begin match !response with
