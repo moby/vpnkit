@@ -9,7 +9,7 @@ vpnkit.exe:
 	opam exec -- dune build --profile release
 
 depends:
-	opam install vpnkit alcotest -y
+	opam install vpnkit alcotest ounit -y
 
 ocaml:
 	ocaml -version || opam init --compiler=4.12.0
