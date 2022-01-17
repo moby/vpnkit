@@ -8,7 +8,7 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let errorf fmt = Fmt.kstrf (fun e -> Lwt.return (Error (`Msg e))) fmt
+let errorf fmt = Fmt.kstr (fun e -> Lwt.return (Error (`Msg e))) fmt
 
 module Exclude = struct
 
@@ -144,7 +144,7 @@ module Make
         None
       end
 
-  let string_of_address (ip, port) = Fmt.strf "%s:%d" (Ipaddr.to_string ip) port
+  let string_of_address (ip, port) = Fmt.str "%s:%d" (Ipaddr.to_string ip) port
 
   type t = {
     http: proxy option;
@@ -459,7 +459,7 @@ module Make
                 | Ok ((ip, port) as address) ->
                   let host = Ipaddr.V4.to_string dst in
                   let description outgoing =
-                    Fmt.strf "%s:443 %s %s:%d" host
+                    Fmt.str "%s:443 %s %s:%d" host
                       (if outgoing then "-->" else "<--") (Ipaddr.to_string ip) port
                   in
                   Log.info (fun f -> f "%s: CONNECT" (description true));

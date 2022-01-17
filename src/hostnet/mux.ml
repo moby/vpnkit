@@ -47,13 +47,13 @@ module Make (Netif: Mirage_net.S) = struct
   let lift_error: ('a, Netif.error) result -> ('a, error) result = function
   | Ok x    -> Ok x
   | Error (#Mirage_net.Net.error as e) -> Error e
-  | Error e -> Fmt.kstrf (fun s -> Error (`Unknown s)) "%a" Netif.pp_error e
+  | Error e -> Fmt.kstr (fun s -> Error (`Unknown s)) "%a" Netif.pp_error e
 
   let filesystem t =
     let xs =
       RuleMap.fold
         (fun ip t acc ->
-           Fmt.strf "%a last_active_time = %.1f" Ipaddr.V4.pp ip
+           Fmt.str "%a last_active_time = %.1f" Ipaddr.V4.pp ip
              t.last_active_time
            :: acc
         ) t.rules []

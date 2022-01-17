@@ -8,7 +8,7 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let failf fmt = Fmt.kstrf failwith fmt
+let failf fmt = Fmt.kstr failwith fmt
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =

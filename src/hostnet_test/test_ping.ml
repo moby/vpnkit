@@ -5,7 +5,7 @@ let src =
   Logs.Src.set_level src (Some Logs.Debug);
   src
 
-let failf fmt = Fmt.kstrf failwith fmt
+let failf fmt = Fmt.kstr failwith fmt
 
 module Log = (val Logs.src_log src : Logs.LOG)
 

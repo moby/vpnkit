@@ -17,7 +17,7 @@ let ok x = Lwt.return (Ok x)
 
 let map_error x = Fs9p_error.map_error x
 
-let error fmt = Fmt.kstrf (fun s -> Lwt.return (Fs9p_error.error "%s" s)) fmt
+let error fmt = Fmt.kstr (fun s -> Lwt.return (Fs9p_error.error "%s" s)) fmt
 
 let err_not_a_dir name = error "%S is not a directory" name
 

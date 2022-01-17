@@ -104,7 +104,7 @@ module Client = struct
 
   let or_error name m =
     m >>= function
-    | `Error _ -> Fmt.kstrf failwith "Failed to connect %s device" name
+    | `Error _ -> Fmt.kstr failwith "Failed to connect %s device" name
     | `Ok x    -> Lwt.return x
 
   type stack = {

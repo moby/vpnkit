@@ -331,7 +331,7 @@ let test_proxy_authorization proxy () =
     Lwt.return ()
   end
 
-let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
+let err_flush e = Fmt.kstr failwith "%a" Incoming.C.pp_write_error e
 
 let test_http_connect_tunnel proxy () =
   let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
@@ -406,7 +406,7 @@ let test_http_connect_tunnel proxy () =
               | Ok flow ->
                 let ic = Outgoing.C.create flow in
                 Outgoing.C.read_some ~len:5 ic >>= function
-                | Error e -> Fmt.kstrf failwith "%a" Outgoing.C.pp_error e
+                | Error e -> Fmt.kstr failwith "%a" Outgoing.C.pp_error e
                 | Ok `Eof -> failwith "EOF"
                 | Ok (`Data buf) ->
                   let txt = Cstruct.to_string buf in
@@ -488,7 +488,7 @@ let test_http_connect_tunnel proxy () =
                   let oc = Outgoing.C.create flow in
                   let request =
                     let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
-                    let resource = Fmt.strf "localhost:%d" server.Server.port in
+                    let resource = Fmt.str "localhost:%d" server.Server.port in
                     let headers = Cohttp.Header.replace connect.Cohttp.Request.headers "host" resource in
                     { connect with Cohttp.Request.resource; headers }
                   in
@@ -504,7 +504,7 @@ let test_http_connect_tunnel proxy () =
                     if res.Cohttp.Response.status <> `OK
                     then failwith "test_http_connect_forward: HTTP CONNECT failed";
                     Outgoing.C.read_some ~len:5 oc >>= function
-                    | Error e -> Fmt.kstrf failwith "%a" Outgoing.C.pp_error e
+                    | Error e -> Fmt.kstr failwith "%a" Outgoing.C.pp_error e
                     | Ok `Eof -> failwith "EOF"
                     | Ok (`Data buf) ->
                       let txt = Cstruct.to_string buf in
@@ -554,7 +554,7 @@ let test_http_connect_tunnel proxy () =
                 let oc = Outgoing.C.create flow in
                 let request =
                   let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
-                  let resource = Fmt.strf "localhost:%d" server.Server.port in
+                  let resource = Fmt.str "localhost:%d" server.Server.port in
                   { connect with Cohttp.Request.resource }
                 in
                 Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc

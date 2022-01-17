@@ -10,7 +10,7 @@ open Vmnet
 
 let is_windows = Sys.os_type = "Win32"
 
-let failf fmt = Fmt.kstrf (fun e -> Lwt_result.fail (`Msg e)) fmt
+let failf fmt = Fmt.kstr (fun e -> Lwt_result.fail (`Msg e)) fmt
 
 module Make(Socket: Sig.SOCKETS) = struct
 

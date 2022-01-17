@@ -43,7 +43,7 @@ module ForwardServer = struct
           | Ok remote ->
             Lwt.finalize (fun () ->
                 Proxy.proxy client_flow remote >>= function
-                | Error e -> Fmt.kstrf failwith "%a" Proxy.pp_error e
+                | Error e -> Fmt.kstr failwith "%a" Proxy.pp_error e
                 | Ok (_l_stats, _r_stats) -> Lwt.return ()
               ) (fun () ->
                 Host.Sockets.Stream.Tcp.close remote
@@ -60,7 +60,7 @@ module ForwardServer = struct
               let read_into flow buf =
                 Mux.Channel.read_into flow buf >>= function
                 | Ok `Eof       -> Lwt.fail End_of_file
-                | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Mux.Channel.pp_error e
+                | Error e       -> Fmt.kstr Lwt.fail_with "%a" Mux.Channel.pp_error e
                 | Ok (`Data ()) -> Lwt.return () in
               let read_next () =
                 read_into client_flow (Cstruct.sub from_vsock_buffer 0 2) >>= fun () ->
@@ -91,7 +91,7 @@ module ForwardServer = struct
               let write flow buf =
                 Mux.Channel.write flow buf >>= function
                 | Error `Closed -> Lwt.fail End_of_file
-                | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Mux.Channel.pp_write_error e
+                | Error e       -> Fmt.kstr Lwt.fail_with "%a" Mux.Channel.pp_write_error e
                 | Ok ()         -> Lwt.return () in
               Host.Sockets.Datagram.Udp.read remote
               >>= function
@@ -257,7 +257,7 @@ module LocalTCPServer = struct
     Channel.write_string ch response 0 (String.length response);
     Channel.flush ch >|= function
     | Ok ()   -> ()
-    | Error e -> Fmt.kstrf failwith "%a" Channel.pp_write_error e
+    | Error e -> Fmt.kstr failwith "%a" Channel.pp_write_error e
 
   let create () =
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
@@ -388,7 +388,7 @@ let http_get flow =
   let message = "GET / HTTP/1.0\r\nconnection: close\r\n\r\n" in
   Channel.write_string ch message 0 (String.length message);
   Channel.flush ch >>= function
-  | Error e -> Fmt.kstrf failwith "%a" Channel.pp_write_error e
+  | Error e -> Fmt.kstr failwith "%a" Channel.pp_write_error e
   | Ok ()   ->
     Host.Sockets.Stream.Tcp.shutdown_write flow
     >>= fun () ->
@@ -480,7 +480,7 @@ let test_10_tcp_connections () =
                   let time = Unix.gettimeofday () -. start in
                   (* NOTE(djs55): on my MBP this is almost immediate *)
                   if time > 1. then
-                    Fmt.kstrf failwith "10 connections took %.02f (> 1) \
+                    Fmt.kstr failwith "10 connections took %.02f (> 1) \
                                         seconds" time;
                   Lwt.return ()
                 )

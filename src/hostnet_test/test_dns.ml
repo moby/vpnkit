@@ -8,8 +8,8 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let pp_ips = Fmt.(list ~sep:(unit ", ") Ipaddr.pp)
-let pp_ip4s = Fmt.(list ~sep:(unit ", ") Ipaddr.V4.pp)
+let pp_ips = Fmt.(list ~sep:(any ", ") Ipaddr.pp)
+let pp_ip4s = Fmt.(list ~sep:(any ", ") Ipaddr.V4.pp)
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
@@ -69,7 +69,7 @@ let test_etc_hosts_query server config () =
       Log.err (fun f ->
           f "This test relies on the name %s not existing but it really \
              has IPs: %a" test_name pp_ips ips);
-      Fmt.kstrf failwith "Test name %s really does exist" test_name
+      Fmt.kstr failwith "Test name %s really does exist" test_name
     | _ ->
       Hosts.etc_hosts := [
         test_name, Ipaddr.V4 (Ipaddr.V4.localhost);
@@ -185,7 +185,7 @@ module Server = struct
     Lwt.finalize (fun () -> f t.port) (fun () -> Udp.shutdown t.server)
 end
 
-let err_udp e = Fmt.kstrf failwith "%a" Client.UDPV4.pp_error e
+let err_udp e = Fmt.kstr failwith "%a" Client.UDPV4.pp_error e
 
 let udp_rpc client src_port dst dst_port buffer =
   let udpv4 = Client.udpv4 client.Client.t in

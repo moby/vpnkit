@@ -19,7 +19,7 @@ module Make(Input: Sig.VMNET) = struct
   let lift_error = function
   | Ok x    -> Ok x
   | Error (#Mirage_net.Net.error as e) -> Error e
-  | Error e -> Fmt.kstrf (fun s -> Error (`Unknown s)) "%a" Input.pp_error e
+  | Error e -> Fmt.kstr (fun s -> Error (`Unknown s)) "%a" Input.pp_error e
 
   type t = {
     input: Input.t;

@@ -117,7 +117,7 @@ module UdpServer = struct
       Lwt.return false
 end
 
-let err_udp e = Fmt.kstrf failwith "%a" Client.UDPV4.pp_error e
+let err_udp e = Fmt.kstr failwith "%a" Client.UDPV4.pp_error e
 
 (* Start a local UDP echo server, send traffic to it and listen for
    a response *)

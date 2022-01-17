@@ -30,7 +30,7 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
-let failf fmt = Fmt.kstrf Lwt.fail_with fmt
+let failf fmt = Fmt.kstr Lwt.fail_with fmt
 
 let or_failwith name m =
   m >>= function
@@ -41,9 +41,9 @@ type pcap = (string * int64 option) option
 
 let print_pcap = function
 | None -> "disabled"
-| Some (file, None) -> Fmt.strf "capturing to %s with no limit" file
+| Some (file, None) -> Fmt.str "capturing to %s with no limit" file
 | Some (file, Some limit) ->
-  Fmt.strf "capturing to %s but limited to %Ld" file limit
+  Fmt.str "capturing to %s but limited to %Ld" file limit
 
 type arp_table = {
   mutex: Lwt_mutex.t;
@@ -153,7 +153,7 @@ struct
     let src_port = Stack_tcp_wire.src_port id in
     let dst = Stack_tcp_wire.dst id in
     let dst_port = Stack_tcp_wire.dst_port id in
-    Fmt.strf "TCP %a:%d > %a:%d"
+    Fmt.str "TCP %a:%d > %a:%d"
       Ipaddr.V4.pp dst dst_port
       Ipaddr.V4.pp src src_port
 
@@ -512,7 +512,7 @@ struct
              payload = Udp { src = src_port; dst = dst_port; len;
                              payload = Payload payload; _ }; _ } ->
       let description =
-        Fmt.strf "%a:%d -> %a:%d" Ipaddr.V4.pp src src_port Ipaddr.V4.pp
+        Fmt.str "%a:%d -> %a:%d" Ipaddr.V4.pp src src_port Ipaddr.V4.pp
           dst dst_port
       in
       if Cstruct.length payload < len then begin
@@ -805,7 +805,7 @@ struct
       let xs =
         IPMap.fold
           (fun (remote, local) t acc ->
-             Fmt.strf "%a <-> %a last_active_time = %s"
+             Fmt.str "%a <-> %a last_active_time = %s"
                Ipaddr.V4.pp remote Ipaddr.V4.pp local
                (Duration.pp Format.str_formatter (Endpoint.idle_time t); Format.flush_str_formatter ())
              :: acc
@@ -1575,7 +1575,7 @@ struct
                   if not (List.mem preferred_ip used_ips) then begin
                     Some preferred_ip
                   end else begin
-                    Fmt.kstrf failwith "Preferred IP address %s already used."
+                    Fmt.kstr failwith "Preferred IP address %s already used."
                       (Ipaddr.V4.to_string preferred_ip)
                   end
             in

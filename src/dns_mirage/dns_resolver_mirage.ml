@@ -110,7 +110,7 @@ module Make(Time:Mirage_time.S)(S:Mirage_stack.V4) = struct
       let txfn buf =
         S.UDPV4.write ~src_port ~dst ~dst_port udp buf >>= function
         | Error e ->
-          Fmt.kstrf fail_with
+          Fmt.kstr fail_with
             "Attempting to communicate with remote resolver: %a"
             S.UDPV4.pp_error e
         | Ok () -> Lwt.return_unit
