@@ -341,10 +341,18 @@ struct
           Lwt.finalize
             (fun () ->
                on_syn_callback ()
-               >>= fun listeners ->
+               >>= fun cb ->
+               (* here source is the remote peer *)
+               let src_port = Stack_tcp_wire.src_port id in
+               begin match cb src_port with
+               | Some handler ->
+                 (* TODO: consider whether this hashtable is leaking *)
+                 Stack_tcp.listen t.tcp4 ~port:src_port ?keepalive:None handler
+               | None -> ()
+               end;
                let src = Stack_tcp_wire.dst id in
                let dst = Stack_tcp_wire.src id in
-               Stack_tcp.input t.tcp4 ~listeners ~src ~dst buf
+               Stack_tcp.input t.tcp4 ~src ~dst buf
             ) (fun () ->
                 t.pending <- Tcp.Id.Set.remove id t.pending;
                 Lwt.return_unit;
@@ -355,7 +363,7 @@ struct
         (* non-SYN packets are injected into the stack as normal *)
         let src = Stack_tcp_wire.dst id in
         let dst = Stack_tcp_wire.src id in
-        Stack_tcp.input t.tcp4 ~listeners:(fun _ -> None) ~src ~dst buf
+        Stack_tcp.input t.tcp4 ~src ~dst buf
       end
 
     module Proxy =
@@ -404,10 +412,7 @@ struct
                     close_flow t ~id `Fin
                   )
               in
-              Some {
-                Stack_tcp.process= f;
-                keepalive= None
-              }
+              Some f
             in
             Lwt.return listeners
         ) buf
@@ -577,11 +582,7 @@ struct
   let with_no_keepalive handler port =
     match handler port with
     | None -> None
-    | Some process ->
-      Some {
-        Stack_tcp.process;
-        keepalive = None
-      }
+    | Some process -> Some process
 
   module Gateway = struct
     type t = {
