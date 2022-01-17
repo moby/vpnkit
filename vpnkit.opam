@@ -1,4 +1,4 @@
-opam-version: "1.2"
+opam-version: "2.0"
 maintainer: "David Scott <dave.scott@docker.com>"
 authors: [
   "Anil Madhavapeddy <anil@recoil.org>"
@@ -14,7 +14,7 @@ authors: [
 ]
 homepage:     "https://github.com/moby/vpnkit"
 bug-reports:  "https://github.com/moby/vpnkit/issues"
-dev-repo:     "https://github.com/moby/vpnkit.git"
+dev-repo: "git+https://github.com/moby/vpnkit.git"
 doc:          "https://moby.github.io/vpnkit/"
 
 build: [
@@ -22,9 +22,10 @@ build: [
 ]
 
 depends: [
+  "ocaml"
   "dune" {build}
-  "alcotest"
-  "ounit"
+  "alcotest" {with-test}
+  "ounit" {with-test}
   "result"
   "tar" {>= "1.0.1"}
   "ipaddr" {>= "5.0.1"}
@@ -55,7 +56,7 @@ depends: [
   "mirage-vnetif" {>= "0.5.0"}
   "io-page-unix"
   "uuidm"
-  "ezjsonm"
+  "ezjsonm" {>= "0.4.0"}
   "sha"
   "stringext"
   "mirage-clock" {>= "4.0.0"}
@@ -64,3 +65,9 @@ depends: [
   "mirage-random-stdlib"
   "re" {>= "1.9.0"}
 ]
+synopsis: "VPN-friendly networking devices for HyperKit"
+description: """
+HyperKit is a hypervisor which runs on macOS using the "hypervisor.framework".
+VPNKit implements a virtual ethernet device for HyperKit VMs in a VPN-friendly
+way, by terminating and proxying all the TCP flows, caching and forwarding
+DNS requests etc. HyperKit and VPNKit are used in Docker for Mac and Windows."""
