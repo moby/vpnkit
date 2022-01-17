@@ -1,23 +1,17 @@
 platform:
-  - x64
+  - x86
 
 environment:
-  CYG_ROOT: "C:\\cygwin64"
-  CYG_CACHE: C:/cygwin64/var/cache/setup
-  CYG_MIRROR: http://mirrors.kernel.org/sourceware/cygwin/
-  CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
-  CYG_ARCH: "x86_64"
-  CYGWIN: "winsymlinks:native"
-  CUSTOM_OPAM: "1"
-  OPAM_COMP: "4.07.0+mingw64c"
-  OPAM_LINT: "false"
-  OPAMYES: 1
-  OPAMCOLORS: 1
-  OPAMVERBOSE: 1
-  BINDIR: 'C:\projects\vpnkit'
+  global:
+    FORK_USER: ocaml
+    FORK_BRANCH: master
+    CYG_ROOT: C:\cygwin64
+    PINS: "hvsock.3.0.0:https://github.com/djs55/ocaml-hvsock.git#release.3.0.0 protocol-9p.2.0.2:https://github.com/djs55/ocaml-9p.git#cstruct.length protocol-9p-unix.2.0.2:https://github.com/djs55/ocaml-9p.git#cstruct.length vpnkit:."
+    PACKAGE: "vpnkit"
+    OPAM_SWITCH: 4.08.0+mingw64c
 
 install:
-  - cmd: echo Windows build is disabled until we can remove cygwin.
+  - ps: iex ((new-object net.webclient).DownloadString("https://raw.githubusercontent.com/$env:FORK_USER/ocaml-ci-scripts/$env:FORK_BRANCH/appveyor-install.ps1"))
 
 build_script:
-  - "%CYG_BASH% '${APPVEYOR_BUILD_FOLDER}/scripts/appveyor.sh'"
+  - call %CYG_ROOT%\bin\bash.exe -l %APPVEYOR_BUILD_FOLDER%\appveyor-opam.sh
