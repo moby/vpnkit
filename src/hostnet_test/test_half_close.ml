@@ -68,7 +68,7 @@ let test_mirage_half_close () =
         if txt <> request
         then failf "Expected to read '%s', got '%s'" request txt;
         Incoming.C.read_line ic >|= data >>= fun bufs ->
-        assert (Cstruct.(len @@ concat bufs) = 0);
+        assert (Cstruct.(length @@ concat bufs) = 0);
         Log.info (fun f -> f "Read the request (up to and including EOF)");
 
         (* Write a response. If the connection is fully closed
@@ -151,7 +151,7 @@ let test_host_half_close () =
         then failf "Expected to read '%s', got '%s'" request txt;
         (* Check we're at EOF *)
         Outgoing.C.read_line oc >|= data >>= fun bufs ->
-        assert (Cstruct.(len @@ concat bufs) = 0);
+        assert (Cstruct.(length @@ concat bufs) = 0);
         Log.info (fun f -> f "Read the request (up to and including EOF)");
         (* Write response *)
         Outgoing.C.write_line oc response;

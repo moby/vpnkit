@@ -118,7 +118,7 @@ struct
     Lwt_list.iter_s (fun c -> Client.disconnect c.client) t.connections
 
   let answer buffer t =
-    let len = Cstruct.len buffer in
+    let len = Cstruct.length buffer in
     let buf = buffer in
     let open Dns.Packet in
     match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
@@ -207,7 +207,7 @@ struct
                           end;
                           (* Determine whether it's a success or a failure; if a success
                              then insert the value into the cache. *)
-                          let len = Cstruct.len reply in
+                          let len = Cstruct.length reply in
                           let buf = reply in
                           begin match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
                           | Some { detail = { rcode = NoError; _ }; answers = ((_ :: _) as answers); _ } ->

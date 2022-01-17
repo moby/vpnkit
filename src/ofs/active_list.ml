@@ -227,7 +227,7 @@ The directory will be deleted and replaced with a file of the same name.
       let n = Types.Stat.sizeof stat in
       if off < offset
       then write (off + n) rest xs
-      else if Cstruct.len rest < n then return off
+      else if Cstruct.length rest < n then return off
       else
         Lwt.return (Types.Stat.write stat rest)
         >>*= fun rest ->
@@ -246,7 +246,7 @@ The directory will be deleted and replaced with a file of the same name.
   let read_string count offset message =
     let data = Cstruct.create (String.length message) in
     Cstruct.blit_from_string message 0 data 0 (String.length message);
-    let len = min count Cstruct.(len data - offset) in
+    let len = min count Cstruct.(length data - offset) in
     let data = Cstruct.sub data offset len in
     return { Response.Read.data }
 
@@ -262,7 +262,7 @@ The directory will be deleted and replaced with a file of the same name.
         | Some x -> x in
         read_string count offset message
       | README ->
-        let len = min count Cstruct.(len readme - offset) in
+        let len = min count Cstruct.(length readme - offset) in
         let data = Cstruct.sub readme offset len in
         return { Response.Read.data }
       | Entry { instance = Some i; _ } ->
@@ -322,7 +322,7 @@ The directory will be deleted and replaced with a file of the same name.
   let write connection ~cancel:_ { Request.Write.fid; offset; data } =
     Log.debug (fun f ->
         f "Write offset=%Ld data=[%s] to file" offset (Cstruct.to_string data));
-    let ok = { Response.Write.count = Int32.of_int @@ Cstruct.len data } in
+    let ok = { Response.Write.count = Int32.of_int @@ Cstruct.length data } in
     try
       let resource = Types.Fid.Map.find fid !(connection.fids) in
       match resource with

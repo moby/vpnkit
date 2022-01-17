@@ -157,16 +157,16 @@ module Make (Flow : Mirage_flow.S) = struct
               Lwt_condition.wait channel.subflow.Subflow.incoming_c
               >>= fun () -> wait ()
         | first :: rest ->
-            let num_from_first = min (Cstruct.len first) (Cstruct.len buf) in
+            let num_from_first = min (Cstruct.length first) (Cstruct.length buf) in
             Cstruct.blit first 0 buf 0 num_from_first;
             let buf = Cstruct.shift buf num_from_first in
             let first = Cstruct.shift first num_from_first in
             Window.advance channel.subflow.Subflow.read num_from_first;
             (channel.subflow).Subflow.incoming <-
-              if Cstruct.len first = 0
+              if Cstruct.length first = 0
               then rest
               else first :: rest;
-            if Cstruct.len buf = 0 then begin
+            if Cstruct.length buf = 0 then begin
               send_window_update channel
               >>= fun () ->
               Lwt.return (Ok (`Data ()))
@@ -185,7 +185,7 @@ module Make (Flow : Mirage_flow.S) = struct
               >>= fun () -> wait ()
         | bufs ->
             (channel.subflow).Subflow.incoming <- [] ;
-            let len = List.fold_left ( + ) 0 (List.map Cstruct.len bufs) in
+            let len = List.fold_left ( + ) 0 (List.map Cstruct.length bufs) in
             Window.advance channel.subflow.Subflow.read len ;
             send_window_update channel
             >>= fun () -> Lwt.return (Ok (`Data (Cstruct.concat bufs)))
@@ -224,7 +224,7 @@ module Make (Flow : Mirage_flow.S) = struct
                  It has to be able to cope with unexpected Data. *)
               send channel.outer
                 Frame.
-                  { command= Data (Int32.of_int (Cstruct.len buf))
+                  { command= Data (Int32.of_int (Cstruct.length buf))
                   ; id= channel.id } ;
               C.write_buffer channel.outer.channel buf )
             to_send ;

@@ -170,7 +170,7 @@ module Sockets = struct
 
       let rec read t = match t.fd, t.already_read with
       | None, _ -> Lwt.return (Ok `Eof)
-      | Some _, Some data when Cstruct.len data > 0 ->
+      | Some _, Some data when Cstruct.length data > 0 ->
         t.already_read <- Some (Cstruct.sub data 0 0); (* next read is `Eof *)
         Lwt.return (Ok (`Data data))
       | Some _, Some _ ->
@@ -184,7 +184,7 @@ module Sockets = struct
             if recv.Uwt.Udp.is_partial then begin
               Log.err (fun f ->
                   f "Socket.%s.read: dropping partial response (buffer \
-                     was %d bytes)" t.label (Cstruct.len buf));
+                     was %d bytes)" t.label (Cstruct.length buf));
               read t
             end else begin
               let data = `Data (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len) in
@@ -356,7 +356,7 @@ module Sockets = struct
         if recv.Uwt.Udp.is_partial then begin
           Log.err (fun f ->
               f "Socket.%s.recvfrom: dropping partial response (buffer was \
-                 %d bytes)" server.label (Cstruct.len buf));
+                 %d bytes)" server.label (Cstruct.length buf));
           recvfrom server buf
         end else match recv.Uwt.Udp.sockaddr with
         | None ->
@@ -508,7 +508,7 @@ module Sockets = struct
 
       let read_into t buf =
         let rec loop buf =
-          if Cstruct.len buf = 0
+          if Cstruct.length buf = 0
           then Lwt.return (Ok (`Data ()))
           else
             Uwt.Tcp.read_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len t.fd
@@ -520,7 +520,7 @@ module Sockets = struct
         loop buf
 
       let read t =
-        (if Cstruct.len t.read_buffer = 0
+        (if Cstruct.length t.read_buffer = 0
          then t.read_buffer <- Cstruct.create t.read_buffer_size);
         Lwt.catch (fun () ->
             Uwt.Tcp.read_ba ~pos:t.read_buffer.Cstruct.off
@@ -845,7 +845,7 @@ module Sockets = struct
 
       let read_into t buf =
         let rec loop buf =
-          if Cstruct.len buf = 0
+          if Cstruct.length buf = 0
           then Lwt.return (Ok (`Data ()))
           else
             Uwt.Pipe.read_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len t.fd
@@ -857,7 +857,7 @@ module Sockets = struct
         loop buf
 
       let read t =
-        (if Cstruct.len t.read_buffer = 0
+        (if Cstruct.length t.read_buffer = 0
          then t.read_buffer <- Cstruct.create t.read_buffer_size);
         Lwt.catch (fun () ->
             Uwt.Pipe.read_ba ~pos:t.read_buffer.Cstruct.off

@@ -100,7 +100,7 @@ module Tcp = struct
   let read t = match t.fd with
   | None -> Lwt.return (Ok `Eof)
   | Some fd ->
-      if Cstruct.len t.read_buffer = 0 then t.read_buffer <- Cstruct.create t.read_buffer_size;
+      if Cstruct.length t.read_buffer = 0 then t.read_buffer <- Cstruct.create t.read_buffer_size;
       Lwt.catch
         (fun () ->
            Lwt_bytes.read fd t.read_buffer.Cstruct.buffer t.read_buffer.Cstruct.off t.read_buffer.Cstruct.len
@@ -322,7 +322,7 @@ module Udp = struct
 
   let read t = match t.fd, t.already_read with
   | None, _ -> Lwt.return (Ok `Eof)
-  | Some _, Some data when Cstruct.len data > 0 ->
+  | Some _, Some data when Cstruct.length data > 0 ->
       t.already_read <- Some (Cstruct.sub data 0 0); (* next read is `Eof *)
       Lwt.return (Ok (`Data data))
   | Some _, Some _ ->
@@ -352,8 +352,8 @@ module Udp = struct
       Lwt.catch
         (fun () ->
            (* Lwt on Win32 doesn't support Lwt_bytes.sendto *)
-           let bytes = Bytes.make (Cstruct.len buf) '\000' in
-           Cstruct.blit_to_bytes buf 0 bytes 0 (Cstruct.len buf);
+           let bytes = Bytes.make (Cstruct.length buf) '\000' in
+           Cstruct.blit_to_bytes buf 0 bytes 0 (Cstruct.length buf);
            Lwt_unix.sendto fd bytes 0 (Bytes.length bytes) [] t.sockaddr
            >|= fun _n -> Ok ()
         ) (fun e ->

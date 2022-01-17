@@ -356,7 +356,7 @@ struct
 
   let answer t is_tcp buf =
     let open Dns.Packet in
-    let len = Cstruct.len buf in
+    let len = Cstruct.length buf in
     match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
     | None ->
       Lwt.return (Error (`Msg "failed to parse DNS packet"))
@@ -394,10 +394,10 @@ struct
               | _, [] -> acc
               | n, x :: xs -> loop (n - 1) xs (x :: acc) in
             List.rev @@ loop n from [] in
-          if Cstruct.len buf > max_udp_response then begin
+          if Cstruct.length buf > max_udp_response then begin
             match search (fun num ->
               (* use only the first 'num' answers *)
-              Cstruct.len (marshal @@ reply ~tc:true (take num answers)) <= max_udp_response
+              Cstruct.length (marshal @@ reply ~tc:true (take num answers)) <= max_udp_response
             ) 0 (List.length answers) with
             | None -> None
             | Some num -> Some (marshal @@ reply ~tc:true (take num answers))
@@ -451,7 +451,7 @@ struct
       Lwt.return (Error (`Msg "DNS packet had multiple questions"))
 
   let describe buf =
-    let len = Cstruct.len buf in
+    let len = Cstruct.length buf in
     match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
     | None -> Printf.sprintf "Unparsable DNS packet length %d" len
     | Some request -> Dns.Packet.to_string request

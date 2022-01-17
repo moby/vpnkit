@@ -427,7 +427,7 @@ struct
         set_icmpv4_seq header safe_outgoing_mtu;
         let icmp_payload = match ip_payload with
         | Some ip_payload ->
-          if (Cstruct.len ip_payload > 8) then begin
+          if (Cstruct.length ip_payload > 8) then begin
             let ip_payload = Cstruct.sub ip_payload 0 8 in
             Cstruct.append ip_header ip_payload
           end else Cstruct.append ip_header ip_payload
@@ -515,11 +515,11 @@ struct
         Fmt.strf "%a:%d -> %a:%d" Ipaddr.V4.pp src src_port Ipaddr.V4.pp
           dst dst_port
       in
-      if Cstruct.len payload < len then begin
+      if Cstruct.length payload < len then begin
         Log.err (fun f -> f "%s: dropping because reported len %d actual len %d"
-                    description len (Cstruct.len payload));
+                    description len (Cstruct.length payload));
         Lwt.return (Ok ())
-      end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
+      end else if dnf && (Cstruct.length payload > safe_outgoing_mtu) then begin
         Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port
           ~dst_port ~ihl raw
         >|= lift_ipv4_error
@@ -755,12 +755,12 @@ struct
                              payload = Payload payload; _ }; _ } ->
       let description = Printf.sprintf "%s:%d -> %s:%d"
           (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in
-      if Cstruct.len payload < len then begin
+      if Cstruct.length payload < len then begin
         Log.err (fun f ->
             f "%s: dropping because reported len %d actual len %d"
-              description len (Cstruct.len payload));
+              description len (Cstruct.length payload));
         Lwt_result.return ()
-      end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
+      end else if dnf && (Cstruct.length payload > safe_outgoing_mtu) then begin
         Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port
           ~dst_port ~ihl raw
       end else begin
@@ -889,7 +889,7 @@ struct
                  Vfs.File.read fd ~offset ~count
                  >>?= fun buf ->
                  fragments := buf :: !fragments;
-                 let len = Int64.of_int @@ Cstruct.len buf in
+                 let len = Int64.of_int @@ Cstruct.length buf in
                  if len = 0L
                  then Lwt.return_unit
                  else aux (Int64.add offset len) in
@@ -900,7 +900,7 @@ struct
              copy ()
              >>= fun fragments ->
              let length =
-               List.fold_left (+) 0 (List.map Cstruct.len fragments)
+               List.fold_left (+) 0 (List.map Cstruct.length fragments)
              in
              let header =
                Tar.Header.make ~file_mode:0o0644 ~mod_time
@@ -1131,8 +1131,8 @@ struct
                 (Macaddr.to_string eth_src)
                 (Macaddr.to_string eth_dst));
           (Switch.write ~size:Ethernet_wire.sizeof_ethernet switch (fun toBuf ->
-            Cstruct.blit buf 0 toBuf 0 (Cstruct.len buf);
-            Cstruct.len buf)
+            Cstruct.blit buf 0 toBuf 0 (Cstruct.length buf);
+            Cstruct.length buf)
            >|= function
             | Ok ()   -> ()
             | Error e ->
@@ -1158,8 +1158,8 @@ struct
           (* pass to virtual network *)
           begin
             Vnet.write vnet_switch t.vnet_client_id ~size:Ethernet_wire.sizeof_ethernet (fun toBuf ->
-              Cstruct.blit buf 0 toBuf 0 (Cstruct.len buf);
-              Cstruct.len buf)
+              Cstruct.blit buf 0 toBuf 0 (Cstruct.length buf);
+              Cstruct.length buf)
             >|= function
             | Ok ()   -> ()
             | Error e ->

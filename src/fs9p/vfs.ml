@@ -119,11 +119,11 @@ module File = struct
       in
       let rec read count =
         !buffer >>= fun avail ->
-        if Cstruct.len avail = 0 then (
+        if Cstruct.length avail = 0 then (
           refill ();
           read count )
         else
-          let count = min count (Cstruct.len avail) in
+          let count = min count (Cstruct.length avail) in
           let response = Cstruct.sub avail 0 count in
           buffer := Lwt.return (Cstruct.shift avail count);
           Lwt.return (Ok response)
@@ -146,9 +146,9 @@ module File = struct
 
     let static data =
       let read ~offset ~count =
-        check_offset ~offset (Cstruct.len data) >>*= fun () ->
+        check_offset ~offset (Cstruct.length data) >>*= fun () ->
         let avail = Cstruct.shift data (Int64.to_int offset) in
-        let count = min count (Cstruct.len avail) in
+        let count = min count (Cstruct.length avail) in
         ok (Cstruct.sub avail 0 count)
       in
       let write ~offset:_ _data = err_read_only in
@@ -173,7 +173,7 @@ module File = struct
         else
           Stream.read stream count >>*= fun result ->
           current_offset :=
-            !current_offset ++ Int64.of_int (Cstruct.len result);
+            !current_offset ++ Int64.of_int (Cstruct.length result);
           need_flush := true;
           ok result
       in
@@ -181,7 +181,7 @@ module File = struct
         if offset <> !current_offset then err_stream_seek
         else
           Stream.write stream data >>*= fun () ->
-          current_offset := !current_offset ++ Int64.of_int (Cstruct.len data);
+          current_offset := !current_offset ++ Int64.of_int (Cstruct.length data);
           ok ()
       in
       ok { read; write }
@@ -230,7 +230,7 @@ module File = struct
       ~chmod:(fun _ -> err_read_only)
 
   let ro_of_cstruct ?(perm = `Normal) data =
-    let length = Cstruct.len data |> Int64.of_int in
+    let length = Cstruct.length data |> Int64.of_int in
     let stat () = ok { length; perm } in
     let open_ () = Fd.static data in
     read_only_aux ~stat ~open_
@@ -259,12 +259,12 @@ module File = struct
        connection at least). *)
     let data = ref (Cstruct.of_string init) in
     let stat () =
-      let length = Int64.of_int @@ Cstruct.len !data in
+      let length = Int64.of_int @@ Cstruct.length !data in
       ok { length; perm = `Normal }
     in
     let open_ () =
       let read count =
-        let count = min count (Cstruct.len !data) in
+        let count = min count (Cstruct.length !data) in
         let result = Cstruct.sub !data 0 count in
         data := Cstruct.shift !data count;
         ok result
@@ -304,7 +304,7 @@ module File = struct
       in
       let read count =
         data >>= fun data ->
-        let count = min count (Cstruct.len !data) in
+        let count = min count (Cstruct.length !data) in
         let result = Cstruct.sub !data 0 count in
         data := Cstruct.shift !data count;
         ok result
@@ -320,8 +320,8 @@ module File = struct
       from [orig] and [padding] is zeroes inserted as needed. *)
   let overwrite orig (data, offset) =
     let orig = match orig with None -> empty | Some orig -> orig in
-    let orig_len = Cstruct.len orig in
-    let data_len = Cstruct.len data in
+    let orig_len = Cstruct.length orig in
+    let data_len = Cstruct.length data in
     if offset = 0 && data_len >= orig_len then data (* Common, fast case *)
     else
       let padding = Cstruct.create (max 0 (offset - orig_len)) in
@@ -332,7 +332,7 @@ module File = struct
         else empty
       in
       Cstruct.concat
-        [ Cstruct.sub orig 0 (min offset (Cstruct.len orig));
+        [ Cstruct.sub orig 0 (min offset (Cstruct.length orig));
           padding;
           data;
           tail
@@ -344,9 +344,9 @@ module File = struct
         read () >>*= function
         | None -> err_no_entry
         | Some contents ->
-            check_offset ~offset (Cstruct.len contents) >>*= fun () ->
+            check_offset ~offset (Cstruct.length contents) >>*= fun () ->
             let avail = Cstruct.shift contents (Int64.to_int offset) in
-            let count = min count (Cstruct.len avail) in
+            let count = min count (Cstruct.length avail) in
             ok (Cstruct.sub avail 0 count)
       and write ~offset data =
         let offset = Int64.to_int offset in
@@ -363,7 +363,7 @@ module File = struct
       else
         read () >>*= fun old ->
         let old = match old with None -> empty | Some old -> old in
-        let extra = len - Cstruct.len old in
+        let extra = len - Cstruct.length old in
         if extra = 0 then Lwt.return (Ok ())
         else if extra < 0 then write (Cstruct.sub old 0 len)
         else
@@ -381,7 +381,7 @@ module File = struct
   let rw_of_string init =
     let data = ref (Cstruct.of_string init) in
     let stat () =
-      let length = Int64.of_int (Cstruct.len !data) in
+      let length = Int64.of_int (Cstruct.length !data) in
       Lwt.return (Ok { length; perm = `Normal })
     in
     let read () = ok (Some !data) in
@@ -404,7 +404,7 @@ module File = struct
     read () >>*= function
     | None -> err_no_entry
     | Some data ->
-        ok { length = Int64.of_int (Cstruct.len data); perm = `Normal }
+        ok { length = Int64.of_int (Cstruct.length data); perm = `Normal }
 end
 
 module Dir = struct

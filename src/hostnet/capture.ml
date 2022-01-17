@@ -42,13 +42,13 @@ module Make(Input: Sig.VMNET) = struct
   let next_packet_id = ref initial_packet_id
 
   let push rule bufs =
-    let orig_len = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
+    let orig_len = List.fold_left (+) 0 (List.map Cstruct.length bufs) in
     let bufs =
       if Cstructs.len bufs > rule.snaplen
       then Cstructs.sub bufs 0 rule.snaplen
       else bufs
     in
-    let len = List.fold_left (+) 0 (List.map Cstruct.len bufs) in
+    let len = List.fold_left (+) 0 (List.map Cstruct.length bufs) in
     let time = Unix.gettimeofday () in
     let id = !next_packet_id in
     incr next_packet_id;
@@ -129,20 +129,20 @@ module Make(Input: Sig.VMNET) = struct
          view of the data *)
       let length, fragments =
         let hdr = 0, fun () -> file_header_buf in
-        let offset = Cstruct.len file_header_buf in
+        let offset = Cstruct.length file_header_buf in
         let _, packets = Queue.fold (fun (offset, acc) pkt ->
             let packet_hdr = offset, fun () -> frame_header frame_header_buf pkt in
-            let offset = offset + (Cstruct.len frame_header_buf) in
+            let offset = offset + (Cstruct.length frame_header_buf) in
             (* assemble packet bodies reversed, in a reversed list of packets *)
             let offset, packet_bodies = List.fold_left (fun (offset, acc) buf ->
                 let this = offset, fun () -> buf in
-                offset + (Cstruct.len buf), this :: acc
+                offset + (Cstruct.length buf), this :: acc
               ) (offset, []) pkt.bufs in
             offset, packet_bodies @ [ packet_hdr ] @ acc
           ) (offset, []) rule.packets in
         let length = match packets with
-        | [] -> Cstruct.len file_header_buf
-        | (x, buf_fn) :: _ -> x + (Cstruct.len (buf_fn ())) in
+        | [] -> Cstruct.length file_header_buf
+        | (x, buf_fn) :: _ -> x + (Cstruct.length (buf_fn ())) in
         length, hdr :: (List.rev packets) in
       let read ~offset ~count =
         (* Check if we try to read beyond the end of the file *)
@@ -152,7 +152,7 @@ module Make(Input: Sig.VMNET) = struct
 
         List.iter (fun (offset', src_fn) ->
             let src = src_fn () in
-            let count' = Cstruct.len src in
+            let count' = Cstruct.length src in
             (* Consider 4 cases of this packet relative to the requested region
                - this packet is completely before
                - this packet is completely after

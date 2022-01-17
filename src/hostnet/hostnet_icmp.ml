@@ -243,7 +243,7 @@ module Make
     Log.debug (fun f ->
       f "ICMP received %a -> %a ttl=%d ty=%d code=%d id=%d seq=%d payload len %d"
         Ipaddr.V4.pp src Ipaddr.V4.pp dst
-        ttl ty code id seq (Cstruct.len payload));
+        ttl ty code id seq (Cstruct.length payload));
     match Icmpv4_wire.int_to_ty ty with
       | None ->
         Log.err (fun f -> f "Unknown ICMP type: %d" ty);

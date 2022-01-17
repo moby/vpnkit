@@ -226,9 +226,9 @@ let send channel n =
     if n = 0 then Lwt.return_unit
     else
       let send_buf = Cstruct.create 1024 in
-      let this_time = min n (Cstruct.len send_buf) in
+      let this_time = min n (Cstruct.length send_buf) in
       let buf = Cstruct.sub send_buf 0 this_time in
-      for i = 0 to Cstruct.len buf - 1 do
+      for i = 0 to Cstruct.length buf - 1 do
         Cstruct.set_uint8 buf i (Random.int 255)
       done ;
       Sha256.update_string sha (Cstruct.to_string buf) ;
@@ -248,7 +248,7 @@ let count_recv channel =
     | Ok `Eof -> Lwt.return n
     | Ok (`Data buf) ->
         Sha256.update_string sha (Cstruct.to_string buf) ;
-        loop (Cstruct.len buf + n)
+        loop (Cstruct.length buf + n)
   in
   loop 0 >>= fun n -> Lwt.return (n, Sha256.(to_hex @@ finalize sha))
 

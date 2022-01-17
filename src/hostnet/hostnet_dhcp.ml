@@ -59,11 +59,11 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
       (* The domain search is encoded using the scheme used for DNS names *)
       let domain_search =
         let open Dns in
-        let buffer = Cstruct.create 1024 in
+        let b = Cstruct.create 1024 in
         let _, n, _ = List.fold_left (fun (map, n, buffer) name ->
             Name.marshal map n buffer (Name.of_string name)
-          ) (Name.Map.empty, 0, buffer) domain_search in
-        Cstruct.(to_string (sub buffer 0 n)) in
+          ) (Name.Map.empty, 0, b) domain_search in
+        Cstruct.(to_string (sub b 0 n)) in
       (* Use the domainName from the command-line if present, otherwise use the
           dhcp.json file *)
       let domain_name = match c.Configuration.domain, !global_dhcp_configuration with
@@ -110,7 +110,7 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
 
   let input net (config : Dhcp_server.Config.t) database buf =
     let open Dhcp_server in
-    match Dhcp_wire.pkt_of_buf buf (Cstruct.len buf) with
+    match Dhcp_wire.pkt_of_buf buf (Cstruct.length buf) with
     | Error e ->
       Log.err (fun f -> f "failed to parse DHCP packet: %s" e);
       Lwt.return database
@@ -178,7 +178,7 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
         of_interest t.server_macaddr pkt.Ethernet_packet.destination ->
       (match pkt.Ethernet_packet.ethertype with
       | `IPv4 ->
-        if Dhcp_wire.is_dhcp buf (Cstruct.len buf) then begin
+        if Dhcp_wire.is_dhcp buf (Cstruct.length buf) then begin
           input t.netif (t.get_dhcp_configuration ()) !database buf
           >|= fun db ->
           database := db

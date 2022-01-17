@@ -212,7 +212,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
       let write v buf (ip, port) =
         let udp = Forwarder.Frame.Udp.({
             ip; port;
-            payload_length = Cstruct.len buf;
+            payload_length = Cstruct.length buf;
         }) in
         let header = Forwarder.Frame.Udp.write_header udp write_header_buffer in
         conn_write v header >>= fun () ->
@@ -223,10 +223,10 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
       let read v =
         conn_read v (Cstruct.sub from_vsock_buffer 0 2) >>= fun () ->
         let frame_length = Cstruct.LE.get_uint16 from_vsock_buffer 0 in
-        if frame_length > (Cstruct.len from_vsock_buffer) then begin
+        if frame_length > (Cstruct.length from_vsock_buffer) then begin
           Log.err (fun f ->
               f "UDP encapsulated frame length is %d but buffer has length %d: \
-                 dropping" frame_length (Cstruct.len from_vsock_buffer));
+                 dropping" frame_length (Cstruct.length from_vsock_buffer));
           Lwt.return None
         end else begin
           let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in

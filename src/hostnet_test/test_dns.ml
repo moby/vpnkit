@@ -149,7 +149,7 @@ module Server = struct
           Log.err (fun f -> f "Udp.read got EOF");
           Lwt.return_unit
         | Ok (`Data buf) ->
-          let len = Cstruct.len buf in
+          let len = Cstruct.length buf in
           begin match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
           | None ->
             Log.err (fun f -> f "failed to parse DNS packet");
@@ -166,7 +166,7 @@ module Server = struct
               { Dns.Packet.id; detail; questions; answers; authorities; additionals }
             in
             let buf = marshal @@ reply answers in
-            Log.info (fun f -> f "DNS response is a UDP datagram of length %d" (Cstruct.len buf));
+            Log.info (fun f -> f "DNS response is a UDP datagram of length %d" (Cstruct.length buf));
             begin Udp.write flow buf
             >>= function
             | Ok () ->
@@ -246,7 +246,7 @@ let truncate_big_response () =
           (fun () ->
             udp_rpc client 1024 primary_dns_ip 53 (Dns.Packet.marshal @@ query_a "very.big.name")
             >>= fun response ->
-            Log.err (fun f -> f "UDP response has length %d" (Cstruct.len response));
+            Log.err (fun f -> f "UDP response has length %d" (Cstruct.length response));
             begin match Dns.Protocol.Server.parse response with
             | None ->
               failwith "failed to parse truncated DNS response"

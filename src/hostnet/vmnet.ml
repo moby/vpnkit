@@ -463,7 +463,7 @@ module Make(C: Sig.CONN) = struct
     | None -> Lwt.return ()
     | Some pcap ->
       Lwt_mutex.with_lock t.pcap_m (fun () ->
-          let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
+          let len = List.(fold_left (+) 0 (map Cstruct.length bufs)) in
           let time = Unix.gettimeofday () in
           let secs = Int32.of_float time in
           let usecs = Int32.of_float (1e6 *. (time -. (floor time))) in
@@ -603,7 +603,7 @@ module Make(C: Sig.CONN) = struct
             );
           Lwt.return (Ok ())
         end else begin
-          if Cstruct.len t.write_header < Packet.sizeof then begin
+          if Cstruct.length t.write_header < Packet.sizeof then begin
             t.write_header <- Cstruct.create (1024 * Packet.sizeof)
           end;
           Packet.marshal len t.write_header;
