@@ -27,8 +27,8 @@ depends: [
   "ounit"
   "result"
   "tar" {>= "1.0.1"}
-  "ipaddr" {= "5.0.1"}
-  "lwt" {= "5.4.0"}
+  "ipaddr" {>= "5.0.1"}
+  "lwt" {>= "5.4.0"}
   "uwt" {>= "0.0.4"}
   "tcpip" {>= "7.0.0"}
   "base64" {>= "3.5.0"}
@@ -45,10 +45,9 @@ depends: [
   "astring"
   "ethernet" {>= "3.0.0"}
   "arp" {>= "3.0.0"}
-  "mirage-device" {= "2.0.0"}
-  "mirage-kv" {= "3.0.1"}
-  "mirage-net" {= "3.0.1"}
-  "mirage-time" {= "2.0.1"}
+  "mirage-kv" {>= "4.0.0"}
+  "mirage-net" {>= "4.0.0"}
+  "mirage-time" {>= "3.0.0"}
   "mirage-protocols" {>= "4.0.1"}
   "mirage-channel" {>= "4.0.1"}
   "cohttp-lwt" {>= "0.99.0"}
@@ -59,10 +58,9 @@ depends: [
   "ezjsonm"
   "sha"
   "stringext"
-  "mirage-clock" {= "3.1.0"}
-  "mirage-clock-unix" {= "3.1.0"}
-  "mirage-random" {= "2.0.0"}
+  "mirage-clock" {>= "4.0.0"}
+  "mirage-clock-unix" {>= "4.0.0"}
+  "mirage-random" {>= "3.0.0"}
   "mirage-random-stdlib"
-  "re" {= "1.9.0"}
-  "uri" {= "4.1.0"}
+  "re" {>= "1.9.0"}
 ]
