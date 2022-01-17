@@ -38,7 +38,7 @@ module Make(Input: Sig.VMNET) = struct
   let write t ~size fill = Input.write t.input ~size fill >|= lift_error
 
   let filter valid_subnets valid_sources next buf =
-    match Ethernet_packet.Unmarshal.of_cstruct buf with
+    match Ethernet.Packet.of_cstruct buf with
     | Ok (_header, payload) ->
       let src = Ipaddr.V4.of_int32 @@ Ipv4_wire.get_ipv4_src payload in
       let from_valid_networks =

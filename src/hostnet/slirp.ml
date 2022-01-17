@@ -554,7 +554,7 @@ struct
       let tcp_stack = { endpoint; udp_nat; dns_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
-      Switch.Port.listen ~header_size:Ethernet_wire.sizeof_ethernet endpoint.Endpoint.netif
+      Switch.Port.listen ~header_size:Ethernet.Packet.sizeof_ethernet endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
            match parse [ buf ] with
@@ -681,7 +681,7 @@ struct
       let tcp_stack = { endpoint; udp_nat; dns_ips; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
-      Switch.Port.listen ~header_size:Ethernet_wire.sizeof_ethernet endpoint.Endpoint.netif
+      Switch.Port.listen ~header_size:Ethernet.Packet.sizeof_ethernet endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
            match parse [ buf ] with
@@ -780,7 +780,7 @@ struct
       let tcp_stack = { endpoint; udp_nat; icmp_nat; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
-      Switch.Port.listen ~header_size:Ethernet_wire.sizeof_ethernet endpoint.Endpoint.netif
+      Switch.Port.listen ~header_size:Ethernet.Packet.sizeof_ethernet endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
            match parse [ buf ] with
@@ -1130,7 +1130,7 @@ struct
                 vnet_client_id
                 (Macaddr.to_string eth_src)
                 (Macaddr.to_string eth_dst));
-          (Switch.write ~size:Ethernet_wire.sizeof_ethernet switch (fun toBuf ->
+          (Switch.write ~size:Ethernet.Packet.sizeof_ethernet switch (fun toBuf ->
             Cstruct.blit buf 0 toBuf 0 (Cstruct.length buf);
             Cstruct.length buf)
            >|= function
@@ -1144,7 +1144,7 @@ struct
     Log.info (fun f ->
         f "Client mac: %s server mac: %s"
           (Macaddr.to_string client_macaddr) (Macaddr.to_string c.Configuration.server_macaddr));
-    Switch.listen switch ~header_size:Ethernet_wire.sizeof_ethernet (fun buf ->
+    Switch.listen switch ~header_size:Ethernet.Packet.sizeof_ethernet (fun buf ->
         let open Frame in
         match parse [ buf ] with
         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
@@ -1157,7 +1157,7 @@ struct
                 (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
           (* pass to virtual network *)
           begin
-            Vnet.write vnet_switch t.vnet_client_id ~size:Ethernet_wire.sizeof_ethernet (fun toBuf ->
+            Vnet.write vnet_switch t.vnet_client_id ~size:Ethernet.Packet.sizeof_ethernet (fun toBuf ->
               Cstruct.blit buf 0 toBuf 0 (Cstruct.length buf);
               Cstruct.length buf)
             >|= function
@@ -1190,7 +1190,7 @@ struct
                 |> Lwt.return)
           end
           >>= fun arp ->
-          Global_arp.input arp (Cstruct.shift buf Ethernet_wire.sizeof_ethernet)
+          Global_arp.input arp (Cstruct.shift buf Ethernet.Packet.sizeof_ethernet)
         | Ok (Ethernet { payload = Ipv4 ({ src; dst; _ } as ipv4 ); _ }) ->
           (* For any new IP destination, create a stack to proxy for
             the remote system *)

@@ -173,10 +173,10 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
        pre-allocated IP anyway, but this will present a problem if
        that assumption ever changes.  *)
     let database = ref (Dhcp_server.Lease.make_db ()) in
-    match Ethernet_packet.Unmarshal.of_cstruct buf with
+    match Ethernet.Packet.of_cstruct buf with
     | Ok (pkt, _payload) when
-        of_interest t.server_macaddr pkt.Ethernet_packet.destination ->
-      (match pkt.Ethernet_packet.ethertype with
+        of_interest t.server_macaddr pkt.Ethernet.Packet.destination ->
+      (match pkt.Ethernet.Packet.ethertype with
       | `IPv4 ->
         if Dhcp_wire.is_dhcp buf (Cstruct.length buf) then begin
           input t.netif (t.get_dhcp_configuration ()) !database buf
