@@ -32,18 +32,18 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make (Ethif: Mirage_protocols.ETHERNET) = struct
+module Make (Ethif: Ethernet.S) = struct
 
   module Table = Map.Make(Ipaddr.V4)
 
   type macaddr = Macaddr.t
   type t = { ethif: Ethif.t; mutable table: macaddr Table.t }
-  type error = Mirage_protocols.Arp.error
-  let pp_error = Mirage_protocols.Arp.pp_error
+  type error = [ `Timeout ]
+  let pp_error ppf `Timeout = Fmt.string ppf "Timeout"
 
   let to_string t =
     let pp_one (ip, mac) =
-      Fmt.strf "%s -> %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac)
+      Fmt.str "%s -> %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac)
     in
     Table.bindings t.table
     |> List.map pp_one

@@ -36,7 +36,7 @@ module Make(Server: Rpc.Server.S) = struct
     let open Lwt.Infix in
     Lwt_unix.sleep t.delay
     >>= fun () ->
-    let len = Cstruct.len buffer in
+    let len = Cstruct.length buffer in
     let buf = buffer in
     match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
     | Some request ->

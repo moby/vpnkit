@@ -27,7 +27,7 @@ module Make (Channel: Mirage_channel.S) = struct
   type oc = Channel.t
   type conn = Channel.flow
 
-  let failf fmt = Fmt.kstrf Lwt.fail_with fmt
+  let failf fmt = Fmt.kstr Lwt.fail_with fmt
 
   let read_line ic =
     Channel.read_line ic >>= function

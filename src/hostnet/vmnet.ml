@@ -18,7 +18,7 @@ module Init = struct
   }
 
   let to_string t =
-    Fmt.strf "{ magic = %s; version = %ld; commit = %s }"
+    Fmt.str "{ magic = %s; version = %ld; commit = %s }"
       t.magic t.version t.commit
 
   let sizeof = 5 + 4 + 40
@@ -51,11 +51,11 @@ module Command = struct
     | Bind_ipv4 of Ipaddr.V4.t * int * bool
 
   let to_string = function
-  | Ethernet x -> Fmt.strf "Ethernet %a" Uuidm.pp x
+  | Ethernet x -> Fmt.str "Ethernet %a" Uuidm.pp x
   | Preferred_ipv4 (uuid, ip) ->
-    Fmt.strf "Preferred_ipv4 %a %a" Uuidm.pp uuid Ipaddr.V4.pp ip
+    Fmt.str "Preferred_ipv4 %a %a" Uuidm.pp uuid Ipaddr.V4.pp ip
   | Bind_ipv4 (ip, port, tcp) ->
-    Fmt.strf "Bind_ipv4 %a %d %b" Ipaddr.V4.pp ip port tcp
+    Fmt.str "Bind_ipv4 %a %d %b" Ipaddr.V4.pp ip port tcp
 
   let sizeof = 1 + 36 + 4
 
@@ -125,7 +125,7 @@ module Vif = struct
   }
 
   let to_string t =
-    Fmt.strf "{ mtu = %d; max_packet_size = %d; client_macaddr = %s }"
+    Fmt.str "{ mtu = %d; max_packet_size = %d; client_macaddr = %s }"
       t.mtu t.max_packet_size (Macaddr.to_string t.client_macaddr)
 
   let create client_macaddr mtu () =
@@ -213,7 +213,7 @@ module Make(C: Sig.CONN) = struct
   | #Mirage_net.Net.error as e -> Mirage_net.Net.pp_error ppf e
   | `Channel e                -> Channel.pp_write_error ppf e
 
-  let failf fmt = Fmt.kstrf (fun e -> Lwt_result.fail (`Msg e)) fmt
+  let failf fmt = Fmt.kstr (fun e -> Lwt_result.fail (`Msg e)) fmt
 
   type t = {
     mutable fd: Channel.t option;
@@ -463,7 +463,7 @@ module Make(C: Sig.CONN) = struct
     | None -> Lwt.return ()
     | Some pcap ->
       Lwt_mutex.with_lock t.pcap_m (fun () ->
-          let len = List.(fold_left (+) 0 (map Cstruct.len bufs)) in
+          let len = List.(fold_left (+) 0 (map Cstruct.length bufs)) in
           let time = Unix.gettimeofday () in
           let secs = Int32.of_float time in
           let usecs = Int32.of_float (1e6 *. (time -. (floor time))) in
@@ -603,7 +603,7 @@ module Make(C: Sig.CONN) = struct
             );
           Lwt.return (Ok ())
         end else begin
-          if Cstruct.len t.write_header < Packet.sizeof then begin
+          if Cstruct.length t.write_header < Packet.sizeof then begin
             t.write_header <- Cstruct.create (1024 * Packet.sizeof)
           end;
           Packet.marshal len t.write_header;

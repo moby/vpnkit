@@ -1002,7 +1002,7 @@ let parse_rdata names base t cls ttl buf =
                   HINFO (cpu, os)
 
     | RR_ISDN -> let a, buf = parse_charstr buf in
-                 let sa = match Cstruct.len buf with
+                 let sa = match Cstruct.length buf with
                    | 0 -> None
                    | _ -> Some (buf |> parse_charstr |> stop)
                  in
@@ -1046,17 +1046,17 @@ let parse_rdata names base t cls ttl buf =
         ))
 
     | RR_SRV ->
-        Cstruct.(BE.(
+        Cstruct.BE.(
           SRV (get_uint16 buf 0, (* prio *)
                get_uint16 buf 2, (* weight *)
                get_uint16 buf 4, (* port *)
-               shift buf 6 |> Name.parse names (base+6) |> stop
-          )))
+               Cstruct.shift buf 6 |> Name.parse names (base+6) |> stop
+          ))
 
     | RR_TXT ->
         let strings =
           let rec aux strings buf =
-            match Cstruct.len buf with
+            match Cstruct.length buf with
               | 0 -> List.rev strings
               | _len ->
                   let s, buf = parse_charstr buf in
@@ -1535,7 +1535,7 @@ let marshal ?(alloc = fun () -> Cstruct.create 4096) dns =
   let names,base,buf = marshaln marshal_rr names base buf dns.authorities in
   let _,_,buf = marshaln marshal_rr names base buf dns.additionals in
 
-  let txbuf = Cstruct.(sub txbuf 0 (len txbuf - len buf)) in
+  let txbuf = Cstruct.(sub txbuf 0 (length txbuf - length buf)) in
   (* Cstruct.hexdump txbuf;   *)
   (* eprintf "TX: %s\n%!" (txbuf |> parse (Hashtbl.create 8) |> to_string); *)
   txbuf

@@ -180,9 +180,9 @@ let try_builtins builtin_names question =
   | _ -> `Dont_know
 
 module Make
-    (Ip: Mirage_protocols.IPV4)
-    (Udp:Mirage_protocols.UDPV4)
-    (Tcp:Mirage_protocols.TCPV4)
+    (Ip: Tcpip.Ip.S with type ipaddr = Ipaddr.V4.t)
+    (Udp: Tcpip.Udp.S with type ipaddr = Ipaddr.V4.t)
+    (Tcp: Tcpip.Tcp.S with type ipaddr = Ipaddr.V4.t)
     (Socket: Sig.SOCKETS)
     (D: Sig.DNS)
     (Time: Mirage_time.S)
@@ -253,9 +253,9 @@ struct
          packet creation fn *)
       let frame = Io_page.to_cstruct (Io_page.get 1) in
       let smac = "\000\000\000\000\000\000" in
-      Ethernet_wire.set_ethernet_src smac 0 frame;
-      Ethernet_wire.set_ethernet_ethertype frame 0x0800;
-      let buf = Cstruct.shift frame Ethernet_wire.sizeof_ethernet in
+      Ethernet__Ethernet_wire.set_ethernet_src smac 0 frame;
+      Ethernet__Ethernet_wire.set_ethernet_ethertype frame 0x0800;
+      let buf = Cstruct.shift frame Ethernet.Packet.sizeof_ethernet in
       Ipv4_wire.set_ipv4_hlen_version buf ((4 lsl 4) + (5));
       Ipv4_wire.set_ipv4_tos buf 0;
       Ipv4_wire.set_ipv4_ttl buf 38;
@@ -264,7 +264,7 @@ struct
       Ipv4_wire.set_ipv4_src buf (Ipaddr.V4.to_int32 source_ip);
       Ipv4_wire.set_ipv4_dst buf (Ipaddr.V4.to_int32 dest_ip);
       let header_len =
-        Ethernet_wire.sizeof_ethernet + Ipv4_wire.sizeof_ipv4
+        Ethernet.Packet.sizeof_ethernet + Ipv4_wire.sizeof_ipv4
       in
 
       let frame = Cstruct.sub frame 0 (header_len + Udp_wire.sizeof_udp) in
@@ -276,12 +276,12 @@ struct
       (* Only for recording, no need to set a checksum. *)
       (* Ip.writev *)
       let bufs = frame :: bufs in
-      let tlen = Cstruct.lenv bufs - Ethernet_wire.sizeof_ethernet in
+      let tlen = Cstruct.lenv bufs - Ethernet.Packet.sizeof_ethernet in
       let dmac = String.make 6 '\000' in
       (* Ip.adjust_output_header *)
-      Ethernet_wire.set_ethernet_dst dmac 0 frame;
+      Ethernet__Ethernet_wire.set_ethernet_dst dmac 0 frame;
       let buf =
-        Cstruct.sub frame Ethernet_wire.sizeof_ethernet Ipv4_wire.sizeof_ipv4
+        Cstruct.sub frame Ethernet.Packet.sizeof_ethernet Ipv4_wire.sizeof_ipv4
       in
       (* Set the mutable values in the ipv4 header *)
       Ipv4_wire.set_ipv4_len buf tlen;
@@ -356,7 +356,7 @@ struct
 
   let answer t is_tcp buf =
     let open Dns.Packet in
-    let len = Cstruct.len buf in
+    let len = Cstruct.length buf in
     match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
     | None ->
       Lwt.return (Error (`Msg "failed to parse DNS packet"))
@@ -394,10 +394,10 @@ struct
               | _, [] -> acc
               | n, x :: xs -> loop (n - 1) xs (x :: acc) in
             List.rev @@ loop n from [] in
-          if Cstruct.len buf > max_udp_response then begin
+          if Cstruct.length buf > max_udp_response then begin
             match search (fun num ->
               (* use only the first 'num' answers *)
-              Cstruct.len (marshal @@ reply ~tc:true (take num answers)) <= max_udp_response
+              Cstruct.length (marshal @@ reply ~tc:true (take num answers)) <= max_udp_response
             ) 0 (List.length answers) with
             | None -> None
             | Some num -> Some (marshal @@ reply ~tc:true (take num answers))
@@ -451,7 +451,7 @@ struct
       Lwt.return (Error (`Msg "DNS packet had multiple questions"))
 
   let describe buf =
-    let len = Cstruct.len buf in
+    let len = Cstruct.length buf in
     match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
     | None -> Printf.sprintf "Unparsable DNS packet length %d" len
     | Some request -> Dns.Packet.to_string request

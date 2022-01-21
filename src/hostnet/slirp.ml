@@ -30,7 +30,7 @@ let log_exception_continue description f =
        Lwt.return ()
     )
 
-let failf fmt = Fmt.kstrf Lwt.fail_with fmt
+let failf fmt = Fmt.kstr Lwt.fail_with fmt
 
 let or_failwith name m =
   m >>= function
@@ -41,9 +41,9 @@ type pcap = (string * int64 option) option
 
 let print_pcap = function
 | None -> "disabled"
-| Some (file, None) -> Fmt.strf "capturing to %s with no limit" file
+| Some (file, None) -> Fmt.str "capturing to %s with no limit" file
 | Some (file, Some limit) ->
-  Fmt.strf "capturing to %s but limited to %Ld" file limit
+  Fmt.str "capturing to %s but limited to %Ld" file limit
 
 type arp_table = {
   mutex: Lwt_mutex.t;
@@ -153,7 +153,7 @@ struct
     let src_port = Stack_tcp_wire.src_port id in
     let dst = Stack_tcp_wire.dst id in
     let dst_port = Stack_tcp_wire.dst_port id in
-    Fmt.strf "TCP %a:%d > %a:%d"
+    Fmt.str "TCP %a:%d > %a:%d"
       Ipaddr.V4.pp dst dst_port
       Ipaddr.V4.pp src src_port
 
@@ -341,10 +341,18 @@ struct
           Lwt.finalize
             (fun () ->
                on_syn_callback ()
-               >>= fun listeners ->
+               >>= fun cb ->
+               (* here source is the remote peer *)
+               let src_port = Stack_tcp_wire.src_port id in
+               begin match cb src_port with
+               | Some handler ->
+                 (* TODO: consider whether this hashtable is leaking *)
+                 Stack_tcp.listen t.tcp4 ~port:src_port ?keepalive:None handler
+               | None -> ()
+               end;
                let src = Stack_tcp_wire.dst id in
                let dst = Stack_tcp_wire.src id in
-               Stack_tcp.input t.tcp4 ~listeners ~src ~dst buf
+               Stack_tcp.input t.tcp4 ~src ~dst buf
             ) (fun () ->
                 t.pending <- Tcp.Id.Set.remove id t.pending;
                 Lwt.return_unit;
@@ -355,7 +363,7 @@ struct
         (* non-SYN packets are injected into the stack as normal *)
         let src = Stack_tcp_wire.dst id in
         let dst = Stack_tcp_wire.src id in
-        Stack_tcp.input t.tcp4 ~listeners:(fun _ -> None) ~src ~dst buf
+        Stack_tcp.input t.tcp4 ~src ~dst buf
       end
 
     module Proxy =
@@ -404,10 +412,7 @@ struct
                     close_flow t ~id `Fin
                   )
               in
-              Some {
-                Stack_tcp.process= f;
-                keepalive= None
-              }
+              Some f
             in
             Lwt.return listeners
         ) buf
@@ -427,7 +432,7 @@ struct
         set_icmpv4_seq header safe_outgoing_mtu;
         let icmp_payload = match ip_payload with
         | Some ip_payload ->
-          if (Cstruct.len ip_payload > 8) then begin
+          if (Cstruct.length ip_payload > 8) then begin
             let ip_payload = Cstruct.sub ip_payload 0 8 in
             Cstruct.append ip_header ip_payload
           end else Cstruct.append ip_header ip_payload
@@ -512,14 +517,14 @@ struct
              payload = Udp { src = src_port; dst = dst_port; len;
                              payload = Payload payload; _ }; _ } ->
       let description =
-        Fmt.strf "%a:%d -> %a:%d" Ipaddr.V4.pp src src_port Ipaddr.V4.pp
+        Fmt.str "%a:%d -> %a:%d" Ipaddr.V4.pp src src_port Ipaddr.V4.pp
           dst dst_port
       in
-      if Cstruct.len payload < len then begin
+      if Cstruct.length payload < len then begin
         Log.err (fun f -> f "%s: dropping because reported len %d actual len %d"
-                    description len (Cstruct.len payload));
+                    description len (Cstruct.length payload));
         Lwt.return (Ok ())
-      end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
+      end else if dnf && (Cstruct.length payload > safe_outgoing_mtu) then begin
         Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port
           ~dst_port ~ihl raw
         >|= lift_ipv4_error
@@ -554,7 +559,7 @@ struct
       let tcp_stack = { endpoint; udp_nat; dns_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
-      Switch.Port.listen ~header_size:Ethernet_wire.sizeof_ethernet endpoint.Endpoint.netif
+      Switch.Port.listen ~header_size:Ethernet.Packet.sizeof_ethernet endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
            match parse [ buf ] with
@@ -577,11 +582,7 @@ struct
   let with_no_keepalive handler port =
     match handler port with
     | None -> None
-    | Some process ->
-      Some {
-        Stack_tcp.process;
-        keepalive = None
-      }
+    | Some process -> Some process
 
   module Gateway = struct
     type t = {
@@ -681,7 +682,7 @@ struct
       let tcp_stack = { endpoint; udp_nat; dns_ips; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
-      Switch.Port.listen ~header_size:Ethernet_wire.sizeof_ethernet endpoint.Endpoint.netif
+      Switch.Port.listen ~header_size:Ethernet.Packet.sizeof_ethernet endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
            match parse [ buf ] with
@@ -755,12 +756,12 @@ struct
                              payload = Payload payload; _ }; _ } ->
       let description = Printf.sprintf "%s:%d -> %s:%d"
           (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in
-      if Cstruct.len payload < len then begin
+      if Cstruct.length payload < len then begin
         Log.err (fun f ->
             f "%s: dropping because reported len %d actual len %d"
-              description len (Cstruct.len payload));
+              description len (Cstruct.length payload));
         Lwt_result.return ()
-      end else if dnf && (Cstruct.len payload > safe_outgoing_mtu) then begin
+      end else if dnf && (Cstruct.length payload > safe_outgoing_mtu) then begin
         Endpoint.send_icmp_dst_unreachable t.endpoint ~src ~dst ~src_port
           ~dst_port ~ihl raw
       end else begin
@@ -780,7 +781,7 @@ struct
       let tcp_stack = { endpoint; udp_nat; icmp_nat; localhost_names; localhost_ips } in
       let open Lwt.Infix in
       (* Wire up the listeners to receive future packets: *)
-      Switch.Port.listen ~header_size:Ethernet_wire.sizeof_ethernet endpoint.Endpoint.netif
+      Switch.Port.listen ~header_size:Ethernet.Packet.sizeof_ethernet endpoint.Endpoint.netif
         (fun buf ->
            let open Frame in
            match parse [ buf ] with
@@ -805,7 +806,7 @@ struct
       let xs =
         IPMap.fold
           (fun (remote, local) t acc ->
-             Fmt.strf "%a <-> %a last_active_time = %s"
+             Fmt.str "%a <-> %a last_active_time = %s"
                Ipaddr.V4.pp remote Ipaddr.V4.pp local
                (Duration.pp Format.str_formatter (Endpoint.idle_time t); Format.flush_str_formatter ())
              :: acc
@@ -889,7 +890,7 @@ struct
                  Vfs.File.read fd ~offset ~count
                  >>?= fun buf ->
                  fragments := buf :: !fragments;
-                 let len = Int64.of_int @@ Cstruct.len buf in
+                 let len = Int64.of_int @@ Cstruct.length buf in
                  if len = 0L
                  then Lwt.return_unit
                  else aux (Int64.add offset len) in
@@ -900,7 +901,7 @@ struct
              copy ()
              >>= fun fragments ->
              let length =
-               List.fold_left (+) 0 (List.map Cstruct.len fragments)
+               List.fold_left (+) 0 (List.map Cstruct.length fragments)
              in
              let header =
                Tar.Header.make ~file_mode:0o0644 ~mod_time
@@ -1130,9 +1131,9 @@ struct
                 vnet_client_id
                 (Macaddr.to_string eth_src)
                 (Macaddr.to_string eth_dst));
-          (Switch.write ~size:Ethernet_wire.sizeof_ethernet switch (fun toBuf ->
-            Cstruct.blit buf 0 toBuf 0 (Cstruct.len buf);
-            Cstruct.len buf)
+          (Switch.write ~size:Ethernet.Packet.sizeof_ethernet switch (fun toBuf ->
+            Cstruct.blit buf 0 toBuf 0 (Cstruct.length buf);
+            Cstruct.length buf)
            >|= function
             | Ok ()   -> ()
             | Error e ->
@@ -1144,7 +1145,7 @@ struct
     Log.info (fun f ->
         f "Client mac: %s server mac: %s"
           (Macaddr.to_string client_macaddr) (Macaddr.to_string c.Configuration.server_macaddr));
-    Switch.listen switch ~header_size:Ethernet_wire.sizeof_ethernet (fun buf ->
+    Switch.listen switch ~header_size:Ethernet.Packet.sizeof_ethernet (fun buf ->
         let open Frame in
         match parse [ buf ] with
         | Ok (Ethernet { src = eth_src ; dst = eth_dst ; _ }) when
@@ -1157,9 +1158,9 @@ struct
                 (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
           (* pass to virtual network *)
           begin
-            Vnet.write vnet_switch t.vnet_client_id ~size:Ethernet_wire.sizeof_ethernet (fun toBuf ->
-              Cstruct.blit buf 0 toBuf 0 (Cstruct.len buf);
-              Cstruct.len buf)
+            Vnet.write vnet_switch t.vnet_client_id ~size:Ethernet.Packet.sizeof_ethernet (fun toBuf ->
+              Cstruct.blit buf 0 toBuf 0 (Cstruct.length buf);
+              Cstruct.length buf)
             >|= function
             | Ok ()   -> ()
             | Error e ->
@@ -1190,7 +1191,7 @@ struct
                 |> Lwt.return)
           end
           >>= fun arp ->
-          Global_arp.input arp (Cstruct.shift buf Ethernet_wire.sizeof_ethernet)
+          Global_arp.input arp (Cstruct.shift buf Ethernet.Packet.sizeof_ethernet)
         | Ok (Ethernet { payload = Ipv4 ({ src; dst; _ } as ipv4 ); _ }) ->
           (* For any new IP destination, create a stack to proxy for
             the remote system *)
@@ -1575,7 +1576,7 @@ struct
                   if not (List.mem preferred_ip used_ips) then begin
                     Some preferred_ip
                   end else begin
-                    Fmt.kstrf failwith "Preferred IP address %s already used."
+                    Fmt.kstr failwith "Preferred IP address %s already used."
                       (Ipaddr.V4.to_string preferred_ip)
                   end
             in

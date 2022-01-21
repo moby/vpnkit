@@ -347,7 +347,7 @@ let test_good_bad_server () =
         R.answer request r
         >>= function
         | Ok reply ->
-            let len = Cstruct.len reply in
+            let len = Cstruct.length reply in
             let buf = reply in
             begin match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
             | Some { Dns.Packet.answers = _ :: _ ; _ } -> Lwt.return_true
@@ -427,7 +427,7 @@ let test_good_dead_server () =
         R.answer request r
         >>= function
         | Ok reply ->
-            let len = Cstruct.len reply in
+            let len = Cstruct.length reply in
             let buf = reply in
             begin match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
             | Some { Dns.Packet.answers = _ :: _ ; _ } -> Lwt.return_true

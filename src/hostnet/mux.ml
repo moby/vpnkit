@@ -47,13 +47,13 @@ module Make (Netif: Mirage_net.S) = struct
   let lift_error: ('a, Netif.error) result -> ('a, error) result = function
   | Ok x    -> Ok x
   | Error (#Mirage_net.Net.error as e) -> Error e
-  | Error e -> Fmt.kstrf (fun s -> Error (`Unknown s)) "%a" Netif.pp_error e
+  | Error e -> Fmt.kstr (fun s -> Error (`Unknown s)) "%a" Netif.pp_error e
 
   let filesystem t =
     let xs =
       RuleMap.fold
         (fun ip t acc ->
-           Fmt.strf "%a last_active_time = %.1f" Ipaddr.V4.pp ip
+           Fmt.str "%a last_active_time = %.1f" Ipaddr.V4.pp ip
              t.last_active_time
            :: acc
         ) t.rules []
@@ -89,7 +89,7 @@ module Make (Netif: Mirage_net.S) = struct
     let t = { netif; rules; default_callback } in
     Lwt.async
       (fun () ->
-         Netif.listen netif ~header_size:Ethernet_wire.sizeof_ethernet @@ callback t >>= function
+         Netif.listen netif ~header_size:Ethernet.Packet.sizeof_ethernet @@ callback t >>= function
          | Ok () -> Lwt.return_unit
          | Error _e ->
            Log.err (fun f -> f "Mux.connect calling Netif.listen: failed");

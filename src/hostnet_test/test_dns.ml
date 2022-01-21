@@ -8,8 +8,8 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let pp_ips = Fmt.(list ~sep:(unit ", ") Ipaddr.pp)
-let pp_ip4s = Fmt.(list ~sep:(unit ", ") Ipaddr.V4.pp)
+let pp_ips = Fmt.(list ~sep:(any ", ") Ipaddr.pp)
+let pp_ip4s = Fmt.(list ~sep:(any ", ") Ipaddr.V4.pp)
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
@@ -69,7 +69,7 @@ let test_etc_hosts_query server config () =
       Log.err (fun f ->
           f "This test relies on the name %s not existing but it really \
              has IPs: %a" test_name pp_ips ips);
-      Fmt.kstrf failwith "Test name %s really does exist" test_name
+      Fmt.kstr failwith "Test name %s really does exist" test_name
     | _ ->
       Hosts.etc_hosts := [
         test_name, Ipaddr.V4 (Ipaddr.V4.localhost);
@@ -149,7 +149,7 @@ module Server = struct
           Log.err (fun f -> f "Udp.read got EOF");
           Lwt.return_unit
         | Ok (`Data buf) ->
-          let len = Cstruct.len buf in
+          let len = Cstruct.length buf in
           begin match Dns.Protocol.Server.parse (Cstruct.sub buf 0 len) with
           | None ->
             Log.err (fun f -> f "failed to parse DNS packet");
@@ -166,7 +166,7 @@ module Server = struct
               { Dns.Packet.id; detail; questions; answers; authorities; additionals }
             in
             let buf = marshal @@ reply answers in
-            Log.info (fun f -> f "DNS response is a UDP datagram of length %d" (Cstruct.len buf));
+            Log.info (fun f -> f "DNS response is a UDP datagram of length %d" (Cstruct.length buf));
             begin Udp.write flow buf
             >>= function
             | Ok () ->
@@ -185,7 +185,7 @@ module Server = struct
     Lwt.finalize (fun () -> f t.port) (fun () -> Udp.shutdown t.server)
 end
 
-let err_udp e = Fmt.kstrf failwith "%a" Client.UDPV4.pp_error e
+let err_udp e = Fmt.kstr failwith "%a" Client.UDPV4.pp_error e
 
 let udp_rpc client src_port dst dst_port buffer =
   let udpv4 = Client.udpv4 client.Client.t in
@@ -196,7 +196,7 @@ let udp_rpc client src_port dst dst_port buffer =
     | Ok ()   -> Lwt.return_unit in
 
   let response = ref None in
-  Client.listen_udpv4 client.Client.t ~port:src_port (fun ~src:_ ~dst:_ ~src_port:remote_src_port buffer ->
+  Client.UDPV4.listen (Client.udpv4 client.Client.t) ~port:src_port (fun ~src:_ ~dst:_ ~src_port:remote_src_port buffer ->
     Log.debug (fun f ->
         f "Received UDP %d -> %d" remote_src_port src_port);
     begin match !response with
@@ -246,7 +246,7 @@ let truncate_big_response () =
           (fun () ->
             udp_rpc client 1024 primary_dns_ip 53 (Dns.Packet.marshal @@ query_a "very.big.name")
             >>= fun response ->
-            Log.err (fun f -> f "UDP response has length %d" (Cstruct.len response));
+            Log.err (fun f -> f "UDP response has length %d" (Cstruct.length response));
             begin match Dns.Protocol.Server.parse response with
             | None ->
               failwith "failed to parse truncated DNS response"

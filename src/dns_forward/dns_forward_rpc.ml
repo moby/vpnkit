@@ -54,7 +54,7 @@ module Client = struct
 
         let rpc (t: t) buffer =
           let buf = buffer in
-          match Dns.Protocol.Server.parse (Cstruct.sub buf 0 (Cstruct.len buffer)) with
+          match Dns.Protocol.Server.parse (Cstruct.sub buf 0 (Cstruct.length buffer)) with
           | Some request ->
             (* Although we aren't multiplexing requests on the same flow (unlike the
                Persistent case below) we still rewrite the request id
@@ -69,8 +69,8 @@ module Client = struct
                   (* Copy the buffer since this function will be run in parallel with the
                      same buffer *)
                   let buffer =
-                    let tmp = Cstruct.create (Cstruct.len buffer) in
-                    Cstruct.blit buffer 0 tmp 0 (Cstruct.len buffer);
+                    let tmp = Cstruct.create (Cstruct.length buffer) in
+                    Cstruct.blit buffer 0 tmp 0 (Cstruct.length buffer);
                     tmp in
                   (* Rewrite the query id before forwarding *)
                   Cstruct.BE.set_uint16 buffer 0 free_id;
@@ -172,7 +172,7 @@ module Client = struct
             disconnect t
         | Ok buffer ->
             let buf = buffer in
-            begin match Dns.Protocol.Server.parse (Cstruct.sub buf 0 (Cstruct.len buffer)) with
+            begin match Dns.Protocol.Server.parse (Cstruct.sub buf 0 (Cstruct.length buffer)) with
             | Some ({ Dns.Packet.questions = [ question ]; _ } as response) ->
                 let client_id = response.Dns.Packet.id in
                 if Hashtbl.mem t.wakeners client_id then begin
@@ -234,7 +234,7 @@ module Client = struct
 
     let rpc (t: t) buffer =
       let buf = buffer in
-      match Dns.Protocol.Server.parse (Cstruct.sub buf 0 (Cstruct.len buffer)) with
+      match Dns.Protocol.Server.parse (Cstruct.sub buf 0 (Cstruct.length buffer)) with
       | Some ({ Dns.Packet.questions = [ question ]; _ } as request) ->
           (* Note: the received request id is scoped to the connection with the
              client. Since we are multiplexing requests to a single server we need
@@ -251,8 +251,8 @@ module Client = struct
                     (* Copy the buffer since this function will be run in parallel with the
                        same buffer *)
                     let buffer =
-                      let tmp = Cstruct.create (Cstruct.len buffer) in
-                      Cstruct.blit buffer 0 tmp 0 (Cstruct.len buffer);
+                      let tmp = Cstruct.create (Cstruct.length buffer) in
+                      Cstruct.blit buffer 0 tmp 0 (Cstruct.length buffer);
                       tmp in
                     (* Rewrite the query id before forwarding *)
                     Cstruct.BE.set_uint16 buffer 0 free_id;

@@ -38,7 +38,7 @@ module Unix = struct
       | Error e ->
         Log.err (fun f -> f "vsock connect write got %a" pp_write_error e);
         close flow >>= fun () ->
-        Fmt.kstrf Lwt.fail_with "%a" pp_write_error e
+        Fmt.kstr Lwt.fail_with "%a" pp_write_error e
 end
 
 module Hvsock = struct

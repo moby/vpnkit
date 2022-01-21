@@ -8,8 +8,8 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let pp_ips = Fmt.(list ~sep:(unit ", ") Ipaddr.pp)
-let pp_ip4s = Fmt.(list ~sep:(unit ", ") Ipaddr.V4.pp)
+let pp_ips = Fmt.(list ~sep:(any ", ") Ipaddr.pp)
+let pp_ip4s = Fmt.(list ~sep:(any ", ") Ipaddr.V4.pp)
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
@@ -111,9 +111,9 @@ let test_http_fetch () =
                 failwith "Failure on reading HTTP GET"
               | Ok (`Data buf) ->
                 Log.info (fun f ->
-                    f "Read %d bytes from www.google.com:80" (Cstruct.len buf));
+                    f "Read %d bytes from www.google.com:80" (Cstruct.length buf));
                 Log.info (fun f -> f "%s" (Cstruct.to_string buf));
-                loop (total_bytes + (Cstruct.len buf))
+                loop (total_bytes + (Cstruct.length buf))
             in
             loop 0 >|= fun total_bytes ->
             Log.info (fun f -> f "Response had %d total bytes" total_bytes);
@@ -140,10 +140,10 @@ module DevNullServer = struct
     (* XXX: this looks like it isn't tail recursive to me *)
     let rec drop_all_data count =
       Channel.read_some ch >>= function
-      | Error e -> Fmt.kstrf Lwt.fail_with "%a" Channel.pp_error e
+      | Error e -> Fmt.kstr Lwt.fail_with "%a" Channel.pp_error e
       | Ok `Eof -> Lwt.return count
       | Ok (`Data buffer) ->
-        drop_all_data Int64.(add count (of_int (Cstruct.len buffer)))
+        drop_all_data Int64.(add count (of_int (Cstruct.length buffer)))
     in
     drop_all_data 0L
     >>= fun total ->
@@ -151,7 +151,7 @@ module DevNullServer = struct
     Cstruct.LE.set_uint64 response 0 total;
     Channel.write_buffer ch response;
     Channel.flush ch >>= function
-    | Error e -> Fmt.kstrf Lwt.fail_with "%a" Channel.pp_write_error e
+    | Error e -> Fmt.kstr Lwt.fail_with "%a" Channel.pp_write_error e
     | Ok ()   -> Lwt.return_unit
 
   let create () =
@@ -197,7 +197,7 @@ let test_many_connections n () =
                 (Host.Sockets.get_num_connections ()));
           loop (c :: acc) (i + 1)
         | Error _ ->
-          Fmt.kstrf failwith
+          Fmt.kstr failwith
             "Connection %d failed, total tracked connections %d" i
             (Host.Sockets.get_num_connections ())
     in
@@ -228,7 +228,7 @@ let test_stream_data connections length () =
             Log.err (fun f ->
                 f "DevNullServer connnection failure: %a"
                   Client.TCPV4.pp_error e);
-            Fmt.kstrf failwith "%a" Client.TCPV4.pp_error e
+            Fmt.kstr failwith "%a" Client.TCPV4.pp_error e
           | Ok flow ->
             Log.info (fun f -> f "Connected to local server");
             Lwt.return flow
@@ -241,7 +241,7 @@ let test_stream_data connections length () =
           if remaining = 0
           then Lwt.return ()
           else begin
-            let this_time = min remaining (Cstruct.len page) in
+            let this_time = min remaining (Cstruct.length page) in
             let buf = Cstruct.sub page 0 this_time in
             Client.TCPV4.write flow buf >>= function
             | Error `Closed ->
@@ -271,10 +271,10 @@ let test_stream_data connections length () =
           (* failwith "Failure on reading result from DevNullServer" *)
         | Ok (`Data buf) ->
           Log.info (fun f ->
-              f "Read %d bytes from DevNullServer" (Cstruct.len buf));
+              f "Read %d bytes from DevNullServer" (Cstruct.length buf));
           let response = Cstruct.LE.get_uint64 buf 0 in
           if Int64.to_int response != length
-          then Fmt.kstrf failwith
+          then Fmt.kstr failwith
               "Response was %Ld while expected %d" response length;
       ) (count connections)
   in

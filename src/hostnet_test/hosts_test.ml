@@ -32,7 +32,7 @@ let test_one txt expected () =
   let x' = List.length x in
   if expected' <> x'
   then
-    Fmt.kstrf failwith "Expected %d hosts in /etc/hosts but found %d"
+    Fmt.kstr failwith "Expected %d hosts in /etc/hosts but found %d"
       expected' x';
   List.iter (fun ((a_name, a_ip), (b_name, b_ip)) ->
       if Ipaddr.compare a_ip b_ip <> 0 then failwith "IP doesn't match";

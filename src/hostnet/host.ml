@@ -40,7 +40,7 @@ module Common = struct
   | #Mirage_flow.write_error as e -> Mirage_flow.pp_write_error ppf e
   | #error as e                   -> pp_error ppf e
 
-  let errorf fmt = Fmt.kstrf (fun s -> Lwt_result.fail (`Msg s)) fmt
+  let errorf fmt = Fmt.kstr (fun s -> Lwt_result.fail (`Msg s)) fmt
 
   let ip_port_of_sockaddr sockaddr =
     try match sockaddr with
@@ -126,7 +126,7 @@ module Sockets = struct
 
       type address = Ipaddr.t * int
 
-      let string_of_flow t = Fmt.strf "udp -> %s" (string_of_address t.address)
+      let string_of_flow t = Fmt.str "udp -> %s" (string_of_address t.address)
 
       let of_fd
           ?idx ?(read_buffer_size = Constants.max_udp_length)
@@ -170,7 +170,7 @@ module Sockets = struct
 
       let rec read t = match t.fd, t.already_read with
       | None, _ -> Lwt.return (Ok `Eof)
-      | Some _, Some data when Cstruct.len data > 0 ->
+      | Some _, Some data when Cstruct.length data > 0 ->
         t.already_read <- Some (Cstruct.sub data 0 0); (* next read is `Eof *)
         Lwt.return (Ok (`Data data))
       | Some _, Some _ ->
@@ -184,7 +184,7 @@ module Sockets = struct
             if recv.Uwt.Udp.is_partial then begin
               Log.err (fun f ->
                   f "Socket.%s.read: dropping partial response (buffer \
-                     was %d bytes)" t.label (Cstruct.len buf));
+                     was %d bytes)" t.label (Cstruct.length buf));
               read t
             end else begin
               let data = `Data (Cstruct.sub buf 0 recv.Uwt.Udp.recv_len) in
@@ -280,7 +280,7 @@ module Sockets = struct
 
       let bind ?(description="") (ip, port) =
         let description =
-          Fmt.strf "udp:%a:%d %s" Ipaddr.pp ip port description
+          Fmt.str "udp:%a:%d %s" Ipaddr.pp ip port description
         in
         let sockaddr = make_sockaddr(ip, port) in
         register_connection description >>= fun idx ->
@@ -311,7 +311,7 @@ module Sockets = struct
           | Uwt.Ok sockaddr ->
             begin match ip_port_of_sockaddr sockaddr with
             | Some (ip, port) ->
-              Fmt.strf "udp:%a:%d" Ipaddr.pp ip port,
+              Fmt.str "udp:%a:%d" Ipaddr.pp ip port,
               begin match ip with
               | Ipaddr.V4 _ -> "UDPv4"
               | Ipaddr.V6 _ -> "UDPv6"
@@ -326,7 +326,7 @@ module Sockets = struct
           make ~idx ~label fd
         | Uwt.Error error ->
           let msg =
-            Fmt.strf "Socket.UDP?.of_bound_fd failed with %s" (Uwt.strerror error)
+            Fmt.str "Socket.UDP?.of_bound_fd failed with %s" (Uwt.strerror error)
           in
           Log.err (fun f -> f "Socket.UDP?.of_bound_fd: %s" msg);
           failwith msg
@@ -336,7 +336,7 @@ module Sockets = struct
         | Unix.ADDR_INET(iaddr, port) ->
           Ipaddr.of_string_exn (Unix.string_of_inet_addr iaddr), port
         | _ ->
-          Fmt.kstrf invalid_arg "Socket.%s.getsockname: passed a non-TCP socket"
+          Fmt.kstr invalid_arg "Socket.%s.getsockname: passed a non-TCP socket"
             label
 
       let shutdown server =
@@ -356,7 +356,7 @@ module Sockets = struct
         if recv.Uwt.Udp.is_partial then begin
           Log.err (fun f ->
               f "Socket.%s.recvfrom: dropping partial response (buffer was \
-                 %d bytes)" server.label (Cstruct.len buf));
+                 %d bytes)" server.label (Cstruct.length buf));
           recvfrom server buf
         end else match recv.Uwt.Udp.sockaddr with
         | None ->
@@ -385,7 +385,7 @@ module Sockets = struct
               let data = Cstruct.sub buffer 0 n in
               (* construct a flow with this buffer available for reading *)
               (* No new fd so no new idx *)
-              let description = Fmt.strf "udp:%s" (string_of_address address) in
+              let description = Fmt.str "udp:%s" (string_of_address address) in
               let flow =
                 of_fd ~description ~read_buffer_size:0 ~already_read:(Some data)
                   (sockaddr_of_address address) address t.fd
@@ -454,7 +454,7 @@ module Sockets = struct
         { idx; label; description; fd; read_buffer; read_buffer_size; closed }
 
       let connect ?(read_buffer_size = default_read_buffer_size) (ip, port) =
-        let description = Fmt.strf "tcp:%a:%d" Ipaddr.pp ip port in
+        let description = Fmt.str "tcp:%a:%d" Ipaddr.pp ip port in
         let label = match ip with
         | Ipaddr.V4 _ -> "TCPv4"
         | Ipaddr.V6 _ -> "TCPv6" in
@@ -508,7 +508,7 @@ module Sockets = struct
 
       let read_into t buf =
         let rec loop buf =
-          if Cstruct.len buf = 0
+          if Cstruct.length buf = 0
           then Lwt.return (Ok (`Data ()))
           else
             Uwt.Tcp.read_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len t.fd
@@ -520,7 +520,7 @@ module Sockets = struct
         loop buf
 
       let read t =
-        (if Cstruct.len t.read_buffer = 0
+        (if Cstruct.length t.read_buffer = 0
          then t.read_buffer <- Cstruct.create t.read_buffer_size);
         Lwt.catch (fun () ->
             Uwt.Tcp.read_ba ~pos:t.read_buffer.Cstruct.off
@@ -624,7 +624,7 @@ module Sockets = struct
 
       let bind_one ?(description="") (ip, port) =
         let description =
-          Fmt.strf "tcp:%a:%d %s" Ipaddr.pp ip port description
+          Fmt.str "tcp:%a:%d %s" Ipaddr.pp ip port description
         in
         register_connection description >>= fun idx ->
         let fd =
@@ -639,7 +639,7 @@ module Sockets = struct
         if not(Uwt.Int_result.is_ok result) then begin
           let error = Uwt.Int_result.to_error result in
           let msg =
-            Fmt.strf "Socket.%s.bind(%s, %d): %s" label (Ipaddr.to_string ip)
+            Fmt.str "Socket.%s.bind(%s, %d): %s" label (Ipaddr.to_string ip)
               port (Uwt.strerror error)
           in
           Log.err (fun f -> f "Socket.%s.bind: %s" label msg);
@@ -658,7 +658,7 @@ module Sockets = struct
           end
         | Uwt.Error error ->
           let msg =
-            Fmt.strf "Socket.%s.bind(%a, %d): %s" label Ipaddr.pp ip port
+            Fmt.str "Socket.%s.bind(%a, %d): %s" label Ipaddr.pp ip port
               (Uwt.strerror error)
           in
           Log.debug (fun f -> f "Socket.%s.bind: %s" label msg);
@@ -700,7 +700,7 @@ module Sockets = struct
       let of_bound_fd ?(read_buffer_size = default_read_buffer_size) fd =
         let description = match Unix.getsockname fd with
         | Unix.ADDR_INET(iaddr, port) ->
-          Fmt.strf "tcp:%s:%d" (Unix.string_of_inet_addr iaddr) port
+          Fmt.str "tcp:%s:%d" (Unix.string_of_inet_addr iaddr) port
         | _ -> "of_bound_fd: unknown TCP socket" in
         let fd = Uwt.Tcp.opentcp_exn fd in
         let idx = register_connection_no_limit description in
@@ -739,7 +739,7 @@ module Sockets = struct
                       | Uwt.Ok sockaddr ->
                         begin match ip_port_of_sockaddr sockaddr with
                         | Some (ip, port) ->
-                          Fmt.strf "tcp:%s:%d" (Ipaddr.to_string ip) port,
+                          Fmt.str "tcp:%s:%d" (Ipaddr.to_string ip) port,
                           begin match ip with
                           | Ipaddr.V4 _ -> "TCPv4"
                           | Ipaddr.V6 _ -> "TCPv6"
@@ -845,7 +845,7 @@ module Sockets = struct
 
       let read_into t buf =
         let rec loop buf =
-          if Cstruct.len buf = 0
+          if Cstruct.length buf = 0
           then Lwt.return (Ok (`Data ()))
           else
             Uwt.Pipe.read_ba ~pos:buf.Cstruct.off ~len:buf.Cstruct.len t.fd
@@ -857,7 +857,7 @@ module Sockets = struct
         loop buf
 
       let read t =
-        (if Cstruct.len t.read_buffer = 0
+        (if Cstruct.length t.read_buffer = 0
          then t.read_buffer <- Cstruct.create t.read_buffer_size);
         Lwt.catch (fun () ->
             Uwt.Pipe.read_ba ~pos:t.read_buffer.Cstruct.off
@@ -931,7 +931,7 @@ module Sockets = struct
       let bind ?(description="") path =
         Lwt.catch (fun () -> Uwt.Fs.unlink path) (fun _ -> Lwt.return ())
         >>= fun () ->
-        let description = Fmt.strf "unix:%s %s" path description in
+        let description = Fmt.str "unix:%s %s" path description in
         register_connection description >>= fun idx ->
         let fd = Uwt.Pipe.init () in
         Lwt.catch (fun () ->
@@ -1009,7 +1009,7 @@ module Sockets = struct
           { idx; fd; closed = false; disable_connection_tracking = false }
         | Uwt.Error error ->
           let msg =
-            Fmt.strf "Socket.Pipe.of_bound_fd (read_buffer_size=%d) failed \
+            Fmt.str "Socket.Pipe.of_bound_fd (read_buffer_size=%d) failed \
                       with %s" read_buffer_size (Uwt.strerror error)
           in
           Log.err (fun f -> f "%s" msg);
@@ -1052,7 +1052,7 @@ module Files = struct
                Uwt.Fs.close file
              )
       ) (fun e ->
-          Lwt_result.fail (`Msg (Fmt.strf "reading %s: %a" path Fmt.exn e))
+          Lwt_result.fail (`Msg (Fmt.str "reading %s: %a" path Fmt.exn e))
         )
 
   (* NOTE(djs55): Fs_event didn't work for me on MacOS *)

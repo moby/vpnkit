@@ -2,8 +2,8 @@
     rely on the dynamic version which can fail with `No_route_to_host` if
     the other side doesn't respond *)
 
-module Make(Ethif: Mirage_protocols.ETHERNET): sig
-  include Mirage_protocols.ARP
+module Make(Ethif: Ethernet.S): sig
+  include Arp.S
 
   type ethif = Ethif.t
 

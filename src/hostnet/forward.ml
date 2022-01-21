@@ -25,19 +25,19 @@ let set_allowed_addresses ips =
     ));
   allowed_addresses := ips
 
-let errorf fmt = Fmt.kstrf (fun e -> Error (`Msg e)) fmt
-let errorf' fmt = Fmt.kstrf (fun e -> Lwt.return (Error (`Msg e))) fmt
+let errorf fmt = Fmt.kstr (fun e -> Error (`Msg e)) fmt
+let errorf' fmt = Fmt.kstr (fun e -> Lwt.return (Error (`Msg e))) fmt
 
 module Port = struct
   type t = Forwarder.Frame.Destination.t
 
   let to_string = function
     | `Tcp (ip, port) ->
-      Fmt.strf "tcp:%a:%d" Ipaddr.pp ip port
+      Fmt.str "tcp:%a:%d" Ipaddr.pp ip port
     | `Udp (ip, port) ->
-      Fmt.strf "udp:%a:%d" Ipaddr.pp ip port
+      Fmt.str "udp:%a:%d" Ipaddr.pp ip port
     | `Unix path ->
-      Fmt.strf "unix:%s" (Base64.encode_exn path)
+      Fmt.str "unix:%s" (Base64.encode_exn path)
 
   let of_string x =
     try
@@ -80,7 +80,7 @@ struct
   let get_key t = t.local
 
   let to_string t =
-    Fmt.strf "%s:%s" (Port.to_string t.local) (Port.to_string t.remote_port)
+    Fmt.str "%s:%s" (Port.to_string t.local) (Port.to_string t.remote_port)
 
   let description_of_format =
     "tcp:<local IP>:<local port>:tcp:<remote IP>:<remote port>
@@ -190,13 +190,13 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
   let conn_read flow buf =
     Mux.Channel.read_into flow buf >>= function
     | Ok `Eof       -> Lwt.fail End_of_file
-    | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Mux.Channel.pp_error e
+    | Error e       -> Fmt.kstr Lwt.fail_with "%a" Mux.Channel.pp_error e
     | Ok (`Data ()) -> Lwt.return ()
 
   let conn_write flow buf =
     Mux.Channel.write flow buf >>= function
     | Error `Closed -> Lwt.fail End_of_file
-    | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Mux.Channel.pp_write_error e
+    | Error e       -> Fmt.kstr Lwt.fail_with "%a" Mux.Channel.pp_write_error e
     | Ok ()         -> Lwt.return ()
 
   let start_udp_proxy description remote_port server =
@@ -212,7 +212,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
       let write v buf (ip, port) =
         let udp = Forwarder.Frame.Udp.({
             ip; port;
-            payload_length = Cstruct.len buf;
+            payload_length = Cstruct.length buf;
         }) in
         let header = Forwarder.Frame.Udp.write_header udp write_header_buffer in
         conn_write v header >>= fun () ->
@@ -223,10 +223,10 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
       let read v =
         conn_read v (Cstruct.sub from_vsock_buffer 0 2) >>= fun () ->
         let frame_length = Cstruct.LE.get_uint16 from_vsock_buffer 0 in
-        if frame_length > (Cstruct.len from_vsock_buffer) then begin
+        if frame_length > (Cstruct.length from_vsock_buffer) then begin
           Log.err (fun f ->
               f "UDP encapsulated frame length is %d but buffer has length %d: \
-                 dropping" frame_length (Cstruct.len from_vsock_buffer));
+                 dropping" frame_length (Cstruct.length from_vsock_buffer));
           Lwt.return None
         end else begin
           let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in
@@ -293,7 +293,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
     match t.local with
     | `Tcp (local_ip, local_port) ->
       let description =
-        Fmt.strf "forwarding from tcp:%a:%d" Ipaddr.pp local_ip local_port
+        Fmt.str "forwarding from tcp:%a:%d" Ipaddr.pp local_ip local_port
       in
       Lwt.catch (fun () ->
           check_bind_allowed local_ip  >>= fun () ->
@@ -326,7 +326,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
         )
     | `Udp (local_ip, local_port) ->
       let description =
-        Fmt.strf "forwarding from udp:%a:%d" Ipaddr.pp local_ip local_port
+        Fmt.str "forwarding from udp:%a:%d" Ipaddr.pp local_ip local_port
       in
       Lwt.catch (fun () ->
           check_bind_allowed local_ip >>= fun () ->
@@ -359,7 +359,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
         )
     | `Unix path ->
       let description =
-        Fmt.strf "forwarding from unix:%s" path
+        Fmt.str "forwarding from unix:%s" path
       in
       Lwt.catch (fun () ->
           Socket.Stream.Unix.bind ~description path

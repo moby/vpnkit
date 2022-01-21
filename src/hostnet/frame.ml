@@ -31,7 +31,7 @@ let ( >>= ) m f = match m with
 | Ok x -> f x
 | Error x -> Error x
 
-let errorf fmt = Fmt.kstrf (fun e -> Error (`Msg e)) fmt
+let errorf fmt = Fmt.kstr (fun e -> Error (`Msg e)) fmt
 
 let need_space_for bufs n description =
   if Cstructs.len bufs < n

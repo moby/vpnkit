@@ -18,7 +18,7 @@ open Lwt.Infix
 
 type 'a t = ('a, [ `Msg of string ]) Lwt_result.t
 
-let errorf fmt = Fmt.kstrf (fun s -> Lwt.return (Error (`Msg s))) fmt
+let errorf fmt = Fmt.kstr (fun s -> Lwt.return (Error (`Msg s))) fmt
 
 module FromFlowError(Flow: Mirage_flow.S) = struct
   let (>>=) m f = m >>= function

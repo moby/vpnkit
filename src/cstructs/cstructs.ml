@@ -6,7 +6,7 @@ let pp_t ppf t =
         t.Cstruct.off t.Cstruct.len (Bigarray.Array1.dim t.Cstruct.buffer)
     ) t
 
-let len = List.fold_left (fun acc c -> Cstruct.len c + acc) 0
+let len = List.fold_left (fun acc c -> Cstruct.length c + acc) 0
 
 let err fmt =
   let b = Buffer.create 20 in                         (* for thread safety. *)
@@ -18,7 +18,7 @@ let rec shift t x =
   if x = 0 then t else match t with
   | [] -> err "Cstructs.shift %a %d" pp_t t x
   | y :: ys ->
-    let y' = Cstruct.len y in
+    let y' = Cstruct.length y in
     if y' > x
     then Cstruct.shift y x :: ys
     else shift ys (x - y')
@@ -35,7 +35,7 @@ let sub t off len =
   | 0, _ -> List.rev acc
   | _, [] -> err "invalid bounds in Cstructs.sub %a off=%d len=%d" pp_t t off len
   | n, t :: ts ->
-    let to_take = min (Cstruct.len t) n in
+    let to_take = min (Cstruct.length t) n in
     (* either t is consumed and we only need ts, or t has data
        remaining in which case we're finished *)
     trim (Cstruct.sub t 0 to_take :: acc) ts (remaining - to_take)
@@ -54,17 +54,17 @@ let get f t off len =
   match t' with
   | x :: xs ->
     (* Return a reference to the existing buffer *)
-    if Cstruct.len x >= len
+    if Cstruct.length x >= len
     then Cstruct.sub x 0 len
     else begin
       (* Copy into a fresh buffer *)
       let rec copy remaining frags =
-        if Cstruct.len remaining > 0
+        if Cstruct.length remaining > 0
         then match frags with
         | [] ->
           err "invalid bounds in Cstructs.%s %a off=%d len=%d" f pp_t t off len
         | x :: xs ->
-          let to_copy = min (Cstruct.len x) (Cstruct.len remaining) in
+          let to_copy = min (Cstruct.length x) (Cstruct.length remaining) in
           Cstruct.blit x 0 remaining 0 to_copy;
           (* either we've copied all of x, or we've filled the
              remaining buffer *)

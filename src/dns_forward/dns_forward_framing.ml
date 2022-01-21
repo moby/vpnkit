@@ -68,13 +68,13 @@ module Tcp (Flow: Mirage_flow.S) = struct
     Lwt_mutex.with_lock t.write_m (fun () ->
         (* RFC 1035 4.2.2 TCP Usage: 2 byte length field *)
         let header = Cstruct.create 2 in
-        Cstruct.BE.set_uint16 header 0 (Cstruct.len buffer);
+        Cstruct.BE.set_uint16 header 0 (Cstruct.length buffer);
         C.write_buffer t.c header;
         C.write_buffer t.c buffer;
         C.flush t.c >>= function
         | Ok ()   -> Lwt_result.return ()
         | Error e ->
-            errorf "Failed to write %d bytes: %a" (Cstruct.len buffer)
+            errorf "Failed to write %d bytes: %a" (Cstruct.length buffer)
               C.pp_write_error e
       )
 end

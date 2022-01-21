@@ -43,7 +43,7 @@ module ForwardServer = struct
           | Ok remote ->
             Lwt.finalize (fun () ->
                 Proxy.proxy client_flow remote >>= function
-                | Error e -> Fmt.kstrf failwith "%a" Proxy.pp_error e
+                | Error e -> Fmt.kstr failwith "%a" Proxy.pp_error e
                 | Ok (_l_stats, _r_stats) -> Lwt.return ()
               ) (fun () ->
                 Host.Sockets.Stream.Tcp.close remote
@@ -60,15 +60,15 @@ module ForwardServer = struct
               let read_into flow buf =
                 Mux.Channel.read_into flow buf >>= function
                 | Ok `Eof       -> Lwt.fail End_of_file
-                | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Mux.Channel.pp_error e
+                | Error e       -> Fmt.kstr Lwt.fail_with "%a" Mux.Channel.pp_error e
                 | Ok (`Data ()) -> Lwt.return () in
               let read_next () =
                 read_into client_flow (Cstruct.sub from_vsock_buffer 0 2) >>= fun () ->
                 let frame_length = Cstruct.LE.get_uint16 from_vsock_buffer 0 in
-                if frame_length > (Cstruct.len from_vsock_buffer) then begin
+                if frame_length > (Cstruct.length from_vsock_buffer) then begin
                   Log.err (fun f ->
                       f "UDP encapsulated frame length is %d but buffer has length %d: \
-                        dropping" frame_length (Cstruct.len from_vsock_buffer));
+                        dropping" frame_length (Cstruct.length from_vsock_buffer));
                   Lwt.return None
                 end else begin
                   let rest = Cstruct.sub from_vsock_buffer 2 (frame_length - 2) in
@@ -91,7 +91,7 @@ module ForwardServer = struct
               let write flow buf =
                 Mux.Channel.write flow buf >>= function
                 | Error `Closed -> Lwt.fail End_of_file
-                | Error e       -> Fmt.kstrf Lwt.fail_with "%a" Mux.Channel.pp_write_error e
+                | Error e       -> Fmt.kstr Lwt.fail_with "%a" Mux.Channel.pp_write_error e
                 | Ok ()         -> Lwt.return () in
               Host.Sockets.Datagram.Udp.read remote
               >>= function
@@ -105,7 +105,7 @@ module ForwardServer = struct
                 | Some (ip, port) ->
                   let udp = Forwarder.Frame.Udp.({
                       ip; port;
-                      payload_length = Cstruct.len buf;
+                      payload_length = Cstruct.length buf;
                   }) in
                   let header = Forwarder.Frame.Udp.write_header udp write_header_buffer in
                   write client_flow header
@@ -206,7 +206,7 @@ end
 
 let udp_echo t len =
   let pattern = Cstruct.create len in
-  for i = 0 to Cstruct.len pattern - 1 do
+  for i = 0 to Cstruct.length pattern - 1 do
     Cstruct.set_uint8 pattern i (Random.int 255)
   done;
   let sender () =
@@ -257,7 +257,7 @@ module LocalTCPServer = struct
     Channel.write_string ch response 0 (String.length response);
     Channel.flush ch >|= function
     | Ok ()   -> ()
-    | Error e -> Fmt.kstrf failwith "%a" Channel.pp_write_error e
+    | Error e -> Fmt.kstr failwith "%a" Channel.pp_write_error e
 
   let create () =
     Host.Sockets.Stream.Tcp.bind (Ipaddr.V4 localhost, 0)
@@ -388,7 +388,7 @@ let http_get flow =
   let message = "GET / HTTP/1.0\r\nconnection: close\r\n\r\n" in
   Channel.write_string ch message 0 (String.length message);
   Channel.flush ch >>= function
-  | Error e -> Fmt.kstrf failwith "%a" Channel.pp_write_error e
+  | Error e -> Fmt.kstr failwith "%a" Channel.pp_write_error e
   | Ok ()   ->
     Host.Sockets.Stream.Tcp.shutdown_write flow
     >>= fun () ->
@@ -480,7 +480,7 @@ let test_10_tcp_connections () =
                   let time = Unix.gettimeofday () -. start in
                   (* NOTE(djs55): on my MBP this is almost immediate *)
                   if time > 1. then
-                    Fmt.kstrf failwith "10 connections took %.02f (> 1) \
+                    Fmt.kstr failwith "10 connections took %.02f (> 1) \
                                         seconds" time;
                   Lwt.return ()
                 )
@@ -537,9 +537,9 @@ let test_tcpv4_forwarded_configuration () =
                 failwith "Failure on reading HTTP GET"
               | Ok (`Data buf) ->
                 Log.info (fun f ->
-                    f "Read %d bytes from gateway:%d" (Cstruct.len buf) local_tcpv4_forwarded_port);
+                    f "Read %d bytes from gateway:%d" (Cstruct.length buf) local_tcpv4_forwarded_port);
                 Log.info (fun f -> f "%s" (Cstruct.to_string buf));
-                loop (total_bytes + (Cstruct.len buf))
+                loop (total_bytes + (Cstruct.length buf))
             in
             loop 0 >|= fun total_bytes ->
             Log.info (fun f -> f "Response had %d total bytes" total_bytes);

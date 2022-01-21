@@ -101,7 +101,7 @@ module MockKV = struct
   let size t name =
     return (
       try
-        Ok (List.assoc name zones |> Cstruct.len |> Int64.of_int)
+        Ok (List.assoc name zones |> Cstruct.length |> Int64.of_int)
       with exn ->
         Error (`Unknown_key name)
     )

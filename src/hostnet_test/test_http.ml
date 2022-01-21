@@ -317,21 +317,21 @@ let test_proxy_authorization proxy () =
     (* If the proxy uses auth, then there has to be a Proxy-Authorization
        header. If theres no auth, there should be no header. *)
     let proxy_authorization = "proxy-authorization" in
-    let proxy = Uri.of_string proxy in
-    begin match Uri.user proxy, Uri.password proxy with
+    let proxy' = Uri.of_string proxy in
+    begin match Uri.user proxy', Uri.password proxy' with
     | Some username, Some password ->
       Alcotest.check Alcotest.(list string) proxy_authorization
-        (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
         [ "Basic " ^ (Base64.encode_exn (username ^ ":" ^ password)) ]
+        (Cohttp.Header.get_multi result.Cohttp.Request.headers proxy_authorization)
     | _, _ ->
       Alcotest.check Alcotest.(list string) proxy_authorization
-        (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
         [ ]
+        (Cohttp.Header.get_multi result.Cohttp.Request.headers proxy_authorization)
     end;
     Lwt.return ()
   end
 
-let err_flush e = Fmt.kstrf failwith "%a" Incoming.C.pp_write_error e
+let err_flush e = Fmt.kstr failwith "%a" Incoming.C.pp_write_error e
 
 let test_http_connect_tunnel proxy () =
   let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
@@ -370,12 +370,12 @@ let test_http_connect_tunnel proxy () =
               begin match Uri.user proxy, Uri.password proxy with
               | Some username, Some password ->
                 Alcotest.check Alcotest.(list string) proxy_authorization
-                  (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
                   [ "Basic " ^ (Base64.encode_exn (username ^ ":" ^ password)) ]
+                  (Cohttp.Header.get_multi req.Cohttp.Request.headers proxy_authorization)
               | _, _ ->
                 Alcotest.check Alcotest.(list string) proxy_authorization
-                  (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
                   [ ]
+                  (Cohttp.Header.get_multi req.Cohttp.Request.headers proxy_authorization)
               end;
               (* Unfortunately cohttp always adds transfer-encoding: chunked
                  so we write the header ourselves *)
@@ -406,7 +406,7 @@ let test_http_connect_tunnel proxy () =
               | Ok flow ->
                 let ic = Outgoing.C.create flow in
                 Outgoing.C.read_some ~len:5 ic >>= function
-                | Error e -> Fmt.kstrf failwith "%a" Outgoing.C.pp_error e
+                | Error e -> Fmt.kstr failwith "%a" Outgoing.C.pp_error e
                 | Ok `Eof -> failwith "EOF"
                 | Ok (`Data buf) ->
                   let txt = Cstruct.to_string buf in
@@ -451,11 +451,11 @@ let test_http_connect_tunnel proxy () =
                 | Some username, Some password ->
                   Alcotest.check Alcotest.(list string) proxy_authorization
                     [ "Basic " ^ (Base64.encode_exn (username ^ ":" ^ password)) ]
-                    (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                    (Cohttp.Header.get_multi req.Cohttp.Request.headers proxy_authorization)
                 | _, _ ->
                   Alcotest.check Alcotest.(list string) proxy_authorization
                     [ ]
-                    (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                    (Cohttp.Header.get_multi req.Cohttp.Request.headers proxy_authorization)
                 end;
                 (* Unfortunately cohttp always adds transfer-encoding: chunked
                    so we write the header ourselves *)
@@ -488,7 +488,7 @@ let test_http_connect_tunnel proxy () =
                   let oc = Outgoing.C.create flow in
                   let request =
                     let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
-                    let resource = Fmt.strf "localhost:%d" server.Server.port in
+                    let resource = Fmt.str "localhost:%d" server.Server.port in
                     let headers = Cohttp.Header.replace connect.Cohttp.Request.headers "host" resource in
                     { connect with Cohttp.Request.resource; headers }
                   in
@@ -504,7 +504,7 @@ let test_http_connect_tunnel proxy () =
                     if res.Cohttp.Response.status <> `OK
                     then failwith "test_http_connect_forward: HTTP CONNECT failed";
                     Outgoing.C.read_some ~len:5 oc >>= function
-                    | Error e -> Fmt.kstrf failwith "%a" Outgoing.C.pp_error e
+                    | Error e -> Fmt.kstr failwith "%a" Outgoing.C.pp_error e
                     | Ok `Eof -> failwith "EOF"
                     | Ok (`Data buf) ->
                       let txt = Cstruct.to_string buf in
@@ -554,7 +554,7 @@ let test_http_connect_tunnel proxy () =
                 let oc = Outgoing.C.create flow in
                 let request =
                   let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
-                  let resource = Fmt.strf "localhost:%d" server.Server.port in
+                  let resource = Fmt.str "localhost:%d" server.Server.port in
                   { connect with Cohttp.Request.resource }
                 in
                 Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc

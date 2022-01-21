@@ -17,7 +17,7 @@ let ok x = Lwt.return (Ok x)
 
 let map_error x = Fs9p_error.map_error x
 
-let error fmt = Fmt.kstrf (fun s -> Lwt.return (Fs9p_error.error "%s" s)) fmt
+let error fmt = Fmt.kstr (fun s -> Lwt.return (Fs9p_error.error "%s" s)) fmt
 
 let err_not_a_dir name = error "%S is not a directory" name
 
@@ -178,8 +178,8 @@ module Op9p = struct
         (* No more room *)
       in
       aux buffer (Inode.unread state) >>*= fun (unused, remaining) ->
-      let data = Cstruct.sub buffer 0 (count - Cstruct.len unused) in
-      let len = Cstruct.len data in
+      let data = Cstruct.sub buffer 0 (count - Cstruct.length unused) in
+      let len = Cstruct.length data in
       (* Linux will abort if we return an error. Instead, just return 0 items. Linux
          will free up space in its buffer and try again. *)
       (* if len = 0 && remaining <> [] then err_buffer_too_small *)
@@ -336,7 +336,7 @@ module Make (Flow : Mirage_flow.S) = struct
       | `OpenDir _ -> err_write_dir
       | `OpenFile file ->
           Vfs.File.write file ~offset data >>= map_error >>*= fun () ->
-          let count = Int32.of_int (Cstruct.len data) in
+          let count = Int32.of_int (Cstruct.length data) in
           ok { P.Response.Write.count }
 
     let remove connection ~cancel:_ { P.Request.Remove.fid } =
