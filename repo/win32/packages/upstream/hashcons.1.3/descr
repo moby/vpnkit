@@ -1,8 +1,0 @@
-OCaml hash-consing library
-
-The technique is described in this paper:
-
-*Sylvain Conchon and Jean-Christophe Filliâtre.* Type-Safe Modular Hash-Consing.
-In ACM SIGPLAN Workshop on ML, Portland, Oregon, September 2006.
-The PDF is available at
-<https://www.lri.fr/~filliatr/ftp/publis/hash-consing2.pdf>

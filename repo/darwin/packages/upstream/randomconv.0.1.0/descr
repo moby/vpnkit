@@ -1,5 +1,0 @@
-Convert from random bytes to random native numbers
-
-
-Given a function which produces random byte vectors, convert it to
-a number of your choice (int32/int64/int/float).

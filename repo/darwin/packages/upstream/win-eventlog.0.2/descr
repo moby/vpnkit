@@ -1,5 +1,0 @@
-Write to the Windows event log
-
-This library contains functions to write low-level events to the Windows
-event log, and to create a Log reporter which writes log messages to
-the event log.

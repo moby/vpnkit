@@ -14,12 +14,10 @@ install:
   - ps: iex ((new-object net.webclient).DownloadString("https://raw.githubusercontent.com/$env:FORK_USER/ocaml-ci-scripts/$env:FORK_BRANCH/appveyor-install.ps1"))
 
 build_script:
-  - call %CYG_ROOT%\bin\bash.exe -l %APPVEYOR_BUILD_FOLDER%\appveyor-opam.sh
-  - call %CYG_ROOT%\bin\bash.exe -l -c "make -f Makefile.darwin test"
-  - call %CYG_ROOT%\bin\bash.exe -l -c "make -f Makefile.darwin OSS-LICENSES"
-  - call %CYG_ROOT%\bin\bash.exe -l -c "make -f Makefile.darwin COMMIT"
+  - call %CYG_ROOT%\bin\bash.exe -l -x %APPVEYOR_BUILD_FOLDER%\appveyor-opam.sh
+  - call %CYG_ROOT%\bin\bash.exe -l -x %APPVEYOR_BUILD_FOLDER%\scripts\appveyor.sh
 
 artifacts:
-  - path: "vpnkit.exe"
-  - path: "OSS-LICENSES"
-  - path: "COMMIT"
+  - path: "./_build/default/vpnkit.exe"
+  - path: "./_build/default/licenses.json"
+  - path: "./_build/default/COMMIT"

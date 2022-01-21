@@ -1,5 +1,0 @@
-libuv bindings
-
-uwt provides OCaml bindings for libuv.
-The main loop of libuv is integrated into lwt,
-the light-weight cooperative threads library.
