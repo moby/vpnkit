@@ -15,3 +15,11 @@ install:
 
 build_script:
   - call %CYG_ROOT%\bin\bash.exe -l %APPVEYOR_BUILD_FOLDER%\appveyor-opam.sh
+  - call %CYG_ROOT%\bin\bash.exe -l -c "make -f Makefile.darwin test"
+  - call %CYG_ROOT%\bin\bash.exe -l -c "make -f Makefile.darwin OSS-LICENSES"
+  - call %CYG_ROOT%\bin\bash.exe -l -c "make -f Makefile.darwin COMMIT"
+
+artifacts:
+  - path: "vpnkit.exe"
+  - path: "OSS-LICENSES"
+  - path: "COMMIT"

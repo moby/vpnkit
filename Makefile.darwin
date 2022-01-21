@@ -3,6 +3,13 @@
 REPO_ROOT=$(shell git rev-parse --show-toplevel)
 LICENSEDIRS=$(REPO_ROOT)/repo/licenses
 
+ARTEFACTS = COMMIT OSS-LICENSES
+ifeq ($(OS),Windows_NT)
+	ARTEFACTS += vpnkit.exe
+else
+	ARTEFACTS += vpnkit.tgz
+endif
+
 build: vpnkit.exe
 
 vpnkit.exe:
@@ -24,7 +31,7 @@ ocaml:
 	opam pin add protocol-9p-unix.2.0.2 "https://github.com/djs55/ocaml-9p.git#cstruct.length" -n
 	opam pin add vpnkit . -n
 
-artefacts: vpnkit.tgz
+artefacts: $(ARTEFACTS)
 
 vpnkit.tgz: vpnkit.exe
 	mkdir -p _build/root/Contents/Resources/bin
