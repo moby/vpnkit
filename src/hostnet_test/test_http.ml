@@ -317,16 +317,16 @@ let test_proxy_authorization proxy () =
     (* If the proxy uses auth, then there has to be a Proxy-Authorization
        header. If theres no auth, there should be no header. *)
     let proxy_authorization = "proxy-authorization" in
-    let proxy = Uri.of_string proxy in
-    begin match Uri.user proxy, Uri.password proxy with
+    let proxy' = Uri.of_string proxy in
+    begin match Uri.user proxy', Uri.password proxy' with
     | Some username, Some password ->
       Alcotest.check Alcotest.(list string) proxy_authorization
-        (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
         [ "Basic " ^ (Base64.encode_exn (username ^ ":" ^ password)) ]
+        (Cohttp.Header.get_multi result.Cohttp.Request.headers proxy_authorization)
     | _, _ ->
       Alcotest.check Alcotest.(list string) proxy_authorization
-        (result.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
         [ ]
+        (Cohttp.Header.get_multi result.Cohttp.Request.headers proxy_authorization)
     end;
     Lwt.return ()
   end
@@ -370,12 +370,12 @@ let test_http_connect_tunnel proxy () =
               begin match Uri.user proxy, Uri.password proxy with
               | Some username, Some password ->
                 Alcotest.check Alcotest.(list string) proxy_authorization
-                  (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
                   [ "Basic " ^ (Base64.encode_exn (username ^ ":" ^ password)) ]
+                  (Cohttp.Header.get_multi req.Cohttp.Request.headers proxy_authorization)
               | _, _ ->
                 Alcotest.check Alcotest.(list string) proxy_authorization
-                  (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
                   [ ]
+                  (Cohttp.Header.get_multi req.Cohttp.Request.headers proxy_authorization)
               end;
               (* Unfortunately cohttp always adds transfer-encoding: chunked
                  so we write the header ourselves *)
@@ -451,11 +451,11 @@ let test_http_connect_tunnel proxy () =
                 | Some username, Some password ->
                   Alcotest.check Alcotest.(list string) proxy_authorization
                     [ "Basic " ^ (Base64.encode_exn (username ^ ":" ^ password)) ]
-                    (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                    (Cohttp.Header.get_multi req.Cohttp.Request.headers proxy_authorization)
                 | _, _ ->
                   Alcotest.check Alcotest.(list string) proxy_authorization
                     [ ]
-                    (req.Cohttp.Request.headers |> Cohttp.Header.to_list |> List.filter (fun (k, _) -> k = proxy_authorization) |> List.map snd)
+                    (Cohttp.Header.get_multi req.Cohttp.Request.headers proxy_authorization)
                 end;
                 (* Unfortunately cohttp always adds transfer-encoding: chunked
                    so we write the header ourselves *)
