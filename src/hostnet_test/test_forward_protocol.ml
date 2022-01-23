@@ -26,7 +26,7 @@ let inputs =
   ; ("data", {command= Data 128l; id= 8l})
   ; ("window", {command= Window 8888888L; id= 9l}) ]
 
-let output_dir = Filename.(concat (dirname Sys.argv.(0)) "test_inputs")
+let output_dir = List.fold_left Filename.concat (Filename.dirname Sys.argv.(0)) [ ".."; ".."; "go"; "test_inputs" ]
 
 (* Regenerate test output files. This is only needed when changing the protocol and
    updating the tests. *)

@@ -1,0 +1,9 @@
+(executable
+ (libraries unix)
+ (modules Mac_package)
+ (name mac_package))
+
+(executable
+ (libraries unix stringext ezjsonm)
+ (modules Licenses)
+ (name licenses))

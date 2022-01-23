@@ -1,3 +1,0 @@
-Virtual package relying on autoconf installation.
-This package can only install if the autoconf command
-is available on the system.

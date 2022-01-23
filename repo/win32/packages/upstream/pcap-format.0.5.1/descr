@@ -1,4 +1,0 @@
-Decode and encode PCAP (packet capture) files
-
-pcap-format provides an interface to encode and decode pcap files, dealing with
-both endianess, including endianess detection.

@@ -19,41 +19,30 @@ jobs:
       - run: brew install libtool
       # Build the OCaml compiler
       - restore_cache:
-           key: ocaml-cache-{{ checksum "Makefile.darwin"}}
-      - run: make -f Makefile.darwin ocaml
+           key: ocaml-cache-{{ checksum "Makefile"}}
+      - run: make -f Makefile ocaml
       - save_cache:
            paths:
              - /Users/distiller/.opam
-           key: ocaml-cache-{{ checksum "Makefile.darwin"}}
+           key: ocaml-cache-{{ checksum "Makefile"}}
       # Build the OCaml dependencies, make sure the cache is cleared if the dependencies change.
       - restore_cache:
-           key: depends-cache-{{ checksum "vpnkit.opam" }}-{{ checksum "Makefile.darwin"}}
-      - run: make -f Makefile.darwin depends
+           key: depends-cache-{{ checksum "vpnkit.opam" }}-{{ checksum "Makefile"}}
+      - run: make -f Makefile depends
       - save_cache:
            paths:
              - /Users/distiller/.opam
-           key: depends-cache-{{ checksum "vpnkit.opam" }}-{{ checksum "Makefile.darwin"}}
-      - run: make -f Makefile.darwin build
-      - run: make -f Makefile.darwin artefacts
+           key: depends-cache-{{ checksum "vpnkit.opam" }}-{{ checksum "Makefile"}}
+      - run: opam exec -- dune build vpnkit.tgz
       - store_artifacts:
-          path: vpnkit.tgz
-      - run: make -f Makefile.darwin COMMIT
+          path: ./_build/default/vpnkit.tgz
+      - run: opam exec -- dune build COMMIT
       - store_artifacts:
-          path: COMMIT
-      # The {{ checksum }} only works for files, not directories
-      - run:
-          name: Generate cache key for OSS-LICENSES
-          command: git ls-tree HEAD repo -- repo | awk '{print $3}' > repo.hash
-      - restore_cache:
-          key: license-cache-{{ checksum "repo.hash" }}-{{ checksum "vpnkit.opam"}}
-      - run: make -f Makefile.darwin OSS-LICENSES
-      - save_cache:
-          paths:
-              - OSS-LICENSES
-          key: license-cache-{{ checksum "repo.hash" }}-{{ checksum "vpnkit.opam"}}
+          path: ./_build/default/COMMIT
+      - run: opam exec -- dune build licenses.json
       - store_artifacts:
-          path: OSS-LICENSES
-      - run: make -f Makefile.darwin test
+          path: ./_build/default/licenses.json
+      - run: opam exec -- dune test
 
 workflows:
   version: 2

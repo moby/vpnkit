@@ -1,0 +1,41 @@
+(executable
+ (libraries unix)
+ (name gen_commit))
+
+(rule
+ (targets COMMIT)
+ (action  (with-outputs-to %{targets} (run git rev-parse HEAD))))
+
+(rule
+ (target deps.csv)
+ (deps vpnkit.opam)
+ (action (with-outputs-to %{target} (run opam list --installed --required-by=vpnkit --recursive --columns name,package --separator=, --nobuild --color=never))))
+
+(rule
+ (target licenses.json)
+ (deps deps.csv (:gen ./scripts/licenses.exe))
+ (action (run %{gen} -out %{target} -in %{deps})))
+
+(rule
+ (target vpnkit.exe)
+ (deps src/bin/main.exe)
+ (action (copy %{deps} %{target})))
+
+(rule
+ (target vpnkit.tgz)
+ (deps    vpnkit.exe (:gen ./scripts/mac_package.exe))
+ (action  (run %{gen} -out %{target} -in %{deps})))
+
+(rule
+ (alias runtest)
+ (deps src/hostnet_test/main.exe
+   go/test_inputs/open_dedicated_connection.bin
+   go/test_inputs/close.bin
+   go/test_inputs/open_multiplexed_unix_connection.bin
+   go/test_inputs/window.bin
+   go/test_inputs/data.bin
+   go/test_inputs/open_multiplexed_connection.bin
+   go/test_inputs/shutdown.bin
+   )
+ (action (run ./src/hostnet_test/main.exe))
+)

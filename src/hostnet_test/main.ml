@@ -30,6 +30,17 @@ let () =
               )
     );
 
+  (* One test requires 1026 descriptors on Unix so run ourself with the ulimit *)
+  let child_arg = "--child" in
+  let is_child = Array.length Sys.argv = 2 && Sys.argv.(1) = child_arg in
+  if Sys.os_type = "Unix" && not is_child then begin
+    match Unix.system (Printf.sprintf "ulimit -n 1500 && %s --child" Sys.argv.(0)) with
+    | Unix.WEXITED n -> exit n
+    | _ ->
+      Printf.fprintf stderr "unable to re-run with ulimit\n";
+      exit 1
+  end;
+
   Host.start_background_gc None;
 
   List.iter
