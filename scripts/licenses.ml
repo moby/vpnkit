@@ -6,11 +6,6 @@ type license = {
   text: string;
 }
 
-let license_to_json l = `O [
-  "link", `String l.link;
-  "text", `String l.text;
-]
-
 let isc = {|
 Permission to use, copy, modify, and distribute this software for any
 purpose with or without fee is hereby granted, provided that the above
@@ -1093,11 +1088,18 @@ let () =
     if line = ""
     then None
     else match Stringext.split ~on:',' (trim_comment line) with
-      | name :: package :: _ ->
+      | name :: package :: rest ->
         let name = String.trim name in
         let package = String.trim package in
+        let license_ty = match rest with
+          | [ x ] ->
+            (* opam quotes these *)
+            if String.length x >= 2 && x.[0] = '"' && x.[String.length x - 1] = '"'
+            then String.sub x 1 (String.length x - 2)
+            else x
+          | _ -> "" in
         if linked_into_executable name && not(base_package name)
-        then (try Some (licenses package) with _ -> missing := package :: !missing; None)
+        then (try Some (package, license_ty, licenses package) with _ -> missing := package :: !missing; None)
         else None
       | _ ->
         failwith (Printf.sprintf "unable to parse %s" line) in
@@ -1114,6 +1116,13 @@ let () =
     | End_of_file -> !all in
   let all = gather_licenses () in
   if !missing <> [] then failwith (Printf.sprintf "unknown licenses for %s" (String.concat ", " !missing));
-  let json = `A (List.map license_to_json all) in
+  let json = `A (List.map (fun (package, license_ty, license) ->
+    `O [
+      "name", `String package; (* name.version *)
+      "type", `String license_ty;
+      "link", `String license.link;
+      "text", `String license.text;
+    ]
+    ) all) in
   let oc = open_out !output_file in
   Ezjsonm.to_channel ~minify:false oc json
