@@ -19,5 +19,6 @@ build_script:
 
 artifacts:
   - path: "./_build/default/vpnkit.exe"
+  - path: "./_build/default/deps.csv"
   - path: "./_build/default/licenses.json"
   - path: "./_build/default/COMMIT"

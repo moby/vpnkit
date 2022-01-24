@@ -42,6 +42,8 @@ jobs:
       - run: opam exec -- dune build licenses.json
       - store_artifacts:
           path: ./_build/default/licenses.json
+      - store_artifacts:
+          path: ./_build/default/deps.csv
       - run: opam exec -- dune test
 
 workflows:

@@ -9,7 +9,7 @@
 (rule
  (target deps.csv)
  (deps vpnkit.opam)
- (action (with-outputs-to %{target} (run opam list --installed --required-by=vpnkit --recursive --columns name,package --separator=, --nobuild --color=never))))
+ (action (with-outputs-to %{target} (run opam list --installed --required-by=vpnkit --recursive --columns name,package,license: --separator=, --nobuild --color=never))))
 
 (rule
  (target licenses.json)
