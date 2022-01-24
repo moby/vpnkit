@@ -508,7 +508,7 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
   }
   | "base.v0.14.2"
   | "csexp.1.5.1"
-  | "dune.2.9.1"
+  | "dune.2.9.1" | "dune.2.9.2"
   | "dune-configurator.2.9.1"
   | "ocaml-compiler-libs.v0.12.4"
   | "ocaml-syntax-shims.1.0.0"
