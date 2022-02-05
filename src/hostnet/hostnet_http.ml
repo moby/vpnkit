@@ -152,7 +152,7 @@ module Make
     exclude: Exclude.t;
     transparent_http_ports: int list;
     transparent_https_ports: int list;
-    allow: string list option;
+    allow: Exclude.t option;
   }
 
   let resolve_ip name_or_ip =
@@ -188,7 +188,7 @@ module Make
     let transparent_https_ports = [ "transparent_https_ports", list int t.transparent_https_ports ] in
     let allow = match t.allow with
     | None -> []
-    | Some hosts -> [ "allow", list string hosts ] in
+    | Some hosts -> [ "allow", list string @@ List.map Exclude.One.to_string hosts ] in
     dict (http @ https @ exclude @ transparent_http_ports @ transparent_https_ports @ allow)
 
   let of_json j =
@@ -212,7 +212,7 @@ module Make
       try get_list get_int @@ find j [ "transparent_https_ports" ]
       with Not_found -> [ 443 ] in
     let allow =
-      try Some (get_list get_string @@ find j [ "allow" ])
+      try Some (List.map Exclude.One.of_string @@ get_list get_string @@ find j [ "allow" ])
     with Not_found -> None in
     let http = match http with None -> None | Some x -> proxy_of_string x in
     let https = match https with None -> None | Some x -> proxy_of_string x in
@@ -224,6 +224,7 @@ module Make
     let http = match http with None -> None | Some x -> proxy_of_string x in
     let https = match https with None -> None | Some x -> proxy_of_string x in
     let exclude = match exclude with None -> [] | Some x -> Exclude.of_string x in
+    let allow = match allow with None -> None | Some x -> Some (List.map Exclude.One.of_string x) in
     let t = { http; https; exclude; transparent_http_ports; transparent_https_ports; allow } in
     Log.info (fun f -> f "HTTP proxy settings changed to: %s" (to_string t));
     Lwt.return (Ok t)
@@ -551,7 +552,7 @@ module Make
 
   let denied_by_policy host = function
     | None -> false
-    | Some hosts -> not(List.mem host hosts)
+    | Some hosts -> not(Exclude.matches host hosts)
 
   let route ?(localhost_names=[]) ?(localhost_ips=[]) proxy exclude allow req =
     match get_host req with
