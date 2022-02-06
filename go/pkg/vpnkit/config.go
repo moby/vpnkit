@@ -29,7 +29,9 @@ type HTTPConfiguration struct {
 	Exclude               string   `json:"exclude,omitempty"`
 	TransparentHTTPPorts  []int    `json:"transparent_http_ports"`
 	TransparentHTTPSPorts []int    `json:"transparent_https_ports"`
+	AllowEnabled          bool     `json:"allow_enabled"`
 	Allow                 []string `json:"allow"`
+	AllorErrorMsg         string   `json:"allow_error_msg"`
 }
 
 func (h HTTPConfiguration) Write(w io.Writer) error {

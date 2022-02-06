@@ -152,7 +152,9 @@ module Make
     exclude: Exclude.t;
     transparent_http_ports: int list;
     transparent_https_ports: int list;
-    allow: Exclude.t option;
+    allow_enabled: bool;
+    allow: Exclude.t;
+    allow_error_msg: string;
   }
 
   let resolve_ip name_or_ip =
@@ -186,10 +188,12 @@ module Make
     let exclude = [ "exclude", string @@ Exclude.to_string t.exclude ] in
     let transparent_http_ports = [ "transparent_http_ports", list int t.transparent_http_ports ] in
     let transparent_https_ports = [ "transparent_https_ports", list int t.transparent_https_ports ] in
-    let allow = match t.allow with
-    | None -> []
-    | Some hosts -> [ "allow", list string @@ List.map Exclude.One.to_string hosts ] in
-    dict (http @ https @ exclude @ transparent_http_ports @ transparent_https_ports @ allow)
+    let allow_enabled = [ "allow_enabled", bool t.allow_enabled ] in
+    let allow = [ "allow", list string @@ List.map Exclude.One.to_string t.allow ] in
+    let allow_error_msg = [ "allow_error_msg", string t.allow_error_msg ] in
+    dict (http @ https @ exclude @ transparent_http_ports @ transparent_https_ports @ allow_enabled @ allow @ allow_error_msg)
+
+  let default_error_msg = "Connections to %s are forbidden by policy. Please contact your IT administrator."
 
   let of_json j =
     let open Ezjsonm in
@@ -211,21 +215,28 @@ module Make
     let transparent_https_ports =
       try get_list get_int @@ find j [ "transparent_https_ports" ]
       with Not_found -> [ 443 ] in
+    let allow_enabled =
+      try (get_bool @@ find j [ "allow_enabled" ])
+      with Not_found -> false
+    in
     let allow =
-      try Some (List.map Exclude.One.of_string @@ get_list get_string @@ find j [ "allow" ])
-    with Not_found -> None in
+      try List.map Exclude.One.of_string @@ get_list get_string @@ find j [ "allow" ]
+      with Not_found -> [] in
+    let allow_error_msg =
+      try get_string @@ find j [ "allow_error_msg" ]
+      with Not_found -> default_error_msg in
     let http = match http with None -> None | Some x -> proxy_of_string x in
     let https = match https with None -> None | Some x -> proxy_of_string x in
-    Lwt.return (Ok { http; https; exclude; transparent_http_ports; transparent_https_ports; allow })
+    Lwt.return (Ok { http; https; exclude; transparent_http_ports; transparent_https_ports; allow_enabled; allow; allow_error_msg })
 
   let to_string t = Ezjsonm.to_string ~minify:false @@ to_json t
 
-  let create ?http ?https ?exclude ?(transparent_http_ports=[ 80 ]) ?(transparent_https_ports=[ 443 ]) ?allow () =
+  let create ?http ?https ?exclude ?(transparent_http_ports=[ 80 ]) ?(transparent_https_ports=[ 443 ]) ?(allow_enabled=false) ?(allow=[]) ?(allow_error_msg = default_error_msg) () =
     let http = match http with None -> None | Some x -> proxy_of_string x in
     let https = match https with None -> None | Some x -> proxy_of_string x in
     let exclude = match exclude with None -> [] | Some x -> Exclude.of_string x in
-    let allow = match allow with None -> None | Some x -> Some (List.map Exclude.One.of_string x) in
-    let t = { http; https; exclude; transparent_http_ports; transparent_https_ports; allow } in
+    let allow = List.map Exclude.One.of_string allow in
+    let t = { http; https; exclude; transparent_http_ports; transparent_https_ports; allow_enabled; allow; allow_error_msg } in
     Log.info (fun f -> f "HTTP proxy settings changed to: %s" (to_string t));
     Lwt.return (Ok t)
 
@@ -550,16 +561,12 @@ module Make
       let port = match Uri.port uri with None -> 80 | Some p -> p in
       Ok (host, port)
 
-  let denied_by_policy host = function
-    | None -> false
-    | Some hosts -> not(Exclude.matches host hosts)
-
-  let route ?(localhost_names=[]) ?(localhost_ips=[]) proxy exclude allow req =
+  let route ?(localhost_names=[]) ?(localhost_ips=[]) proxy exclude allow_enabled allow req =
     match get_host req with
     | Error x -> Lwt.return (Error x)
     | Ok (host, port) ->
       Log.debug (fun f -> f "host from request = %s:%d" host port);
-      if denied_by_policy host allow
+      if allow_enabled && not(Exclude.matches host allow)
       then Lwt.return (Error (`Refused host))
       else
       (* A proxy URL must have both a host and a port to be useful *)
@@ -611,10 +618,10 @@ module Make
           Lwt.return (Ok { next_hop_address = (next_hop_ip, next_hop_port); host; port; description; ty })
       end
 
-  let fetch ?localhost_names ?localhost_ips ~flow proxy exclude allow incoming req =
+  let fetch ?localhost_names ?localhost_ips ~flow proxy exclude allow_enabled allow allow_error_msg incoming req =
     let uri = Cohttp.Request.uri req in
     let meth = Cohttp.Request.meth req in
-    route ?localhost_names ?localhost_ips proxy exclude allow req
+    route ?localhost_names ?localhost_ips proxy exclude allow_enabled allow req
     >>= function
     | Error `Missing_host_header ->
       send_error `Bad_request incoming "HTTP proxy"
@@ -622,7 +629,7 @@ module Make
       >>= fun () ->
       Lwt.return false
     | Error (`Refused host) ->
-      let response = "HTTP/1.1 403 Connections to " ^ host ^ " are forbidden by policy. Please contact your IT administrator.\r\nConnection: closed\r\n\r\n" in
+      let response = "HTTP/1.1 403 " ^ (Stringext.replace_all allow_error_msg ~pattern:"%s" ~with_:host) ^ "\r\nConnection: close\r\n\r\n" in
       Incoming.C.write_string incoming response 0 (String.length response);
       begin Incoming.C.flush incoming >>= function
       | Error _ ->
@@ -704,7 +711,7 @@ module Make
   (* A regular, non-transparent HTTP proxy implementation.
      If [proxy] is [None] then requests will be sent to origin servers;
      otherwise they will be sent to the upstream proxy. *)
-  let explicit_proxy ~localhost_names ~localhost_ips proxy exclude allow () =
+  let explicit_proxy ~localhost_names ~localhost_ips proxy exclude allow_enabled allow allow_error_msg () =
     let listeners _port =
       Log.debug (fun f -> f "HTTP TCP handshake complete");
       let process flow =
@@ -721,7 +728,7 @@ module Make
                           x);
                     Lwt.return_unit
                   | `Ok req ->
-                    fetch ~localhost_names ~localhost_ips ~flow proxy exclude allow incoming req
+                    fetch ~localhost_names ~localhost_ips ~flow proxy exclude allow_enabled allow allow_error_msg incoming req
                     >>= function
                     | true ->
                       (* keep the connection open, read more requests *)
@@ -740,7 +747,7 @@ module Make
     in
     Lwt.return listeners
 
-  let transparent_http ~dst ~localhost_names ~localhost_ips proxy exclude allow =
+  let transparent_http ~dst ~localhost_names ~localhost_ips proxy exclude allow_enabled allow allow_error_msg =
     let listeners _port =
       Log.debug (fun f -> f "HTTP TCP handshake complete");
       let process flow =
@@ -766,7 +773,7 @@ module Make
                     | Error `Missing_host_header ->
                       { req with Cohttp.Request.headers = Cohttp.Header.replace req.headers "host" (Ipaddr.V4.to_string dst) }
                     | Ok _ -> req in
-                  fetch ~localhost_names ~localhost_ips ~flow (Some proxy) exclude allow incoming req
+                  fetch ~localhost_names ~localhost_ips ~flow (Some proxy) exclude allow_enabled allow allow_error_msg incoming req
                   >>= function
                   | true ->
                     (* keep the connection open, read more requests *)
@@ -786,7 +793,7 @@ module Make
 
   let transparent_proxy_handler ~localhost_names ~localhost_ips ~dst:(ip, port) ~t =
     match t.http, t.https with
-    | Some proxy, _ when List.mem port t.transparent_http_ports -> Some (transparent_http ~dst:ip ~localhost_names ~localhost_ips proxy t.exclude t.allow)
+    | Some proxy, _ when List.mem port t.transparent_http_ports -> Some (transparent_http ~dst:ip ~localhost_names ~localhost_ips proxy t.exclude t.allow_enabled t.allow t.allow_error_msg)
     | _, Some proxy when List.mem port t.transparent_https_ports ->
       if Exclude.matches (Ipaddr.V4.to_string ip) t.exclude
       then None
@@ -796,7 +803,7 @@ module Make
   let explicit_proxy_handler ~localhost_names ~localhost_ips ~dst:(_, port) ~t =
     match port, t.http, t.https with
     | 3128, proxy, _
-    | 3129, _, proxy -> Some (explicit_proxy ~localhost_names ~localhost_ips proxy t.exclude t.allow ())
+    | 3129, _, proxy -> Some (explicit_proxy ~localhost_names ~localhost_ips proxy t.exclude t.allow_enabled t.allow t.allow_error_msg ())
     (* For other ports, refuse the connection *)
     | _, _, _ -> None
 end
