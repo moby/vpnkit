@@ -10,7 +10,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 let errorf fmt = Fmt.kstr (fun e -> Lwt.return (Error (`Msg e))) fmt
 
-module Exclude = struct
+module Match = struct
 
   module One = struct
     module Element = struct
@@ -149,11 +149,11 @@ module Make
   type t = {
     http: proxy option;
     https: proxy option;
-    exclude: Exclude.t;
+    exclude: Match.t;
     transparent_http_ports: int list;
     transparent_https_ports: int list;
     allow_enabled: bool;
-    allow: Exclude.t;
+    allow: Match.t;
     allow_error_msg: string;
   }
 
@@ -185,11 +185,11 @@ module Make
     | None   -> []
     | Some x -> [ "https", string @@ string_of_proxy x ]
     in
-    let exclude = [ "exclude", string @@ Exclude.to_string t.exclude ] in
+    let exclude = [ "exclude", string @@ Match.to_string t.exclude ] in
     let transparent_http_ports = [ "transparent_http_ports", list int t.transparent_http_ports ] in
     let transparent_https_ports = [ "transparent_https_ports", list int t.transparent_https_ports ] in
     let allow_enabled = [ "allow_enabled", bool t.allow_enabled ] in
-    let allow = [ "allow", list string @@ List.map Exclude.One.to_string t.allow ] in
+    let allow = [ "allow", list string @@ List.map Match.One.to_string t.allow ] in
     let allow_error_msg = [ "allow_error_msg", string t.allow_error_msg ] in
     dict (http @ https @ exclude @ transparent_http_ports @ transparent_https_ports @ allow_enabled @ allow @ allow_error_msg)
 
@@ -206,8 +206,8 @@ module Make
       with Not_found -> None
     in
     let exclude =
-      try Exclude.of_string @@ get_string @@ find j [ "exclude" ]
-      with Not_found -> Exclude.none
+      try Match.of_string @@ get_string @@ find j [ "exclude" ]
+      with Not_found -> Match.none
     in
     let transparent_http_ports =
       try get_list get_int @@ find j [ "transparent_http_ports" ]
@@ -220,7 +220,7 @@ module Make
       with Not_found -> false
     in
     let allow =
-      try List.map Exclude.One.of_string @@ get_list get_string @@ find j [ "allow" ]
+      try List.map Match.One.of_string @@ get_list get_string @@ find j [ "allow" ]
       with Not_found -> [] in
     let allow_error_msg =
       try get_string @@ find j [ "allow_error_msg" ]
@@ -234,8 +234,8 @@ module Make
   let create ?http ?https ?exclude ?(transparent_http_ports=[ 80 ]) ?(transparent_https_ports=[ 443 ]) ?(allow_enabled=false) ?(allow=[]) ?(allow_error_msg = default_error_msg) () =
     let http = match http with None -> None | Some x -> proxy_of_string x in
     let https = match https with None -> None | Some x -> proxy_of_string x in
-    let exclude = match exclude with None -> [] | Some x -> Exclude.of_string x in
-    let allow = List.map Exclude.One.of_string allow in
+    let exclude = match exclude with None -> [] | Some x -> Match.of_string x in
+    let allow = List.map Match.One.of_string allow in
     let t = { http; https; exclude; transparent_http_ports; transparent_https_ports; allow_enabled; allow; allow_error_msg } in
     Log.info (fun f -> f "HTTP proxy settings changed to: %s" (to_string t));
     Lwt.return (Ok t)
@@ -566,7 +566,7 @@ module Make
     | Error x -> Lwt.return (Error x)
     | Ok (host, port) ->
       Log.debug (fun f -> f "host from request = %s:%d" host port);
-      if allow_enabled && not(Exclude.matches host allow)
+      if allow_enabled && not(Match.matches host allow)
       then Lwt.return (Error (`Refused host))
       else
       (* A proxy URL must have both a host and a port to be useful *)
@@ -589,7 +589,7 @@ module Make
         | None -> Some ((host, port), `Origin)
         (* If a proxy is configured it depends on whether the request matches the excludes *)
         | Some proxy ->
-          if Exclude.matches host exclude
+          if Match.matches host exclude
           then Some ((host, port), `Origin)
           else Some (proxy, `Proxy) in
       begin match hostport_and_ty with
@@ -795,7 +795,7 @@ module Make
     match t.http, t.https with
     | Some proxy, _ when List.mem port t.transparent_http_ports -> Some (transparent_http ~dst:ip ~localhost_names ~localhost_ips proxy t.exclude t.allow_enabled t.allow t.allow_error_msg)
     | _, Some proxy when List.mem port t.transparent_https_ports ->
-      if Exclude.matches (Ipaddr.V4.to_string ip) t.exclude
+      if Match.matches (Ipaddr.V4.to_string ip) t.exclude
       then None
       else Some (tunnel_https_over_connect ~localhost_names ~localhost_ips ~dst:ip proxy)
     | _, _ -> None

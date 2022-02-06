@@ -7,58 +7,58 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Exclude = struct
+module Match = struct
 
   let test_ip_match () =
-    let exclude = Hostnet_http.Exclude.of_string "10.0.0.1" in
-    assert (Hostnet_http.Exclude.matches "10.0.0.1" exclude)
+    let exclude = Hostnet_http.Match.of_string "10.0.0.1" in
+    assert (Hostnet_http.Match.matches "10.0.0.1" exclude)
 
   let test_cidr_match () =
-    let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
-    assert (Hostnet_http.Exclude.matches "10.0.0.1" exclude)
+    let exclude = Hostnet_http.Match.of_string "10.0.0.0/24" in
+    assert (Hostnet_http.Match.matches "10.0.0.1" exclude)
 
   let test_cidr_no_match () =
-    let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
-    assert (not(Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "10.0.0.0/24" in
+    assert (not(Hostnet_http.Match.matches
                   "192.168.0.1"
                   exclude))
 
   let test_domain_match () =
-    let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
-    assert (Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "mit.edu" in
+    assert (Hostnet_http.Match.matches
                   "dave.mit.edu"
                   exclude)
 
   let test_domain_star_match () =
-    let exclude = Hostnet_http.Exclude.of_string "*.mit.edu" in
-    assert (Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "*.mit.edu" in
+    assert (Hostnet_http.Match.matches
                   "dave.mit.edu"
                   exclude)
 
   let test_domain_dot_match () =
-    let exclude = Hostnet_http.Exclude.of_string ".mit.edu" in
-    assert (Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string ".mit.edu" in
+    assert (Hostnet_http.Match.matches
                   "dave.mit.edu"
                   exclude)
 
   let test_domain_no_match () =
-    let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
-    assert (not(Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "mit.edu" in
+    assert (not(Hostnet_http.Match.matches
                   "www.mobyproject.org"
                   exclude))
 
   let test_list () =
-    let exclude = Hostnet_http.Exclude.of_string "*.local, 169.254.0.0/16" in
-    assert (Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "*.local, 169.254.0.0/16" in
+    assert (Hostnet_http.Match.matches
                   "dave.local"
                   exclude);
-    assert (Hostnet_http.Exclude.matches
+    assert (Hostnet_http.Match.matches
                   "169.254.0.1"
                   exclude);
-    assert (not(Hostnet_http.Exclude.matches
+    assert (not(Hostnet_http.Match.matches
                   "10.0.0.1"
                   exclude));
-    assert (not(Hostnet_http.Exclude.matches
+    assert (not(Hostnet_http.Match.matches
                   "www.mobyproject.org"
                   exclude))
 

@@ -310,7 +310,7 @@ let test_tcp = [
 let tests =
   Hosts_test.tests @ Forwarding.tests @ test_dhcp
   @ Test_dns.suite
-  @ test_tcp @ Test_nat.tests @ Test_http.tests @ Test_http.Exclude.tests
+  @ test_tcp @ Test_nat.tests @ Test_http.tests @ Test_http.Match.tests
   @ Test_half_close.tests @ Test_ping.tests
   @ Test_bridge.tests @ Test_forward_protocol.suite
 

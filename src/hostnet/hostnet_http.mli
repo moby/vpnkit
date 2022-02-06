@@ -1,4 +1,4 @@
-module Exclude: sig
+module Match: sig
   type t
   (** A request destination which should bypass the proxy *)
 
