@@ -26,11 +26,18 @@ ensure that you unset your `OPAMROOT` environment variable:
 unset OPAMROOT
 ```
 
-To build, type
+To set up the OCaml build environment, type:
+```
+make ocaml
+```
+To install the OCaml dependencies, type:
+```
+make depends
+```
+To build:
 ```
 make
 ```
-The first build will take a little longer as it will build all the package dependencies first.
 
 When the build succeeds the `vpnkit.exe` binary should be available in the current directory.
 
