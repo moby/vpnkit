@@ -501,10 +501,10 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
     Copyright (c) 2016 The astring programmers
     |} ^ isc
   }
-  | "base.v0.14.2"
+  | "base.v0.14.2" | "base.v0.14.3"
   | "csexp.1.5.1"
-  | "dune.2.9.1" | "dune.2.9.2"
-  | "dune-configurator.2.9.1"
+  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3"
+  | "dune-configurator.2.9.1" | "dune-configurator.2.9.3"
   | "ocaml-compiler-libs.v0.12.4"
   | "ocaml-syntax-shims.1.0.0"
   | "parsexp.v0.14.2"
@@ -525,7 +525,7 @@ Copyright (c) 2016--2020 Jane Street Group, LLC opensource@janestreet.com
     Copyright (c) 2010 Thomas Gazagnaire thomas@gazagnaire.com
     |} ^ isc
   }
-  | "bigarray-compat.1.0.0" -> {
+  | "bigarray-compat.1.0.0" | "bigarray-compat.1.1.0" -> {
     link = "https://github.com/mirage/bigarray-compat/blob/757e11302b40619322fb839a8ef0cb0e16ba0828/LICENSE.md";
     text = {|
     Copyright (c) 2019-2021 Lucas Pluvinage lucas.pluvinage@gmail.com
@@ -636,7 +636,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
 
     |} ^ isc
   }
-  | "metrics.0.3.0" -> {
+  | "metrics.0.3.0" | "metrics.0.4.0" -> {
     link = "https://github.com/mirage/metrics/blob/0f48d63c5e1c0e33d7043b2c6e053ba380516433/LICENSE.md";
     text = isc;
   }
@@ -648,7 +648,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     Copyright (c) 2015 Thomas Gazagnaire thomas@gazagnaire.org
     |} ^ isc
   }
-  | "mirage-clock.4.0.0" | "mirage-clock-unix.4.0.0" -> {
+  | "mirage-clock.4.0.0" | "mirage-clock-unix.4.0.0" | "mirage-clock.4.1.0" | "mirage-clock-unix.4.1.0" -> {
     link = "https://github.com/mirage/mirage-clock/blob/5c1fa5e5818d1a5d8600894e95f07d48ad705c6f/LICENSE.md";
     text = {|
     Copyright (c) 2010 Anil Madhavapeddy anil@recoil.org 2014 Daniel C. Bünzli
@@ -722,7 +722,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
 
     |} ^ isc
   }
-  | "mirage-entropy.0.5.0" | "mirage-entropy.0.5.1" -> {
+  | "mirage-entropy.0.4.1" | "mirage-entropy.0.5.0" | "mirage-entropy.0.5.1" -> {
     link = "https://github.com/mirage/mirage-entropy/blob/8d4c9ed42dbea225b306af082acd8e15464287ba/LICENSE.md";
     text = {|
     Copyright (c) 2014-2016, Hannes Mehnert, Anil Madhavapeddy, David Kaloper Meršinjak
@@ -911,7 +911,7 @@ might be covered by the GNU Lesser General Public License.
     Copyright (c) 2008 Daniel C. Bünzli
     |} ^ isc
   }
-  | "uutf.1.0.2" -> {
+  | "uutf.1.0.2" | "uutf.1.0.3" -> {
     link = "https://github.com/dbuenzli/uutf/blob/d43c88c0673b0d30dc34960645d0f992d68b23a1/LICENSE.md";
     text = {|
     Copyright (c) 2016 Daniel C. Bünzli
@@ -937,7 +937,8 @@ might be covered by the GNU Lesser General Public License.
 
     |} ^ mit
   }
-  | "menhir.20211230" | "menhirLib.20211230" | "menhirSdk.20211230" -> {
+  | "menhir.20211230" | "menhirLib.20211230" | "menhirSdk.20211230"
+  | "menhir.20220210" | "menhirLib.20220210" | "menhirSdk.20220210" -> {
     link = "https://gitlab.inria.fr/fpottier/menhir/-/blob/20211230/LICENSE";
     text = {|
 
@@ -950,7 +951,7 @@ Public License version 2 (included below).
     link = "https://github.com/OCamlPro/ocplib-endian/blob/10292cd3ffa4d23d737e3f855ad04f22d3d95460/COPYING.txt";
     text = lgpl21_with_ocaml_linking_exception;
   }
-  | "ounit.2.2.4" | "ounit2.2.2.4" -> {
+  | "ounit.2.2.4" | "ounit.2.2.6" | "ounit2.2.2.4" | "ounit2.2.2.6" -> {
     link = "https://github.com/gildor478/ounit/blob/faf4936b17507406c7592186dcaa3f25c6fc138a/LICENSE.txt";
     text = {|
     Copyright (c) 2002, 2003 by Maas-Maarten Zeeman
@@ -979,7 +980,7 @@ otherwise, arising from, out of or in connection with the Software or
 the use or other dealings in the software.
     |}
   }
-  | "sha.1.15.1" -> {
+  | "sha.1.15.1" | "sha.1.15.2" -> {
     link = "https://github.com/djs55/ocaml-sha/blob/af5c7b1c7d3b8f9492038b7b40ba9cad82fb4ee8/LICENSE.md";
     text = isc;
   }
