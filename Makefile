@@ -16,8 +16,6 @@ ocaml:
 	opam pin add omake "https://github.com/ocaml-omake/omake.git#0e4aef74dfe005b4e880cd13c08f7c57fa4a030b" -n
 	# Fix for OCaml 4.12 build
 	opam pin add uwt "https://github.com/fdopen/uwt.git#c43349bf3689181756feb341e3896d4a0a695523" -n
-	opam pin add protocol-9p.2.0.2 "https://github.com/djs55/ocaml-9p.git#cstruct.length" -n
-	opam pin add protocol-9p-unix.2.0.2 "https://github.com/djs55/ocaml-9p.git#cstruct.length" -n
 	opam pin add vpnkit . -n
 
 test:

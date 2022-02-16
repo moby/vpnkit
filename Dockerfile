@@ -11,9 +11,6 @@ RUN opam pin configurator --dev-repo -n
 RUN opam pin add omake "https://github.com/ocaml-omake/omake.git#gerd/disable-parallel-bootstrap" -n
 # Fix for OCaml 4.12 build
 RUN opam pin add uwt "https://github.com/fdopen/uwt.git#c43349bf3689181756feb341e3896d4a0a695523" -n
-# While waiting for the release:
-RUN opam pin add protocol-9p.2.0.1 "https://github.com/djs55/ocaml-9p.git" -n
-RUN opam pin add protocol-9p-unix.2.0.1 "https://github.com/djs55/ocaml-9p.git" -n
 
 RUN sudo apk add libtool autoconf automake # missing depexts
 

@@ -6,7 +6,7 @@ environment:
     FORK_USER: ocaml
     FORK_BRANCH: master
     CYG_ROOT: C:\cygwin64
-    PINS: "protocol-9p.2.0.2:https://github.com/djs55/ocaml-9p.git#cstruct.length protocol-9p-unix.2.0.2:https://github.com/djs55/ocaml-9p.git#cstruct.length vpnkit:."
+    PINS: "vpnkit:."
     PACKAGE: "vpnkit"
     OPAM_SWITCH: 4.08.0+mingw64c
 
