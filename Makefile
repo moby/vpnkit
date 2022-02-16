@@ -18,6 +18,9 @@ ocaml:
 	opam pin add uwt "https://github.com/fdopen/uwt.git#c43349bf3689181756feb341e3896d4a0a695523" -n
 	opam pin add vpnkit . -n
 
+depends:
+	opam install --deps-only -t vpnkit
+
 test:
 	opam exec -- dune test
 
