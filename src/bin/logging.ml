@@ -2,9 +2,11 @@
 
   let pp_ptime f () =
     let open Unix in
-    let tm = Unix.gmtime (Unix.time ()) in
-    Fmt.pf f "time=\"%04d-%02d-%02dT%02d:%02d:%02dZ\"" (tm.tm_year + 1900) (tm.tm_mon + 1)
-      tm.tm_mday tm.tm_hour tm.tm_min tm.tm_sec
+    let s = Unix.gettimeofday () in
+    let tm = Unix.gmtime s in
+    let nsecs = Float.rem s Float.one *. 1e9 |> int_of_float in
+    Fmt.pf f "time=\"%04d-%02d-%02dT%02d:%02d:%02d.%09dZ\"" (tm.tm_year + 1900) (tm.tm_mon + 1)
+      tm.tm_mday tm.tm_hour tm.tm_min tm.tm_sec nsecs
 
 let reporter =
   let report src level ~over k msgf =
