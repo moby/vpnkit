@@ -1,4 +1,4 @@
-module Exclude: sig
+module Match: sig
   type t
   (** A request destination which should bypass the proxy *)
 
@@ -25,11 +25,14 @@ sig
 
   val create: ?http:string -> ?https:string -> ?exclude:string
     -> ?transparent_http_ports:int list -> ?transparent_https_ports:int list
+    -> ?allow_enabled:bool -> ?allow:string list -> ?allow_error_msg:string
     -> unit ->
     (t, [`Msg of string]) result Lwt.t
   (** Create a transparent HTTP forwarding instance which forwards
       HTTP to the proxy [http], HTTPS to the proxy [https] or connects
-      directly if the URL matches [exclude]. *)
+      directly if the URL matches [exclude].
+      If an allow list is provided then host names not on the list will
+      be rejected. *)
 
   val of_json: Ezjsonm.value -> (t, [`Msg of string]) result Lwt.t
   (** [of_json json] decodes [json] into a proxy configuration *)

@@ -7,58 +7,58 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Exclude = struct
+module Match = struct
 
   let test_ip_match () =
-    let exclude = Hostnet_http.Exclude.of_string "10.0.0.1" in
-    assert (Hostnet_http.Exclude.matches "10.0.0.1" exclude)
+    let exclude = Hostnet_http.Match.of_string "10.0.0.1" in
+    assert (Hostnet_http.Match.matches "10.0.0.1" exclude)
 
   let test_cidr_match () =
-    let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
-    assert (Hostnet_http.Exclude.matches "10.0.0.1" exclude)
+    let exclude = Hostnet_http.Match.of_string "10.0.0.0/24" in
+    assert (Hostnet_http.Match.matches "10.0.0.1" exclude)
 
   let test_cidr_no_match () =
-    let exclude = Hostnet_http.Exclude.of_string "10.0.0.0/24" in
-    assert (not(Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "10.0.0.0/24" in
+    assert (not(Hostnet_http.Match.matches
                   "192.168.0.1"
                   exclude))
 
   let test_domain_match () =
-    let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
-    assert (Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "mit.edu" in
+    assert (Hostnet_http.Match.matches
                   "dave.mit.edu"
                   exclude)
 
   let test_domain_star_match () =
-    let exclude = Hostnet_http.Exclude.of_string "*.mit.edu" in
-    assert (Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "*.mit.edu" in
+    assert (Hostnet_http.Match.matches
                   "dave.mit.edu"
                   exclude)
 
   let test_domain_dot_match () =
-    let exclude = Hostnet_http.Exclude.of_string ".mit.edu" in
-    assert (Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string ".mit.edu" in
+    assert (Hostnet_http.Match.matches
                   "dave.mit.edu"
                   exclude)
 
   let test_domain_no_match () =
-    let exclude = Hostnet_http.Exclude.of_string "mit.edu" in
-    assert (not(Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "mit.edu" in
+    assert (not(Hostnet_http.Match.matches
                   "www.mobyproject.org"
                   exclude))
 
   let test_list () =
-    let exclude = Hostnet_http.Exclude.of_string "*.local, 169.254.0.0/16" in
-    assert (Hostnet_http.Exclude.matches
+    let exclude = Hostnet_http.Match.of_string "*.local, 169.254.0.0/16" in
+    assert (Hostnet_http.Match.matches
                   "dave.local"
                   exclude);
-    assert (Hostnet_http.Exclude.matches
+    assert (Hostnet_http.Match.matches
                   "169.254.0.1"
                   exclude);
-    assert (not(Hostnet_http.Exclude.matches
+    assert (not(Hostnet_http.Match.matches
                   "10.0.0.1"
                   exclude));
-    assert (not(Hostnet_http.Exclude.matches
+    assert (not(Hostnet_http.Match.matches
                   "www.mobyproject.org"
                   exclude))
 
@@ -538,7 +538,13 @@ let test_http_connect_tunnel proxy () =
                 Lwt.wakeup_later forwarded_u ();
                 Lwt.return_unit
           ) (fun server ->
-            let json = Ezjsonm.from_string "{ }" in
+            let json = Ezjsonm.from_string {|
+            {
+                  "allow_enabled": true,
+                  "allow": [ "localhost" ],
+                  "allow_error_msg": "stop connecting to %s"
+            }
+                    |} in
             Slirp_stack.Slirp_stack.Debug.update_http_json json ()
             >>= function
             | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
@@ -593,9 +599,61 @@ let test_http_connect_tunnel proxy () =
       )
     end
 
+  let test_http_proxy_connect_rejected () =
+    Host.Main.run begin
+    Slirp_stack.with_stack ~pcap:"test_http_proxy_connect_rejected.pcap" (fun _ stack ->
+      let json = Ezjsonm.from_string {|
+{
+      "allow_enabled": true,
+      "allow": [ "not-localhost" ],
+      "allow_error_msg": "stop connecting to %s"
+}
+        |} in
+      Slirp_stack.Slirp_stack.Debug.update_http_json json ()
+      >>= function
+      | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
+      | Ok () ->
+        let open Slirp_stack in
+        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+        >>= function
+        | Error _ ->
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          failwith "test_proxy_connect_rejected: connect failed"
+        | Ok flow ->
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          let oc = Outgoing.C.create flow in
+          let request =
+            let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
+            let resource = Fmt.str "localhost:%d" 1234 in
+            { connect with Cohttp.Request.resource }
+          in
+          Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
+          >>= fun () ->
+          Outgoing.Response.read oc
+          >>= function
+          | `Eof ->
+            failwith "test_proxy_connect_rejected: EOF on HTTP CONNECT"
+          | `Invalid x ->
+            failwith ("test_proxy_connect_rejected: Invalid HTTP response: " ^ x)
+          | `Ok res ->
+            if res.Cohttp.Response.status = `OK then failwith "test_proxy_connect_rejected: HTTP CONNECT accepted";
+            if res.Cohttp.Response.status <> `Forbidden
+            then failwith "test_proxy_connect_rejected: HTTP CONNECT did not fail with forbidden";
+            Lwt.return (`Result ())
+    )
+      >|= function
+      | `Timeout  -> failwith "HTTP interception failed"
+      | `Result x -> x
+    end
+
   let test_http_proxy_connect_fail () =
     Host.Main.run begin
       Slirp_stack.with_stack ~pcap:"test_http_proxy_connect_fail.pcap" (fun _ stack ->
+        let json = Ezjsonm.from_string "{ }" in
+        Slirp_stack.Slirp_stack.Debug.update_http_json json ()
+        >>= function
+        | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
+        | Ok () ->
         let open Slirp_stack in
         Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
         >>= function
@@ -1012,12 +1070,14 @@ let proxy_urls = [
 ) Slirp_stack.names_for_localhost)
 
 let tests = [
-
   "HTTP: interception",
   [ "", `Quick, test_interception "http://127.0.0.1" ];
 
   "HTTP proxy: CONNECT",
   [ "check that HTTP CONNECT requests through the proxy", `Quick, test_http_proxy_connect ];
+
+  "HTTP proxy: CONNECT rejected",
+  [ "check that HTTP CONNECT requests must match the allow list", `Quick, test_http_proxy_connect_rejected ];
 
   "HTTP proxy: CONNECT fails",
   [ "check that HTTP CONNECT fails if the port is not found", `Quick, test_http_proxy_connect_fail ];

@@ -24,11 +24,14 @@ func (d DHCPConfiguration) Write(w io.Writer) error {
 
 // HTTPConfiguration configures the built-in HTTP proxy.
 type HTTPConfiguration struct {
-	HTTP                  string `json:"http,omitempty"`
-	HTTPS                 string `json:"https,omitempty"`
-	Exclude               string `json:"exclude,omitempty"`
-	TransparentHTTPPorts  []int  `json:"transparent_http_ports"`
-	TransparentHTTPSPorts []int  `json:"transparent_https_ports"`
+	HTTP                  string   `json:"http,omitempty"`
+	HTTPS                 string   `json:"https,omitempty"`
+	Exclude               string   `json:"exclude,omitempty"`
+	TransparentHTTPPorts  []int    `json:"transparent_http_ports"`
+	TransparentHTTPSPorts []int    `json:"transparent_https_ports"`
+	AllowEnabled          bool     `json:"allow_enabled"`
+	Allow                 []string `json:"allow"`
+	AllorErrorMsg         string   `json:"allow_error_msg"`
 }
 
 func (h HTTPConfiguration) Write(w io.Writer) error {
