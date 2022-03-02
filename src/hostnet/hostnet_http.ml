@@ -196,38 +196,41 @@ module Make
   let default_error_msg = "Connections to %s are forbidden by policy. Please contact your IT administrator."
 
   let of_json j =
-    let open Ezjsonm in
-    let http =
-      try Some (get_string @@ find j [ "http" ])
-      with Not_found -> None
-    in
-    let https =
-      try Some (get_string @@ find j [ "https" ])
-      with Not_found -> None
-    in
-    let exclude =
-      try Match.of_string @@ get_string @@ find j [ "exclude" ]
-      with Not_found -> Match.none
-    in
-    let transparent_http_ports =
-      try get_list get_int @@ find j [ "transparent_http_ports" ]
-      with Not_found -> [ 80 ] in
-    let transparent_https_ports =
-      try get_list get_int @@ find j [ "transparent_https_ports" ]
-      with Not_found -> [ 443 ] in
-    let allow_enabled =
-      try (get_bool @@ find j [ "allow_enabled" ])
-      with Not_found -> false
-    in
-    let allow =
-      try List.map Match.One.of_string @@ get_list get_string @@ find j [ "allow" ]
-      with Not_found -> [] in
-    let allow_error_msg =
-      try get_string @@ find j [ "allow_error_msg" ]
-      with Not_found -> default_error_msg in
-    let http = match http with None -> None | Some x -> proxy_of_string x in
-    let https = match https with None -> None | Some x -> proxy_of_string x in
-    Lwt.return (Ok { http; https; exclude; transparent_http_ports; transparent_https_ports; allow_enabled; allow; allow_error_msg })
+    try
+      let open Ezjsonm in
+      let http =
+        try Some (get_string @@ find j [ "http" ])
+        with Not_found -> None
+      in
+      let https =
+        try Some (get_string @@ find j [ "https" ])
+        with Not_found -> None
+      in
+      let exclude =
+        try Match.of_string @@ get_string @@ find j [ "exclude" ]
+        with Not_found -> Match.none
+      in
+      let transparent_http_ports =
+        try get_list get_int @@ find j [ "transparent_http_ports" ]
+        with Not_found -> [ 80 ] in
+      let transparent_https_ports =
+        try get_list get_int @@ find j [ "transparent_https_ports" ]
+        with Not_found -> [ 443 ] in
+      let allow_enabled =
+        try (get_bool @@ find j [ "allow_enabled" ])
+        with Not_found -> false
+      in
+      let allow =
+        try List.map Match.One.of_string @@ get_list get_string @@ find j [ "allow" ]
+        with Not_found -> [] in
+      let allow_error_msg =
+        try get_string @@ find j [ "allow_error_msg" ]
+        with Not_found -> default_error_msg in
+      let http = match http with None -> None | Some x -> proxy_of_string x in
+      let https = match https with None -> None | Some x -> proxy_of_string x in
+      Lwt.return (Ok { http; https; exclude; transparent_http_ports; transparent_https_ports; allow_enabled; allow; allow_error_msg })
+    with e ->
+      Lwt.return (Error (`Msg (Printf.sprintf "parsing json: %s" (Printexc.to_string e))))
 
   let to_string t = Ezjsonm.to_string ~minify:false @@ to_json t
 
