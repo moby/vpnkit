@@ -16,6 +16,9 @@ all: build/vpnkit-iptables-wrapper.linux build/vpnkit-forwarder.linux build/vpnk
 test:
 	go test -race -v ./cmd/... ./pkg/...
 
+build-push:
+	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(ORG)/vpnkit-forwarder:$(HASH) -f Dockerfile ..
+
 # Build in linux container
 build-in-container: build-forwarder-in-container build-expose-port-in-container build-kube-forwarder-in-container build-dial-example-in-container
 
