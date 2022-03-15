@@ -148,17 +148,32 @@ func (c *Control) ListenOnListener(l net.Listener, listenerName string, quit <-c
 // Connect a data connection
 func (c *Control) Connect(path string, quit <-chan struct{}) error {
 	for {
-		t := transport.Choose(path)
-		log.Printf("dialing %s %s for data connection", t.String(), path)
-		conn, err := t.Dial(context.Background(), path)
-		if err != nil {
-			// This can happen if the server is restarting
-			log.Printf("unable to connect data on %s %s: %s. Is the server restarting? Will retry in 1s.", t.String(), path, err)
-			time.Sleep(time.Second)
-			continue
-		}
-		log.Printf("connected data connection on %s %s", t.String(), path)
+		conn := c.connectOnce(path, quit)
 		c.handleDataConn(conn, quit, true)
+		// Since there is no initial handshake in t.Dial, sometimes it can connect() successfully
+		// and then handleDataConn immediately returns with an EOF. We need to avoid spinning.
+		log.Printf("data connection closed. Will reconnect in 1s.")
+		time.Sleep(time.Second)
+	}
+}
+
+func (c *Control) connectOnce(path string, quit <-chan struct{}) net.Conn {
+	var lastLog time.Time
+	start := time.Now()
+	t := transport.Choose(path)
+	log.Printf("dialing %s %s for data connection", t.String(), path)
+	for {
+		conn, err := t.Dial(context.Background(), path)
+		if err == nil {
+			log.Printf("connected data connection on %s %s after %s", t.String(), path, time.Since(start))
+			return conn
+		}
+		// This can happen if the server is restarting
+		if time.Since(lastLog) > 30*time.Second {
+			log.Printf("unable to connect data on %s %s after %s: %s. Is the server restarting? Will retry every 1s.", t.String(), path, time.Since(start), err)
+			lastLog = time.Now()
+		}
+		time.Sleep(time.Second)
 	}
 }
 

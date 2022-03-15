@@ -601,7 +601,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
 
     |} ^ isc
   }
-  | "functoria-runtime.3.0.3" -> {
+  | "functoria-runtime.3.0.3" | "functoria-runtime.3.1.2" -> {
     link = "https://github.com/mirage/functoria/blob/d89fadb14bef0b1eb43761cdced0816e7772a533/LICENSE.md";
     text = {|
     Copyright (c) 2015-2018, Thomas Gazagnaire, Anil Madhavapeddy, Dave Scott, Thomas Leonard, Gabriel Radanne
@@ -629,7 +629,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     Copyright (c) 2013 Thomas Gazagnaire thomas@gazagnaire.org Copyright (C) 2012-2013 Citrix Inc Copyright (c) 2010-2012 Anil Madhavapeddy anil@recoil.org
     |} ^ isc
   }
-  | "ipaddr.5.2.0" | "ipaddr-sexp.5.2.0" | "macaddr.5.2.0" | "macaddr-cstruct.5.2.0" | "macaddr-sexp.5.2.0" -> {
+  | "ipaddr.5.2.0" | "ipaddr.5.3.0" | "ipaddr-sexp.5.2.0" | "ipaddr-sexp.5.3.0" | "macaddr.5.2.0" | "macaddr.5.3.0" | "macaddr-cstruct.5.2.0" | "macaddr-cstruct.5.3.0" | "macaddr-sexp.5.2.0" | "macaddr-sexp.5.3.0" -> {
     link = "https://github.com/mirage/ocaml-ipaddr/blob/7745ea4be2c1c5a7ab95908b26a6ed81a0947ab5/LICENSE.md";
     text = {|
     Copyright (c) 2013-2015 David Sheets sheets@alum.mit.edu Copyright (c) 2010-2011, 2014 Anil Madhavapeddy anil@recoil.org
@@ -730,7 +730,7 @@ All rights reserved.
 
     |} ^ bsd_2_clause_simplified
   }
-  | "mirage-kv.4.0.0" -> {
+  | "mirage-kv.4.0.0" | "mirage-kv.4.0.1" -> {
     link = "https://github.com/mirage/mirage-kv/blob/5c2c75e5a0efc0c9390b11fab75b1e706ea8d4ab/LICENSE.md";
     text = isc
   }
@@ -776,7 +776,7 @@ covered by the GNU Library General Public License.
 
     |} ^ lgpl21
   }
-  | "mmap.1.1.0" -> {
+  | "mmap.1.1.0" | "map.1.2.0" -> {
     link = "https://github.com/mirage/mmap/blob/46f613db11c00667764523ccbb3d63e53e1c666c/LICENSE";
     text = {|
     In the following, "the OCaml Core System" refers to all files marked
@@ -829,6 +829,34 @@ the license in file toplevel/LICENSE-findlib.
 
 ----------------------------------------------------------------------
 
+    |} ^ lgpl21
+  }
+  | "camlp-streams." -> {
+    link = "https://github.com/ocaml/camlp-streams/blob/trunk/LICENSE";
+    text = {|
+    The Camlp-streams library is copyright Institut National de Recherche
+    en Informatique et en Automatique (INRIA) and distributed under the
+    terms of the GNU Lesser General Public License (LGPL) version 2.1
+    (included below).
+  
+    As a special exception to the GNU Lesser General Public License, you
+    may link, statically or dynamically, a "work that uses the
+    Camlp-streams library" with a publicly distributed version of the
+    Camlp-streams library to produce an executable file containing
+    portions of the Camlp-streams library, and distribute that executable
+    file under terms of your choice, without any of the additional
+    requirements listed in clause 6 of the GNU Lesser General Public
+    License.  By "a publicly distributed version of the Camlp-streams
+    library", we mean either the unmodified Camlp-streams library
+    available from https://github/com/ocaml/camlp-streams, or a modified
+    version of the Camlp-streams library that is distributed under the
+    conditions defined in clause 2 of the GNU Lesser General Public
+    License.  This exception does not however invalidate any other reasons
+    why the executable file might be covered by the GNU Lesser General
+    Public License.
+    
+    ----------------------------------------------------------------------
+  
     |} ^ lgpl21
   }
   | "ocaml.4.08.0" | "ocaml-base-compiler.4.08.0"
@@ -991,7 +1019,7 @@ the use or other dealings in the software.
 
     |} ^ mit
   }
-  | "tar.2.0.0" -> {
+  | "tar.2.0.0" | "tar.2.0.1" -> {
     link = "https://github.com/mirage/ocaml-tar/blob/4da72c48eb1ea1066052216cdcfa12c5931c6eec/LICENSE.md";
     text = {|
     Copyright (c) 2012-2018 The ocaml-tar contributors
