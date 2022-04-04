@@ -648,7 +648,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     Copyright (c) 2015 Thomas Gazagnaire thomas@gazagnaire.org
     |} ^ isc
   }
-  | "mirage-clock.4.0.0" | "mirage-clock-unix.4.0.0" | "mirage-clock.4.1.0" | "mirage-clock-unix.4.1.0" -> {
+  | "mirage-clock.4.0.0" | "mirage-clock-unix.4.0.0" | "mirage-clock.4.1.0" | "mirage-clock-unix.4.1.0" | "mirage-clock.4.2.0" | "mirage-clock-unix.4.2.0" -> {
     link = "https://github.com/mirage/mirage-clock/blob/5c1fa5e5818d1a5d8600894e95f07d48ad705c6f/LICENSE.md";
     text = {|
     Copyright (c) 2010 Anil Madhavapeddy anil@recoil.org 2014 Daniel C. Bünzli
@@ -687,7 +687,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     link = "https://github.com/mirage/mirage-time/blob/c68f199b1952f0656526a3212f82afd2a49c1f00/LICENSE.md";
     text = isc;
   }
-  | "mirage-vnetif.0.5.0" -> {
+  | "mirage-vnetif.0.5.0" | "mirage-vnetif.0.6.0" -> {
     link = "https://github.com/mirage/mirage-vnetif/blob/8582e89c194b1253550daa755b4a4ff608bd07ca/LICENSE.md";
     text = {|
     Copyright (c) 2015, Magnus Skjegstad magnus@skjegstad.com
@@ -776,7 +776,7 @@ covered by the GNU Library General Public License.
 
     |} ^ lgpl21
   }
-  | "mmap.1.1.0" | "map.1.2.0" -> {
+  | "mmap.1.1.0" | "mmap.1.2.0" -> {
     link = "https://github.com/mirage/mmap/blob/46f613db11c00667764523ccbb3d63e53e1c666c/LICENSE";
     text = {|
     In the following, "the OCaml Core System" refers to all files marked
@@ -831,7 +831,7 @@ the license in file toplevel/LICENSE-findlib.
 
     |} ^ lgpl21
   }
-  | "camlp-streams." -> {
+  | "camlp-streams.5.0" -> {
     link = "https://github.com/ocaml/camlp-streams/blob/trunk/LICENSE";
     text = {|
     The Camlp-streams library is copyright Institut National de Recherche
@@ -1026,7 +1026,7 @@ the use or other dealings in the software.
 
     |} ^ isc
   }
-  | "tcpip.7.0.1" -> {
+  | "tcpip.7.0.1" | "tcpip.7.1.0" -> {
     link = "https://github.com/mirage/mirage-tcpip/blob/353f7b92a1a8747923ce6918426fd3f82aa27445/LICENSE.md";
     text = {|
     Copyright (c) Anil Madhavapeddy <anil@recoil.org>

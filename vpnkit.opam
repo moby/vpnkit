@@ -46,6 +46,7 @@ depends: [
   "astring"
   "ethernet" {>= "3.0.0"}
   "arp" {>= "3.0.0"}
+  "mirage-entropy" {>= "0.5.0"}
   "mirage-kv" {>= "4.0.0"}
   "mirage-net" {>= "4.0.0"}
   "mirage-time" {>= "3.0.0"}
