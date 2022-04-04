@@ -232,7 +232,7 @@ module Make
     with e ->
       Lwt.return (Error (`Msg (Printf.sprintf "parsing json: %s" (Printexc.to_string e))))
 
-  let to_string t = Ezjsonm.to_string ~minify:false @@ to_json t
+  let to_string t = Ezjsonm.to_string ~minify:true @@ to_json t
 
   let create ?http ?https ?exclude ?(transparent_http_ports=[ 80 ]) ?(transparent_https_ports=[ 443 ]) ?(allow_enabled=false) ?(allow=[]) ?(allow_error_msg = default_error_msg) () =
     let http = match http with None -> None | Some x -> proxy_of_string x in
