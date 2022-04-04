@@ -776,7 +776,7 @@ covered by the GNU Library General Public License.
 
     |} ^ lgpl21
   }
-  | "mmap.1.1.0" | "map.1.2.0" -> {
+  | "mmap.1.1.0" | "mmap.1.2.0" -> {
     link = "https://github.com/mirage/mmap/blob/46f613db11c00667764523ccbb3d63e53e1c666c/LICENSE";
     text = {|
     In the following, "the OCaml Core System" refers to all files marked
