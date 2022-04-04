@@ -5,7 +5,7 @@
     let s = Unix.gettimeofday () in
     let tm = Unix.gmtime s in
     let nsecs = Float.rem s Float.one *. 1e9 |> int_of_float in
-    Fmt.pf f "time=\"%04d-%02d-%02dT%02d:%02d:%02d.%09dZ\"" (tm.tm_year + 1900) (tm.tm_mon + 1)
+    Fmt.pf f "%04d-%02d-%02dT%02d:%02d:%02d.%09dZ" (tm.tm_year + 1900) (tm.tm_mon + 1)
       tm.tm_mday tm.tm_hour tm.tm_min tm.tm_sec nsecs
 
 let process = Filename.basename Sys.argv.(0)
@@ -21,7 +21,7 @@ let reporter =
       let level = Logs.level_to_string (Some level) in
 
       Fmt.kpf k Fmt.stderr
-        ("%a process=%a level=%a msg=\"%a: " ^^ fmt ^^ "\"@.")
+        ("[%a][%a][%a] %a: " ^^ fmt ^^ "@.")
         pp_ptime ()
         Fmt.string process
         Fmt.string level
