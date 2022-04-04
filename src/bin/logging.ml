@@ -10,26 +10,57 @@
 
 let process = Filename.basename Sys.argv.(0)
 
+let with_lock m f x =
+  Mutex.lock m;
+  try
+    let result = f x in
+    Mutex.unlock m;
+    result
+  with e ->
+    Mutex.unlock m;
+    raise e
+
 let reporter =
+  let buffer = Buffer.create 1024 in
+  let m = Mutex.create () in
+  let c = Condition.create () in
+  let (_: Thread.t) = Thread.create (fun () ->
+    let rec next () = match Buffer.contents buffer with
+      | "" ->
+        Condition.wait c m;
+        next ()
+      | data ->
+        Buffer.reset buffer;
+        data in
+    let rec loop () =
+      let data = with_lock m next () in
+      (* Block writing to stderr without the buffer mutex held. Logging may continue into the buffer. *)
+      output_string stderr data;
+      flush stderr;
+      loop () in
+    loop ()
+  ) () in
+  let buffer_fmt = Format.formatter_of_buffer buffer in
+
+
   let report src level ~over k msgf =
     let k _ =
+      Condition.signal c;
       over ();
       k ()
     in
     let src = Logs.Src.name src in
-    let with_stamp _h _tags k fmt =
-      let level = Logs.level_to_string (Some level) in
-
-      Fmt.kpf k Fmt.stderr
-        ("[%a][%a][%a] %a: " ^^ fmt ^^ "@.")
-        pp_ptime ()
-        Fmt.string process
-        Fmt.string level
-        Fmt.string src
-
-    in
     msgf @@ fun ?header ?tags fmt ->
-    with_stamp header tags k fmt
+      let level = Logs.level_to_string (Some level) in
+      with_lock m
+        (fun () ->
+          Format.kfprintf k buffer_fmt
+            ("[%a][%a][%a] %a: " ^^ fmt ^^ "@.")
+            pp_ptime ()
+            Fmt.string process
+            Fmt.string level
+            Fmt.string src
+        ) ()
   in
   { Logs.report }
 
