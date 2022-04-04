@@ -85,12 +85,12 @@ module Policy(Files: Sig.FILES) = struct
             Files.read_file resolv_conf
             >>= function
             | Error (`Msg m) ->
-              Log.warn (fun f -> f "reading %s: %s" resolv_conf m);
+              Log.info (fun f -> f "reading %s: %s" resolv_conf m);
               Lwt.return_unit
             | Ok txt ->
               begin match Dns_forward.Config.Unix.of_resolv_conf txt with
               | Error (`Msg m) ->
-                Log.warn (fun f -> f "parsing %s: %s" resolv_conf m);
+                Log.err (fun f -> f "parsing %s: %s" resolv_conf m);
                 Lwt.return_unit
               | Ok servers ->
                 add ~priority:2 ~config:(`Upstream servers);
