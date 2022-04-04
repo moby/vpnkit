@@ -8,7 +8,7 @@ let src =
 module Log9P = (val Logs.src_log src : Logs.LOG)
 
 let src =
-  let src = Logs.Src.create "usernet" ~doc:"Mirage TCP/IP <-> socket proxy" in
+  let src = Logs.Src.create "main" ~doc:"Mirage TCP/IP <-> socket proxy" in
   Logs.Src.set_level src (Some Logs.Info);
   src
 
@@ -348,7 +348,6 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       port_forwards hosts
       listen_backlog gc_compact
     =
-    Log.info (fun f -> f "Setting handler to ignore all SIGPIPE signals");
     (* This will always succeed on Mac but will raise Illegal_argument
        on Windows. Happily on Windows there is no such thing as
        SIGPIPE so it's safe to catch the exception and throw it
@@ -488,6 +487,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       in
       if debug || env_debug then Some Logs.Debug else Some Logs.Info in
     Logging.setup level;
+    Log.info (fun f -> f "Starting");
 
     if Sys.os_type = "Unix" then begin
       Log.info (fun f -> f "Increasing preemptive thread pool size to 1024 threads");
