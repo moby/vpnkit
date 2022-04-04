@@ -21,7 +21,9 @@ let with_lock m f x =
     raise e
 
 let reporter =
-  let buffer = Buffer.create 1024 in
+  let max_buffer_size = 65536 in
+  let buffer = Buffer.create 128 in
+  let dropped_bytes = ref 0 in
   let m = Mutex.create () in
   let c = Condition.create () in
   let (_: Thread.t) = Thread.create (fun () ->
@@ -30,12 +32,17 @@ let reporter =
         Condition.wait c m;
         next ()
       | data ->
+        let dropped = !dropped_bytes in
+        dropped_bytes := 0;
         Buffer.reset buffer;
-        data in
+        data, dropped in
     let rec loop () =
-      let data = with_lock m next () in
+      let data, dropped = with_lock m next () in
       (* Block writing to stderr without the buffer mutex held. Logging may continue into the buffer. *)
       output_string stderr data;
+      if dropped > 0 then begin
+        output_string stderr (Printf.sprintf "%d bytes of logs dropped\n" dropped)
+      end;
       flush stderr;
       loop () in
     loop ()
@@ -54,7 +61,11 @@ let reporter =
       let level = Logs.level_to_string (Some level) in
       with_lock m
         (fun () ->
-          Format.kfprintf k buffer_fmt
+          let destination =
+            if Buffer.length buffer > max_buffer_size then begin
+              Format.make_formatter (fun _ _ _ -> ()) (fun () -> ())
+            end else buffer_fmt in
+          Format.kfprintf k destination
             ("[%a][%a][%a] %a: " ^^ fmt ^^ "@.")
             pp_ptime ()
             Fmt.string process
