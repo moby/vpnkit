@@ -39,17 +39,12 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
   (* given some MACs and IPs, construct a usable DHCP configuration *)
   let make ~configuration:c netif =
     let open Dhcp_server.Config in
-    (* FIXME: We need a DHCP range to make the DHCP server happy, even though we
-       intend only to serve IPs to one downstream host.
-       see https://github.com/haesbaert/charrua-core/issues/27 - this may be
-       resolved in the future *)
-    let low_ip, high_ip =
+    let low_ip =
       let open Ipaddr.V4 in
       let all_static_ips = [ c.Configuration.gateway_ip; c.Configuration.lowest_ip ] in
       let highest = maximum_ip all_static_ips in
-      let i32 = to_int32 highest in
-      of_int32 @@ Int32.succ i32, of_int32 @@ Int32.succ @@ Int32.succ i32 in
-    let ip_list = [ c.Configuration.gateway_ip; low_ip; high_ip; c.Configuration.highest_ip ] in
+      of_int32 @@ Int32.succ (to_int32 highest) in
+    let ip_list = [ c.Configuration.gateway_ip; low_ip; c.Configuration.highest_ip ] in
     let prefix = smallest_prefix c.Configuration.lowest_ip ip_list 32 in
     (* Use the dhcp.json in preference, otherwise fall back to the DNS configuration *)
     let domain_search = match !global_dhcp_configuration with
@@ -94,7 +89,6 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
         ip_addr = c.Configuration.gateway_ip;
         mac_addr = c.Configuration.server_macaddr;
         network = prefix;
-        (* FIXME: this needs https://github.com/haesbaert/charrua-core/pull/31 *)
         range = Some (c.Configuration.lowest_ip, c.Configuration.lowest_ip); (* allow one dynamic client *)
       } in
 
