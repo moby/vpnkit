@@ -730,7 +730,7 @@ All rights reserved.
 
     |} ^ bsd_2_clause_simplified
   }
-  | "mirage-kv.4.0.0" -> {
+  | "mirage-kv.4.0.1" -> {
     link = "https://github.com/mirage/mirage-kv/blob/5c2c75e5a0efc0c9390b11fab75b1e706ea8d4ab/LICENSE.md";
     text = isc
   }
@@ -776,7 +776,7 @@ covered by the GNU Library General Public License.
 
     |} ^ lgpl21
   }
-  | "mmap.1.1.0" -> {
+  | "mmap.1.1.0" | "mmap.1.2.0" -> {
     link = "https://github.com/mirage/mmap/blob/46f613db11c00667764523ccbb3d63e53e1c666c/LICENSE";
     text = {|
     In the following, "the OCaml Core System" refers to all files marked
@@ -1045,6 +1045,10 @@ Copyright (c) 2016-2017 Mindy Preston
     Copyright (c) 2016, Dave Scott
 
     |} ^ isc
+  }
+  | "camlp-streams.5.0" -> {
+    link = "https://raw.githubusercontent.com/ocaml/camlp-streams/trunk/LICENSE";
+    text = lgpl21_with_ocaml_linking_exception
   }
   | x -> failwith (Printf.sprintf "unknown license for " ^ x)
 
