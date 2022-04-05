@@ -5,28 +5,73 @@
     let s = Unix.gettimeofday () in
     let tm = Unix.gmtime s in
     let nsecs = Float.rem s Float.one *. 1e9 |> int_of_float in
-    Fmt.pf f "time=\"%04d-%02d-%02dT%02d:%02d:%02d.%09dZ\"" (tm.tm_year + 1900) (tm.tm_mon + 1)
+    Fmt.pf f "%04d-%02d-%02dT%02d:%02d:%02d.%09dZ" (tm.tm_year + 1900) (tm.tm_mon + 1)
       tm.tm_mday tm.tm_hour tm.tm_min tm.tm_sec nsecs
 
+let process = Filename.basename Sys.argv.(0)
+
+let with_lock m f x =
+  Mutex.lock m;
+  try
+    let result = f x in
+    Mutex.unlock m;
+    result
+  with e ->
+    Mutex.unlock m;
+    raise e
+
 let reporter =
+  let max_buffer_size = 65536 in
+  let buffer = Buffer.create 128 in
+  let dropped_bytes = ref 0 in
+  let m = Mutex.create () in
+  let c = Condition.create () in
+  let (_: Thread.t) = Thread.create (fun () ->
+    let rec next () = match Buffer.contents buffer with
+      | "" ->
+        Condition.wait c m;
+        next ()
+      | data ->
+        let dropped = !dropped_bytes in
+        dropped_bytes := 0;
+        Buffer.reset buffer;
+        data, dropped in
+    let rec loop () =
+      let data, dropped = with_lock m next () in
+      (* Block writing to stderr without the buffer mutex held. Logging may continue into the buffer. *)
+      output_string stderr data;
+      if dropped > 0 then begin
+        output_string stderr (Printf.sprintf "%d bytes of logs dropped\n" dropped)
+      end;
+      flush stderr;
+      loop () in
+    loop ()
+  ) () in
+  let buffer_fmt = Format.formatter_of_buffer buffer in
+
+
   let report src level ~over k msgf =
     let k _ =
+      Condition.signal c;
       over ();
       k ()
     in
     let src = Logs.Src.name src in
-    let with_stamp _h _tags k fmt =
+    msgf @@ fun ?header:_ ?tags:_ fmt ->
       let level = Logs.level_to_string (Some level) in
-
-      Fmt.kpf k Fmt.stderr
-        ("\r%a level=%a @[msg=\"%a: " ^^ fmt ^^ "\"@]@.")
-        pp_ptime ()
-        Fmt.string level
-        Fmt.string src
-
-    in
-    msgf @@ fun ?header ?tags fmt ->
-    with_stamp header tags k fmt
+      with_lock m
+        (fun () ->
+          let destination =
+            if Buffer.length buffer > max_buffer_size then begin
+              Format.make_formatter (fun _ _ _ -> ()) (fun () -> ())
+            end else buffer_fmt in
+          Format.kfprintf k destination
+            ("[%a][%a][%a] %a: " ^^ fmt ^^ "@.")
+            pp_ptime ()
+            Fmt.string process
+            Fmt.string level
+            Fmt.string src
+        ) ()
   in
   { Logs.report }
 

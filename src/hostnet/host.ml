@@ -1064,6 +1064,8 @@ module Files = struct
     let cb _h res = match res with
     | Ok _ ->
       callback ()
+    | Error Uwt_base.ENOENT ->
+      ()
     | Error err ->
       Log.err (fun f -> f "While watching %s: %s" path (Uwt.err_name err));
       () in
