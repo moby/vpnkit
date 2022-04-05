@@ -905,7 +905,7 @@ might be covered by the GNU Lesser General Public License.
   }
   | "fd-send-recv.2.0.1" -> {
     link = "https://github.com/xapi-project/ocaml-fd-send-recv/blob/7c9b151a7cc54f11c45280177027d9d42473737c/LICENSE";
-    text = lgpl21_with_ocaml_linking_exception
+    text = lgpl21_with_ocaml_linking_exception;
   }
   | "fmt.0.9.0" -> {
     link = "https://github.com/dbuenzli/fmt/blob/11221dcfd08c9b21c2dc63378fd6ffe75333fb33/LICENSE.md";
