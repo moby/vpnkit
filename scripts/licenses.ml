@@ -580,8 +580,9 @@ POSSIBILITY OF SUCH DAMAGE.
 Copyright (c) 2009-2018 <the authors, see individual headers on files>
     |} ^isc
   }
-  | "cstruct.6.0.1" | "cstruct-lwt.6.0.1" | "cstruct-sexp.6.0.1" | "ppx_cstruct.6.0.1" -> {
-    link = "https://github.com/mirage/ocaml-cstruct/blob/28dade8963a9edfddeb8dba782a8eae0341e80d4/LICENSE.md";
+  | "cstruct.6.0.1" | "cstruct-lwt.6.0.1" | "cstruct-sexp.6.0.1" | "ppx_cstruct.6.0.1"
+  | "cstruct.6.1.0" | "cstruct-lwt.6.1.0" | "cstruct-sexp.6.1.0" | "ppx_cstruct.6.1.0" -> {
+    link = "https://raw.githubusercontent.com/mirage/ocaml-cstruct/v6.1.0/LICENSE.md";
     text = {|
     Copyright (c) 2012 Anil Madhavapeddy anil@recoil.org Copyright (c) 2012 Pierre Chambart Copyright (c) Christiano F. Haesbaert haesbaert@haesbaert.org Copyright (c) Citrix Inc Copyright (c) David Sheets sheets@alum.mit.edu Copyright (c) Drup drupyog@zoho.com Copyright (c) Hannes Mehnert hannes@mehnert.org Copyright (c) Jeremy Yallop yallop@gmail.com Copyright (c) Mindy Preston meetup@yomimono.org Copyright (c) Nicolas Ojeda Bar n.oje.bar@gmail.com Copyright (c) Richard Mortier mort@cantab.net Copyright (c) Rudi Grinberg rudi.grinberg@gmail.com Copyright (c) Thomas Gazagnaire thomas@gazagnaire.com Copyright (c) Thomas Leonard talex5@gmail.com Copyright (c) Vincent Bernardoff vb@luminar.eu.org Copyright (c) pqwy david@numm.org
 
@@ -640,8 +641,8 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     link = "https://github.com/mirage/metrics/blob/0f48d63c5e1c0e33d7043b2c6e053ba380516433/LICENSE.md";
     text = isc;
   }
-  | "mirage-channel.4.0.1" -> {
-    link = "https://github.com/mirage/mirage-channel/blob/78e4546abd06f6ea07b7f8742e89db33f63aee2b/LICENSE.md";
+  | "mirage-channel.4.0.1" | "mirage-channel.4.1.0" -> {
+    link = "https://raw.githubusercontent.com/mirage/mirage-channel/v4.1.0/LICENSE.md";
     text = {|
     Copyright (c) 2011-2015 Anil Madhavapeddy anil@recoil.org
     Copyright (c) 2015 Mindy Preston
