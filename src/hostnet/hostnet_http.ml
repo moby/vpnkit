@@ -94,19 +94,6 @@ module Match = struct
 
 end
 
-let error_html title body =
-  Printf.sprintf
-"<html><head>
-<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">
-<title>%s</title>
-</head><body>
-%s
-<br>
-<p>Server is <a href=\"https://github.com/moby/vpnkit\">moby/vpnkit</a></p>
-</body>
-</html>
-" title body
-
 module Make
     (Ip: Tcpip.Ip.S with type ipaddr = Ipaddr.V4.t)
     (Udp: Tcpip.Udp.S with type ipaddr = Ipaddr.V4.t)
@@ -457,13 +444,38 @@ module Make
           else ip in
         Lwt.return (Ok (ip, port))
 
-  let send_error status incoming description msg () =
-    let res = Cohttp.Response.make ~version:`HTTP_1_1 ~status () in
-    Log.info (fun f -> f "%s: returning 503 Service_unavailable" description);
-    Incoming.Response.write ~flush:true (fun writer ->
-      Incoming.Response.write_body writer
-        (error_html "ERROR: connection refused" msg)
-    ) res incoming
+  let send_error status incoming description =
+    let header = "HTTP/1.1 " ^ status ^ " " ^ description ^ "\r\nConnection: closed\r\n\r\n" in
+    let body = {|
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title> |} ^ description ^ {| </title>
+  </head>
+  <body>
+    <h1>|} ^ description ^ {|</h1>
+    <p>
+      Please check:
+    </p>
+    <ul>
+      <li> if your Internet connection is working </li>
+      <li> your HTTP proxy setting</li>
+    </ul>
+    <p>
+    This message comes from the HTTP proxy in <a href=\"https://github.com/moby/vpnkit\">moby/vpnkit</a>.
+  </p>
+  </body>
+</html>
+    |} in
+    let response = header ^ body in
+    Incoming.C.write_string incoming response 0 (String.length response);
+    begin Incoming.C.flush incoming >>= function
+    | Error _ ->
+      Log.err (fun f -> f "failed to return %s %s" status description);
+      Lwt.return_unit
+    | Ok () ->
+      Lwt.return_unit
+    end
 
   let tunnel_https_over_connect ~localhost_names ~localhost_ips ~dst proxy =
     let listeners _port =
@@ -627,22 +639,15 @@ module Make
     route ?localhost_names ?localhost_ips proxy exclude allow_enabled allow req
     >>= function
     | Error `Missing_host_header ->
-      send_error `Bad_request incoming "HTTP proxy"
-        "The HTTP request must contain an absolute URI e.g. http://github.com/moby/vpnkit" ()
+      send_error "400" incoming "request must contain an absolute URI"
       >>= fun () ->
       Lwt.return false
     | Error (`Refused host) ->
-      let response = "HTTP/1.1 403 " ^ (Stringext.replace_all allow_error_msg ~pattern:"%s" ~with_:host) ^ "\r\nConnection: close\r\n\r\n" in
-      Incoming.C.write_string incoming response 0 (String.length response);
-      begin Incoming.C.flush incoming >>= function
-      | Error _ ->
-        Log.err (fun f -> f "%s: failed to return 403 Forbidden" host);
-        Lwt.return false
-      | Ok () ->
-        Lwt.return false
-      end
+      send_error "403" incoming (Stringext.replace_all allow_error_msg ~pattern:"%s" ~with_:host)
+      >>= fun () ->
+      Lwt.return false
     | Error (`Msg m) ->
-      send_error `Service_unavailable incoming "HTTP proxy" m ()
+      send_error "503" incoming m
       >>= fun () ->
       Lwt.return false
     | Ok { next_hop_address; host; port; description; ty } ->
@@ -659,10 +664,11 @@ module Make
           );
       begin Socket.Stream.Tcp.connect next_hop_address >>= function
       | Error _ ->
-        Log.err (fun f ->
-            f "%s: Failed to connect to %s" (description true) (string_of_address next_hop_address));
-        send_error `Service_unavailable incoming "HTTP proxy"
-          (Printf.sprintf "The proxy could not connect ot %s" (string_of_address next_hop_address)) ()
+        let message = match ty with
+          | `Origin -> Printf.sprintf "unable to connect to %s. Do you need an HTTP proxy?" (string_of_address next_hop_address)
+          | `Proxy -> Printf.sprintf "unable to connect to HTTP proxy %s" (string_of_address next_hop_address) in
+        Log.err (fun f -> f "%s: %s" (description true) message);
+        send_error "503" incoming message
         >>= fun () ->
         Lwt.return false
       | Ok remote ->
