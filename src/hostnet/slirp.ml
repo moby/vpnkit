@@ -1158,7 +1158,7 @@ struct
                 (Macaddr.to_string eth_src) (Macaddr.to_string eth_dst));
           (* pass to virtual network *)
           begin
-            Vnet.write vnet_switch t.vnet_client_id ~size:Ethernet.Packet.sizeof_ethernet (fun toBuf ->
+            Vnet.write vnet_switch t.vnet_client_id ~size:c.Configuration.mtu (fun toBuf ->
               Cstruct.blit buf 0 toBuf 0 (Cstruct.length buf);
               Cstruct.length buf)
             >|= function
