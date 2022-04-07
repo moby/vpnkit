@@ -1426,7 +1426,7 @@ struct
       Host.Files.read_file path
       >>= function
       | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to read DHCP configuration from %s: %s. Disabling transparent HTTP redirection." path m);
+        Log.err (fun f -> f "Failed to read DHCP configuration from %s: %s. Disabling DHCP server." path m);
         update_dhcp { c with dhcp_configuration = None }
       | Ok txt ->
         update_dhcp { c with dhcp_configuration = Configuration.Dhcp_configuration.of_string txt }
