@@ -451,7 +451,7 @@ struct
          respond with an ICMP error message which will
          hopefully prompt the other side to send messages we
          can forward *)
-      Log.err (fun f -> f
+      Log.warn (fun f -> f
                   "Sending icmp-dst-unreachable in response to UDP %s:%d -> \
                    %s:%d with DNF set IPv4 "
                   (Ipaddr.V4.to_string src) src_port
@@ -521,7 +521,7 @@ struct
           dst dst_port
       in
       if Cstruct.length payload < len then begin
-        Log.err (fun f -> f "%s: dropping because reported len %d actual len %d"
+        Log.warn (fun f -> f "%s: dropping because reported len %d actual len %d"
                     description len (Cstruct.length payload));
         Lwt.return (Ok ())
       end else if dnf && (Cstruct.length payload > safe_outgoing_mtu) then begin
@@ -757,7 +757,7 @@ struct
       let description = Printf.sprintf "%s:%d -> %s:%d"
           (Ipaddr.V4.to_string src) src_port (Ipaddr.V4.to_string dst) dst_port in
       if Cstruct.length payload < len then begin
-        Log.err (fun f ->
+        Log.warn (fun f ->
             f "%s: dropping because reported len %d actual len %d"
               description len (Cstruct.length payload));
         Lwt_result.return ()
@@ -1040,7 +1040,7 @@ struct
     let icmp_nat = match Icmp_nat.create () with
       | icmp_nat -> Some icmp_nat
       | exception Unix.Unix_error (Unix.EPERM, _, _) ->
-        Log.err (fun f -> f "Permission denied setting up user-space ICMP socket: ping will not work");
+        Log.warn (fun f -> f "Permission denied setting up user-space ICMP socket: ping will not work");
         None
       | exception e ->
         Log.err (fun f -> f "Unexpected exception %s setting up user-space ICMP socket: ping will not work" (Printexc.to_string e));
@@ -1329,19 +1329,19 @@ struct
 
   let update_http c = match c.Configuration.http_intercept with
     | None ->
-      Log.info (fun f -> f "Disabling transparent HTTP redirection");
+      Log.info (fun f -> f "Disabling HTTP proxy");
       http := None;
       Lwt.return_unit
     | Some x ->
       Http_forwarder.of_json x
       >>= function
       | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to decode transparent HTTP redirection json: %s" m);
+        Log.err (fun f -> f "Failed to decode HTTP proxy configuration json: %s" m);
         Lwt.return_unit
       | Ok t ->
         http := Some t;
         Log.info (fun f ->
-          f "Updating transparent HTTP redirection: %s" (Http_forwarder.to_string t)
+          f "Updating HTTP proxy configuration: %s" (Http_forwarder.to_string t)
         );
         Lwt.return_unit
 
@@ -1385,16 +1385,16 @@ struct
     ) >>= fun () ->
 
     let read_http_intercept_file path =
-      Log.info (fun f -> f "Reading transparent HTTP redirection from %s" path);
+      Log.info (fun f -> f "Reading HTTP proxy configuration from %s" path);
       Host.Files.read_file path
       >>= function
       | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to read transparent HTTP redirection from %s: %s. Disabling transparent HTTP redirection." path m);
+        Log.err (fun f -> f "Failed to read HTTP proxy configuration from %s: %s. Disabling HTTP proxy." path m);
         update_http { c with http_intercept = None }
       | Ok txt ->
         begin match Ezjsonm.from_string txt with
         | exception _ ->
-          Log.err (fun f -> f "Failed to parse transparent HTTP redirection json: %s" txt);
+          Log.err (fun f -> f "Failed to parse HTTP proxy configuration json: %s" txt);
           update_http { c with http_intercept = None }
         | http_intercept ->
           update_http { c with http_intercept = Some http_intercept }
@@ -1404,18 +1404,18 @@ struct
     | Some path ->
       begin match Host.Files.watch_file path
         (fun () ->
-          Log.info (fun f -> f "Transparent HTTP redirection configuration file %s has changed" path);
+          Log.info (fun f -> f "HTTP proxy configuration file %s has changed" path);
           Lwt.async (fun () ->
-            log_exception_continue "Parsing transparent HTTP redirection configuration"
+            log_exception_continue "Parsing HTTP proxy configuration"
               (fun () ->
                 read_http_intercept_file path
               )
           )
         ) with
       | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to watch transparent HTTP redirection configuration file %s for changes: %s" path m)
+        Log.err (fun f -> f "Failed to watch HTTP proxy configuration file %s for changes: %s" path m)
       | Ok _watch ->
-        Log.info (fun f -> f "Watching transparent HTTP redirection configuration file %s for changes" path)
+        Log.info (fun f -> f "Watching HTTP proxy configuration file %s for changes" path)
       end;
       Lwt.return_unit
     ) >>= fun () ->
@@ -1426,7 +1426,7 @@ struct
       Host.Files.read_file path
       >>= function
       | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to read DHCP configuration from %s: %s. Disabling transparent HTTP redirection." path m);
+        Log.err (fun f -> f "Failed to read DHCP configuration from %s: %s. Disabling DHCP server." path m);
         update_dhcp { c with dhcp_configuration = None }
       | Ok txt ->
         update_dhcp { c with dhcp_configuration = Configuration.Dhcp_configuration.of_string txt }

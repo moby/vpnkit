@@ -471,7 +471,7 @@ module Make
     Incoming.C.write_string incoming response 0 (String.length response);
     begin Incoming.C.flush incoming >>= function
     | Error _ ->
-      Log.err (fun f -> f "failed to return %s %s" status description);
+      Log.warn (fun f -> f "failed to return %s %s" status description);
       Lwt.return_unit
     | Ok () ->
       Lwt.return_unit
@@ -488,7 +488,7 @@ module Make
                 address_of_proxy ~localhost_names ~localhost_ips proxy
                 >>= function
                 | Error (`Msg m) ->
-                  Log.err (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string proxy) m);
+                  Log.warn (fun f -> f "HTTP proxy: cannot forward to %s: %s" (Uri.to_string proxy) m);
                   Lwt.return_unit
                 | Ok ((ip, port) as address) ->
                   let host = Ipaddr.V4.to_string dst in
@@ -507,7 +507,7 @@ module Make
                   in
                   Socket.Stream.Tcp.connect address >>= function
                   | Error _ ->
-                    Log.err (fun f ->
+                    Log.warn (fun f ->
                         f "Failed to connect to %s" (string_of_address address));
                     Lwt.return_unit
                   | Ok remote ->
@@ -565,7 +565,7 @@ module Make
     (* A host in the URI takes precedence over a host: header *)
     match Uri.host uri, Cohttp.Header.get req.Cohttp.Request.headers "host" with
     | None, None ->
-      Log.err (fun f -> f "HTTP request had no host in the URI nor in the host: header: %s"
+      Log.warn (fun f -> f "HTTP request had no host in the URI nor in the host: header: %s"
         (Sexplib.Sexp.to_string_hum
           (Cohttp.Request.sexp_of_t req))
       );
@@ -609,7 +609,7 @@ module Make
           else Some (proxy, `Proxy) in
       begin match hostport_and_ty with
       | None ->
-        Log.err (fun f -> f "Failed to route request: %s" (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t req)));
+        Log.warn (fun f -> f "Failed to route request: %s" (Sexplib.Sexp.to_string_hum (Cohttp.Request.sexp_of_t req)));
         Lwt.return (Error `Missing_host_header)
       | Some ((next_hop_host, next_hop_port), ty) ->
         let next_hop_host =
@@ -667,7 +667,7 @@ module Make
         let message = match ty with
           | `Origin -> Printf.sprintf "unable to connect to %s. Do you need an HTTP proxy?" (string_of_address next_hop_address)
           | `Proxy -> Printf.sprintf "unable to connect to HTTP proxy %s" (string_of_address next_hop_address) in
-        Log.err (fun f -> f "%s: %s" (description true) message);
+        Log.warn (fun f -> f "%s: %s" (description true) message);
         send_error "503" incoming message
         >>= fun () ->
         Lwt.return false
@@ -683,7 +683,7 @@ module Make
             Incoming.C.write_string incoming response 0 (String.length response);
             begin Incoming.C.flush incoming >>= function
             | Error _ ->
-              Log.err (fun f -> f "%s: failed to return 200 OK" (description false));
+              Log.warn (fun f -> f "%s: failed to return 200 OK" (description false));
               Lwt.return false
             | Ok () ->
               proxy_bytes ~incoming ~outgoing ~flow ~remote
