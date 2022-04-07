@@ -1329,19 +1329,19 @@ struct
 
   let update_http c = match c.Configuration.http_intercept with
     | None ->
-      Log.info (fun f -> f "Disabling transparent HTTP redirection");
+      Log.info (fun f -> f "Disabling HTTP proxy");
       http := None;
       Lwt.return_unit
     | Some x ->
       Http_forwarder.of_json x
       >>= function
       | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to decode transparent HTTP redirection json: %s" m);
+        Log.err (fun f -> f "Failed to decode HTTP proxy configuration json: %s" m);
         Lwt.return_unit
       | Ok t ->
         http := Some t;
         Log.info (fun f ->
-          f "Updating transparent HTTP redirection: %s" (Http_forwarder.to_string t)
+          f "Updating HTTP proxy configuration: %s" (Http_forwarder.to_string t)
         );
         Lwt.return_unit
 
@@ -1385,16 +1385,16 @@ struct
     ) >>= fun () ->
 
     let read_http_intercept_file path =
-      Log.info (fun f -> f "Reading transparent HTTP redirection from %s" path);
+      Log.info (fun f -> f "Reading HTTP proxy configuration from %s" path);
       Host.Files.read_file path
       >>= function
       | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to read transparent HTTP redirection from %s: %s. Disabling transparent HTTP redirection." path m);
+        Log.err (fun f -> f "Failed to read HTTP proxy configuration from %s: %s. Disabling HTTP proxy." path m);
         update_http { c with http_intercept = None }
       | Ok txt ->
         begin match Ezjsonm.from_string txt with
         | exception _ ->
-          Log.err (fun f -> f "Failed to parse transparent HTTP redirection json: %s" txt);
+          Log.err (fun f -> f "Failed to parse HTTP proxy configuration json: %s" txt);
           update_http { c with http_intercept = None }
         | http_intercept ->
           update_http { c with http_intercept = Some http_intercept }
@@ -1404,18 +1404,18 @@ struct
     | Some path ->
       begin match Host.Files.watch_file path
         (fun () ->
-          Log.info (fun f -> f "Transparent HTTP redirection configuration file %s has changed" path);
+          Log.info (fun f -> f "HTTP proxy configuration file %s has changed" path);
           Lwt.async (fun () ->
-            log_exception_continue "Parsing transparent HTTP redirection configuration"
+            log_exception_continue "Parsing HTTP proxy configuration"
               (fun () ->
                 read_http_intercept_file path
               )
           )
         ) with
       | Error (`Msg m) ->
-        Log.err (fun f -> f "Failed to watch transparent HTTP redirection configuration file %s for changes: %s" path m)
+        Log.err (fun f -> f "Failed to watch HTTP proxy configuration file %s for changes: %s" path m)
       | Ok _watch ->
-        Log.info (fun f -> f "Watching transparent HTTP redirection configuration file %s for changes" path)
+        Log.info (fun f -> f "Watching HTTP proxy configuration file %s for changes" path)
       end;
       Lwt.return_unit
     ) >>= fun () ->
