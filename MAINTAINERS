@@ -17,6 +17,7 @@
 			"samoht",
 			"guillaumerose",
 			"ebriney",
+			"fredericdalleau",
 		]
 
 [people]
@@ -51,3 +52,8 @@
 	Name = "Emmanuel Briney"
 	Email = "emmanuel.briney@docker.com"
 	GitHub = "ebriney"
+
+	[people.fredericdalleau]
+	Name = "Frederic Dalleau"
+	Email = "frederic.dalleau@docker.com"
+	GitHub = "fredericdalleau"
