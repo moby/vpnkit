@@ -1,14 +1,8 @@
-FROM ocaml/opam:alpine-3.13-ocaml-4.12 as build
-RUN opam update
+FROM ocaml/opam:alpine-3.15-ocaml-4.14 as build
+RUN opam remote
 
-# Not in the opam-repository metadata in the image. Remove after the image is updated:
-RUN opam pin add lwt.5.4.0 https://github.com/ocsigen/lwt/archive/5.4.0.zip -n
-RUN opam pin add fd-send-recv.2.0.1 https://github.com/xapi-project/ocaml-fd-send-recv/archive/v2.0.1.tar.gz -n
-
-# Can be removed after we upgrade tcpip
-RUN opam pin configurator --dev-repo -n
 # Fix for Apple Silicon codesign issue
-RUN opam pin add omake "https://github.com/ocaml-omake/omake.git#gerd/disable-parallel-bootstrap" -n
+RUN opam pin add omake "https://github.com/ocaml-omake/omake.git#0e4aef74dfe005b4e880cd13c08f7c57fa4a030b" -n
 # Fix for OCaml 4.12 build
 RUN opam pin add uwt "https://github.com/fdopen/uwt.git#c43349bf3689181756feb341e3896d4a0a695523" -n
 
@@ -21,4 +15,4 @@ RUN opam depext vpnkit -y
 RUN opam install vpnkit -y
 
 FROM alpine:latest
-COPY --from=build /home/opam/.opam/4.12/bin/vpnkit /vpnkit
+COPY --from=build /home/opam/.opam/4.14/bin/vpnkit /vpnkit
