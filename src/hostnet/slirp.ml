@@ -354,6 +354,8 @@ struct
                let dst = Stack_tcp_wire.src id in
                Stack_tcp.input t.tcp4 ~src ~dst buf
             ) (fun () ->
+                let src_port = Stack_tcp_wire.src_port id in
+                Stack_tcp.unlisten t.tcp4 ~port:src_port;
                 t.pending <- Tcp.Id.Set.remove id t.pending;
                 Lwt.return_unit;
               )
