@@ -503,8 +503,8 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
   }
   | "base.v0.14.2" | "base.v0.14.3"
   | "csexp.1.5.1"
-  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3"
-  | "dune-configurator.2.9.1" | "dune-configurator.2.9.3" | "dune-configurator.3.0.2" | "dune-configurator.3.0.3"
+  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1"
+  | "dune-configurator.2.9.1" | "dune-configurator.2.9.3" | "dune-configurator.3.0.2" | "dune-configurator.3.0.3" | "dune-configurator.3.1.1"
   | "ocaml-compiler-libs.v0.12.4"
   | "ocaml-syntax-shims.1.0.0"
   | "parsexp.v0.14.2"
@@ -532,7 +532,7 @@ Copyright (c) 2016--2020 Jane Street Group, LLC opensource@janestreet.com
 
     |} ^ isc
   }
-  | "bigstringaf.0.8.0" -> {
+  | "bigstringaf.0.8.0" | "bigstringaf.0.9.0" -> {
     link = "https://github.com/inhabitedtype/bigstringaf/blob/9c1e57375f3da15cf344c228e2cc14a36513923d/LICENSE";
     text = {|
     Copyright (c) 2018, Inhabited Type LLC
@@ -609,7 +609,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
 
     |} ^ isc
   }
-  | "hex.1.4.0" -> {
+  | "hex.1.4.0" | "hex.1.5.0" -> {
     link = "https://github.com/mirage/ocaml-hex/blob/a248fd213bd2248f610e8c5a7eeb39c92283896e/LICENSE.md";
     text = {|
     Copyright (c) 2015 Trevor Summers Smith trevorsummerssmith@gmail.com
@@ -699,7 +699,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     link = "https://github.com/mirage/mirage-stack/blob/2d0fe8f5a198e04415eafd6496d5719f0a610e7e/LICENSE.md";
     text = isc;
   }
-  | "pcap-format.0.5.2" -> {
+  | "pcap-format.0.5.2" | "pcap-format.0.6.0" -> {
     link = "https://github.com/mirage/ocaml-pcap/blob/76bf3ce75fed04a0625fc2a1c83545c0437bf823/LICENSE.md";
     text = {|
     Copyright (c) 2012-2018 The ocaml-pcap contributors
