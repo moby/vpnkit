@@ -166,6 +166,77 @@ let test_host_half_close () =
       )
   end
 
+let test_connect_valid_invalid_port () =
+  Host.Main.run begin
+    Slirp_stack.with_stack ~pcap:"test_connect_valid_invalid_port.pcap" (fun _ stack -> with_server (fun _ ->
+        Lwt.return_unit
+      ) (fun server ->
+            (* Now that a server is running, connect to a valid port and ensure it succeeds quickly *)
+            let open Slirp_stack in
+            let ip = Ipaddr.V4.localhost in
+            let port = server.Server.port in
+            let mkconn = Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
+            >|= function
+            | Ok _ ->
+              Log.debug (fun f ->
+                  f "Connected to localhost:%d" port);
+            | Error _ ->
+              Log.err (fun f ->
+                  f "Failure to connect to localhost:%d" port);
+              failwith "Connection should have succeeded";
+            >>= fun () ->
+              Server.destroy server;
+            >>= fun () ->
+              (* Now that a server is down, connect to an invalid port and ensure it fails quickly *)
+              Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
+              >|= function
+              | Ok _ ->
+                Log.err (fun f ->
+                    f "Connected to localhost:%d" port);
+                failwith "Connection should have failed"
+              | Error _ ->
+                Log.debug (fun f ->
+                    f "Expected failure to connect to localhost:%d" port);
+            in Lwt.pick [
+              (Host.Time.sleep_ns (Duration.of_sec 5) >|= fun () -> `Timeout);
+              (mkconn >|= fun x -> `Result x) ]
+          ) >>= function
+        | `Timeout  -> failwith "TCP server invalid port test timed-out"
+        | `Result x -> Lwt.return x
+      )
+  end
+
+  let test_connect_multiple_valid_ports () =
+    Host.Main.run begin
+      Slirp_stack.with_stack ~pcap:"test_connect_multiple_valid_ports.pcap" (fun _ stack -> with_server (fun _ ->
+          Lwt.return_unit
+        ) (fun server ->
+              let open Slirp_stack in
+              let ip = Ipaddr.V4.localhost in
+              let port = server.Server.port in
+              let rec mkconn = function
+              | 0 -> Lwt.return ();
+              | 3 -> Server.destroy server >>= fun () -> mkconn 1;
+              | count -> Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
+                >|= function
+                | Ok _ ->
+                  Log.debug (fun f ->
+                      f "Connected tentative %d to localhost:%d" count port);
+                | Error _ ->
+                  Log.debug (fun f ->
+                      f "Failure to connect to localhost:%d" port);
+                >>=
+                  fun () -> mkconn (count-1);
+              in
+              Lwt.pick [
+                (Host.Time.sleep_ns (Duration.of_sec 5) >|= fun () -> `Timeout);
+                (mkconn 8 >|= fun x -> `Result x) ]
+          ) >>= function
+          | `Timeout  -> failwith "TCP server valid port test timed-out"
+          | `Result x -> Lwt.return x
+        )
+    end
+
 let tests = [
 
   "TCP: test Mirage half close", [
@@ -176,5 +247,16 @@ let tests = [
   "TCP: test Host half close", [
     "check that the Host half-close isn't a full-close", `Quick,
     test_host_half_close
-  ];
+  ] ;
+
+  "TCP: test server valid invalid port", [
+    "check that a connection to a valid port does not block after the port becomes invalid", `Quick,
+    test_connect_valid_invalid_port
+  ] ;
+
+  "TCP: test server multiple valid ports", [
+    "check that multiple connections to valid and invalid ports", `Quick,
+    test_connect_multiple_valid_ports
+  ] ;
+
 ]
