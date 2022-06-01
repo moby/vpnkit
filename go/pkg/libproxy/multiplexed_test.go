@@ -45,7 +45,7 @@ func newMultiplexer(name string, conn io.ReadWriteCloser, allocateBackwards bool
 }
 
 func TestNew(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	client, err := local.Dial(Destination{
 		Proto: TCP,
@@ -68,7 +68,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	// There was a bug where the second iteration failed because the main loop had deadlocked
 	// when it received a Close message.
@@ -95,7 +95,7 @@ func TestClose(t *testing.T) {
 }
 
 func TestUDPEncapsulationIsTransparent(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 
 	client, err := local.Dial(Destination{
@@ -135,7 +135,7 @@ func TestUDPEncapsulationIsTransparent(t *testing.T) {
 }
 
 func TestCloseClose(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	// There was a bug where the second iteration failed because the main loop had deadlocked
 	// when it received a Close message.
@@ -168,7 +168,7 @@ func TestCloseClose(t *testing.T) {
 }
 
 func TestCloseWriteCloseWrite(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	// There was a bug where the second iteration failed because the main loop had deadlocked
 	// when it received a Close message.
@@ -201,7 +201,7 @@ func TestCloseWriteCloseWrite(t *testing.T) {
 }
 
 func TestCloseCloseWrite(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	// There was a bug where the second iteration failed because the main loop had deadlocked
 	// when it received a Close message.
@@ -234,7 +234,7 @@ func TestCloseCloseWrite(t *testing.T) {
 }
 
 func TestCloseWriteWrite(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	client, err := local.Dial(Destination{
 		Proto: TCP,
@@ -270,7 +270,7 @@ func TestCloseWriteWrite(t *testing.T) {
 }
 
 func TestCloseThenWrite(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	// There was a bug where the second iteration failed because the main loop had deadlocked
 	// when it received a Close message.
@@ -311,7 +311,7 @@ func TestCloseThenWrite(t *testing.T) {
 }
 
 func TestReadDeadline(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	client, err := local.Dial(Destination{
 		Proto: TCP,
@@ -342,7 +342,7 @@ func TestReadDeadline(t *testing.T) {
 }
 
 func TestWriteDeadline(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	client, err := local.Dial(Destination{
 		Proto: TCP,
@@ -473,7 +473,7 @@ func TestMuxCorners(t *testing.T) {
 	for _, toWriteClient := range interesting {
 		for _, toWriteServer := range interesting {
 			log.Printf("Client will write %d and server will write %d", toWriteClient, toWriteServer)
-			loopback := newLoopback()
+			loopback := NewLoopback()
 			local, remote := newLoopbackMultiplexer(t, loopback)
 			muxReadWrite(t, local, remote, toWriteClient, toWriteServer)
 		}
@@ -481,13 +481,13 @@ func TestMuxCorners(t *testing.T) {
 }
 
 func TestMuxReadWrite(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	muxReadWrite(t, local, remote, 1048576, 1048576)
 }
 
 func TestMuxConcurrent(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 	numConcurrent := 500 // limited by the race detector
 	toWrite := 65536 * 2 // 2 * Window size
@@ -611,7 +611,7 @@ func TestWindow(t *testing.T) {
 	// Check that one connection blocked on a window update doesn't preclude
 	// other connections from working i.e. the lowlevel connection handler isn't
 	// itself blocked in a write()
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	local, remote := newLoopbackMultiplexer(t, loopback)
 
 	done := writeAndBlock(t, local, remote)
@@ -629,7 +629,7 @@ func TestWindow(t *testing.T) {
 }
 
 func TestEOF(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	if err := loopback.OtherEnd().Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -640,7 +640,7 @@ func TestEOF(t *testing.T) {
 }
 
 func TestCrossChannelOpening(t *testing.T) {
-	loopback := newLoopback()
+	loopback := NewLoopback()
 	muxHost, muxGuest := newLoopbackMultiplexer(t, loopback)
 	acceptG := &errgroup.Group{}
 	acceptG.Go(func() error {

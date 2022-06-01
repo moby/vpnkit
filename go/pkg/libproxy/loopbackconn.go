@@ -143,7 +143,8 @@ type loopback struct {
 	simulateLatency time.Duration
 }
 
-func newLoopback() *loopback {
+// NewLoopback creates a bidirectional buffered connection, intended for testing.
+func NewLoopback() *loopback {
 	write := newBufferedPipe()
 	read := newBufferedPipe()
 	return &loopback{
@@ -151,6 +152,8 @@ func newLoopback() *loopback {
 		read:  read,
 	}
 }
+
+var _ io.ReadWriteCloser = &loopback{}
 
 func (l *loopback) LocalAddr() net.Addr {
 	return &addrLoopback{}
