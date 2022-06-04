@@ -1,4 +1,5 @@
 _build/
+_opam/
 .*.swp
 *.native
 *.byte
