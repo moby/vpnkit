@@ -503,8 +503,9 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
   }
   | "base.v0.14.2" | "base.v0.14.3"
   | "csexp.1.5.1"
-  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1"
+  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1" | "dune.3.2.0"
   | "dune-configurator.2.9.1" | "dune-configurator.2.9.3" | "dune-configurator.3.0.2" | "dune-configurator.3.0.3" | "dune-configurator.3.1.1"
+  | "dune-configurator.3.2.0"
   | "ocaml-compiler-libs.v0.12.4"
   | "ocaml-syntax-shims.1.0.0"
   | "parsexp.v0.14.2"
@@ -753,7 +754,7 @@ All rights reserved.
 
     |} ^ isc
   }
-  | "re.1.10.3" -> {
+  | "re.1.10.3" | "re.1.10.4" -> {
     link = "https://github.com/ocaml/ocaml-re/blob/c5d5df80e128c3d7646b7d8b1322012c5fcc35f3/LICENSE.md";
     text = {|
     This Software is distributed under the terms of the GNU Lesser
@@ -862,6 +863,7 @@ the license in file toplevel/LICENSE-findlib.
   }
   | "ocaml.4.08.0" | "ocaml-base-compiler.4.08.0"
   | "ocaml.4.12.0" | "ocaml-base-compiler.4.12.0"
+  | "ocaml.4.14.0" | "ocaml-base-compiler.4.14.0"
   | "ocaml-variants.4.08.0+mingw64c"
   | "seq.base" | "stdlib-shims.0.3.0" | "uchar.0.0.2" -> {
     link = "https://github.com/ocaml/ocaml/blob/a095535e5c02a95da4908a82d9f75a62609cc592/LICENSE";
@@ -896,7 +898,7 @@ might be covered by the GNU Lesser General Public License.
     Copyright (c) 2017 2018 Hannes Mehnert hannes@mehnert.org
     |} ^ isc
   }
-  | "cppo.1.6.8" -> {
+  | "cppo.1.6.8" | "cppo.1.6.9" -> {
     link = "https://github.com/ocaml-community/cppo/blob/94b2d0f21fcda5473773518a12afbcff45a52990/LICENSE.md";
     text = {|
     Copyright (c) 2009-2011 Martin Jambon All rights reserved.
@@ -946,7 +948,7 @@ might be covered by the GNU Lesser General Public License.
     Copyright (c) 2016 Daniel C. Bünzli
     |} ^ isc
   }
-  | "uwt.0.3.3" -> {
+  | "uwt.0.3.3" | "uwt.0.3.4~dev" -> {
     link = "https://github.com/fdopen/uwt/blob/44276aa6755b92eddc9ad58662a968afad243e8b/LICENSE.md";
     text = {|
     Copyright (c) 2015-2018, the Authors of uwt (dist/AUTHORS)
@@ -1027,7 +1029,7 @@ the use or other dealings in the software.
 
     |} ^ isc
   }
-  | "tcpip.7.0.1" | "tcpip.7.1.0" -> {
+  | "tcpip.7.0.1" | "tcpip.7.1.0" | "tcpip.7.1.1" -> {
     link = "https://github.com/mirage/mirage-tcpip/blob/353f7b92a1a8747923ce6918426fd3f82aa27445/LICENSE.md";
     text = {|
     Copyright (c) Anil Madhavapeddy <anil@recoil.org>
