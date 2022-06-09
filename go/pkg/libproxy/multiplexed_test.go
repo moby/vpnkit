@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -52,19 +54,13 @@ func TestNew(t *testing.T) {
 		IP:    net.ParseIP("127.0.0.1"),
 		Port:  8080,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 	server, _, err := remote.Accept()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := client.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := server.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
+	assert.Nil(t, client.Close())
+	assert.Nil(t, server.Close())
+	assert.Nil(t, local.Close())
+	assert.Nil(t, remote.Close())
 }
 
 func TestClose(t *testing.T) {
