@@ -9,6 +9,7 @@ environment:
     PINS: "vpnkit:."
     PACKAGE: "vpnkit"
     OPAM_SWITCH: 4.08.0+mingw64c
+    CYG_MIRROR: https://mirrors.kernel.org/sourceware/cygwin/
 
 install:
   - ps: iex ((new-object net.webclient).DownloadString("https://raw.githubusercontent.com/$env:FORK_USER/ocaml-ci-scripts/$env:FORK_BRANCH/appveyor-install.ps1"))
