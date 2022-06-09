@@ -411,6 +411,9 @@ func NewMultiplexer(label string, conn io.ReadWriteCloser, allocateBackwards boo
 
 // Close the underlying transport.
 func (m *multiplexer) Close() error {
+	m.metadataMutex.Lock()
+	m.isRunning = false
+	m.metadataMutex.Unlock()
 	return m.conn.Close()
 }
 
@@ -522,14 +525,16 @@ func (m *multiplexer) Run() {
 	m.isRunning = true
 	m.metadataMutex.Unlock()
 	go func() {
-		if err := m.run(); err != nil {
-			if err == io.EOF {
-				// This is expected when the data connection is broken
-				log.Infof("disconnected data connection: multiplexer is offline")
-			} else {
-				log.Printf("Multiplexer main loop failed with %v", err)
-				m.DumpState(log.Writer())
-			}
+		err := m.run()
+		m.metadataMutex.Lock()
+		expected := err == io.EOF || !m.isRunning
+		m.metadataMutex.Unlock()
+		if expected {
+			// This is expected when the data connection is broken
+			log.Infof("disconnected data connection: multiplexer is offline")
+		} else if err != nil {
+			log.Printf("Multiplexer main loop failed with %v", err)
+			m.DumpState(log.Writer())
 		}
 		m.metadataMutex.Lock()
 		m.isRunning = false

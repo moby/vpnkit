@@ -7,7 +7,7 @@ import (
 
 func TestWrite(t *testing.T) {
 	// Check that writes don't block
-	l := newLoopback()
+	l := NewLoopback()
 	n, err := l.Write([]byte("hello"))
 	if err != nil {
 		t.Fatal(err)
@@ -17,7 +17,7 @@ func TestWrite(t *testing.T) {
 
 func TestWriteRead(t *testing.T) {
 	// Check that read works after write
-	local := newLoopback()
+	local := NewLoopback()
 	n, err := local.Write([]byte("hello"))
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +32,7 @@ func TestWriteRead(t *testing.T) {
 
 func TestWriteCloseWriteRead(t *testing.T) {
 	// test that write, closewrite, read doesn't drop data
-	local := newLoopback()
+	local := NewLoopback()
 	n, err := local.Write([]byte("hello"))
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestWriteCloseWriteRead(t *testing.T) {
 
 func TestWriteCloseRead(t *testing.T) {
 	// test that write, closewrite, read doesn't drop data
-	local := newLoopback()
+	local := NewLoopback()
 	n, err := local.Write([]byte("hello"))
 	if err != nil {
 		t.Fatal(err)
