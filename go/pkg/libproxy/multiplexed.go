@@ -14,17 +14,16 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	maxBufferSize = 65536
-)
+const defaultWindowSize = 65536
 
 type windowState struct {
 	current uint64
 	allowed uint64
+	max     uint64
 }
 
 func (w *windowState) String() string {
-	return fmt.Sprintf("current %d, allowed %d", w.current, w.allowed)
+	return fmt.Sprintf("current %d, allowed %d, max %d", w.current, w.allowed, w.max)
 }
 
 func (w *windowState) size() int {
@@ -32,11 +31,11 @@ func (w *windowState) size() int {
 }
 
 func (w *windowState) isAlmostClosed() bool {
-	return w.size() < maxBufferSize/2
+	return w.size() < int(w.max/2)
 }
 
 func (w *windowState) advance() {
-	w.allowed = w.current + uint64(maxBufferSize)
+	w.allowed = w.current + w.max
 }
 
 type channel struct {
@@ -82,10 +81,14 @@ func newChannel(multiplexer *multiplexer, ID uint32, d Destination) *channel {
 		multiplexer: multiplexer,
 		destination: d,
 		ID:          ID,
-		read:        &windowState{},
-		write:       &windowState{},
-		readPipe:    readPipe,
-		refCount:    2,
+		read: &windowState{
+			max: defaultWindowSize,
+		},
+		write: &windowState{
+			max: defaultWindowSize,
+		},
+		readPipe: readPipe,
+		refCount: 2,
 	}
 	c.c = sync.NewCond(&c.m)
 	return c
@@ -249,6 +252,26 @@ func (c *channel) recvClose() {
 	c.c.Broadcast()
 }
 
+// SetReadBuffer sets the size of the operating system's receive buffer associated with the connection.
+// See similar function https://pkg.go.dev/net#IPConn.SetReadBuffer
+func (c *channel) SetReadBuffer(bytes uint) error {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.read.max = uint64(bytes)
+	// Will take effect on next window update
+	return nil
+}
+
+// SetWriteBuffer sets the size of the operating system's write buffer associated with the connection.
+// See similar function https://pkg.go.dev/net#IPConn.SetWriteBuffer
+func (c *channel) SetWriteBuffer(bytes uint) error {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.write.max = uint64(bytes)
+	// Will take effect on next window update
+	return nil
+}
+
 func (c *channel) SetReadDeadline(timeout time.Time) error {
 	return c.readPipe.SetReadDeadline(timeout)
 }
@@ -314,12 +337,19 @@ type Multiplexer interface {
 	Run()            // Run the multiplexer (otherwise Dial, Accept will not work)
 	IsRunning() bool // IsRunning is true if the multiplexer is running normally, false if it has failed
 
-	Dial(d Destination) (Conn, error)    // Dial a remote Destination
-	Accept() (Conn, *Destination, error) // Accept a connection from a remote Destination
+	Dial(d Destination) (MultiplexedConn, error)    // Dial a remote Destination
+	Accept() (MultiplexedConn, *Destination, error) // Accept a connection from a remote Destination
 
 	Close() error // Close the multiplexer
 
 	DumpState(w io.Writer) // WriteState dumps debug state to the writer
+}
+
+// MultiplexedConn is a sub-connection within a single multiplexed connection.
+type MultiplexedConn interface {
+	Conn
+	SetReadBuffer(uint) error  // SetReadBuffer sets the maximum read buffer size
+	SetWriteBuffer(uint) error // SetWriteBuffer sets the maximum write buffer size
 }
 
 type multiplexer struct {
@@ -331,7 +361,7 @@ type multiplexer struct {
 	channels          map[uint32]*channel
 	nextChannelID     uint32
 	metadataMutex     sync.Mutex // hold when reading/modifying this structure
-	pendingAccept     []*channel  // incoming connections
+	pendingAccept     []*channel // incoming connections
 	acceptCond        *sync.Cond
 	isRunning         bool
 	events            *ring.Ring // log of packetEvents
@@ -437,7 +467,7 @@ func (m *multiplexer) decrChannelRef(ID uint32) {
 }
 
 // Dial opens a connection to the given destination
-func (m *multiplexer) Dial(d Destination) (Conn, error) {
+func (m *multiplexer) Dial(d Destination) (MultiplexedConn, error) {
 	m.metadataMutex.Lock()
 	if !m.isRunning {
 		m.metadataMutex.Unlock()
@@ -464,7 +494,7 @@ func (m *multiplexer) Dial(d Destination) (Conn, error) {
 var ErrNotRunning = errors.New("multiplexer is not running")
 
 // Accept returns the next client connection
-func (m *multiplexer) Accept() (Conn, *Destination, error) {
+func (m *multiplexer) Accept() (MultiplexedConn, *Destination, error) {
 	m.metadataMutex.Lock()
 	defer m.metadataMutex.Unlock()
 	for {

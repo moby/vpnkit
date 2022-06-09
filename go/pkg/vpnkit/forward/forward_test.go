@@ -25,12 +25,12 @@ func (m *mockMux) IsRunning() bool {
 	return true
 }
 
-func (m *mockMux) Dial(d libproxy.Destination) (libproxy.Conn, error) {
+func (m *mockMux) Dial(d libproxy.Destination) (libproxy.MultiplexedConn, error) {
 	m.dialed = &d
 	return nil, errors.New("unimplemented Dial")
 }
 
-func (m *mockMux) Accept() (libproxy.Conn, *libproxy.Destination, error) {
+func (m *mockMux) Accept() (libproxy.MultiplexedConn, *libproxy.Destination, error) {
 	return nil, nil, errors.New("unimplemented Accept")
 }
 

@@ -506,6 +506,9 @@ func TestMuxConcurrent(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer server.Close()
+			// Set the read/write buffer sizes to unusual values.
+			server.SetReadBuffer(defaultWindowSize - 1)
+			server.SetWriteBuffer(defaultWindowSize - 1)
 			done, sha := writeRandomBuffer(server, toWrite)
 			m.Lock()
 			serverWriteSha[destination.Port] = sha

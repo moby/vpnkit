@@ -3,6 +3,7 @@ package libproxy
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -19,7 +20,7 @@ type UDPListener interface {
 
 // UDPEncapsulator implements net.Conn and reads and writes UDP datagrams framed within a stream connection
 type uDPEncapsulator interface {
-	Conn
+	MultiplexedConn
 	ReadFromUDP(b []byte) (int, *net.UDPAddr, error)
 	WriteToUDP(b []byte, addr *net.UDPAddr) (int, error)
 }
@@ -88,6 +89,14 @@ func (u *udpEncapsulator) SetDeadline(t time.Time) error {
 
 func (u *udpEncapsulator) SetReadDeadline(t time.Time) error {
 	return u.conn.SetReadDeadline(t)
+}
+
+func (u *udpEncapsulator) SetReadBuffer(b uint) error {
+	return errors.New("udpEncapsulator.SetReadBuffer not supported")
+}
+
+func (u *udpEncapsulator) SetWriteBuffer(b uint) error {
+	return errors.New("udpEncapsulator.SetWriteBuffer not supported")
 }
 
 func (u *udpEncapsulator) SetWriteDeadline(t time.Time) error {
