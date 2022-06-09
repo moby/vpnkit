@@ -337,12 +337,19 @@ type Multiplexer interface {
 	Run()            // Run the multiplexer (otherwise Dial, Accept will not work)
 	IsRunning() bool // IsRunning is true if the multiplexer is running normally, false if it has failed
 
-	Dial(d Destination) (Conn, error)    // Dial a remote Destination
-	Accept() (Conn, *Destination, error) // Accept a connection from a remote Destination
+	Dial(d Destination) (MultiplexedConn, error)    // Dial a remote Destination
+	Accept() (MultiplexedConn, *Destination, error) // Accept a connection from a remote Destination
 
 	Close() error // Close the multiplexer
 
 	DumpState(w io.Writer) // WriteState dumps debug state to the writer
+}
+
+// MultiplexedConn is a sub-connection within a single multiplexed connection.
+type MultiplexedConn interface {
+	Conn
+	SetReadBuffer(uint) error  // SetReadBuffer sets the maximum read buffer size
+	SetWriteBuffer(uint) error // SetWriteBuffer sets the maximum write buffer size
 }
 
 type multiplexer struct {
@@ -460,7 +467,7 @@ func (m *multiplexer) decrChannelRef(ID uint32) {
 }
 
 // Dial opens a connection to the given destination
-func (m *multiplexer) Dial(d Destination) (Conn, error) {
+func (m *multiplexer) Dial(d Destination) (MultiplexedConn, error) {
 	m.metadataMutex.Lock()
 	if !m.isRunning {
 		m.metadataMutex.Unlock()
@@ -487,7 +494,7 @@ func (m *multiplexer) Dial(d Destination) (Conn, error) {
 var ErrNotRunning = errors.New("multiplexer is not running")
 
 // Accept returns the next client connection
-func (m *multiplexer) Accept() (Conn, *Destination, error) {
+func (m *multiplexer) Accept() (MultiplexedConn, *Destination, error) {
 	m.metadataMutex.Lock()
 	defer m.metadataMutex.Unlock()
 	for {
