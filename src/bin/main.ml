@@ -833,7 +833,7 @@ let gc_compact =
   in
   Arg.(value & opt (some int) None doc)
 
-let command =
+let ethernet_cmd =
   let doc = "proxy TCP/IP connections from an ethernet link via sockets" in
   let man =
     [`S "DESCRIPTION";
@@ -847,7 +847,23 @@ let command =
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ tcpv4_forwards
         $ gateway_forwards_path $ forwards_path $ gc_compact),
-  Term.info (Filename.basename Sys.argv.(0)) ~version:Version.git ~doc ~man
+  Term.info "ethernet" ~version:Version.git ~doc ~man
+
+
+let verbose =
+  let doc = "Extra verbose logging"in
+  Arg.(value & flag & info ["v"; "verbose"] ~doc)
+
+let urls = Arg.(value & pos_all string [] & info [] ~docv:"URL")
+
+let curl_cmd =
+  let doc = "A debug command which fetches a resource over HTTP" in
+  let man =
+    [`S "DESCRIPTION";
+     `P "Fetch a resource over HTTP to help diagnose local firewall or anti-virus problems."]
+  in
+  Term.(const Curl.curl $ verbose $ urls),
+Term.info "curl" ~version:Version.git ~doc ~man
 
 let () =
   Printexc.record_backtrace true;
@@ -856,4 +872,4 @@ let () =
   Log.err (fun f ->
       f "Lwt.async failure %a: %s" Fmt.exn exn (Printexc.get_backtrace ()))
   );
-  Term.exit @@ Term.eval command
+  Term.exit @@ Term.eval_choice ethernet_cmd [ethernet_cmd; curl_cmd]
