@@ -824,7 +824,7 @@ module Sockets = struct
 
       let get_test_address () =
         let i = Random.int 1_000_000 in
-        if Sys.os_type == "Windows" then
+        if Sys.os_type = "Win32" then
           Printf.sprintf "\\\\.\\pipe\\vpnkittest%d" i
         else Printf.sprintf "/tmp/vpnkittest.%d" i
 
