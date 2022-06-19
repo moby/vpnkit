@@ -17,6 +17,7 @@ depends:
 
 test:
 	opam exec -- dune test
+	opam exec -- dune build @e2e
 
 %: %.in
 	@echo "  GEN     " $@
