@@ -1281,10 +1281,6 @@ module Dns = struct
         Lwt.return []
     | Ok ips -> Lwt.return ips
 
-  let%test "getaddrinfo dave.recoil.org" =
-    Luv_lwt.run
-      (getaddrinfo "dave.recoil.org" `INET >>= fun ips -> Lwt.return (ips <> []))
-
   let localhost_local = Dns.Name.of_string "localhost.local"
 
   let resolve_getaddrinfo question =
