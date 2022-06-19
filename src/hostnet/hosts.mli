@@ -14,7 +14,7 @@ module Make(Files: Sig.FILES): sig
   val watch: ?path:string -> unit -> (watch, [ `Msg of string ]) result Lwt.t
   (** Start watching the hosts file, updating the [etc_hosts] binding in the
       background. The [?path] argument allows the location of the hosts file
-      to be overriden. *)
+      to be overriden. This blocks until the watch has been established. *)
 
   val unwatch: watch -> unit Lwt.t
   (** Stop watching the hosts file *)

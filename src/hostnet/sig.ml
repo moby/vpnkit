@@ -123,7 +123,7 @@ module type FILES = sig
 
   val watch_file: string -> (unit -> unit) -> (watch, [ `Msg of string ]) result Lwt.t
   (** [watch_file path callback] executes [callback] whenever the contents of
-      [path] may have changed. *)
+      [path] may have changed. This blocks until the watch has been established. *)
 
   val unwatch: watch -> unit Lwt.t
   (** [unwatch watch] stops watching the path(s) associated with [watch] *)
