@@ -33,6 +33,10 @@ let parse_sockaddr sockaddr =
 let string_of_address (dst, dst_port) =
   Ipaddr.to_string dst ^ ":" ^ string_of_int dst_port
 
+let ( >>*= ) m f = m >>= function
+  | Error (`Msg m) -> Lwt.fail_with m
+  | Ok x -> f x
+
 module Common = struct
   (** FLOW boilerplate *)
 
@@ -299,9 +303,8 @@ module Sockets = struct
                               Connection_limit.register_no_limit "udp"
                             in
                             return (Ok (idx, label, udp))))))
-        >>= function
-        | Error (`Msg m) -> Lwt.fail_with m
-        | Ok (idx, label, udp) -> Lwt.return (make ~idx ~label udp)
+        >>*= fun (idx, label, udp) ->
+        Lwt.return (make ~idx ~label udp)
 
       let getsockname { fd; _ } =
         Luv_lwt.in_luv (fun return ->
@@ -311,9 +314,8 @@ module Sockets = struct
                 match parse_sockaddr sockaddr with
                 | Error err -> return (Error (`Msg (Luv.Error.strerror err)))
                 | Ok (ip, port) -> return (Ok (ip, port))))
-        >>= function
-        | Error (`Msg m) -> Lwt.fail_with m
-        | Ok x -> Lwt.return x
+        >>*= fun x ->
+        Lwt.return x
 
       let shutdown server =
         if not server.closed then (
@@ -358,9 +360,8 @@ module Sockets = struct
                               return (Error (`Msg (Luv.Error.strerror err)))
                           | Ok () -> return (Ok (Luv.Buffer.size buf, address)))
                     )))
-        >>= function
-        | Error (`Msg m) -> Lwt.fail_with m
-        | Ok (size, address) -> Lwt.return (size, address)
+        >>*= fun (size, address) ->
+        Lwt.return (size, address)
 
       let listen t flow_cb =
         let rec loop () =
@@ -663,9 +664,8 @@ module Sockets = struct
         | Ok x -> Lwt.return (Ok x)
 
       let bind ?description (ip, requested_port) =
-        bind_one ?description (ip, requested_port) >>= function
-        | Error (`Msg m) -> Lwt.fail_with m
-        | Ok (idx, _label, fd, bound_port) ->
+        bind_one ?description (ip, requested_port)
+        >>*= fun (idx, _label, fd, bound_port) ->
             (* On some systems localhost will resolve to ::1 first and this can
                cause performance problems (particularly on Windows). Perform a
                best-effort bind to the ::1 address. *)
@@ -677,10 +677,9 @@ module Sockets = struct
                 then (
                   Log.debug (fun f ->
                       f "Attempting a best-effort bind of ::1:%d" bound_port);
-                  bind_one (Ipaddr.(V6 V6.localhost), bound_port) >>= function
-                  | Error (`Msg m) -> Lwt.fail_with m
-                  | Ok (idx, _, fd, _) ->
-                      Lwt.return [ (idx, (ip, bound_port), fd) ])
+                  bind_one (Ipaddr.(V6 V6.localhost), bound_port)
+                  >>*= fun (idx, _, fd, _) ->
+                  Lwt.return [ (idx, (ip, bound_port), fd) ])
                 else Lwt.return [])
               (fun e ->
                 Log.debug (fun f ->
@@ -752,10 +751,8 @@ module Sockets = struct
                                             description
                                         in
                                         return (Ok (idx, (ip, port), tcp)))))))))
-        >>= function
-        | Error (`Msg m) -> Lwt.fail_with m
-        | Ok (idx, (ip, port), fd) ->
-            Lwt.return (make ip [ (idx, (ip, port), fd) ])
+        >>*= fun (idx, (ip, port), fd) ->
+        Lwt.return (make ip [ (idx, (ip, port), fd) ])
 
       let listen server' cb =
         let handle_connection client label description idx =
@@ -929,9 +926,8 @@ module Sockets = struct
                                    closed = false;
                                    disable_connection_tracking = false;
                                  })))))
-        >>= function
-        | Error (`Msg m) -> Lwt.fail_with m
-        | Ok x -> Lwt.return x
+        >>*= fun x ->
+        Lwt.return x
 
       let getsockname server =
         Luv_lwt.in_luv (fun return -> return (Luv.Pipe.getsockname server.fd))
@@ -1061,9 +1057,8 @@ module TestServer (F : ClientServer) = struct
            let connected = Lwt_mvar.create_empty () in
            F.listen server (fun flow ->
                Lwt_mvar.put connected () >>= fun () -> F.close flow);
-           F.connect address >>= function
-           | Error (`Msg m) -> Lwt.fail_with m
-           | Ok flow ->
+           F.connect address
+           >>*= fun flow ->
                with_flow flow (fun () ->
                    Lwt_mvar.take connected >>= fun () -> Lwt.return_unit)))
 
@@ -1087,9 +1082,8 @@ module TestServer (F : ClientServer) = struct
                    loop () >>= fun () ->
                    Lwt.return Sha1.(to_hex @@ finalize sha))
                >>= fun digest -> Lwt_mvar.put received digest);
-           F.connect address >>= function
-           | Error (`Msg m) -> Lwt.fail_with m
-           | Ok flow ->
+           F.connect address
+           >>*= fun flow ->
                with_flow flow (fun () ->
                    let buf = Cstruct.create 1048576 in
                    let sha = Sha1.init () in
@@ -1104,6 +1098,7 @@ module TestServer (F : ClientServer) = struct
                          let ba = Cstruct.to_bigarray subbuf in
                          Sha1.update_buffer sha ba;
                          F.writev flow [ subbuf ] >>= function
+                         | Error `Closed -> Lwt.fail End_of_file
                          | Error _ -> Lwt.fail_with "write error"
                          | Ok () -> loop (n - 1))
                    in
@@ -1188,9 +1183,8 @@ module Files = struct
         match Luv.FS_event.stop w.h with
         | Error err -> return (Error (`Msg (Luv.Error.strerror err)))
         | Ok () -> return (Ok ()))
-    >>= function
-    | Error (`Msg m) -> Lwt.fail_with m
-    | Ok () -> Lwt.return_unit
+    >>*= fun () ->
+    Lwt.return_unit
 
   let watch_file path callback =
     Luv_lwt.in_luv (fun return ->
@@ -1241,9 +1235,8 @@ module Time = struct
             with
             | Error err -> return (Error (`Msg (Luv.Error.strerror err)))
             | Ok () -> ()))
-    >>= function
-    | Error (`Msg m) -> Lwt.fail_with m
-    | Ok () -> Lwt.return_unit
+    >>*= fun() ->
+    Lwt.return_unit
 
   let%test "Time.sleep_ns wakes up" =
     let start = Unix.gettimeofday () in

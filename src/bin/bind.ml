@@ -12,6 +12,10 @@ let is_windows = Sys.os_type = "Win32"
 
 let failf fmt = Fmt.kstr (fun e -> Lwt_result.fail (`Msg e)) fmt
 
+let ( >>*= ) m f = m >>= function
+  | Error (`Msg m) -> Lwt.fail_with m
+  | Ok x -> f x
+
 module Make(Socket: Sig.SOCKETS) = struct
 
   module Channel = Mirage_channel.Make(Socket.Stream.Unix)
@@ -100,9 +104,9 @@ module Make(Socket: Sig.SOCKETS) = struct
         match local_ip with
         | Ipaddr.V4 ipv4 ->
           if local_port < 1024 && not is_windows then
-            request_privileged_port ipv4 local_port false >>= function
-            | Error (`Msg x) -> Lwt.fail_with x
-            | Ok fd          -> Socket.Datagram.Udp.of_bound_fd fd
+            request_privileged_port ipv4 local_port false
+            >>*= fun fd ->
+            Socket.Datagram.Udp.of_bound_fd fd
           else
             bind ?description (local_ip, local_port)
         | _ -> bind ?description (local_ip, local_port)
@@ -117,9 +121,9 @@ module Make(Socket: Sig.SOCKETS) = struct
         match local_ip with
         | Ipaddr.V4 ipv4 ->
           if local_port < 1024 && not is_windows then
-            request_privileged_port ipv4 local_port true >>= function
-            | Error (`Msg x) -> Lwt.fail_with x
-            | Ok fd          -> Socket.Stream.Tcp.of_bound_fd fd
+            request_privileged_port ipv4 local_port true
+            >>*= fun fd ->
+            Socket.Stream.Tcp.of_bound_fd fd
           else
             bind ?description (local_ip, local_port)
         | _ -> bind ?description (local_ip, local_port)
