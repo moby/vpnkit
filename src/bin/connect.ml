@@ -9,6 +9,10 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 open Lwt.Infix
 
+let ( >>*= ) m f = m >>= function
+  | Error (`Msg m) -> Lwt.fail_with m
+  | Ok x -> f x
+
 let (/) = Filename.concat
 let home = try Sys.getenv "HOME" with Not_found -> "/Users/root"
 let vsock_port = 62373l
@@ -21,11 +25,8 @@ module Unix = struct
   include Host.Sockets.Stream.Unix
 
   let connect () =
-    connect (!vsock_path) >>= function
-    | Error (`Msg msg) ->
-      Log.err (fun f -> f "vsock connect write got %s" msg);
-      Lwt.fail_with msg
-    | Ok flow ->
+    connect (!vsock_path)
+    >>*= fun flow ->
       let address =
         Cstruct.of_string (Printf.sprintf "00000003.%08lx\n" vsock_port)
       in
@@ -61,7 +62,7 @@ module Hvsock = struct
   let set_port_forward_addr x = hvsockaddr := Some x
 
   let close flow =
-    Host.Sockets.deregister_connection flow.idx;
+    Connection_limit.deregister flow.idx;
     F.close flow.flow
 
   let connect () = match !hvsockaddr with
@@ -71,11 +72,12 @@ module Hvsock = struct
     failwith "Hyper-V socket forwarding not initialised"
   | Some sockaddr ->
     let description = "hvsock" in
-    Host.Sockets.register_connection description >>= fun idx ->
-    let fd = F.Socket.create () in
-    F.Socket.connect fd sockaddr >|= fun () ->
-    let flow = F.connect fd in
-    { idx; flow }
+    (Lwt.return @@ Connection_limit.register description)
+    >>*= fun idx ->
+      let fd = F.Socket.create () in
+      F.Socket.connect fd sockaddr >|= fun () ->
+      let flow = F.connect fd in
+      { idx; flow }
 
   let read_into t = F.read_into t.flow
   let read t = F.read t.flow

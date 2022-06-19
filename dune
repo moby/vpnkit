@@ -27,7 +27,7 @@
  (action  (run %{gen} -out %{target} -in %{deps})))
 
 (rule
- (alias runtest)
+ (alias e2e)
  (deps src/hostnet_test/main.exe
    go/test_inputs/open_dedicated_connection.bin
    go/test_inputs/close.bin
