@@ -501,10 +501,54 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
     Copyright (c) 2016 The astring programmers
     |} ^ isc
   }
+  | "fpath.0.7.3" -> {
+    link = "https://raw.githubusercontent.com/dbuenzli/fpath/master/LICENSE.md";
+    text = {|
+    Copyright (c) 2014 The fpath programmers
+    |} ^ isc
+  }
+  | "octavius.1.2.2" -> {
+    link = "https://raw.githubusercontent.com/ocaml-doc/octavius/master/LICENSE.md";
+    text = {|
+    Copyright (c) 2015 Leo White <leo@lpw25.net>
+    |} ^ isc
+  }
+  | "luv_unix.0.5.0" | "luv.0.5.11" -> {
+    link = "https://raw.githubusercontent.com/aantron/luv/master/LICENSE.md";
+    text = {|
+    Copyright (c) 2018-2021 Anton Bachin
+    |} ^ mit
+  }
+  | "integers.0.7.0" -> {
+    link = "https://raw.githubusercontent.com/ocamllabs/ocaml-integers/0.7.0/LICENSE.md";
+    text = {|
+    Copyright (c) 2013-2016 Jeremy Yallop
+    |} ^ mit
+  }
+  | "ctypes.0.20.1" -> {
+    link = "https://raw.githubusercontent.com/ocamllabs/ocaml-ctypes/master/LICENSE";
+    text = {|
+    Copyright (c) 2013 Jeremy Yallop
+    |} ^ mit
+  }
+  | "time_now.v0.14.0"
+  | "stdio.v0.14.0"
+  | "ppx_optcomp.v0.14.3"
+  | "ppx_js_style.v0.14.1"
+  | "ppx_inline_test.v0.14.1"
+  | "ppx_here.v0.14.0"
+  | "ppx_hash.v0.14.0"
+  | "ppx_enumerate.v0.14.0"
+  | "ppx_compare.v0.14.0"
+  | "ppx_cold.v0.14.0"
+  | "ppx_base.v0.14.0"
+  | "ppx_assert.v0.14.0"
+  | "jst-config.v0.14.1"
+  | "jane-street-headers.v0.14.0"
   | "base.v0.14.2" | "base.v0.14.3"
   | "csexp.1.5.1"
-  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1" | "dune.3.2.0"
-  | "dune-configurator.2.9.1" | "dune-configurator.2.9.3" | "dune-configurator.3.0.2" | "dune-configurator.3.0.3" | "dune-configurator.3.1.1"
+  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1" | "dune.3.2.0" | "dune.3.3.0"
+  | "dune-configurator.2.9.1" | "dune-configurator.2.9.3" | "dune-configurator.3.0.2" | "dune-configurator.3.0.3" | "dune-configurator.3.1.1" | "dune-configurator.3.3.0"
   | "dune-configurator.3.2.0"
   | "ocaml-compiler-libs.v0.12.4"
   | "ocaml-syntax-shims.1.0.0"
@@ -568,7 +612,7 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
     |}
   }
-  | "cmdliner.1.0.4" -> {
+  | "cmdliner.1.0.4" | "cmdliner.1.1.1" -> {
     link = "https://github.com/dbuenzli/cmdliner/blob/93ee8854625a312d9ce69f83398bbc1e8443402f/LICENSE.md";
     text = {|
     Copyright (c) 2011 Daniel C. Bünzli
@@ -863,8 +907,11 @@ the license in file toplevel/LICENSE-findlib.
   }
   | "ocaml.4.08.0" | "ocaml-base-compiler.4.08.0"
   | "ocaml.4.12.0" | "ocaml-base-compiler.4.12.0"
+  | "ocaml.4.13.0" | "ocaml-base-compiler.4.13.0"
+  | "ocaml.4.13.1" | "ocaml-base-compiler.4.13.1"
   | "ocaml.4.14.0" | "ocaml-base-compiler.4.14.0"
   | "ocaml-variants.4.08.0+mingw64c"
+  | "ocaml-variants.4.13.1+mingw64c"
   | "seq.base" | "stdlib-shims.0.3.0" | "uchar.0.0.2" -> {
     link = "https://github.com/ocaml/ocaml/blob/a095535e5c02a95da4908a82d9f75a62609cc592/LICENSE";
     text = {|
