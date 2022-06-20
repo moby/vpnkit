@@ -64,6 +64,39 @@ module type FLOW_CLIENT_SERVER = sig
     and type flow := flow
 end
 
+module type UNIX_DGRAM = sig
+  type flow
+
+  val of_bound_fd: ?mtu:int -> Unix.file_descr -> flow Lwt.t
+  (** Create a flow from a file descriptor bound to a Unix domain socket
+      by some other process and passed to us. *)
+
+  val send: flow -> Cstruct.t -> unit Lwt.t
+
+  val recv: flow -> Cstruct.t Lwt.t
+
+  val close: flow -> unit Lwt.t
+
+  type address = string
+  (** Path of a listening Unix domain socket *)
+
+  val connect: address -> flow Lwt.t
+  (** Connect a SOCK_DRAM socket via fd-passing to a listening socket. *)
+
+  type server
+  (** A Unix domain socket which can receive datagram sockets *)
+
+  val bind: ?description:string -> address -> server Lwt.t
+  (** Bind a server to an address *)
+
+  val listen: server -> (flow -> unit Lwt.t) -> unit
+  (** Accept connections forever, calling the callback with a connection.
+      Connections are closed automatically when the callback finishes. *)
+
+  val shutdown: server -> unit Lwt.t
+  (** Stop accepting connections on the given server *)
+end
+
 module type SOCKETS = sig
   (* An OS-based BSD sockets implementation *)
 
@@ -81,6 +114,7 @@ module type SOCKETS = sig
 
       val sendto: server -> address -> ?ttl:int -> Cstruct.t -> unit Lwt.t
     end
+    module Unix: UNIX_DGRAM
   end
   module Stream: sig
     module Tcp: sig

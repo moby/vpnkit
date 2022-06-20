@@ -71,6 +71,7 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
         Dhcp_wire.Ntp_servers [ c.Configuration.gateway_ip ];
         Dhcp_wire.Broadcast_addr (Ipaddr.V4.Prefix.broadcast prefix);
         Dhcp_wire.Subnet_mask (Ipaddr.V4.Prefix.netmask prefix);
+        Dhcp_wire.Interface_mtu c.Configuration.mtu;
       ] in
       (* domain_search and get_domain_name may produce an empty string, which is
         * invalid, so only add the option if there is content *)
