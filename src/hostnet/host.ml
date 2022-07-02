@@ -519,6 +519,7 @@ module Sockets = struct
 
       let connect ?read_buffer_size:_ (ip, port) =
         let description = Fmt.str "tcp:%a:%d" Ipaddr.pp ip port in
+        Printf.printf "%s connecting\n%!" description;
         let label =
           match ip with Ipaddr.V4 _ -> "TCPv4" | Ipaddr.V6 _ -> "TCPv6"
         in
@@ -543,8 +544,10 @@ module Sockets = struct
                         Luv.Handle.close fd (fun () ->
                             return (Error (`Msg (Luv.Error.strerror err))))
                     | Ok sockaddr ->
+                        Printf.printf "%s created sockaddr\n%!" description;
                         Luv.TCP.connect fd sockaddr (function
                           | Error err ->
+                              Printf.printf "%s connect failed with %s\n%!" description (Luv.Error.strerror err);
                               Connection_limit.deregister idx;
                               Luv.Handle.close fd (fun () ->
                                   return (Error (`Msg (Luv.Error.strerror err))))
@@ -557,12 +560,15 @@ module Sockets = struct
             in
             Log.info (fun f -> f "%s" msg);
             Lwt.return (Error (`Msg msg))
-        | Ok (fd, idx) -> Lwt.return (Ok (of_fd ~description ~idx ~label fd))
+        | Ok (fd, idx) ->
+          Printf.printf "%s connected\n%!" description;
+          Lwt.return (Ok (of_fd ~description ~idx ~label fd))
 
       let shutdown_read _ = Lwt.return ()
 
       let shutdown_write { label; fd; closed; _ } =
-        if not closed then
+        if not closed then begin
+          Printf.printf "%s shutdown_write\n%!" label;
           Luv_lwt.in_luv (fun return ->
               Luv.Stream.shutdown fd (function
                 | Error err ->
@@ -571,7 +577,7 @@ module Sockets = struct
                           (Luv.Error.strerror err));
                     return ()
                 | Ok () -> return ()))
-        else Lwt.return_unit
+        end else Lwt.return_unit
 
       let read_into t buf = read_into t.fd buf
       let read t = read t.fd
