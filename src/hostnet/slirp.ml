@@ -377,47 +377,48 @@ struct
     module Proxy =
       Mirage_flow_combinators.Proxy(Clock)(Stack_tcp)(Host.Sockets.Stream.Tcp)
 
-    let input_tcp t ~id ~syn ~rst (ip, port) (buf: Cstruct.t) =
-      intercept_tcp t ~id ~syn ~rst (fun () ->
-          Host.Sockets.Stream.Tcp.connect (ip, port)
-          >>= function
-          | Error (`Msg m) ->
-            Log.debug (fun f ->
-                f "%a:%d: failed to connect, sending RST: %s"
-                  Ipaddr.pp ip port m);
-            Lwt.return (fun _ -> None)
-          | Ok socket ->
-            let tcp = Tcp.Flow.create id socket in
-            let listeners port =
-              Log.debug (fun f ->
-                  f "%a:%d handshake complete" Ipaddr.pp ip port);
-              let f flow =
-                match tcp.Tcp.Flow.socket with
-                | None ->
-                  Log.err (fun f ->
-                      f "%s callback called on closed socket"
-                        (Tcp.Flow.to_string tcp));
+    let forward_via_tcp_socket t ~id (ip, port) () =
+      Host.Sockets.Stream.Tcp.connect (ip, port)
+      >>= function
+      | Error (`Msg m) ->
+        Log.debug (fun f ->
+            f "%a:%d: failed to connect, sending RST: %s"
+              Ipaddr.pp ip port m);
+        Lwt.return (fun _ -> None)
+      | Ok socket ->
+        let tcp = Tcp.Flow.create id socket in
+        let listeners port =
+          Log.debug (fun f ->
+              f "%a:%d handshake complete" Ipaddr.pp ip port);
+          let f flow =
+            match tcp.Tcp.Flow.socket with
+            | None ->
+              Log.err (fun f ->
+                  f "%s callback called on closed socket"
+                    (Tcp.Flow.to_string tcp));
+              Lwt.return_unit
+            | Some socket ->
+              Lwt.finalize (fun () ->
+                Proxy.proxy flow socket
+                >>= function
+                | Error e ->
+                  Log.debug (fun f ->
+                      f "%s proxy failed with %a"
+                        (Tcp.Flow.to_string tcp) Proxy.pp_error e);
                   Lwt.return_unit
-                | Some socket ->
-                  Lwt.finalize (fun () ->
-                    Proxy.proxy flow socket
-                    >>= function
-                    | Error e ->
-                      Log.debug (fun f ->
-                          f "%s proxy failed with %a"
-                            (Tcp.Flow.to_string tcp) Proxy.pp_error e);
-                      Lwt.return_unit
-                    | Ok (_l_stats, _r_stats) ->
-                      Lwt.return_unit
-                  ) (fun () ->
-                    Log.debug (fun f -> f "%s proxy terminated" (Tcp.Flow.to_string tcp));
-                    close_flow t ~id `Fin
-                  )
-              in
-              Some f
-            in
-            Lwt.return listeners
-        ) buf
+                | Ok (_l_stats, _r_stats) ->
+                  Lwt.return_unit
+              ) (fun () ->
+                Log.debug (fun f -> f "%s proxy terminated" (Tcp.Flow.to_string tcp));
+                close_flow t ~id `Fin
+              )
+          in
+          Some f
+        in
+        Lwt.return listeners
+
+    let input_tcp t ~id ~syn ~rst (ip, port) (buf: Cstruct.t) =
+      intercept_tcp t ~id ~syn ~rst (forward_via_tcp_socket t ~id (ip, port)) buf
 
     (* Send an ICMP destination reachable message in response to the
        given packet. This can be used to indicate the packet would
