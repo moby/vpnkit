@@ -1510,6 +1510,52 @@ struct
       end
     ) >>= fun () ->
 
+    let read_forwards_file path =
+      Log.info (fun f -> f "Reading forwards file from %s" path);
+      Host.Files.read_file path
+      >>= function
+      | Error (`Msg "ENOENT") ->
+        Log.info (fun f -> f "Not reading forwards file %s becuase it does not exist" path);
+        Lwt.return_unit
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to read forwards from %s: %s." path m);
+        Forwards.update [];
+        Lwt.return_unit
+      | Ok txt ->
+        match Forwards.of_string txt with
+        | Ok xs ->
+          Forwards.update xs;
+          Lwt.return_unit
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to parse forwards from %s: %s." path m);
+          Lwt.return_unit
+      in
+    ( match c.forwards_path with
+    | None -> Lwt.return_unit
+    | Some path ->
+      begin Host.Files.watch_file path
+        (fun () ->
+          Log.info (fun f -> f "Forwards file %s has changed" path);
+          Lwt.async (fun () ->
+            log_exception_continue "Parsing forwards"
+              (fun () ->
+                read_forwards_file path
+              )
+          )
+        )
+      >>= function
+      | Error (`Msg "ENOENT") ->
+        Log.info (fun f -> f "Not watching forwards file %s because it does not exist" path);
+        Lwt.return_unit
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to watch forwards file %s for changes: %s" path m);
+        Lwt.return_unit
+      | Ok _watch ->
+        Log.info (fun f -> f "Watching forwards file %s for changes" path);
+        Lwt.return_unit
+      end
+    ) >>= fun () ->
+
     Log.info (fun f -> f "Configuration %s" (Configuration.to_string c));
     let global_arp_table : arp_table = {
       mutex = Lwt_mutex.create();
