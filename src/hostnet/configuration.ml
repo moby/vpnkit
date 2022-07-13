@@ -57,11 +57,12 @@ type t = {
   udpv4_forwards: Gateway_forwards.t;
   tcpv4_forwards: Gateway_forwards.t;
   gateway_forwards_path: string option;
+  forwards_path: string option;
   pcap_snaplen: int;
 }
 
 let to_string t =
-  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; host_ip = %s; lowest_ip = %s; highest_ip = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s; gateway_names = %s; vm_names = %s; udpv4_forwards = %s; tcpv4_forwards = %s; gateway_forwards_path = %s; pcap_snaplen = %d"
+  Printf.sprintf "server_macaddr = %s; max_connection = %s; dns_path = %s; dns = %s; resolver = %s; domain = %s; allowed_bind_addresses = %s; gateway_ip = %s; host_ip = %s; lowest_ip = %s; highest_ip = %s; dhcp_json_path = %s; dhcp_configuration = %s; mtu = %d; http_intercept = %s; http_intercept_path = %s; port_max_idle_time = %s; host_names = %s; gateway_names = %s; vm_names = %s; udpv4_forwards = %s; tcpv4_forwards = %s; gateway_forwards_path = %s; forwards_path = %s; pcap_snaplen = %d"
     (Macaddr.to_string t.server_macaddr)
     (match t.max_connections with None -> "None" | Some x -> string_of_int x)
     (match t.dns_path with None -> "None" | Some x -> x)
@@ -85,6 +86,7 @@ let to_string t =
     (Gateway_forwards.to_string t.udpv4_forwards)
     (Gateway_forwards.to_string t.tcpv4_forwards)
     (match t.gateway_forwards_path with None -> "None" | Some x -> x)
+    (match t.forwards_path with None -> "None" | Some x -> x)
     t.pcap_snaplen
 
 let no_dns_servers =
@@ -132,6 +134,7 @@ let default = {
   udpv4_forwards = [];
   tcpv4_forwards = [];
   gateway_forwards_path = None;
+  forwards_path = None;
   pcap_snaplen = default_pcap_snaplen;
 }
 
