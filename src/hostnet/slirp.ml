@@ -319,7 +319,13 @@ struct
       t.established <- Tcp.Id.Set.empty;
       Lwt.return_unit
 
-    let intercept_tcp_syn t ~id ~syn on_syn_callback (buf: Cstruct.t) =
+    let intercept_tcp t ~id ~syn ~rst on_syn_callback (buf: Cstruct.t) =
+      (* Note that we must cleanup even when the connection is reset before it
+         is fully established. *)
+      ( if rst
+        then close_flow t ~id `Reset
+        else Lwt.return_unit )
+      >>= fun () ->
       if syn then begin
         if Tcp.Id.Set.mem id t.pending then begin
           (* This can happen if the `connect` blocks for a few seconds *)
@@ -372,13 +378,7 @@ struct
       Mirage_flow_combinators.Proxy(Clock)(Stack_tcp)(Host.Sockets.Stream.Tcp)
 
     let input_tcp t ~id ~syn ~rst (ip, port) (buf: Cstruct.t) =
-      (* Note that we must cleanup even when the connection is reset before it
-         is fully established. *)
-      ( if rst
-        then close_flow t ~id `Reset
-        else Lwt.return_unit )
-      >>= fun () ->
-      intercept_tcp_syn t ~id ~syn (fun () ->
+      intercept_tcp t ~id ~syn ~rst (fun () ->
           Host.Sockets.Stream.Tcp.connect (ip, port)
           >>= function
           | Error (`Msg m) ->
@@ -646,12 +646,12 @@ struct
 
     (* TCP to port 53 -> DNS forwarder *)
     | Ipv4 { src; dst;
-             payload = Tcp { src = src_port; dst = 53; syn; raw;
+             payload = Tcp { src = src_port; dst = 53; syn; rst; raw;
                              payload = Payload _; _ }; _ } ->
       let id =
         Stack_tcp_wire.v ~src_port:53 ~dst:src ~src:dst ~dst_port:src_port
       in
-      Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun () ->
+      Endpoint.intercept_tcp t.endpoint ~id ~syn ~rst (fun () ->
           !dns >>= fun t ->
           Dns_forwarder.handle_tcp ~t >|= fun handler ->
           with_no_keepalive handler
@@ -660,7 +660,7 @@ struct
 
     (* HTTP proxy *)
     | Ipv4 { src; dst;
-             payload = Tcp { src = src_port; dst = dst_port; syn; raw;
+             payload = Tcp { src = src_port; dst = dst_port; syn; rst; raw;
                              payload = Payload _; _ }; _ } ->
       let id =
         Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
@@ -672,7 +672,7 @@ struct
         | None -> Lwt.return (Ok ())
         | Some cb ->
           cb >>= fun cb ->
-          Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
+          Endpoint.intercept_tcp t.endpoint ~id ~syn ~rst (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
           >|= ok
         end
       end
@@ -750,7 +750,7 @@ struct
         >|= ok
       | Some cb ->
         cb >>= fun cb ->
-        Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
+        Endpoint.intercept_tcp t.endpoint ~id ~syn ~rst (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
         >|= ok
       end
     | Ipv4 { src; dst; ihl; dnf; raw; ttl;
