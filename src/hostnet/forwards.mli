@@ -35,3 +35,10 @@ module Unix : sig
   val connect :
     Ipaddr.t * int -> (flow, [> `ECONNREFUSED | `Msg of string ]) result Lwt.t
 end
+
+module Test (Clock : Mirage_clock.MCLOCK) : sig
+  type server
+
+  val start_forwarder : string -> server Lwt.t
+  val shutdown : server -> unit Lwt.t
+end
