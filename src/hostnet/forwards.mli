@@ -28,3 +28,10 @@ module Tcp : sig
   val find : Ipaddr.t * int -> string
   (** [find dst_ip dst_port] returns the internal path to forward the TCP connection to. *)
 end
+
+module Unix : sig
+  include Mirage_flow_combinators.SHUTDOWNABLE
+
+  val connect :
+    Ipaddr.t * int -> (flow, [> `ECONNREFUSED | `Msg of string ]) result Lwt.t
+end
