@@ -14,7 +14,7 @@ module Make
     (Ip: Tcpip.Ip.S with type ipaddr = Ipaddr.V4.t)
     (Udp: Tcpip.Udp.S with type ipaddr = Ipaddr.V4.t)
     (Tcp: Mirage_flow_combinators.SHUTDOWNABLE)
-    (Socket: Sig.SOCKETS)
+    (Remote: Sig.FLOW_CLIENT with type address = Ipaddr.t * int)
     (Dns_resolver: Sig.DNS) :
 sig
 
