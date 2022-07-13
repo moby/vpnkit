@@ -193,7 +193,7 @@ struct
 
       type t = {
         id: Stack_tcp_wire.t;
-        mutable socket: Host.Sockets.Stream.Tcp.flow option;
+        mutable socket: Forwards.Stream.Tcp.flow option;
         mutable last_active_time_ns: int64;
       }
 
@@ -223,6 +223,18 @@ struct
         let t = { id; socket; last_active_time_ns } in
         all := Id.Map.add id t !all;
         t
+      let close id t =
+        (* Closing the socket should cause the proxy to exit cleanly *)
+        begin match t.socket with
+        | Some socket ->
+          t.socket <- None;
+          Forwards.Stream.Tcp.close socket
+        | None ->
+          (* If we have a Tcp.Flow still in the table, there should still be an
+             active socket, otherwise the state has gotten out-of-sync *)
+          Log.warn (fun f -> f "%s: no socket registered, possible socket leak" (string_of_id id));
+          Lwt.return_unit
+        end
       let remove id =
         all := Id.Map.remove id !all
       let mem id = Id.Map.mem id !all
@@ -299,17 +311,7 @@ struct
         end;
         Tcp.Flow.remove id;
         t.established <- Tcp.Id.Set.remove id t.established;
-        begin match tcp.Tcp.Flow.socket with
-        | Some socket ->
-          (* Note this should cause the proxy to exit cleanly *)
-          tcp.Tcp.Flow.socket <- None;
-          Host.Sockets.Stream.Tcp.close socket
-        | None ->
-          (* If we have a Tcp.Flow still in the table, there should still be an
-             active socket, otherwise the state has gotten out-of-sync *)
-          Log.warn (fun f -> f "%s: no socket registered, possible socket leak" (string_of_id id));
-          Lwt.return_unit
-        end
+        Tcp.Flow.close id tcp
       end else Lwt.return_unit
 
     let destroy t =
@@ -375,10 +377,10 @@ struct
       end
 
     module Proxy =
-      Mirage_flow_combinators.Proxy(Clock)(Stack_tcp)(Host.Sockets.Stream.Tcp)
+      Mirage_flow_combinators.Proxy(Clock)(Stack_tcp)(Forwards.Stream.Tcp)
 
     let forward_via_tcp_socket t ~id (ip, port) () =
-      Host.Sockets.Stream.Tcp.connect (ip, port)
+      Forwards.Stream.Tcp.connect (ip, port)
       >>= function
       | Error (`Msg m) ->
         Log.debug (fun f ->

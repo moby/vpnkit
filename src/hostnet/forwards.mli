@@ -28,3 +28,7 @@ module Tcp : sig
   val find : Ipaddr.t * int -> string
   (** [find dst_ip dst_port] returns the internal path to forward the TCP connection to. *)
 end
+
+module Stream : sig
+  module Tcp : Sig.FLOW_CLIENT with type address = Ipaddr.t * int
+end
