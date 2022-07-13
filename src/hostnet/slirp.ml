@@ -193,7 +193,9 @@ struct
 
       type t = {
         id: Stack_tcp_wire.t;
-        mutable socket: Host.Sockets.Stream.Tcp.flow option;
+        mutable socket: [
+          | `Tcp of Host.Sockets.Stream.Tcp.flow
+         ] option;
         mutable last_active_time_ns: int64;
       }
 
@@ -223,6 +225,18 @@ struct
         let t = { id; socket; last_active_time_ns } in
         all := Id.Map.add id t !all;
         t
+      let close id t =
+        (* Closing the socket should cause the proxy to exit cleanly *)
+        begin match t.socket with
+        | Some (`Tcp socket) ->
+          t.socket <- None;
+          Host.Sockets.Stream.Tcp.close socket
+        | None ->
+          (* If we have a Tcp.Flow still in the table, there should still be an
+             active socket, otherwise the state has gotten out-of-sync *)
+          Log.warn (fun f -> f "%s: no socket registered, possible socket leak" (string_of_id id));
+          Lwt.return_unit
+        end
       let remove id =
         all := Id.Map.remove id !all
       let mem id = Id.Map.mem id !all
@@ -299,17 +313,7 @@ struct
         end;
         Tcp.Flow.remove id;
         t.established <- Tcp.Id.Set.remove id t.established;
-        begin match tcp.Tcp.Flow.socket with
-        | Some socket ->
-          (* Note this should cause the proxy to exit cleanly *)
-          tcp.Tcp.Flow.socket <- None;
-          Host.Sockets.Stream.Tcp.close socket
-        | None ->
-          (* If we have a Tcp.Flow still in the table, there should still be an
-             active socket, otherwise the state has gotten out-of-sync *)
-          Log.warn (fun f -> f "%s: no socket registered, possible socket leak" (string_of_id id));
-          Lwt.return_unit
-        end
+        Tcp.Flow.close id tcp
       end else Lwt.return_unit
 
     let destroy t =
@@ -386,7 +390,7 @@ struct
               Ipaddr.pp ip port m);
         Lwt.return (fun _ -> None)
       | Ok socket ->
-        let tcp = Tcp.Flow.create id socket in
+        let tcp = Tcp.Flow.create id (`Tcp socket) in
         let listeners port =
           Log.debug (fun f ->
               f "%a:%d handshake complete" Ipaddr.pp ip port);
@@ -397,7 +401,7 @@ struct
                   f "%s callback called on closed socket"
                     (Tcp.Flow.to_string tcp));
               Lwt.return_unit
-            | Some socket ->
+            | Some (`Tcp socket) ->
               Lwt.finalize (fun () ->
                 Proxy.proxy flow socket
                 >>= function
