@@ -193,7 +193,10 @@ struct
 
       type t = {
         id: Stack_tcp_wire.t;
-        mutable socket: Host.Sockets.Stream.Tcp.flow option;
+        mutable socket: [
+          | `Tcp of Host.Sockets.Stream.Tcp.flow
+          | `Unix of Forwards.Unix.flow
+         ] option;
         mutable last_active_time_ns: int64;
       }
 
@@ -223,6 +226,21 @@ struct
         let t = { id; socket; last_active_time_ns } in
         all := Id.Map.add id t !all;
         t
+      let close id t =
+        (* Closing the socket should cause the proxy to exit cleanly *)
+        begin match t.socket with
+        | Some (`Tcp socket) ->
+          t.socket <- None;
+          Host.Sockets.Stream.Tcp.close socket
+        | Some (`Unix socket) ->
+          t.socket <- None;
+          Forwards.Unix.close socket
+        | None ->
+          (* If we have a Tcp.Flow still in the table, there should still be an
+             active socket, otherwise the state has gotten out-of-sync *)
+          Log.warn (fun f -> f "%s: no socket registered, possible socket leak" (string_of_id id));
+          Lwt.return_unit
+        end
       let remove id =
         all := Id.Map.remove id !all
       let mem id = Id.Map.mem id !all
@@ -299,17 +317,7 @@ struct
         end;
         Tcp.Flow.remove id;
         t.established <- Tcp.Id.Set.remove id t.established;
-        begin match tcp.Tcp.Flow.socket with
-        | Some socket ->
-          (* Note this should cause the proxy to exit cleanly *)
-          tcp.Tcp.Flow.socket <- None;
-          Host.Sockets.Stream.Tcp.close socket
-        | None ->
-          (* If we have a Tcp.Flow still in the table, there should still be an
-             active socket, otherwise the state has gotten out-of-sync *)
-          Log.warn (fun f -> f "%s: no socket registered, possible socket leak" (string_of_id id));
-          Lwt.return_unit
-        end
+        Tcp.Flow.close id tcp
       end else Lwt.return_unit
 
     let destroy t =
@@ -319,7 +327,13 @@ struct
       t.established <- Tcp.Id.Set.empty;
       Lwt.return_unit
 
-    let intercept_tcp_syn t ~id ~syn on_syn_callback (buf: Cstruct.t) =
+    let intercept_tcp t ~id ~syn ~rst on_syn_callback (buf: Cstruct.t) =
+      (* Note that we must cleanup even when the connection is reset before it
+         is fully established. *)
+      ( if rst
+        then close_flow t ~id `Reset
+        else Lwt.return_unit )
+      >>= fun () ->
       if syn then begin
         if Tcp.Id.Set.mem id t.pending then begin
           (* This can happen if the `connect` blocks for a few seconds *)
@@ -368,56 +382,110 @@ struct
         Stack_tcp.input t.tcp4 ~src ~dst buf
       end
 
-    module Proxy =
+    module Tcp_Proxy =
       Mirage_flow_combinators.Proxy(Clock)(Stack_tcp)(Host.Sockets.Stream.Tcp)
+    module Unix_Proxy =
+      Mirage_flow_combinators.Proxy(Clock)(Stack_tcp)(Forwards.Unix)
+
+    let forward_via_tcp_socket t ~id (ip, port) () =
+      Host.Sockets.Stream.Tcp.connect (ip, port)
+      >>= function
+      | Error (`Msg m) ->
+        Log.debug (fun f ->
+            f "%a:%d: failed to connect, sending RST: %s"
+              Ipaddr.pp ip port m);
+        Lwt.return (fun _ -> None)
+      | Ok socket ->
+        let tcp = Tcp.Flow.create id (`Tcp socket) in
+        let listeners port =
+          Log.debug (fun f ->
+              f "%a:%d handshake complete" Ipaddr.pp ip port);
+          let f flow =
+            match tcp.Tcp.Flow.socket with
+            | None ->
+              Log.err (fun f ->
+                  f "%s callback called on closed socket"
+                    (Tcp.Flow.to_string tcp));
+              Lwt.return_unit
+            | Some (`Unix _) ->
+              (* Should never happen but not currently forbidden by the types *)
+              Log.err (fun f ->
+                  f "%s callback has a Unix socket, expected TCP"
+                  (Tcp.Flow.to_string tcp));
+              close_flow t ~id `Reset
+            | Some (`Tcp socket) ->
+              Lwt.finalize (fun () ->
+                Tcp_Proxy.proxy flow socket
+                >>= function
+                | Error e ->
+                  Log.debug (fun f ->
+                      f "%s proxy failed with %a"
+                        (Tcp.Flow.to_string tcp) Tcp_Proxy.pp_error e);
+                  Lwt.return_unit
+                | Ok (_l_stats, _r_stats) ->
+                  Lwt.return_unit
+              ) (fun () ->
+                Log.debug (fun f -> f "%s proxy terminated" (Tcp.Flow.to_string tcp));
+                close_flow t ~id `Fin
+              )
+          in
+          Some f
+        in
+        Lwt.return listeners
+
+    let forward_via_unix_socket t ~id (ip, port) () =
+      Forwards.Unix.connect (ip, port)
+      >>= function
+      | Error `ECONNREFUSED ->
+        Log.debug (fun f ->
+          f "%a:%d: ECONNREFUSED, sending RST"
+            Ipaddr.pp ip port);
+        Lwt.return (fun _ -> None)
+      | Error (`Msg m) ->
+        Log.debug (fun f ->
+            f "%a:%d: failed to connect, sending RST: %s"
+              Ipaddr.pp ip port m);
+        Lwt.return (fun _ -> None)
+      | Ok socket ->
+        let tcp = Tcp.Flow.create id (`Unix socket) in
+        let listeners port =
+          Log.debug (fun f ->
+              f "%a:%d handshake complete" Ipaddr.pp ip port);
+          let f flow =
+            match tcp.Tcp.Flow.socket with
+            | None ->
+              Log.err (fun f ->
+                  f "%s callback called on closed socket"
+                    (Tcp.Flow.to_string tcp));
+              Lwt.return_unit
+            | Some (`Tcp _) ->
+              (* Should never happen but not currently forbidden by the types *)
+              Log.err (fun f ->
+                  f "%s callback has a TCP socket, expected Unix"
+                  (Tcp.Flow.to_string tcp));
+              close_flow t ~id `Reset
+            | Some (`Unix socket) ->
+              Lwt.finalize (fun () ->
+                Unix_Proxy.proxy flow socket
+                >>= function
+                | Error e ->
+                  Log.debug (fun f ->
+                      f "%s proxy failed with %a"
+                        (Tcp.Flow.to_string tcp) Unix_Proxy.pp_error e);
+                  Lwt.return_unit
+                | Ok (_l_stats, _r_stats) ->
+                  Lwt.return_unit
+              ) (fun () ->
+                Log.debug (fun f -> f "%s proxy terminated" (Tcp.Flow.to_string tcp));
+                close_flow t ~id `Fin
+              )
+          in
+          Some f
+        in
+        Lwt.return listeners
 
     let input_tcp t ~id ~syn ~rst (ip, port) (buf: Cstruct.t) =
-      (* Note that we must cleanup even when the connection is reset before it
-         is fully established. *)
-      ( if rst
-        then close_flow t ~id `Reset
-        else Lwt.return_unit )
-      >>= fun () ->
-      intercept_tcp_syn t ~id ~syn (fun () ->
-          Host.Sockets.Stream.Tcp.connect (ip, port)
-          >>= function
-          | Error (`Msg m) ->
-            Log.debug (fun f ->
-                f "%a:%d: failed to connect, sending RST: %s"
-                  Ipaddr.pp ip port m);
-            Lwt.return (fun _ -> None)
-          | Ok socket ->
-            let tcp = Tcp.Flow.create id socket in
-            let listeners port =
-              Log.debug (fun f ->
-                  f "%a:%d handshake complete" Ipaddr.pp ip port);
-              let f flow =
-                match tcp.Tcp.Flow.socket with
-                | None ->
-                  Log.err (fun f ->
-                      f "%s callback called on closed socket"
-                        (Tcp.Flow.to_string tcp));
-                  Lwt.return_unit
-                | Some socket ->
-                  Lwt.finalize (fun () ->
-                    Proxy.proxy flow socket
-                    >>= function
-                    | Error e ->
-                      Log.debug (fun f ->
-                          f "%s proxy failed with %a"
-                            (Tcp.Flow.to_string tcp) Proxy.pp_error e);
-                      Lwt.return_unit
-                    | Ok (_l_stats, _r_stats) ->
-                      Lwt.return_unit
-                  ) (fun () ->
-                    Log.debug (fun f -> f "%s proxy terminated" (Tcp.Flow.to_string tcp));
-                    close_flow t ~id `Fin
-                  )
-              in
-              Some f
-            in
-            Lwt.return listeners
-        ) buf
+      intercept_tcp t ~id ~syn ~rst (forward_via_tcp_socket t ~id (ip, port)) buf
 
     (* Send an ICMP destination reachable message in response to the
        given packet. This can be used to indicate the packet would
@@ -646,12 +714,12 @@ struct
 
     (* TCP to port 53 -> DNS forwarder *)
     | Ipv4 { src; dst;
-             payload = Tcp { src = src_port; dst = 53; syn; raw;
+             payload = Tcp { src = src_port; dst = 53; syn; rst; raw;
                              payload = Payload _; _ }; _ } ->
       let id =
         Stack_tcp_wire.v ~src_port:53 ~dst:src ~src:dst ~dst_port:src_port
       in
-      Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun () ->
+      Endpoint.intercept_tcp t.endpoint ~id ~syn ~rst (fun () ->
           !dns >>= fun t ->
           Dns_forwarder.handle_tcp ~t >|= fun handler ->
           with_no_keepalive handler
@@ -660,7 +728,7 @@ struct
 
     (* HTTP proxy *)
     | Ipv4 { src; dst;
-             payload = Tcp { src = src_port; dst = dst_port; syn; raw;
+             payload = Tcp { src = src_port; dst = dst_port; syn; rst; raw;
                              payload = Payload _; _ }; _ } ->
       let id =
         Stack_tcp_wire.v ~src_port:dst_port ~dst:src ~src:dst ~dst_port:src_port
@@ -672,7 +740,7 @@ struct
         | None -> Lwt.return (Ok ())
         | Some cb ->
           cb >>= fun cb ->
-          Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
+          Endpoint.intercept_tcp t.endpoint ~id ~syn ~rst (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
           >|= ok
         end
       end
@@ -731,6 +799,19 @@ struct
         | None ->
           Lwt.return (Ok ()) )
 
+    (* Transparent TCP forward? *)
+    | Ipv4 { src = src_ip ; dst = dst_ip;
+             payload = Tcp { src = src_port;
+                             dst = dst_port; syn; rst; raw; _ }; _ } when Forwards.Tcp.mem (Ipaddr.V4 dst_ip, dst_port) ->
+      let id =
+        Stack_tcp_wire.v
+          ~src_port:dst_port ~dst:src_ip ~src:dst_ip ~dst_port:src_port
+      in
+      Endpoint.intercept_tcp t.endpoint ~id ~syn ~rst (fun () ->
+        Endpoint.forward_via_unix_socket t.endpoint ~id (Ipaddr.V4 dst_ip, dst_port) ()
+      ) raw
+      >|= ok
+
     (* Transparent HTTP intercept? *)
     | Ipv4 { src = dest_ip ; dst = local_ip;
              payload = Tcp { src = dest_port;
@@ -750,7 +831,7 @@ struct
         >|= ok
       | Some cb ->
         cb >>= fun cb ->
-        Endpoint.intercept_tcp_syn t.endpoint ~id ~syn (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
+        Endpoint.intercept_tcp t.endpoint ~id ~syn ~rst (fun _ -> Lwt.return @@ with_no_keepalive cb) raw
         >|= ok
       end
     | Ipv4 { src; dst; ihl; dnf; raw; ttl;
@@ -1506,6 +1587,52 @@ struct
         Lwt.return_unit
       | Ok _watch ->
         Log.info (fun f -> f "Watching gateway forwards file %s for changes" path);
+        Lwt.return_unit
+      end
+    ) >>= fun () ->
+
+    let read_forwards_file path =
+      Log.info (fun f -> f "Reading forwards file from %s" path);
+      Host.Files.read_file path
+      >>= function
+      | Error (`Msg "ENOENT") ->
+        Log.info (fun f -> f "Not reading forwards file %s becuase it does not exist" path);
+        Lwt.return_unit
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to read forwards from %s: %s." path m);
+        Forwards.update [];
+        Lwt.return_unit
+      | Ok txt ->
+        match Forwards.of_string txt with
+        | Ok xs ->
+          Forwards.update xs;
+          Lwt.return_unit
+        | Error (`Msg m) ->
+          Log.err (fun f -> f "Failed to parse forwards from %s: %s." path m);
+          Lwt.return_unit
+      in
+    ( match c.forwards_path with
+    | None -> Lwt.return_unit
+    | Some path ->
+      begin Host.Files.watch_file path
+        (fun () ->
+          Log.info (fun f -> f "Forwards file %s has changed" path);
+          Lwt.async (fun () ->
+            log_exception_continue "Parsing forwards"
+              (fun () ->
+                read_forwards_file path
+              )
+          )
+        )
+      >>= function
+      | Error (`Msg "ENOENT") ->
+        Log.info (fun f -> f "Not watching forwards file %s because it does not exist" path);
+        Lwt.return_unit
+      | Error (`Msg m) ->
+        Log.err (fun f -> f "Failed to watch forwards file %s for changes: %s" path m);
+        Lwt.return_unit
+      | Ok _watch ->
+        Log.info (fun f -> f "Watching forwards file %s for changes" path);
         Lwt.return_unit
       end
     ) >>= fun () ->
