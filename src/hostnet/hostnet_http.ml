@@ -237,7 +237,7 @@ module Make
     module Response = Cohttp.Response.Make(IO)
   end
   module Outgoing = struct
-    module C = Mirage_channel.Make(Socket.Stream.Tcp)
+    module C = Mirage_channel.Make(Forwards.Unix)
     module IO = Cohttp_mirage_io.Make(C)
     module Request = Cohttp.Request.Make(IO)
     module Response = Cohttp.Response.Make(IO)
@@ -295,7 +295,7 @@ module Make
             Lwt.return false
           )
         >>= fun continue ->
-        if continue then loop () else Socket.Stream.Tcp.shutdown_write remote
+        if continue then loop () else Forwards.Unix.shutdown_write remote
       in
       loop () in
     Lwt.join [
@@ -505,7 +505,7 @@ module Make
                     let request = Cohttp.Request.make ~meth:`CONNECT ~headers uri in
                     { request with Cohttp.Request.resource = host ^ ":" ^ (string_of_int port) }
                   in
-                  Socket.Stream.Tcp.connect address >>= function
+                  Forwards.Unix.connect address >>= function
                   | Error _ ->
                     Log.warn (fun f ->
                         f "Failed to connect to %s" (string_of_address address));
@@ -538,7 +538,7 @@ module Make
                                         (Cohttp.Response.sexp_of_t res)));
                           let incoming = Incoming.C.create flow in
                           proxy_bytes ~incoming ~outgoing ~flow ~remote
-                      ) (fun () -> Socket.Stream.Tcp.close remote)
+                      ) (fun () -> Forwards.Unix.close remote)
               ) (fun () -> Tcp.close flow)
           ) (fun e ->
             Log.warn (fun f -> f "tunnel_https_over_connect caught exception: %s" (Printexc.to_string e));
@@ -662,7 +662,7 @@ module Make
             (Sexplib.Sexp.to_string_hum
               (Cohttp.Request.sexp_of_t req))
           );
-      begin Socket.Stream.Tcp.connect next_hop_address >>= function
+      begin Forwards.Unix.connect next_hop_address >>= function
       | Error _ ->
         let message = match ty with
           | `Origin -> Printf.sprintf "unable to connect to %s. Do you need an HTTP proxy?" (string_of_address next_hop_address)
@@ -714,7 +714,7 @@ module Make
                 (Cohttp.Request.sexp_of_t req))
             );
             proxy_request ~description ~incoming ~outgoing ~flow ~remote ~req
-        ) (fun () -> Socket.Stream.Tcp.close remote)
+        ) (fun () -> Forwards.Unix.close remote)
       end
 
   (* A regular, non-transparent HTTP proxy implementation.
