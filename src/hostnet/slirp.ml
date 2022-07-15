@@ -104,7 +104,7 @@ struct
     Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)
       (Host.Time)(Clock)(Recorder)
   module Http_forwarder =
-    Hostnet_http.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets.Stream.Tcp)(Host.Dns)
+    Hostnet_http.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Forwards.Stream.Tcp)(Host.Dns)
 
   module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Clock)(Host.Time)
   module Icmp_nat = Hostnet_icmp.Make(Host.Sockets)(Clock)(Host.Time)
