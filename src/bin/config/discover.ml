@@ -4,7 +4,7 @@ let os_type () =
     (* We want to differentiate between Linux and Darwin/macOS *)
     let ic = Unix.open_process_in "uname" in
     let line = input_line ic in
-    close_in ic;
+    let _ = Unix.close_process_in ic in
     line
   | x -> x
 
