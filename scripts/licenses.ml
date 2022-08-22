@@ -547,9 +547,9 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
   | "jane-street-headers.v0.14.0"
   | "base.v0.14.2" | "base.v0.14.3"
   | "csexp.1.5.1"
-  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1" | "dune.3.2.0" | "dune.3.3.0"
+  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1" | "dune.3.2.0" | "dune.3.3.0" | "dune.3.4.1"
   | "dune-configurator.2.9.1" | "dune-configurator.2.9.3" | "dune-configurator.3.0.2" | "dune-configurator.3.0.3" | "dune-configurator.3.1.1" | "dune-configurator.3.3.0"
-  | "dune-configurator.3.2.0"
+  | "dune-configurator.3.2.0" | "dune-configurator.3.4.1"
   | "ocaml-compiler-libs.v0.12.4"
   | "ocaml-syntax-shims.1.0.0"
   | "parsexp.v0.14.2"
@@ -626,7 +626,8 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     |} ^isc
   }
   | "cstruct.6.0.1" | "cstruct-lwt.6.0.1" | "cstruct-sexp.6.0.1" | "ppx_cstruct.6.0.1"
-  | "cstruct.6.1.0" | "cstruct-lwt.6.1.0" | "cstruct-sexp.6.1.0" | "ppx_cstruct.6.1.0" -> {
+  | "cstruct.6.1.0" | "cstruct-lwt.6.1.0" | "cstruct-sexp.6.1.0" | "ppx_cstruct.6.1.0"
+  | "cstruct.6.1.1" | "cstruct-lwt.6.1.1" | "cstruct-sexp.6.1.1" | "ppx_cstruct.6.1.1" -> {
     link = "https://raw.githubusercontent.com/mirage/ocaml-cstruct/v6.1.0/LICENSE.md";
     text = {|
     Copyright (c) 2012 Anil Madhavapeddy anil@recoil.org Copyright (c) 2012 Pierre Chambart Copyright (c) Christiano F. Haesbaert haesbaert@haesbaert.org Copyright (c) Citrix Inc Copyright (c) David Sheets sheets@alum.mit.edu Copyright (c) Drup drupyog@zoho.com Copyright (c) Hannes Mehnert hannes@mehnert.org Copyright (c) Jeremy Yallop yallop@gmail.com Copyright (c) Mindy Preston meetup@yomimono.org Copyright (c) Nicolas Ojeda Bar n.oje.bar@gmail.com Copyright (c) Richard Mortier mort@cantab.net Copyright (c) Rudi Grinberg rudi.grinberg@gmail.com Copyright (c) Thomas Gazagnaire thomas@gazagnaire.com Copyright (c) Thomas Leonard talex5@gmail.com Copyright (c) Vincent Bernardoff vb@luminar.eu.org Copyright (c) pqwy david@numm.org
@@ -675,7 +676,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     Copyright (c) 2013 Thomas Gazagnaire thomas@gazagnaire.org Copyright (C) 2012-2013 Citrix Inc Copyright (c) 2010-2012 Anil Madhavapeddy anil@recoil.org
     |} ^ isc
   }
-  | "ipaddr.5.2.0" | "ipaddr.5.3.0" | "ipaddr-sexp.5.2.0" | "ipaddr-sexp.5.3.0" | "macaddr.5.2.0" | "macaddr.5.3.0" | "macaddr-cstruct.5.2.0" | "macaddr-cstruct.5.3.0" | "macaddr-sexp.5.2.0" | "macaddr-sexp.5.3.0" -> {
+  | "ipaddr.5.2.0" | "ipaddr.5.3.0" | "ipaddr.5.3.1" | "ipaddr-sexp.5.2.0" | "ipaddr-sexp.5.3.0" | "ipaddr-sexp.5.3.1" | "macaddr.5.2.0" | "macaddr.5.3.0" | "macaddr.5.3.1" | "macaddr-cstruct.5.2.0" | "macaddr-cstruct.5.3.0" | "macaddr-cstruct.5.3.1" | "macaddr-sexp.5.2.0" | "macaddr-sexp.5.3.0" | "macaddr-sexp.5.3.1" -> {
     link = "https://github.com/mirage/ocaml-ipaddr/blob/7745ea4be2c1c5a7ab95908b26a6ed81a0947ab5/LICENSE.md";
     text = {|
     Copyright (c) 2013-2015 David Sheets sheets@alum.mit.edu Copyright (c) 2010-2011, 2014 Anil Madhavapeddy anil@recoil.org
@@ -877,7 +878,7 @@ the license in file toplevel/LICENSE-findlib.
 
     |} ^ lgpl21
   }
-  | "camlp-streams.5.0" -> {
+  | "camlp-streams.5.0" | "camlp-streams.5.0.1" -> {
     link = "https://github.com/ocaml/camlp-streams/blob/trunk/LICENSE";
     text = {|
     The Camlp-streams library is copyright Institut National de Recherche
@@ -1008,7 +1009,7 @@ might be covered by the GNU Lesser General Public License.
     Copyright (c) 2016 David Kaloper Meršinjak
     |} ^ isc
   }
-  | "lwt.5.5.0" | "lwt-dllist.1.0.1" -> {
+  | "lwt.5.5.0" | "lwt.5.6.1" | "lwt-dllist.1.0.1" -> {
     link = "https://github.com/ocsigen/lwt/blob/bab52d9744cb2d5cd3cfe86cda65ba73752998ee/LICENSE.md";
     text = {|
     Copyright (c) 1999-2020, the Authors of Lwt (docs/AUTHORS)
@@ -1076,7 +1077,7 @@ the use or other dealings in the software.
 
     |} ^ isc
   }
-  | "tcpip.7.0.1" | "tcpip.7.1.0" | "tcpip.7.1.1" -> {
+  | "tcpip.7.0.1" | "tcpip.7.1.0" | "tcpip.7.1.1" | "tcpip.7.1.2" -> {
     link = "https://github.com/mirage/mirage-tcpip/blob/353f7b92a1a8747923ce6918426fd3f82aa27445/LICENSE.md";
     text = {|
     Copyright (c) Anil Madhavapeddy <anil@recoil.org>
