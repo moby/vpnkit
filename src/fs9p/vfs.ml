@@ -53,7 +53,7 @@ let ok x = Lwt.return (Ok x)
 
 let error fmt = Error.otherk Lwt.return fmt
 
-type 'a or_err = ('a, Error.t) Result.result Lwt.t
+type 'a or_err = ('a, Error.t) result Lwt.t
 
 module File = struct
   let err_no_entry = Lwt.return Error.no_entry

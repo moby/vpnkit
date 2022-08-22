@@ -5,7 +5,6 @@
 *)
 
 open Astring
-open Result
 
 (** Error codes. *)
 module Error : sig
@@ -58,7 +57,7 @@ module Error : sig
   val pp : t Fmt.t
 end
 
-type 'a or_err = ('a, Error.t) Result.result Lwt.t
+type 'a or_err = ('a, Error.t) result Lwt.t
 (** The type of errors. *)
 
 val ok : 'a -> 'a or_err

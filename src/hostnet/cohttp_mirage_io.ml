@@ -18,7 +18,6 @@
  *)
 
 open Lwt.Infix
-open Result
 
 module Make (Channel: Mirage_channel.S) = struct
 

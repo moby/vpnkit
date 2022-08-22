@@ -26,7 +26,6 @@ depends: [
   "dune"
   "alcotest" {with-test}
   "ounit" {with-test}
-  "result"
   "tar" {>= "1.0.1"}
   "ipaddr" {>= "5.0.1"}
   "lwt" {>= "5.4.0"}

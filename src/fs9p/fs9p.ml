@@ -1,5 +1,4 @@
 open Lwt.Infix
-open Result
 open Fs9p_error.Infix
 module P = Protocol_9p
 

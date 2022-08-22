@@ -105,7 +105,7 @@ let close flow =
   Lwt.return_unit
 
 type server = {
-  mutable listen_cb: unit -> (flow, [ `Msg of string ]) Result.result Lwt.t;
+  mutable listen_cb: unit -> (flow, [ `Msg of string ]) result Lwt.t;
   address: address;
 }
 let bound = Hashtbl.create 7
