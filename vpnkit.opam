@@ -35,7 +35,7 @@ depends: [
   "base64" {>= "3.5.0"}
   "cstruct" {>= "6.0.0"}
   "pcap-format" {>= "0.4.0"}
-  "cmdliner"
+  "cmdliner" {< "1.1.0"}
   "charrua" {>= "1.3.0"}
   "charrua-client"
   "charrua-server"
