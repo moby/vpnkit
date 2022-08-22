@@ -480,7 +480,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main
       socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls pcap_snaplen
-      max_connections port_forwards dns http hosts host_names gateway_names
+      max_connections port_forwards dns http http_intercept_api_path hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
       dhcp_json_path mtu udpv4_forwards tcpv4_forwards gateway_forwards_path forwards_path gc_compact
@@ -681,6 +681,21 @@ let http =
   in
   Arg.(value & opt (some string) None doc)
 
+let http_intercept_api_path =
+  let doc =
+    Arg.info ~doc:
+      "HTTP proxy configuration update API server path. \
+      If this argument is given, then vpnkit will listen on this Unix domain socket \
+      or Windows named pipe and receive HTTP proxy configuration updates. HTTP POST /http_proxy.json \
+      requests should contain the configuration in .json format as \
+      follows: `{\"http\": \"host:3128\",\
+        \"https\": \"host:3128\",\
+        \"exclude\": \"*.local\"\
+      }`\
+      " ["http-api-path"]
+  in
+  Arg.(value & opt (some string) None doc)
+
 let hosts =
   let doc =
     Arg.info ~doc:
@@ -842,7 +857,7 @@ let command =
   in
   Term.(pure main
         $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls $ pcap_urls $ pcap_snaplen
-        $ max_connections $ port_forwards $ dns $ http $ hosts
+        $ max_connections $ port_forwards $ dns $ http $ http_intercept_api_path $ hosts
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ tcpv4_forwards
