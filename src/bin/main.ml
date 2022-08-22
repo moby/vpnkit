@@ -483,7 +483,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       max_connections port_forwards dns http hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
-      dhcp_json_path mtu udpv4_forwards tcpv4_forwards gateway_forwards_path gc_compact
+      dhcp_json_path mtu udpv4_forwards tcpv4_forwards gateway_forwards_path forwards_path gc_compact
     =
     let level =
       let env_debug =
@@ -543,6 +543,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       udpv4_forwards;
       tcpv4_forwards;
       gateway_forwards_path;
+      forwards_path;
       pcap_snaplen;
     } in
     match socket_url with
@@ -816,6 +817,14 @@ let gateway_forwards_path =
   in
   Arg.(value & opt (some string) None doc)
 
+let forwards_path =
+  let doc =
+    Arg.info ~doc:
+      "Path of forwards configuration file"
+      [ "forwards" ]
+  in
+  Arg.(value & opt (some string) None doc)
+
 let gc_compact =
   let doc =
     Arg.info ~doc:
@@ -837,7 +846,7 @@ let command =
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ tcpv4_forwards
-        $ gateway_forwards_path $ gc_compact),
+        $ gateway_forwards_path $ forwards_path $ gc_compact),
   Term.info (Filename.basename Sys.argv.(0)) ~version:Version.git ~doc ~man
 
 let () =

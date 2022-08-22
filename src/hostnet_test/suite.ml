@@ -126,6 +126,75 @@ let test_http_fetch () =
   in
   run ~pcap:"test_http_fetch.pcap" t
 
+let test_tcp_forwards () =
+  let t _ stack =
+    let path = "/tmp/forwards.sock" in
+    let module ForwardsTest = Forwards.Test(Mclock) in
+    ForwardsTest.start_forwarder path
+    >>= fun forwarder ->
+    Forwards.update [
+      {
+        Forwards.protocol = `Tcp;
+        dst_prefix = Ipaddr.V4 Ipaddr.V4.Prefix.global;
+        dst_port = 80;
+        path = path;
+      }
+    ];
+    Lwt.finalize
+      (fun () ->
+        let resolver = DNS.create stack.Client.t in
+        DNS.gethostbyname resolver "www.google.com" >>= function
+        | Ipaddr.V4 ip :: _ ->
+          begin
+            Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
+            >>= function
+            | Error _ ->
+              Log.err (fun f -> f "Failed to connect to www.google.com:80");
+              failwith "http_fetch"
+            | Ok flow ->
+              Log.info (fun f -> f "Connected to www.google.com:80");
+              let page = Io_page.(to_cstruct (get 1)) in
+              let http_get = "GET / HTTP/1.0\nHost: anil.recoil.org\n\n" in
+              Cstruct.blit_from_string http_get 0 page 0 (String.length http_get);
+              let buf = Cstruct.sub page 0 (String.length http_get) in
+              Client.TCPV4.write flow buf >>= function
+              | Error `Closed ->
+                Log.err (fun f ->
+                    f "EOF writing HTTP request to www.google.com:80");
+                failwith "EOF on writing HTTP GET"
+              | Error _ ->
+                Log.err (fun f ->
+                    f "Failure writing HTTP request to www.google.com:80");
+                failwith "Failure on writing HTTP GET"
+              | Ok () ->
+                let rec loop total_bytes =
+                  Client.TCPV4.read flow >>= function
+                  | Ok `Eof     -> Lwt.return total_bytes
+                  | Error _ ->
+                    Log.err (fun f ->
+                        f "Failure read HTTP response from www.google.com:80");
+                    failwith "Failure on reading HTTP GET"
+                  | Ok (`Data buf) ->
+                    Log.info (fun f ->
+                        f "Read %d bytes from www.google.com:80" (Cstruct.length buf));
+                    Log.info (fun f -> f "%s" (Cstruct.to_string buf));
+                    loop (total_bytes + (Cstruct.length buf))
+                in
+                loop 0 >|= fun total_bytes ->
+                Log.info (fun f -> f "Response had %d total bytes" total_bytes);
+                if total_bytes == 0 then failwith "response was empty"
+          end
+        | _ ->
+          Log.err (fun f ->
+              f "Failed to look up an IPv4 address for www.google.com");
+          failwith "http_fetch dns"
+      ) (fun () ->
+        Forwards.update [];
+        ForwardsTest.shutdown forwarder
+      )
+  in
+  run ~pcap:"test_tcp_forwards.pcap" t
+
 module DevNullServer = struct
   (* Accept local TCP connections, throw away all incoming data and then return
      the total number of bytes processed. *)
@@ -288,6 +357,8 @@ let test_dhcp = [
 
 let test_tcp = [
   "HTTP GET", [ "HTTP GET http://www.google.com/", `Quick, test_http_fetch ];
+
+  "TCP forward", [ "HTTP GET http://www.google.com/ via TCP forwarder", `Quick, test_tcp_forwards ];
 
   "Max connections",
   [ "HTTP GET fails beyond max connections", `Quick, test_max_connections ];
