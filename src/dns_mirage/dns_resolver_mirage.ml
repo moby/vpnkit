@@ -17,7 +17,6 @@
 open Lwt
 open Dns
 open Dns_resolver
-open Result
 
 module DP = Packet
 

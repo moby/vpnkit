@@ -24,7 +24,7 @@ type response = Cstruct.t
 type address = Config.Address.t
 let string_of_address a = Ipaddr.to_string a.Config.Address.ip ^ ":" ^ (string_of_int a.Config.Address.port)
 
-type cb = request -> (response, [ `Msg of string ]) Result.result Lwt.t
+type cb = request -> (response, [ `Msg of string ]) result Lwt.t
 
 type message_cb = ?src:address -> ?dst:address -> buf:Cstruct.t -> unit -> unit Lwt.t
 
