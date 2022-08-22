@@ -347,6 +347,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let main_t
       configuration
       socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
+      http_intercept_api_path
       port_forwards hosts
       listen_backlog gc_compact
     =
@@ -389,6 +390,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           )
       ) port_control_urls;
 
+
     let vnet_switch = Vnet.create () in
 
     let uri = Uri.of_string socket_url in
@@ -405,6 +407,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       in
       Slirp_stack.create_static vnet_switch configuration
       >>= fun stack_config ->
+      begin match http_intercept_api_path with
+      | None -> ()
+      | Some path -> start_server "http_intercept_api" path Slirp_stack.http_intercept_api_handler
+      end;
       let callback fd =
         let conn = HV.connect fd in
         Slirp_stack.connect stack_config conn >>= fun stack ->
@@ -428,6 +434,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         Slirp.Make(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
           (Mclock)(Mirage_random_stdlib)(Vnet)
       in
+      begin match http_intercept_api_path with
+      | None -> ()
+      | Some path -> start_server "http_intercept_api" path Slirp_stack.http_intercept_api_handler
+      end;
       begin unix_listen socket_url
       >>= function
         | Error (`Msg m) ->
@@ -461,6 +471,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       in
       Slirp_stack.create_static vnet_switch configuration
       >>= fun stack_config ->
+      begin match http_intercept_api_path with
+      | None -> ()
+      | Some path -> start_server "http_intercept_api" path Slirp_stack.http_intercept_api_handler
+      end;
       let callback fd =
         let conn = HV_generic.connect fd in
         Slirp_stack.connect stack_config conn >>= fun stack ->
@@ -553,6 +567,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     try
       Host.Main.run
         (main_t configuration socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
+          http_intercept_api_path
           port_forwards hosts
           listen_backlog gc_compact);
     with e ->

@@ -829,6 +829,71 @@ struct
          ]
       )
 
+  let http_intercept_api_handler flow =
+    let module C = Mirage_channel.Make(Host.Sockets.Stream.Unix) in
+    let module IO = Cohttp_mirage_io.Make(C) in
+    let module Request = Cohttp.Request.Make(IO) in
+    let module Response = Cohttp.Response.Make(IO) in
+    let c = C.create flow in
+    let write_response code status body =
+      let response = "HTTP/1.0 " ^ code ^ " " ^ status ^ "\r\nConnection: closed\r\n\r\n" ^ body in
+      C.write_string c response 0 (String.length response);
+      C.flush c >>= function
+      | Ok () -> Lwt.return_unit
+      | Error _ ->
+        Log.warn (fun f -> f "HTTP intercept API: error writing response to client");
+        Lwt.return_unit in
+    Lwt.catch (fun () ->
+      Request.read c >>= function
+      | `Eof -> Lwt.return_unit
+      | `Invalid x ->
+        Log.warn (fun f -> f "Failed to parse HTTP request: %s" x);
+        Lwt.return_unit
+      | `Ok req ->
+        begin match Cohttp.Request.meth req, Uri.path @@ Cohttp.Request.uri req with
+        | `GET, "/http_proxy.json" ->
+          begin match !http with
+          | None -> write_response "404" "None set" ""
+          | Some http -> write_response "200" "OK" (Http_forwarder.to_string http)
+          end
+        | `POST, "/http_proxy.json" ->
+          begin
+            let reader = Request.make_body_reader req c in
+            let buf = Buffer.create 128 in
+            let rec loop () =
+              let open Cohttp.Transfer in
+              Request.read_body_chunk reader >>= function
+              | Done -> Lwt.return (Buffer.contents buf)
+              | Final_chunk x
+              | Chunk x ->
+                Buffer.add_string buf x;
+                loop () in
+            loop () >>= function body ->
+            begin match Ezjsonm.from_string body with
+            | exception e ->
+              write_response "400" "Bad_request" ("Failed to parse .json: " ^ (Printexc.to_string e))
+            | json ->
+              begin Http_forwarder.of_json json
+              >>= function
+              | Error (`Msg m) ->
+                write_response "400" "Bad_request" ("Failed to parse .json: " ^ m)
+              | Ok t ->
+                http := Some t;
+                Log.info (fun f ->
+                  f "Updating HTTP proxy configuration: %s" (Http_forwarder.to_string t)
+                );
+                write_response "200" "OK" ""
+              end
+            end
+          end
+        | _, _ ->
+          write_response "404" "Unknown" "Try {GET,POST} /http_proxy.json"
+        end
+      ) (fun e ->
+          Log.err (fun f -> f "HTTP intercept API: %s " (Printexc.to_string e));
+          Lwt.return_unit
+        )
+
   let pcap t flow =
     let module C = Mirage_channel.Make(Host.Sockets.Stream.Unix) in
     let c = C.create flow in
