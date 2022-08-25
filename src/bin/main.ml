@@ -347,6 +347,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   let main_t
       configuration
       socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
+      http_intercept_api_path
       port_forwards hosts
       listen_backlog gc_compact
     =
@@ -389,6 +390,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
           )
       ) port_control_urls;
 
+
     let vnet_switch = Vnet.create () in
 
     let uri = Uri.of_string socket_url in
@@ -405,6 +407,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       in
       Slirp_stack.create_static vnet_switch configuration
       >>= fun stack_config ->
+      begin match http_intercept_api_path with
+      | None -> ()
+      | Some path -> start_server "http_intercept_api" path Slirp_stack.http_intercept_api_handler
+      end;
       let callback fd =
         let conn = HV.connect fd in
         Slirp_stack.connect stack_config conn >>= fun stack ->
@@ -428,6 +434,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         Slirp.Make(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
           (Mclock)(Mirage_random_stdlib)(Vnet)
       in
+      begin match http_intercept_api_path with
+      | None -> ()
+      | Some path -> start_server "http_intercept_api" path Slirp_stack.http_intercept_api_handler
+      end;
       begin unix_listen socket_url
       >>= function
         | Error (`Msg m) ->
@@ -461,6 +471,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       in
       Slirp_stack.create_static vnet_switch configuration
       >>= fun stack_config ->
+      begin match http_intercept_api_path with
+      | None -> ()
+      | Some path -> start_server "http_intercept_api" path Slirp_stack.http_intercept_api_handler
+      end;
       let callback fd =
         let conn = HV_generic.connect fd in
         Slirp_stack.connect stack_config conn >>= fun stack ->
@@ -480,7 +494,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
 
   let main
       socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls pcap_snaplen
-      max_connections port_forwards dns http hosts host_names gateway_names
+      max_connections port_forwards dns http http_intercept_api_path hosts host_names gateway_names
       vm_names listen_backlog port_max_idle_time debug
       server_macaddr domain allowed_bind_addresses gateway_ip host_ip lowest_ip highest_ip
       dhcp_json_path mtu udpv4_forwards tcpv4_forwards gateway_forwards_path forwards_path gc_compact
@@ -553,6 +567,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     try
       Host.Main.run
         (main_t configuration socket_url port_control_urls introspection_urls diagnostics_urls pcap_urls
+          http_intercept_api_path
           port_forwards hosts
           listen_backlog gc_compact);
     with e ->
@@ -678,6 +693,21 @@ let http =
         \"exclude\": \"*.local\"\
       }`\
       " ["http"]
+  in
+  Arg.(value & opt (some string) None doc)
+
+let http_intercept_api_path =
+  let doc =
+    Arg.info ~doc:
+      "HTTP proxy configuration update API server path. \
+      If this argument is given, then vpnkit will listen on this Unix domain socket \
+      or Windows named pipe and receive HTTP proxy configuration updates. HTTP POST /http_proxy.json \
+      requests should contain the configuration in .json format as \
+      follows: `{\"http\": \"host:3128\",\
+        \"https\": \"host:3128\",\
+        \"exclude\": \"*.local\"\
+      }`\
+      " ["http-api-path"]
   in
   Arg.(value & opt (some string) None doc)
 
@@ -842,7 +872,7 @@ let command =
   in
   Term.(pure main
         $ socket $ port_control_urls $ introspection_urls $ diagnostics_urls $ pcap_urls $ pcap_snaplen
-        $ max_connections $ port_forwards $ dns $ http $ hosts
+        $ max_connections $ port_forwards $ dns $ http $ http_intercept_api_path $ hosts
         $ host_names $ gateway_names $ vm_names $ listen_backlog $ port_max_idle_time $ debug
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ tcpv4_forwards

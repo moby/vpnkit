@@ -37,6 +37,9 @@ sig
   val pcap: connection -> Host.Sockets.Stream.Unix.flow -> unit Lwt.t
   (** Output all traffic in pcap format over a local Unix socket or named pipe *)
 
+  val http_intercept_api_handler: Host.Sockets.Stream.Unix.flow -> unit Lwt.t
+  (** Handle HTTP proxy reconfigurations via an HTTP API *)
+
   module Debug: sig
     module Nat : sig
       type address = Ipaddr.t * int
