@@ -9,7 +9,7 @@ depends:
 	opam install vpnkit alcotest ounit -y
 
 ocaml:
-	ocaml -version || opam init --compiler=4.12.0
+	ocaml -version || opam init --compiler=4.14.0
 	opam pin add vpnkit . -n
 
 depends:
