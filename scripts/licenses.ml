@@ -777,7 +777,7 @@ All rights reserved.
 
     |} ^ bsd_2_clause_simplified
   }
-  | "mirage-kv.4.0.0" | "mirage-kv.4.0.1" -> {
+  | "mirage-kv.4.0.0" | "mirage-kv.4.0.1" | "mirage-kv.5.0.0" -> {
     link = "https://github.com/mirage/mirage-kv/blob/5c2c75e5a0efc0c9390b11fab75b1e706ea8d4ab/LICENSE.md";
     text = isc
   }
