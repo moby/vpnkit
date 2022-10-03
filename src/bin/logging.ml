@@ -20,12 +20,26 @@ let with_lock m f x =
     Mutex.unlock m;
     raise e
 
+let buffer = Buffer.create 128
+let m = Mutex.create ()
+let c = Condition.create ()
+let shutdown_requested = ref false
+let shutdown_done = ref false
+
+let shutdown () =
+  with_lock m
+    (fun () ->
+      shutdown_requested := true;
+      Buffer.add_string buffer "logging system has shutdown";
+      Condition.broadcast c;
+      while not !shutdown_done do
+        Condition.wait c m;
+      done
+    ) ()
+
 let reporter =
   let max_buffer_size = 65536 in
-  let buffer = Buffer.create 128 in
   let dropped_bytes = ref 0 in
-  let m = Mutex.create () in
-  let c = Condition.create () in
   let (_: Thread.t) = Thread.create (fun () ->
     let rec next () = match Buffer.contents buffer with
       | "" ->
@@ -36,6 +50,14 @@ let reporter =
         dropped_bytes := 0;
         Buffer.reset buffer;
         data, dropped in
+    let should_continue () = match Buffer.contents buffer with
+      | "" ->
+        if !shutdown_requested then begin
+          shutdown_done := true;
+          Condition.broadcast c;
+        end;
+        not !shutdown_done
+      | _ -> true (* more logs to print *) in
     let rec loop () =
       let data, dropped = with_lock m next () in
       (* Block writing to stderr without the buffer mutex held. Logging may continue into the buffer. *)
@@ -44,7 +66,7 @@ let reporter =
         output_string stderr (Printf.sprintf "%d bytes of logs dropped\n" dropped)
       end;
       flush stderr;
-      loop () in
+      if with_lock m should_continue () then loop () in
     loop ()
   ) () in
   let buffer_fmt = Format.formatter_of_buffer buffer in
@@ -52,7 +74,7 @@ let reporter =
 
   let report src level ~over k msgf =
     let k _ =
-      Condition.signal c;
+      Condition.broadcast c;
       over ();
       k ()
     in
