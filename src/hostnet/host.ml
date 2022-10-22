@@ -573,9 +573,18 @@ module Sockets = struct
                 | Ok () -> return ()))
         else Lwt.return_unit
 
-      let read_into t buf = read_into t.fd buf
-      let read t = read t.fd
-      let writev t bufs = writev t.fd bufs
+      let read_into t buf =
+        if t.closed
+        then (Log.info (fun f -> f "read_into %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
+        else read_into t.fd buf
+      let read t =
+        if t.closed
+        then (Log.info (fun f -> f "read %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
+        else read t.fd
+      let writev t bufs =
+        if t.closed (* || t.shutdown *)
+        then (Log.info (fun f -> f "writev %s already closed: EPIPE" t.description); Lwt.return (Error (`Msg "EPIPE")))
+        else writev t.fd bufs
       let write t buf = writev t [ buf ]
 
       let close t =
@@ -880,9 +889,18 @@ module Sockets = struct
                 | Ok () -> return ()))
         else Lwt.return_unit
 
-      let read_into t buf = read_into t.fd buf
-      let read t = read t.fd
-      let writev t bufs = writev t.fd bufs
+      let read_into t buf =
+        if t.closed
+        then (Log.info (fun f -> f "read_into %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
+        else read_into t.fd buf
+      let read t =
+        if t.closed
+        then (Log.info (fun f -> f "read %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
+        else read t.fd
+      let writev t bufs =
+        if t.closed (* || t.shutdown *)
+        then (Log.info (fun f -> f "writev %s already closed: EPIPE" t.description); Lwt.return (Error (`Msg "EPIPE")))
+        else writev t.fd bufs
       let write t buf = writev t [ buf ]
 
       let close t =
