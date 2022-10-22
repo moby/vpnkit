@@ -36,6 +36,8 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
   | hd::tl ->
     List.fold_left (fun acc x -> if compare acc x > 0 then acc else x) hd tl
 
+  let very_long_lease = Int32.max_int (* over 68 years *)
+
   (* given some MACs and IPs, construct a usable DHCP configuration *)
   let make ~configuration:c netif =
     let open Dhcp_server.Config in
@@ -82,10 +84,9 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
         options = options;
         hostname = "vpnkit"; (* it's us! *)
         hosts = [ ];
-        (* 2 hours, from charrua defaults *)
-        default_lease_time = Int32.of_int (60 * 60 * 2);
-        (* 24 hours, from charrua defaults *)
-        max_lease_time = Int32.of_int (60 * 60 * 24) ;
+        (* This avoids clients seeing network glitches when the leases are renewed *)
+        default_lease_time = very_long_lease;
+        max_lease_time = very_long_lease;
         ip_addr = c.Configuration.gateway_ip;
         mac_addr = c.Configuration.server_macaddr;
         network = prefix;
