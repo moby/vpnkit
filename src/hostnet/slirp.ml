@@ -1,7 +1,7 @@
 open Lwt.Infix
 
 let src =
-  let src = Logs.Src.create "slirp" ~doc:"Mirage TCP/IP <-> socket proxy" in
+  let src = Logs.Src.create "usernet" ~doc:"Mirage TCP/IP <-> socket proxy" in
   Logs.Src.set_level src (Some Logs.Info);
   src
 
