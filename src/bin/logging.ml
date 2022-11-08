@@ -57,7 +57,7 @@ let reporter =
       k ()
     in
     let src = Logs.Src.name src in
-    msgf @@ fun ?header:_ ?tags:_ fmt ->
+    msgf @@ fun ?header ?tags fmt ->
       let level = Logs.level_to_string (Some level) in
       with_lock m
         (fun () ->
