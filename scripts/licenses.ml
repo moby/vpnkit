@@ -785,7 +785,7 @@ All rights reserved.
     link = "https://github.com/mirage/mirage-protocols/blob/37aa4a86f9f423bb7fe1d70c8a71331060a45048/LICENSE.md";
     text = isc;
   }
-  | "psq.0.2.0" -> {
+  | "psq.0.2.0" | "psq.0.2.1" -> {
     link = "https://github.com/pqwy/psq/blob/beeaf9396655d195f9a20243102c9773d826d3b0/LICENSE.md";
     text = {|
     Copyright (c) 2016 David Kaloper Meršinjak
@@ -1003,7 +1003,7 @@ might be covered by the GNU Lesser General Public License.
 
     |} ^ mit
   }
-  | "lru.0.3.0" -> {
+  | "lru.0.3.0" | "lru.0.3.1" -> {
     link = "https://github.com/pqwy/lru/blob/3a0b5f9effa86f6615501a648069b9a12c5096e5/LICENSE.md";
     text = {|
     Copyright (c) 2016 David Kaloper Meršinjak
