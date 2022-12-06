@@ -69,6 +69,38 @@ func readProtocol(p string) (Protocol, error) {
 	return "", errors.New("unknown protocol: " + p)
 }
 
+// WriteRequest to vpnkit to open a tunnel to a remote service.
+func (r *Request) Write(w io.Writer) error {
+	req := request{
+		Protocol: writeProtocol(r.Protocol),
+		DstIP:    r.DstIP.String(),
+		DstPort:  r.DstPort,
+		SrcIP:    r.SrcIP.String(),
+		SrcPort:  r.SrcPort,
+	}
+	b, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint16(len(b))); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, b); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeProtocol(p Protocol) string {
+	switch p {
+	case TCP:
+		return "tcp"
+	case UDP:
+		return "udp"
+	}
+	return "unknown"
+}
+
 // Matches protocol definition in src/hostnet/forwards.ml
 type request struct {
 	Protocol string `json:"protocol"`
@@ -81,6 +113,22 @@ type request struct {
 // Response to the tunnel open request.
 type Response struct {
 	Accepted bool `json:"accepted"` // Accepted is true if the tunnel is now connected.
+}
+
+func ReadResponse(r io.Reader) (*Response, error) {
+	var len uint16
+	if err := binary.Read(r, binary.LittleEndian, &len); err != nil {
+		return nil, errors.Wrap(err, "reading response length")
+	}
+	buf := make([]byte, len)
+	if err := binary.Read(r, binary.LittleEndian, &buf); err != nil {
+		return nil, errors.Wrap(err, "reading response")
+	}
+	var res Response
+	if err := json.Unmarshal(buf, &res); err != nil {
+		return nil, errors.Wrap(err, "parsing response json")
+	}
+	return &res, nil
 }
 
 func (r *Response) Write(w io.Writer) error {
