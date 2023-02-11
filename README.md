@@ -17,7 +17,8 @@ VMs interoperate with host VPN configurations.
 Building on Unix (including Mac)
 --------------------------------
 
-First install `wget`, `opam` and `pkg-config` using your package manager of choice.
+First install `wget`, `opam`, `pkg-config`, and `dylibbundler` using your
+package manager of choice.
 
 If you are an existing `opam` user then you can either build against your existing `opam`
 package universe, or the custom universe contained in this repo. To use the custom universe,
