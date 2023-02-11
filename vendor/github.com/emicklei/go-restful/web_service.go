@@ -60,7 +60,7 @@ func reflectTypeName(sample interface{}) string {
 func (w *WebService) compilePathExpression() {
 	compiled, err := newPathExpression(w.rootPath)
 	if err != nil {
-		log.Printf("[restful] invalid path:%s because:%v", w.rootPath, err)
+		log.Printf("invalid path:%s because:%v", w.rootPath, err)
 		os.Exit(1)
 	}
 	w.pathExpr = compiled
@@ -118,7 +118,7 @@ func (w *WebService) QueryParameter(name, description string) *Parameter {
 // QueryParameter creates a new Parameter of kind Query for documentation purposes.
 // It is initialized as not required with string as its DataType.
 func QueryParameter(name, description string) *Parameter {
-	p := &Parameter{&ParameterData{Name: name, Description: description, Required: false, DataType: "string"}}
+	p := &Parameter{&ParameterData{Name: name, Description: description, Required: false, DataType: "string", CollectionFormat: CollectionFormatCSV.String()}}
 	p.beQuery()
 	return p
 }
@@ -165,6 +165,18 @@ func FormParameter(name, description string) *Parameter {
 	return p
 }
 
+// MultiPartFormParameter creates a new Parameter of kind Form (using multipart/form-data) for documentation purposes.
+// It is initialized as required with string as its DataType.
+func (w *WebService) MultiPartFormParameter(name, description string) *Parameter {
+	return MultiPartFormParameter(name, description)
+}
+
+func MultiPartFormParameter(name, description string) *Parameter {
+	p := &Parameter{&ParameterData{Name: name, Description: description, Required: false, DataType: "string"}}
+	p.beMultiPartForm()
+	return p
+}
+
 // Route creates a new Route using the RouteBuilder and add to the ordered list of Routes.
 func (w *WebService) Route(builder *RouteBuilder) *WebService {
 	w.routesLock.Lock()
@@ -188,7 +200,7 @@ func (w *WebService) RemoveRoute(path, method string) error {
 			continue
 		}
 		newRoutes[current] = w.routes[ix]
-		current = current + 1
+		current++
 	}
 	w.routes = newRoutes
 	return nil
@@ -287,4 +299,9 @@ func (w *WebService) PATCH(subPath string) *RouteBuilder {
 // DELETE is a shortcut for .Method("DELETE").Path(subPath)
 func (w *WebService) DELETE(subPath string) *RouteBuilder {
 	return new(RouteBuilder).typeNameHandler(w.typeNameHandleFunc).servicePath(w.rootPath).Method("DELETE").Path(subPath)
+}
+
+// OPTIONS is a shortcut for .Method("OPTIONS").Path(subPath)
+func (w *WebService) OPTIONS(subPath string) *RouteBuilder {
+	return new(RouteBuilder).typeNameHandler(w.typeNameHandleFunc).servicePath(w.rootPath).Method("OPTIONS").Path(subPath)
 }
