@@ -498,22 +498,30 @@ var ErrNotRunning = errors.New("multiplexer is not running")
 
 // Accept returns the next client connection
 func (m *multiplexer) Accept() (MultiplexedConn, *Destination, error) {
+	first, err := m.nextPendingAccept()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := first.sendWindowUpdate(); err != nil {
+		return nil, nil, err
+	}
+	if first.destination.Proto == UDP {
+		return newUDPConn(first), &first.destination, nil
+	}
+	return first, &first.destination, nil
+}
+
+func (m *multiplexer) nextPendingAccept() (*channel, error) {
 	m.metadataMutex.Lock()
 	defer m.metadataMutex.Unlock()
 	for {
 		if !m.isRunning {
-			return nil, nil, ErrNotRunning
+			return nil, ErrNotRunning
 		}
 		if len(m.pendingAccept) > 0 {
 			first := m.pendingAccept[0]
 			m.pendingAccept = m.pendingAccept[1:]
-			if err := first.sendWindowUpdate(); err != nil {
-				return nil, nil, err
-			}
-			if first.destination.Proto == UDP {
-				return newUDPConn(first), &first.destination, nil
-			}
-			return first, &first.destination, nil
+			return first, nil
 		}
 		m.acceptCond.Wait()
 	}
