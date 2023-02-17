@@ -100,7 +100,7 @@ func (c *channel) sendWindowUpdate() error {
 	c.read.advance()
 	seq := c.read.allowed
 	c.m.Unlock()
-	return c.multiplexer.send(NewWindow(c.ID, seq))
+	return c.multiplexer.send(NewWindow(c.ID, seq), nil)
 }
 
 func (c *channel) recvWindowUpdate(seq uint64) {
@@ -149,23 +149,11 @@ func (c *channel) Write(p []byte) (int, error) {
 			c.m.Unlock()
 
 			// need to write the header and the payload together
-			c.multiplexer.writeMutex.Lock()
-			f := NewData(c.ID, uint32(toWrite))
-			c.multiplexer.appendEvent(&event{eventType: eventSend, frame: f})
-			err1 := f.Write(c.multiplexer.connW)
-			_, err2 := c.multiplexer.connW.Write(p[0:toWrite])
-			err3 := c.multiplexer.connW.Flush()
-			c.multiplexer.writeMutex.Unlock()
+			err := c.multiplexer.send(NewData(c.ID, uint32(toWrite)), p[0:toWrite])
 
 			c.m.Lock()
-			if err1 != nil {
-				return written, err1
-			}
-			if err2 != nil {
-				return written, err2
-			}
-			if err3 != nil {
-				return written, err3
+			if err != nil {
+				return written, err
 			}
 			c.write.current = c.write.current + uint64(toWrite)
 			p = p[toWrite:]
@@ -210,7 +198,7 @@ func (c *channel) Close() error {
 	if alreadyClosed {
 		return nil
 	}
-	if err := c.multiplexer.send(NewClose(c.ID)); err != nil {
+	if err := c.multiplexer.send(NewClose(c.ID), nil); err != nil {
 		return err
 	}
 	c.m.Lock()
@@ -237,7 +225,7 @@ func (c *channel) CloseWrite() error {
 	if alreadyShutdown {
 		return nil
 	}
-	if err := c.multiplexer.send(NewShutdown(c.ID)); err != nil {
+	if err := c.multiplexer.send(NewShutdown(c.ID), nil); err != nil {
 		return err
 	}
 	c.m.Lock()
@@ -425,14 +413,22 @@ func (m *multiplexer) appendEvent(e *event) {
 	m.events = m.events.Next()
 }
 
-func (m *multiplexer) send(f *Frame) error {
+// send a frame (header) plus optional payload. If this call fails then the multiplexed connection will be desynchronised.
+func (m *multiplexer) send(f *Frame, payload []byte) error {
 	m.writeMutex.Lock()
 	defer m.writeMutex.Unlock()
-	if err := f.Write(m.connW); err != nil {
-		return err
-	}
 	m.appendEvent(&event{eventType: eventSend, frame: f})
-	return m.connW.Flush()
+
+	if err := f.Write(m.connW); err != nil {
+		return fmt.Errorf("writing frame %s: %w", f, err)
+	}
+	if n, err := m.connW.Write(payload); err != nil || n != len(payload) {
+		return fmt.Errorf("writing frame %s payload length %d: %d, %w", f, len(payload), n, err)
+	}
+	if err := m.connW.Flush(); err != nil {
+		return fmt.Errorf("flushing frame %s: %w", f, err)
+	}
+	return nil
 }
 
 func (m *multiplexer) findFreeChannelID() uint32 {
@@ -482,7 +478,7 @@ func (m *multiplexer) Dial(d Destination) (MultiplexedConn, error) {
 	m.channels[id] = channel
 	m.metadataMutex.Unlock()
 
-	if err := m.send(NewOpen(id, d)); err != nil {
+	if err := m.send(NewOpen(id, d), nil); err != nil {
 		return nil, err
 	}
 	if err := channel.sendWindowUpdate(); err != nil {
