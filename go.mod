@@ -11,8 +11,8 @@ require (
 	github.com/sirupsen/logrus v1.3.0
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.3.0
-	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
-	golang.org/x/sync v0.0.0-20190423024810-112230192c58
+	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	k8s.io/api v0.0.0-20170922112058-fe29995db376
 	k8s.io/apimachinery v0.0.0-20170922111930-9d38e20d609d
 	k8s.io/client-go v0.0.0-20170922112243-82aa063804cf
@@ -30,7 +30,7 @@ require (
 	github.com/go-openapi/jsonreference v0.0.0-20161105162150-36d33bfe519e // indirect
 	github.com/go-openapi/spec v0.0.0-20170914061247-7abd5745472f // indirect
 	github.com/go-openapi/swag v0.0.0-20170606142751-f3f9494671f9 // indirect
-	github.com/gogo/protobuf v1.2.1 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/golang/protobuf v1.3.1 // indirect
 	github.com/google/btree v1.0.0 // indirect
@@ -59,9 +59,9 @@ require (
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.0.1 // indirect
-	golang.org/x/net v0.0.0-20190522155817-f3200d17e092 // indirect
+	golang.org/x/net v0.0.0-20201021035429-f5854403a974 // indirect
 	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/text v0.3.0 // indirect
+	golang.org/x/text v0.3.3 // indirect
 	gopkg.in/inf.v0 v0.9.0 // indirect
 	gopkg.in/yaml.v2 v2.2.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20170906091745-abfc5fbe1cf8 // indirect
