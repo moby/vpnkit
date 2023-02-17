@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -118,6 +119,9 @@ func testProxy(t *testing.T, proto string, proxy Proxy) {
 }
 
 func TestUnixProxy(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix domain sockets don't work on Windows")
+	}
 	pathA := "/tmp/network_proxy_test.sock"
 	pathB := "/tmp/network_proxy_test.sock2"
 	if err := os.Remove(pathA); err != nil && !(os.IsNotExist(err)) {
