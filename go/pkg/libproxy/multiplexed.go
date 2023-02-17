@@ -106,7 +106,9 @@ func (c *channel) sendWindowUpdate() error {
 func (c *channel) recvWindowUpdate(seq uint64) {
 	c.m.Lock()
 	c.write.allowed = seq
-	c.c.Signal()
+	// net.Conn says: Multiple goroutines may invoke methods on a Conn simultaneously.
+	// Therefore there can be multiple goroutines blocked in Write, so when the window opens we should wake them all up.
+	c.c.Broadcast()
 	c.m.Unlock()
 }
 
@@ -148,14 +150,10 @@ func (c *channel) Write(p []byte) (int, error) {
 			c.write.current = c.write.current + uint64(toWrite)
 
 			// Don't block holding the metadata mutex.
-			// Note this would allow concurrent calls to Write on the same channel
-			// to conflict, but we regard that as user error.
 			c.m.Unlock()
-
-			// need to write the header and the payload together
 			err := c.multiplexer.send(NewData(c.ID, uint32(toWrite)), p[0:toWrite])
-
 			c.m.Lock()
+
 			if err != nil {
 				return written, err
 			}
