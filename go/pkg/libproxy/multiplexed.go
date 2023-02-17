@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -39,7 +40,7 @@ func (w *windowState) advance() {
 }
 
 type channel struct {
-	m             sync.Mutex
+	m             deadlock.Mutex
 	c             *sync.Cond
 	multiplexer   *multiplexer
 	destination   Destination
@@ -357,15 +358,15 @@ type multiplexer struct {
 	conn              io.Closer
 	connR             io.Reader // with buffering
 	connW             *bufio.Writer
-	writeMutex        sync.Mutex // hold when writing on the channel
+	writeMutex        deadlock.Mutex // hold when writing on the channel
 	channels          map[uint32]*channel
 	nextChannelID     uint32
-	metadataMutex     sync.Mutex // hold when reading/modifying this structure
-	pendingAccept     []*channel // incoming connections
+	metadataMutex     deadlock.Mutex // hold when reading/modifying this structure
+	pendingAccept     []*channel     // incoming connections
 	acceptCond        *sync.Cond
 	isRunning         bool
 	events            *ring.Ring // log of packetEvents
-	eventsM           sync.Mutex
+	eventsM           deadlock.Mutex
 	allocateBackwards bool
 }
 
