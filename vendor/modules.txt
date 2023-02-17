@@ -91,7 +91,6 @@ github.com/json-iterator/go
 github.com/juju/ratelimit
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 ## explicit
-github.com/konsorten/go-windows-terminal-sequences
 # github.com/labstack/echo v3.3.10+incompatible
 ## explicit
 github.com/labstack/echo
@@ -144,8 +143,8 @@ github.com/pmezard/go-difflib/difflib
 # github.com/sasha-s/go-deadlock v0.3.1
 ## explicit
 github.com/sasha-s/go-deadlock
-# github.com/sirupsen/logrus v1.3.0
-## explicit
+# github.com/sirupsen/logrus v1.9.0
+## explicit; go 1.13
 github.com/sirupsen/logrus
 # github.com/spf13/afero v1.2.2
 ## explicit
@@ -163,8 +162,8 @@ github.com/spf13/pflag
 # github.com/spf13/viper v1.4.0
 ## explicit
 github.com/spf13/viper
-# github.com/stretchr/testify v1.3.0
-## explicit
+# github.com/stretchr/testify v1.7.0
+## explicit; go 1.13
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 # github.com/valyala/bytebufferpool v1.0.0
@@ -206,6 +205,9 @@ gopkg.in/inf.v0
 # gopkg.in/yaml.v2 v2.2.2
 ## explicit
 gopkg.in/yaml.v2
+# gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+## explicit
+gopkg.in/yaml.v3
 # k8s.io/api v0.0.0-20170922112058-fe29995db376
 ## explicit
 k8s.io/api/admissionregistration/v1alpha1
