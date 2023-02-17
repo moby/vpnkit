@@ -4,9 +4,10 @@ import (
 	"encoding/binary"
 	"net"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 const (
@@ -50,7 +51,7 @@ type UDPProxy struct {
 	backendAddr    *net.UDPAddr
 	dialer         UDPDialer
 	connTrackTable connTrackMap
-	connTrackLock  sync.Mutex
+	connTrackLock  deadlock.Mutex
 }
 
 // UDPDialer creates UDP (pseudo-)connections to an address
