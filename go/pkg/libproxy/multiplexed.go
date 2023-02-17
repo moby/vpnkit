@@ -164,28 +164,28 @@ func (c *channel) Write(p []byte) (int, error) {
 			continue
 		}
 
-		// Wait for the write window to be increased (or a timeout)
-		done := make(chan struct{})
-		timeout := make(chan time.Time)
+		// If the client has set a deadline then create a timer:
+		var (
+			timer   *time.Timer
+			timeOut bool
+		)
 		if !c.writeDeadline.IsZero() {
-			go func() {
-				time.Sleep(time.Until(c.writeDeadline))
-				close(timeout)
-			}()
+			timer = time.AfterFunc(time.Until(c.writeDeadline), func() {
+				c.m.Lock()
+				defer c.m.Unlock()
+				timeOut = true
+				c.c.Broadcast()
+			})
 		}
-		go func() {
-			c.c.Wait()
-			close(done)
-		}()
-		select {
-		case <-timeout:
-			// clean up the goroutine
-			c.c.Broadcast()
-			<-done
+
+		// Wait for the write window to be increased or a timeout
+		c.c.Wait()
+
+		if timer != nil {
+			timer.Stop()
+		}
+		if timeOut {
 			return written, &errTimeout{}
-		case <-done:
-			// The timeout will still fire in the background
-			continue
 		}
 	}
 }
