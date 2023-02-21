@@ -139,10 +139,14 @@ func (c *channel) Write(p []byte) (int, error) {
 			return written, io.EOF
 		}
 		if c.write.size() > 0 {
+			// Some window space is available
 			toWrite := c.write.size()
 			if toWrite > len(p) {
 				toWrite = len(p)
 			}
+			// Advance the window before dropping the lock in case another Write() appears and sees the same available space
+			c.write.current = c.write.current + uint64(toWrite)
+
 			// Don't block holding the metadata mutex.
 			// Note this would allow concurrent calls to Write on the same channel
 			// to conflict, but we regard that as user error.
@@ -167,7 +171,6 @@ func (c *channel) Write(p []byte) (int, error) {
 			if err3 != nil {
 				return written, err3
 			}
-			c.write.current = c.write.current + uint64(toWrite)
 			p = p[toWrite:]
 			written = written + toWrite
 			continue
