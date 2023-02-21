@@ -8,11 +8,12 @@ require (
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/linuxkit/virtsock v0.0.0-20180830132707-8e79449dea07
 	github.com/pkg/errors v0.8.1-0.20181023235946-059132a15dd0
-	github.com/sirupsen/logrus v1.3.0
+	github.com/sasha-s/go-deadlock v0.3.1
+	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/viper v1.4.0
-	github.com/stretchr/testify v1.3.0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	github.com/stretchr/testify v1.7.0
+	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	k8s.io/api v0.0.0-20170922112058-fe29995db376
 	k8s.io/apimachinery v0.0.0-20170922111930-9d38e20d609d
 	k8s.io/client-go v0.0.0-20170922112243-82aa063804cf
@@ -41,7 +42,6 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.5 // indirect
 	github.com/juju/ratelimit v0.0.0-20170523012141-5b9ff8664717 // indirect
-	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
 	github.com/labstack/gommon v0.2.9 // indirect
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/mailru/easyjson v0.0.0-20170902151237-2a92e673c9a6 // indirect
@@ -54,7 +54,6 @@ require (
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sasha-s/go-deadlock v0.3.1 // indirect
 	github.com/spf13/afero v1.2.2 // indirect
 	github.com/spf13/cast v1.3.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
@@ -66,5 +65,6 @@ require (
 	golang.org/x/text v0.3.3 // indirect
 	gopkg.in/inf.v0 v0.9.0 // indirect
 	gopkg.in/yaml.v2 v2.2.2 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 	k8s.io/kube-openapi v0.0.0-20170906091745-abfc5fbe1cf8 // indirect
 )
