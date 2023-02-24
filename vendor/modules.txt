@@ -1,12 +1,6 @@
 # github.com/Microsoft/go-winio v0.4.11
 ## explicit
 github.com/Microsoft/go-winio
-# github.com/PuerkitoBio/purell v1.1.0
-## explicit
-github.com/PuerkitoBio/purell
-# github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578
-## explicit
-github.com/PuerkitoBio/urlesc
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
@@ -20,21 +14,6 @@ github.com/emicklei/go-restful-swagger12
 # github.com/fsnotify/fsnotify v1.4.7
 ## explicit
 github.com/fsnotify/fsnotify
-# github.com/ghodss/yaml v1.0.0
-## explicit
-github.com/ghodss/yaml
-# github.com/go-openapi/jsonpointer v0.0.0-20170102174223-779f45308c19
-## explicit
-github.com/go-openapi/jsonpointer
-# github.com/go-openapi/jsonreference v0.0.0-20161105162150-36d33bfe519e
-## explicit
-github.com/go-openapi/jsonreference
-# github.com/go-openapi/spec v0.0.0-20170914061247-7abd5745472f
-## explicit
-github.com/go-openapi/spec
-# github.com/go-openapi/swag v0.0.0-20170606142751-f3f9494671f9
-## explicit
-github.com/go-openapi/swag
 # github.com/gogo/protobuf v1.3.2
 ## explicit; go 1.15
 github.com/gogo/protobuf/proto
@@ -52,10 +31,17 @@ github.com/golang/protobuf/ptypes/timestamp
 # github.com/google/btree v1.0.0
 ## explicit
 github.com/google/btree
+# github.com/google/go-cmp v0.3.0
+## explicit; go 1.8
+github.com/google/go-cmp/cmp
+github.com/google/go-cmp/cmp/internal/diff
+github.com/google/go-cmp/cmp/internal/flags
+github.com/google/go-cmp/cmp/internal/function
+github.com/google/go-cmp/cmp/internal/value
 # github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf
 ## explicit
 github.com/google/gofuzz
-# github.com/google/uuid v0.0.0-20170814143639-7e072fc3a7be
+# github.com/google/uuid v1.0.0
 ## explicit
 github.com/google/uuid
 # github.com/googleapis/gnostic v0.1.0
@@ -67,7 +53,7 @@ github.com/googleapis/gnostic/extensions
 ## explicit
 github.com/gregjones/httpcache
 github.com/gregjones/httpcache/diskcache
-# github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
+# github.com/hashicorp/golang-lru v0.5.0
 ## explicit
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
@@ -106,11 +92,6 @@ github.com/linuxkit/virtsock/pkg/vsock
 # github.com/magiconair/properties v1.8.1
 ## explicit
 github.com/magiconair/properties
-# github.com/mailru/easyjson v0.0.0-20170902151237-2a92e673c9a6
-## explicit
-github.com/mailru/easyjson/buffer
-github.com/mailru/easyjson/jlexer
-github.com/mailru/easyjson/jwriter
 # github.com/mattn/go-colorable v0.1.2
 ## explicit
 github.com/mattn/go-colorable
@@ -123,7 +104,7 @@ github.com/mitchellh/mapstructure
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 ## explicit
 github.com/modern-go/concurrent
-# github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742
+# github.com/modern-go/reflect2 v1.0.1
 ## explicit
 github.com/modern-go/reflect2
 # github.com/pelletier/go-toml v1.4.0
@@ -199,11 +180,10 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-golang.org/x/text/width
 # gopkg.in/inf.v0 v0.9.0
 ## explicit
 gopkg.in/inf.v0
-# gopkg.in/yaml.v2 v2.2.2
+# gopkg.in/yaml.v2 v2.2.4
 ## explicit
 gopkg.in/yaml.v2
 # k8s.io/api v0.0.0-20170922112058-fe29995db376
@@ -232,19 +212,17 @@ k8s.io/api/scheduling/v1alpha1
 k8s.io/api/settings/v1alpha1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1beta1
-# k8s.io/apimachinery v0.0.0-20170922111930-9d38e20d609d
-## explicit
-k8s.io/apimachinery/pkg/api/equality
+# k8s.io/apimachinery v0.15.7
+## explicit; go 1.12
 k8s.io/apimachinery/pkg/api/errors
 k8s.io/apimachinery/pkg/api/meta
 k8s.io/apimachinery/pkg/api/resource
 k8s.io/apimachinery/pkg/apis/meta/internalversion
 k8s.io/apimachinery/pkg/apis/meta/v1
 k8s.io/apimachinery/pkg/apis/meta/v1/unstructured
-k8s.io/apimachinery/pkg/apis/meta/v1alpha1
+k8s.io/apimachinery/pkg/apis/meta/v1beta1
 k8s.io/apimachinery/pkg/conversion
 k8s.io/apimachinery/pkg/conversion/queryparams
-k8s.io/apimachinery/pkg/conversion/unstructured
 k8s.io/apimachinery/pkg/fields
 k8s.io/apimachinery/pkg/labels
 k8s.io/apimachinery/pkg/runtime
@@ -264,6 +242,7 @@ k8s.io/apimachinery/pkg/util/errors
 k8s.io/apimachinery/pkg/util/framer
 k8s.io/apimachinery/pkg/util/intstr
 k8s.io/apimachinery/pkg/util/json
+k8s.io/apimachinery/pkg/util/naming
 k8s.io/apimachinery/pkg/util/net
 k8s.io/apimachinery/pkg/util/runtime
 k8s.io/apimachinery/pkg/util/sets
@@ -397,6 +376,9 @@ k8s.io/client-go/transport
 k8s.io/client-go/util/cert
 k8s.io/client-go/util/flowcontrol
 k8s.io/client-go/util/integer
-# k8s.io/kube-openapi v0.0.0-20170906091745-abfc5fbe1cf8
+# k8s.io/klog v0.3.1
 ## explicit
-k8s.io/kube-openapi/pkg/common
+k8s.io/klog
+# sigs.k8s.io/yaml v1.1.0
+## explicit
+sigs.k8s.io/yaml
