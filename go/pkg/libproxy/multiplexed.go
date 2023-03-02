@@ -574,14 +574,20 @@ func (m *multiplexer) DumpState(w io.Writer) {
 		}
 	})
 	m.eventsM.Unlock()
+
+	var channels []*channel
 	m.metadataMutex.Lock()
-	io.WriteString(w, "Active channels:\n")
 	for _, c := range m.channels {
+		channels = append(channels, c)
+	}
+	m.metadataMutex.Unlock()
+
+	io.WriteString(w, "Active channels:\n")
+	for _, c := range channels {
 		io.WriteString(w, c.String())
 		io.WriteString(w, "\n")
 	}
 	io.WriteString(w, "End of state dump\n")
-	m.metadataMutex.Unlock()
 }
 
 // IsRunning returns whether the multiplexer is running or not
