@@ -8,6 +8,7 @@ require (
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/linuxkit/virtsock v0.0.0-20180830132707-8e79449dea07
 	github.com/pkg/errors v0.8.1-0.20181023235946-059132a15dd0
+	github.com/sasha-s/go-deadlock v0.3.1
 	github.com/sirupsen/logrus v1.3.0
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.3.0
@@ -54,16 +55,15 @@ require (
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sasha-s/go-deadlock v0.3.1 // indirect
 	github.com/spf13/afero v1.2.2 // indirect
 	github.com/spf13/cast v1.3.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.0.1 // indirect
-	golang.org/x/net v0.0.0-20201021035429-f5854403a974 // indirect
-	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/text v0.3.3 // indirect
+	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/text v0.7.0 // indirect
 	gopkg.in/inf.v0 v0.9.0 // indirect
 	gopkg.in/yaml.v2 v2.2.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20170906091745-abfc5fbe1cf8 // indirect
