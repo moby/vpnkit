@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -493,7 +492,7 @@ func TestMuxConcurrent(t *testing.T) {
 	serverReadSha := make(map[uint16]string)
 	clientWriteSha := make(map[uint16]string)
 	clientReadSha := make(map[uint16]string)
-	m := &deadlock.Mutex{}
+	m := &sync.Mutex{}
 	wg.Add(numConcurrent)
 	for i := 0; i < numConcurrent; i++ {
 		go func(i int) {

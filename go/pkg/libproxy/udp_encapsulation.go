@@ -6,9 +6,8 @@ import (
 	"errors"
 	"io"
 	"net"
+	"sync"
 	"time"
-
-	"github.com/sasha-s/go-deadlock"
 )
 
 // UDPListener defines a listener interface to read, write and close a UDP connection
@@ -29,9 +28,9 @@ type uDPEncapsulator interface {
 // udpEncapsulator encapsulates a UDP connection and listener
 type udpEncapsulator struct {
 	conn net.Conn
-	m    deadlock.Mutex
-	r    deadlock.Mutex
-	w    deadlock.Mutex
+	m    sync.Mutex
+	r    sync.Mutex
+	w    sync.Mutex
 	addr *net.UDPAddr
 }
 
