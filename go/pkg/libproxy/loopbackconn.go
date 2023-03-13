@@ -5,8 +5,6 @@ import (
 	"net"
 	"sync"
 	"time"
-
-	"github.com/sasha-s/go-deadlock"
 )
 
 // io.Pipe is synchronous but we need to decouple the Read and Write calls
@@ -21,7 +19,7 @@ import (
 type bufferedPipe struct {
 	bufs         [][]byte
 	eof          bool
-	m            deadlock.Mutex
+	m            sync.Mutex
 	c            *sync.Cond
 	readDeadline time.Time
 }

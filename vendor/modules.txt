@@ -132,18 +132,12 @@ github.com/pelletier/go-toml
 # github.com/peterbourgon/diskv v2.0.1+incompatible
 ## explicit
 github.com/peterbourgon/diskv
-# github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5
-## explicit
-github.com/petermattis/goid
 # github.com/pkg/errors v0.8.1-0.20181023235946-059132a15dd0
 ## explicit
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/sasha-s/go-deadlock v0.3.1
-## explicit
-github.com/sasha-s/go-deadlock
 # github.com/sirupsen/logrus v1.3.0
 ## explicit
 github.com/sirupsen/logrus
