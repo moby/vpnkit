@@ -69,7 +69,9 @@ func main() {
 				if err != nil {
 					log.Fatalf("unable to create %s: %v", filename, err)
 				}
-				profile.WriteTo(f, 2)
+				if err := profile.WriteTo(f, 2); err != nil {
+					log.Fatalf("writing profile: %s", err)
+				}
 				f.Close()
 			}
 		}
