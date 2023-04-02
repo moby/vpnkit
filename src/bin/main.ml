@@ -398,7 +398,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     match Uri.scheme uri with
     | Some ("hyperv-connect"|"hyperv-listen") ->
       let module Slirp_stack =
-        Slirp.Make(Vmnet.Make(HV))(Dns_policy)
+        Slirp.Make(Vmnet_stream.Make(HV))(Dns_policy)
           (Mclock)(Mirage_random_stdlib)(Vnet)
       in
       let sockaddr =
@@ -429,9 +429,38 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       if Uri.scheme uri = Some "hyperv-connect"
       then hvsock_connect_forever socket_url sockaddr callback
       else hvsock_listen sockaddr callback
+    | Some "dgram" ->
+      let module Slirp_stack =
+        Slirp.Make(Vmnet_dgram.Make(Host_unix_dgram))(Dns_policy)
+          (Mclock)(Mirage_random_stdlib)(Vnet)
+      in
+      let path = Uri.path uri in
+      (try Unix.unlink path with Unix.Unix_error(Unix.ENOENT, _, _) -> ());
+      begin Host_unix_dgram.bind path
+      >>= fun server ->
+        Slirp_stack.create_static vnet_switch configuration
+        >>= fun stack_config ->
+        Host_unix_dgram.listen server (fun conn ->
+            Slirp_stack.connect stack_config conn >>= fun stack ->
+            Log.info (fun f -> f "TCP/IP stack connected");
+            List.iter (fun url ->
+              start_introspection url (Slirp_stack.filesystem stack);
+            ) introspection_urls;
+            List.iter (fun url ->
+              start_server "diagnostics" url @@ Slirp_stack.diagnostics stack
+            ) diagnostics_urls;
+            List.iter (fun url ->
+              start_server "pcap" url @@ Slirp_stack.pcap stack
+            ) pcap_urls;
+            Slirp_stack.after_disconnect stack >|= fun () ->
+            Log.info (fun f -> f "TCP/IP stack disconnected")
+          );
+        let wait_forever, _ = Lwt.task () in
+        wait_forever
+      end
     | Some "fd" | None ->
       let module Slirp_stack =
-        Slirp.Make(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
+        Slirp.Make(Vmnet_stream.Make(Host.Sockets.Stream.Unix))(Dns_policy)
           (Mclock)(Mirage_random_stdlib)(Vnet)
       in
       begin match http_intercept_api_path with
@@ -466,7 +495,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       end
     | _ ->
       let module Slirp_stack =
-        Slirp.Make(Vmnet.Make(HV_generic))(Dns_policy)
+        Slirp.Make(Vmnet_stream.Make(HV_generic))(Dns_policy)
           (Mclock)(Mirage_random_stdlib)(Vnet)
       in
       Slirp_stack.create_static vnet_switch configuration
@@ -508,7 +537,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     Logging.setup level;
     Log.info (fun f -> f "Starting");
 
-
+    let mtu = if mtu > Constants.max_mtu then begin
+      Log.warn (fun f -> f "capping MTU at the maximum value %d" Constants.max_mtu);
+      Constants.max_mtu
+    end else mtu in
     let host_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," host_names in
     let gateway_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," gateway_names in
     let vm_names = List.map Dns.Name.of_string @@ Astring.String.cuts ~sep:"," vm_names in

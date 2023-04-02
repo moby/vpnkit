@@ -44,28 +44,3 @@ module Make(C: Sig.CONN): sig
 
 end
 
-module Init : sig
-  type t
-
-  val to_string: t -> string
-  val sizeof: int
-  val default: t
-
-  val marshal: t -> Cstruct.t -> Cstruct.t
-  val unmarshal: Cstruct.t -> t * Cstruct.t
-end
-
-module Command : sig
-
-  type t =
-    | Ethernet of Uuidm.t (* 36 bytes *)
-    | Preferred_ipv4 of Uuidm.t (* 36 bytes *) * Ipaddr.V4.t
-    | Bind_ipv4 of Ipaddr.V4.t * int * bool
-
-  val to_string: t -> string
-  val sizeof: int
-
-  val marshal: t -> Cstruct.t -> Cstruct.t
-  val unmarshal: Cstruct.t -> (t * Cstruct.t, [ `Msg of string ]) result
-end
-

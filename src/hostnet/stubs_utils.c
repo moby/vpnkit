@@ -4,6 +4,8 @@
 #include <caml/callback.h>
 #include <caml/alloc.h>
 #include <caml/unixsupport.h>
+#include <caml/bigarray.h>
+#include <caml/threads.h>
 
 #include <stdio.h>
 
@@ -61,4 +63,34 @@ CAMLprim value stub_setSocketTTL(value s, value ttl){
     unix_error(errno, "setsockopt", Nothing);
   }
   CAMLreturn(Val_unit);
+}
+
+CAMLprim value stub_cstruct_send(value val_fd, value val_buf, value val_ofs, value val_len) {
+  CAMLparam4(val_fd, val_buf, val_ofs, val_len);
+#ifdef WIN32
+  caml_failwith("stub_cstruct_send not implemented on Win32");
+#endif
+  int fd = Int_val(val_fd);
+  const char *buf = (char*)Caml_ba_data_val(val_buf) + Long_val(val_ofs);
+  size_t len = (size_t) Long_val(val_len);
+  caml_release_runtime_system();
+  ssize_t n = send(fd, buf, len, 0);
+  caml_acquire_runtime_system();
+  if (n < 0) unix_error(errno, "send", Nothing);
+  CAMLreturn(Val_int(n));
+}
+
+CAMLprim value stub_cstruct_recv(value val_fd, value val_buf, value val_ofs, value val_len) {
+  CAMLparam4(val_fd, val_buf, val_ofs, val_len);
+#ifdef WIN32
+  caml_failwith("stub_cstruct_recv not implemented on Win32");
+#endif
+  int fd = Int_val(val_fd);
+  void *buf = (void*)Caml_ba_data_val(val_buf) + Long_val(val_ofs);
+  size_t len = (size_t) Long_val(val_len);
+  caml_release_runtime_system();
+  ssize_t n = recv(fd, buf, len, 0);
+  caml_acquire_runtime_system();
+  if (n < 0) unix_error(errno, "recv", Nothing);
+  CAMLreturn(Val_int(n));
 }

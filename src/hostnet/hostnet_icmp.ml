@@ -113,7 +113,7 @@ module Make
     Lwt.return { server; server_fd; phys_to_flow; virt_to_flow; ids_in_use; next_id; send_reply }
 
   let start_receiver t =
-    let buf = Cstruct.create 4096 in
+    let buf = Cstruct.create Constants.max_ip_datagram_length in
 
     let try_to_send ~src ~dst ~payload =
       match t.send_reply with

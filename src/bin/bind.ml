@@ -6,7 +6,7 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 open Lwt.Infix
-open Vmnet
+open Vmnet_proto
 
 let is_windows = Sys.os_type = "Win32"
 
@@ -97,6 +97,7 @@ module Make(Socket: Sig.SOCKETS) = struct
   module Datagram = struct
     type address = Socket.Datagram.address
 
+    module Unix = Socket.Datagram.Unix
     module Udp = struct
       include Socket.Datagram.Udp
 

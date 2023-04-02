@@ -64,7 +64,7 @@ module Dns_policy = struct
 
 end
 
-module VMNET = Vmnet.Make(Host.Sockets.Stream.Tcp)
+module VMNET = Vmnet_stream.Make(Host.Sockets.Stream.Tcp)
 module Vnet = Basic_backend.Make
 module Slirp_stack =
   Slirp.Make(VMNET)(Dns_policy)(Mclock)(Mirage_random_stdlib)(Vnet)

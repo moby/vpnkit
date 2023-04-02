@@ -52,6 +52,8 @@ end
 
 module Sockets = struct
   module Datagram = struct
+    module Unix = Host_unix_dgram
+
     type address = Ipaddr.t * int
 
     let string_of_address = string_of_address
