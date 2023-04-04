@@ -583,7 +583,7 @@ func writeAndBlock(t *testing.T, local, remote Multiplexer) chan error {
 	if err := server.SetWriteDeadline(time.Now().Add(1 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	done := make(chan error, 1)
+	done := make(chan error)
 	go func() {
 		buf, _ := genRandomBuffer(1024)
 		for {
@@ -594,10 +594,10 @@ func writeAndBlock(t *testing.T, local, remote Multiplexer) chan error {
 			}
 		}
 		if err := client.Close(); err != nil {
-			t.Fatal(err)
+			done <- err
 		}
 		if err := server.Close(); err != nil {
-			t.Fatal(err)
+			done <- err
 		}
 		close(done)
 	}()
