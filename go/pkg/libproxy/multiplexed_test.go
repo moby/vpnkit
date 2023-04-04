@@ -627,6 +627,40 @@ func TestWindow(t *testing.T) {
 	}
 }
 
+func TestCloseThenWindowUpdate(t *testing.T) {
+	// Check that if one side sends a Close, and an in-progress Read sends a Window update,
+	// the whole multiplexer doesn't break.
+
+	// Connect a client to a server:
+	loopback := NewLoopback()
+	local, remote := newLoopbackMultiplexer(t, loopback)
+	client, err := local.Dial(Destination{
+		Proto: TCP,
+		IP:    net.ParseIP("127.0.0.1"),
+		Port:  8080,
+	})
+	require.Nil(t, err)
+	server, _, err := remote.Accept()
+	require.Nil(t, err)
+
+	buf := make([]byte, defaultWindowSize)
+	// Write a full window of data
+	_, err = server.Write(buf)
+	require.Nil(t, err)
+	// client send Close()
+	require.Nil(t, client.Close())
+	// server sends Close() and the channel refcount drops to zero
+	require.Nil(t, server.Close())
+	// although conventionally reading after closing would return an error, it's possible for an concurrent read to succeed.
+	// client Reads and sends a Window update
+	_, err = client.Read(buf)
+	assert.Nil(t, err)
+	// give the window update time to arrive and be processed
+	time.Sleep(time.Second)
+	assert.True(t, local.IsRunning())
+	assert.True(t, remote.IsRunning())
+}
+
 func TestEOF(t *testing.T) {
 	loopback := NewLoopback()
 	if err := loopback.OtherEnd().Close(); err != nil {
