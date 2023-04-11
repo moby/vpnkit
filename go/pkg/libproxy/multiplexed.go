@@ -626,7 +626,10 @@ func (m *multiplexer) run() error {
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
 			if !ok {
-				return fmt.Errorf("Unknown channel id %s", f.String())
+				// It's possible for Close and Window messages to arrive out-of-order because
+				// every send competes for the writeMutex.
+				log.Infof("dropping packet with unknown channel id %s", f.String())
+				continue
 			}
 			channel.recvWindowUpdate(payload.seq)
 		case *DataFrame:
@@ -634,7 +637,10 @@ func (m *multiplexer) run() error {
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
 			if !ok {
-				return fmt.Errorf("Unknown channel id: %s", f.String())
+				// It's possible for Close and Data messages to arrive out-of-order because
+				// every send competes for the writeMutex.
+				log.Infof("dropping packet with unknown channel id %s", f.String())
+				continue
 			}
 			// We don't use a direct io.Copy or io.CopyN to the readPipe because if they get
 			// EOF on Write, they will drop the data in the buffer and we don't know how big
@@ -655,7 +661,10 @@ func (m *multiplexer) run() error {
 			channel, ok := m.channels[f.ID]
 			m.metadataMutex.Unlock()
 			if !ok {
-				return fmt.Errorf("Unknown channel id: %s", f.String())
+				// It's possible for Close and Shutdown messages to arrive out-of-order because
+				// every send competes for the writeMutex.
+				log.Infof("dropping packet with unknown channel id %s", f.String())
+				continue
 			}
 			channel.readPipe.closeWriteNoErr()
 		case *CloseFrame:
