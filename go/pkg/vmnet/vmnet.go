@@ -576,15 +576,14 @@ func (v *Vif) dhcp() (net.IP, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		ethernet, err = ParseEthernetFrame(response)
 		if err != nil {
 			continue
 		}
-		for i, x := range ethernet.Dst {
-			if i > len(v.ClientMAC) || v.ClientMAC[i] != x {
-				// intended for someone else
-				continue
-			}
+		if !hwaddrIsBroadcast(ethernet.Dst) && !hwaddrIsEqual(ethernet.Dst, v.ClientMAC) {
+			// intended for someone else
+			continue
 		}
 		ipv4, err = ParseIpv4(ethernet.Data)
 		if err != nil {
@@ -604,8 +603,12 @@ func (v *Vif) dhcp() (net.IP, error) {
 			// truncated
 			continue
 		}
-		if udpv4.Data[240] != 53 || udpv4.Data[241] != 1 || udpv4.Data[242] != 2 {
+		if udpv4.Data[0] != 2 {
 			// not a DHCP offer
+			continue
+		}
+		if udpv4.Data[4] != 1 || udpv4.Data[5] != 0 || udpv4.Data[6] != 0 || udpv4.Data[7] != 0 {
+			// not our XID
 			continue
 		}
 		var ip net.IP
@@ -614,4 +617,22 @@ func (v *Vif) dhcp() (net.IP, error) {
 		return ip, nil
 	}
 
+}
+
+func hwaddrIsBroadcast(mac net.HardwareAddr) bool {
+	for _, b := range mac {
+		if b != 0xff {
+			return false
+		}
+	}
+	return true
+}
+
+func hwaddrIsEqual(a, b net.HardwareAddr) bool {
+	for i, x := range a {
+		if i > len(b) || b[i] != x {
+			return false
+		}
+	}
+	return true
 }
