@@ -1,11 +1,12 @@
-FROM golang:1.16-alpine AS builder
+# syntax=docker/dockerfile:1
+FROM golang:1.19-alpine AS builder
 
 WORKDIR /go/src/github.com/moby/vpnkit/go
 COPY . /go/src/github.com/moby/vpnkit
 
-RUN apk add --no-cache go musl-dev gcc
+RUN apk add --no-cache musl-dev build-base
 RUN GOPATH=/go CGO_ENABLED=1 go build -buildmode pie -ldflags "-linkmode=external -s -extldflags \"-fno-PIC -static\"" -o /kube-vpnkit-forwarder /go/src/github.com/moby/vpnkit/go/cmd/kube-vpnkit-forwarder/main.go
 
 FROM scratch
-COPY --from=builder /kube-vpnkit-forwarder /kube-vpnkit-forwarder
+COPY --link --from=builder /kube-vpnkit-forwarder /kube-vpnkit-forwarder
 CMD ["/kube-vpnkit-forwarder"]

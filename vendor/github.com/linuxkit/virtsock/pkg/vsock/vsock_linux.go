@@ -26,6 +26,20 @@ func sockaddrToVsock(sa unix.Sockaddr) *Addr {
 	return nil
 }
 
+// Closes fd, retrying EINTR
+func closeFD(fd int) error {
+	for {
+		if err := unix.Close(fd); err != nil {
+			if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINTR {
+				continue
+			}
+			return errors.Wrapf(err, "failed to close() fd %d", fd)
+		}
+		break
+	}
+	return nil
+}
+
 // Dial connects to the CID.Port via virtio sockets
 func Dial(cid, port uint32) (Conn, error) {
 	fd, err := syscall.Socket(unix.AF_VSOCK, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
@@ -39,6 +53,8 @@ func Dial(cid, port uint32) (Conn, error) {
 			if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINTR {
 				continue
 			}
+			// Trying not to leak fd here
+			_ = closeFD(fd)
 			return nil, errors.Wrapf(err, "failed connect() to %08x.%08x", cid, port)
 		}
 		break
