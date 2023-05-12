@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/pkg/errors"
@@ -20,34 +21,50 @@ const annotation = "vpnkit-k8s-controller"
 type Controller struct {
 	services corev1client.ServicesGetter
 	client   vpnkit.Client
+
+	internalCtx context.Context
+	cancel      context.CancelFunc
 }
 
 // New creates a new controller
-func New(client vpnkit.Client, services corev1client.ServicesGetter) *Controller {
+func New(rootCtx context.Context, client vpnkit.Client, services corev1client.ServicesGetter) *Controller {
+	internalCtx, cancel := context.WithCancel(rootCtx)
 	return &Controller{
-		services: services,
-		client:   client,
+		internalCtx: internalCtx,
+		cancel:      cancel,
+		services:    services,
+		client:      client,
 	}
 }
 
 var _ cache.ResourceEventHandler = &Controller{}
 
-// Dispose unexpose all ports previously exposed by this controller
-func (c *Controller) Dispose() {
-	ctx := context.Background()
+// Dispose unexposes all ports previously exposed by this controller
+func (c *Controller) Dispose(ctx context.Context) {
+	// stop any ongoing operations using the internalCtx
+	c.cancel()
+
 	ports, err := c.client.ListExposed(ctx)
 	if err != nil {
 		log.Infof("Cannot list exposed ports: %v", err)
 		return
 	}
-	for _, port := range ports {
+	var wg sync.WaitGroup
+	for i := range ports {
+		port := ports[i]
 		if port.Annotation != annotation {
 			continue
 		}
-		if err := c.client.Unexpose(ctx, &port); err != nil {
-			log.Infof("cannot unexpose port: %v", err)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Infof("Unexposing port: %s", port.String())
+			if err := c.client.Unexpose(ctx, &port); err != nil {
+				log.Infof("cannot unexpose port: %v", err)
+			}
+		}()
 	}
+	wg.Wait()
 }
 
 // OnAdd exposes port if necessary
