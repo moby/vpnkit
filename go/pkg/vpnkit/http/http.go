@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 	"github.com/moby/vpnkit/go/pkg/vpnkit"
 	"github.com/moby/vpnkit/go/pkg/vpnkit/transport"
 )

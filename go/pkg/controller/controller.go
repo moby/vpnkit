@@ -9,7 +9,9 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 const annotation = "vpnkit-k8s-controller"
@@ -27,6 +29,8 @@ func New(client vpnkit.Client, services corev1client.ServicesGetter) *Controller
 		client:   client,
 	}
 }
+
+var _ cache.ResourceEventHandler = &Controller{}
 
 // Dispose unexpose all ports previously exposed by this controller
 func (c *Controller) Dispose() {
@@ -47,7 +51,7 @@ func (c *Controller) Dispose() {
 }
 
 // OnAdd exposes port if necessary
-func (c *Controller) OnAdd(obj interface{}) {
+func (c *Controller) OnAdd(obj interface{}, _ bool) {
 	if err := c.ensureOpened(obj); err != nil {
 		log.Errorf("OnAdd failed: %v", err)
 	}
@@ -93,11 +97,12 @@ func (c *Controller) closeAbsentPorts(oldObj, newObj interface{}) error {
 }
 
 func (c *Controller) ensureOpened(obj interface{}) error {
+	ctx := context.TODO()
+
 	service, ok := obj.(*v1.Service)
 	if !ok {
 		return fmt.Errorf("received an invalid object, was expecting v1.Service")
 	}
-	ctx := context.Background()
 	opened, err := c.client.ListExposed(ctx)
 	if err != nil {
 		return errors.Wrap(err, "cannot list exposed ports")
@@ -126,7 +131,11 @@ func (c *Controller) ensureOpened(obj interface{}) error {
 				},
 			},
 		}
-		if _, err := c.services.Services(service.Namespace).UpdateStatus(copy); err != nil {
+		if _, err := c.services.Services(service.Namespace).UpdateStatus(
+			ctx,
+			copy,
+			metav1.UpdateOptions{},
+		); err != nil {
 			log.Errorf("Cannot update service status %s: %v", service.Name, err)
 		}
 	}

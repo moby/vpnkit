@@ -17,7 +17,7 @@ limitations under the License.
 package cache
 
 import (
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -30,8 +30,16 @@ import (
 // AppendFunc is used to add a matching item to whatever list the caller is using
 type AppendFunc func(interface{})
 
+// ListAll calls appendFn with each value retrieved from store which matches the selector.
 func ListAll(store Store, selector labels.Selector, appendFn AppendFunc) error {
+	selectAll := selector.Empty()
 	for _, m := range store.List() {
+		if selectAll {
+			// Avoid computing labels of the objects to speed up common flows
+			// of listing all objects.
+			appendFn(m)
+			continue
+		}
 		metadata, err := meta.Accessor(m)
 		if err != nil {
 			return err
@@ -43,24 +51,16 @@ func ListAll(store Store, selector labels.Selector, appendFn AppendFunc) error {
 	return nil
 }
 
+// ListAllByNamespace used to list items belongs to namespace from Indexer.
 func ListAllByNamespace(indexer Indexer, namespace string, selector labels.Selector, appendFn AppendFunc) error {
 	if namespace == metav1.NamespaceAll {
-		for _, m := range indexer.List() {
-			metadata, err := meta.Accessor(m)
-			if err != nil {
-				return err
-			}
-			if selector.Matches(labels.Set(metadata.GetLabels())) {
-				appendFn(m)
-			}
-		}
-		return nil
+		return ListAll(indexer, selector, appendFn)
 	}
 
 	items, err := indexer.Index(NamespaceIndex, &metav1.ObjectMeta{Namespace: namespace})
 	if err != nil {
 		// Ignore error; do slow search without index.
-		glog.Warningf("can not retrieve list of objects using index : %v", err)
+		klog.Warningf("can not retrieve list of objects using index : %v", err)
 		for _, m := range indexer.List() {
 			metadata, err := meta.Accessor(m)
 			if err != nil {
@@ -73,7 +73,15 @@ func ListAllByNamespace(indexer Indexer, namespace string, selector labels.Selec
 		}
 		return nil
 	}
+
+	selectAll := selector.Empty()
 	for _, m := range items {
+		if selectAll {
+			// Avoid computing labels of the objects to speed up common flows
+			// of listing all objects.
+			appendFn(m)
+			continue
+		}
 		metadata, err := meta.Accessor(m)
 		if err != nil {
 			return err
@@ -104,6 +112,7 @@ type GenericNamespaceLister interface {
 	Get(name string) (runtime.Object, error)
 }
 
+// NewGenericLister creates a new instance for the genericLister.
 func NewGenericLister(indexer Indexer, resource schema.GroupResource) GenericLister {
 	return &genericLister{indexer: indexer, resource: resource}
 }
