@@ -740,9 +740,8 @@ let test_http_connect_tunnel proxy () =
             failwith "test_proxy_get: EOF on HTTP GET"
           | `Invalid x ->
             failwith ("test_proxy_get: Invalid HTTP response: " ^ x)
-          | `Ok res ->
-            if res.Cohttp.Response.status <> `OK
-            then failwith "test_proxy_get: HTTP GET failed unexpectedly";
+          | `Ok _ ->
+            (* any response is ok. We'll probably get a "301 Moved Permanently" *)
             Lwt.return_unit
         )
     end
@@ -971,9 +970,8 @@ let test_http_connect_tunnel proxy () =
             failwith "test_proxy_head: EOF on HTTP HEAD"
           | `Invalid x ->
             failwith ("test_proxy_head: Invalid HTTP response: " ^ x)
-          | `Ok res ->
-            if res.Cohttp.Response.status <> `OK
-            then failwith "test_proxy_head: HTTP HEAD failed unexpectedly";
+          | `Ok _ ->
+            (* any valid HTTP response will do *)
             (* Now try another request to see if the channel still works *)
             let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ()) in
             Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
@@ -985,9 +983,8 @@ let test_http_connect_tunnel proxy () =
                 failwith "test_proxy_head: EOF on HTTP GET after HEAD"
               | `Invalid x ->
                 failwith ("test_proxy_head: Invalid HTTP response: " ^ x)
-              | `Ok res ->
-                if res.Cohttp.Response.status <> `OK
-                then failwith "test_proxy_head: HTTP GET after HEAD failed unexpectedly";
+              | `Ok _ ->
+                (* any HTTP response will do *)
                 Lwt.return `Ok in
             Lwt.pick [
               (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () -> `Timeout);
