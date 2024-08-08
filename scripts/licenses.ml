@@ -447,7 +447,7 @@ limitations under the License.
 |}
 
 let licenses = function
-  | "angstrom.0.15.0" -> {
+  | "angstrom.0.15.0" | "angstrom.0.16.0" -> {
     link = "https://github.com/inhabitedtype/angstrom/blob/21333c8629ade0b99732a7c34c9513096d7efa05/LICENSE";
     text = {|
   Copyright (c) 2016, Inhabited Type LLC
@@ -481,7 +481,7 @@ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.|}
   }
-  | "arp.3.0.0" -> {
+  | "arp.3.0.0" | "arp.3.1.1" -> {
     link = "https://github.com/mirage/arp/blob/7222488873ae6d54233480322cb2f92a8df312ba/LICENSE.md";
     text = {|
 Copyright (c) 2016 Hannes Mehnert hannes@mehnert.org
@@ -513,7 +513,7 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
     Copyright (c) 2015 Leo White <leo@lpw25.net>
     |} ^ isc
   }
-  | "luv_unix.0.5.0" | "luv.0.5.11" -> {
+  | "luv_unix.0.5.0" | "luv.0.5.11" | "luv.0.5.13" | "luv_unix.0.5.1" -> {
     link = "https://raw.githubusercontent.com/aantron/luv/master/LICENSE.md";
     text = {|
     Copyright (c) 2018-2021 Anton Bachin
@@ -525,7 +525,7 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
     Copyright (c) 2013-2016 Jeremy Yallop
     |} ^ mit
   }
-  | "ctypes.0.20.1" -> {
+  | "ctypes.0.20.1" | "ctypes.0.22.0" -> {
     link = "https://raw.githubusercontent.com/ocamllabs/ocaml-ctypes/master/LICENSE";
     text = {|
     Copyright (c) 2013 Jeremy Yallop
@@ -563,7 +563,7 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
 Copyright (c) 2016--2020 Jane Street Group, LLC opensource@janestreet.com
     |} ^ mit
   }
-  | "base64.3.5.0" -> {
+  | "base64.3.5.0" | "base64.3.5.1" -> {
     link = "https://github.com/mirage/ocaml-base64/blob/3a5e259895acef979a0fab8bb59d396e1bccead0/LICENSE.md";
     text = {|
     Copyright (c) 2006-2009 Citrix Systems Inc.
@@ -577,7 +577,7 @@ Copyright (c) 2016--2020 Jane Street Group, LLC opensource@janestreet.com
 
     |} ^ isc
   }
-  | "bigstringaf.0.8.0" | "bigstringaf.0.9.0" -> {
+  | "bigstringaf.0.8.0" | "bigstringaf.0.9.0" | "bigstringaf.0.10.0" -> {
     link = "https://github.com/inhabitedtype/bigstringaf/blob/9c1e57375f3da15cf344c228e2cc14a36513923d/LICENSE";
     text = {|
     Copyright (c) 2018, Inhabited Type LLC
@@ -618,7 +618,7 @@ POSSIBILITY OF SUCH DAMAGE.
     Copyright (c) 2011 Daniel C. Bünzli
     |} ^ isc
   }
-  | "cohttp.5.0.0" | "cohttp-lwt.5.0.0" -> {
+  | "cohttp.5.0.0" | "cohttp.5.3.1" | "cohttp-lwt.5.0.0" | "cohttp-lwt.5.3.0" -> {
     link = "https://github.com/mirage/ocaml-cohttp/blob/5f9c0ae88a69e4280810fe73344367e90954dea5/LICENSE.md";
     text = {|
     ISC License
@@ -676,14 +676,14 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     Copyright (c) 2013 Thomas Gazagnaire thomas@gazagnaire.org Copyright (C) 2012-2013 Citrix Inc Copyright (c) 2010-2012 Anil Madhavapeddy anil@recoil.org
     |} ^ isc
   }
-  | "ipaddr.5.2.0" | "ipaddr.5.3.0" | "ipaddr.5.3.1" | "ipaddr-sexp.5.2.0" | "ipaddr-sexp.5.3.0" | "ipaddr-sexp.5.3.1" | "macaddr.5.2.0" | "macaddr.5.3.0" | "macaddr.5.3.1" | "macaddr-cstruct.5.2.0" | "macaddr-cstruct.5.3.0" | "macaddr-cstruct.5.3.1" | "macaddr-sexp.5.2.0" | "macaddr-sexp.5.3.0" | "macaddr-sexp.5.3.1" -> {
+  | "ipaddr.5.2.0" | "ipaddr.5.3.0" | "ipaddr.5.3.1" | "ipaddr.5.6.0" | "ipaddr-sexp.5.2.0" | "ipaddr-sexp.5.3.0" | "ipaddr-sexp.5.3.1" | "ipaddr-sexp.5.6.0"| "macaddr.5.2.0" | "macaddr.5.3.0" | "macaddr.5.3.1" | "macaddr.5.6.0" | "macaddr-cstruct.5.2.0" | "macaddr-cstruct.5.3.0" | "macaddr-cstruct.5.3.1" | "macaddr-cstruct.5.6.0" | "macaddr-sexp.5.2.0" | "macaddr-sexp.5.3.0" | "macaddr-sexp.5.3.1" | "macaddr-sexp.5.6.0" -> {
     link = "https://github.com/mirage/ocaml-ipaddr/blob/7745ea4be2c1c5a7ab95908b26a6ed81a0947ab5/LICENSE.md";
     text = {|
     Copyright (c) 2013-2015 David Sheets sheets@alum.mit.edu Copyright (c) 2010-2011, 2014 Anil Madhavapeddy anil@recoil.org
 
     |} ^ isc
   }
-  | "metrics.0.3.0" | "metrics.0.4.0" -> {
+  | "metrics.0.3.0" | "metrics.0.4.0" | "metrics.0.4.1" -> {
     link = "https://github.com/mirage/metrics/blob/0f48d63c5e1c0e33d7043b2c6e053ba380516433/LICENSE.md";
     text = isc;
   }
@@ -762,7 +762,7 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     Copyright (c) 2015, MirageOS
     |} ^ isc
   }
-  | "uri.4.2.0" | "uri-sexp.4.2.0" -> {
+  | "uri.4.2.0" | "uri.4.4.0" | "uri-sexp.4.2.0" | "uri-sexp.4.4.0" -> {
     link = "https://github.com/mirage/ocaml-uri/blob/0ff3efbbc235bef5a7d67cc01bc1dadbe2e859b9/LICENSE.md";
     text = {|
     Copyright (c) <the authors, see individual headers on files>
@@ -799,7 +799,7 @@ All rights reserved.
 
     |} ^ isc
   }
-  | "re.1.10.3" | "re.1.10.4" -> {
+  | "re.1.10.3" | "re.1.10.4" | "re.1.11.0" -> {
     link = "https://github.com/ocaml/ocaml-re/blob/c5d5df80e128c3d7646b7d8b1322012c5fcc35f3/LICENSE.md";
     text = {|
     This Software is distributed under the terms of the GNU Lesser
@@ -850,7 +850,7 @@ might be covered by the GNU Lesser General Public License.
 
     |} ^ lgpl21
   }
-  | "num.1.4" -> {
+  | "num.1.4" | "num.1.5-1" -> {
     link = "https://github.com/ocaml/num/blob/814c159ea6cebff3b1f61b2055b893be87084ae3/LICENSE";
     text = {|
     The Num library is copyright Institut National de Recherche en
@@ -978,7 +978,7 @@ might be covered by the GNU Lesser General Public License.
 
     |} ^ isc
   }
-  | "jsonm.1.0.1" -> {
+  | "jsonm.1.0.1" | "jsonm.1.0.2" -> {
     link = "https://github.com/dbuenzli/jsonm/blob/15ba785854b8b6e45958570d23238b603cd3f8d6/LICENSE.md";
     text = {|
     Copyright (c) 2012 Daniel C. Bünzli
@@ -1009,7 +1009,7 @@ might be covered by the GNU Lesser General Public License.
     Copyright (c) 2016 David Kaloper Meršinjak
     |} ^ isc
   }
-  | "lwt.5.5.0" | "lwt.5.6.1" | "lwt-dllist.1.0.1" -> {
+  | "lwt.5.5.0" | "lwt.5.6.1" | "lwt.5.7.0" | "lwt-dllist.1.0.1" -> {
     link = "https://github.com/ocsigen/lwt/blob/bab52d9744cb2d5cd3cfe86cda65ba73752998ee/LICENSE.md";
     text = {|
     Copyright (c) 1999-2020, the Authors of Lwt (docs/AUTHORS)
@@ -1017,7 +1017,9 @@ might be covered by the GNU Lesser General Public License.
     |} ^ mit
   }
   | "menhir.20211230" | "menhirLib.20211230" | "menhirSdk.20211230"
-  | "menhir.20220210" | "menhirLib.20220210" | "menhirSdk.20220210" -> {
+  | "menhir.20220210" | "menhirLib.20220210" | "menhirSdk.20220210"
+  | "menhirSdk.20240715" | "menhirLib.20240715" | "menhirCST.20240715" | "menhir.20240715"
+  -> {
     link = "https://gitlab.inria.fr/fpottier/menhir/-/blob/20211230/LICENSE";
     text = {|
 
@@ -1030,7 +1032,7 @@ Public License version 2 (included below).
     link = "https://github.com/OCamlPro/ocplib-endian/blob/10292cd3ffa4d23d737e3f855ad04f22d3d95460/COPYING.txt";
     text = lgpl21_with_ocaml_linking_exception;
   }
-  | "ounit.2.2.4" | "ounit.2.2.6" | "ounit2.2.2.4" | "ounit2.2.2.6" -> {
+  | "ounit.2.2.4" | "ounit.2.2.6" | "ounit.2.2.7" | "ounit2.2.2.4" | "ounit2.2.2.6" | "ounit2.2.2.7" -> {
     link = "https://github.com/gildor478/ounit/blob/faf4936b17507406c7592186dcaa3f25c6fc138a/LICENSE.txt";
     text = {|
     Copyright (c) 2002, 2003 by Maas-Maarten Zeeman
@@ -1059,7 +1061,7 @@ otherwise, arising from, out of or in connection with the Software or
 the use or other dealings in the software.
     |}
   }
-  | "sha.1.15.1" | "sha.1.15.2" -> {
+  | "sha.1.15.1" | "sha.1.15.2" | "sha.1.15.4" -> {
     link = "https://github.com/djs55/ocaml-sha/blob/af5c7b1c7d3b8f9492038b7b40ba9cad82fb4ee8/LICENSE.md";
     text = isc;
   }
@@ -1130,6 +1132,7 @@ Copyright (c) 2016-2017 Mindy Preston
 let linked_into_executable = function
   | "ocaml-config"
   | "conf-which" -> false (* part of OCaml infra *)
+  | "conf-pkg-config"
   | "ocamlbuild"
   | "ocamlfind"
   | "ppx_derivers"
