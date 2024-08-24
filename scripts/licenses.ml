@@ -525,7 +525,7 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
     Copyright (c) 2013-2016 Jeremy Yallop
     |} ^ mit
   }
-  | "ctypes.0.20.1" | "ctypes.0.22.0" -> {
+  | "ctypes.0.20.1" | "ctypes.0.22.0" | "ctypes.0.23.0" -> {
     link = "https://raw.githubusercontent.com/ocamllabs/ocaml-ctypes/master/LICENSE";
     text = {|
     Copyright (c) 2013 Jeremy Yallop
@@ -546,9 +546,9 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
   | "jst-config.v0.14.1"
   | "jane-street-headers.v0.14.0"
   | "base.v0.14.2" | "base.v0.14.3"
-  | "csexp.1.5.1"
-  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1" | "dune.3.2.0" | "dune.3.3.0" | "dune.3.4.1" | "dune.3.5.0"
-  | "dune-configurator.2.9.1" | "dune-configurator.2.9.3" | "dune-configurator.3.0.2" | "dune-configurator.3.0.3" | "dune-configurator.3.1.1" | "dune-configurator.3.3.0" | "dune-configurator.3.5.0"
+  | "csexp.1.5.1" | "csexp.1.5.2"
+  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1" | "dune.3.2.0" | "dune.3.3.0" | "dune.3.4.1" | "dune.3.5.0" | "dune.3.16.0"
+  | "dune-configurator.2.9.1" | "dune-configurator.2.9.3" | "dune-configurator.3.0.2" | "dune-configurator.3.0.3" | "dune-configurator.3.1.1" | "dune-configurator.3.3.0" | "dune-configurator.3.5.0" | "dune-configurator.3.16.0"
   | "dune-configurator.3.2.0" | "dune-configurator.3.4.1"
   | "ocaml-compiler-libs.v0.12.4"
   | "ocaml-syntax-shims.1.0.0"
@@ -911,6 +911,8 @@ the license in file toplevel/LICENSE-findlib.
   | "ocaml.4.13.0" | "ocaml-base-compiler.4.13.0"
   | "ocaml.4.13.1" | "ocaml-base-compiler.4.13.1"
   | "ocaml.4.14.0" | "ocaml-base-compiler.4.14.0"
+  | "ocaml.4.14.1" | "ocaml-base-compiler.4.14.1"
+  | "ocaml.4.14.2" | "ocaml-base-compiler.4.14.2"
   | "ocaml-variants.4.08.0+mingw64c"
   | "ocaml-variants.4.13.1+mingw64c"
   | "seq.base" | "stdlib-shims.0.3.0" | "uchar.0.0.2" -> {
@@ -1116,7 +1118,7 @@ Copyright (c) 2016-2017 Mindy Preston
     |} ^ isc
 
   }
-  | "vpnkit.0.2.0" -> {
+  | "vpnkit.0.2.0" | "vpnkit.0.5.0" -> {
     link = "https://github.com/moby/vpnkit/blob/master/LICENSE";
     text = apache2 "Copyright 2013-2016 Docker, Inc."
   }
