@@ -911,6 +911,8 @@ the license in file toplevel/LICENSE-findlib.
   | "ocaml.4.13.0" | "ocaml-base-compiler.4.13.0"
   | "ocaml.4.13.1" | "ocaml-base-compiler.4.13.1"
   | "ocaml.4.14.0" | "ocaml-base-compiler.4.14.0"
+  | "ocaml.4.14.1" | "ocaml-base-compiler.4.14.1"
+  | "ocaml.4.14.2" | "ocaml-base-compiler.4.14.2"
   | "ocaml-variants.4.08.0+mingw64c"
   | "ocaml-variants.4.13.1+mingw64c"
   | "seq.base" | "stdlib-shims.0.3.0" | "uchar.0.0.2" -> {
@@ -1116,7 +1118,7 @@ Copyright (c) 2016-2017 Mindy Preston
     |} ^ isc
 
   }
-  | "vpnkit.0.2.0" -> {
+  | "vpnkit.0.2.0" | "vpnkit.0.5.0" -> {
     link = "https://github.com/moby/vpnkit/blob/master/LICENSE";
     text = apache2 "Copyright 2013-2016 Docker, Inc."
   }
