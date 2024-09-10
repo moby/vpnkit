@@ -1,11 +1,21 @@
 # syntax=docker/dockerfile:1
 FROM golang:1.19-alpine AS builder
 
-WORKDIR /go/src/github.com/moby/vpnkit/go
-COPY . /go/src/github.com/moby/vpnkit
-
 RUN apk add --no-cache musl-dev build-base
-RUN GOPATH=/go CGO_ENABLED=1 go build -buildmode pie -ldflags "-linkmode=external -s -extldflags \"-fno-PIC -static\"" -o /kube-vpnkit-forwarder /go/src/github.com/moby/vpnkit/go/cmd/kube-vpnkit-forwarder/main.go
+
+# no separate go mod download step because vendoring is in use
+COPY . /src
+WORKDIR /src
+
+RUN --mount=type=bind,target=. \
+    --mount=type=cache,target=/root/.cache \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=1 go build \
+      -mod=vendor \
+      -buildmode pie \
+      -ldflags '-linkmode=external -s -extldflags "-fno-PIC -static"' \
+      -o /kube-vpnkit-forwarder \
+      ./go/cmd/kube-vpnkit-forwarder
 
 FROM scratch
 COPY --link --from=builder /kube-vpnkit-forwarder /kube-vpnkit-forwarder
