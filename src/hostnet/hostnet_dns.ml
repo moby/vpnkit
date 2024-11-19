@@ -446,10 +446,11 @@ struct
             | _, Host ->
               D.resolve question
               >>= function
-              | [] ->
-                Lwt.return (Ok (Some (marshal nxdomain)))
-              | answers ->
+              | Ok answers ->
                 Lwt.return (Ok (marshal_reply answers))
+              (* Currently return all errors as NXDOMAIN *)
+              | Error _ ->
+                Lwt.return (Ok (Some (marshal nxdomain)))
       end
     | _ ->
       Lwt.return (Error (`Msg "DNS packet had multiple questions"))

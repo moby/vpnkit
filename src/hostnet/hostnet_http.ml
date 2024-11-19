@@ -151,16 +151,19 @@ module Make
       let question =
         make_question ~q_class:Q_IN Q_A (Dns.Name.of_string name_or_ip)
       in
-      Dns_resolver.resolve question
-      >>= fun rrs ->
-      (* Any IN record will do (NB it might be a CNAME) *)
-      let rec find_ip = function
-        | { cls = RR_IN; rdata = A ipv4; _ } :: _ ->
-          Lwt.return (Ok (Ipaddr.V4 ipv4))
-        | _ :: rest -> find_ip rest
-        | [] -> errorf "Failed to lookup host: %s" name_or_ip in
-      find_ip rrs
-    | Ok x -> Lwt.return (Ok x)
+      (Dns_resolver.resolve question >>= function
+      | Ok rrs ->
+        (* Any IN record will do (NB it might be a CNAME) *)
+        let rec find_ip = function
+          | { cls = RR_IN; rdata = A ipv4; _ } :: _ ->
+            Lwt.return (Ok (Ipaddr.V4 ipv4))
+          | _ :: rest -> find_ip rest
+          | [] -> errorf "Failed to lookup host: %s" name_or_ip
+        in
+        find_ip rrs
+      | Error _ ->
+        Lwt.return (Error (`Msg (Printf.sprintf "Failed to lookup host: %s" name_or_ip))))
+    | Ok ip -> Lwt.return (Ok ip)
 
   let to_json t =
     let open Ezjsonm in
