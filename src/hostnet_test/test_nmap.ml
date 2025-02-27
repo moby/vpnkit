@@ -27,13 +27,13 @@ let test_nmap () =
     let start = Unix.gettimeofday () in
     let open_ports = ref [] in
     let connect_disconnect ip port =
-      Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, port)
+      Client.TCP.create_connection (Client.tcp stack.Client.t) (ip, port)
       >>= function
       | Error _ ->
         Lwt.return_unit
       | Ok flow ->
         open_ports := port :: !open_ports;
-        Client.TCPV4.close flow
+        Client.TCP.close flow
         >>= fun () ->
         Lwt.return_unit in
     (* Limit the number of concurrent connection requests *)
@@ -93,7 +93,7 @@ let test_nmap () =
       else begin
         let ping = Packets.icmp_echo_request ~id:0x1234 ~seq ~len:0 in
         Log.info (fun f -> f "sending ping to verify the stack is still working");
-        Client.Icmpv41.write stack.Client.icmpv4 ~dst:localhost_ip ping
+        Client.Icmpv41.write stack.Client.icmpv4 ~dst:(Ipaddr.to_v4 localhost_ip |> Option.get) ping
         >>= function
         | Error e -> failf "Icmpv41.write failed: %a" Client.Icmpv41.pp_error e
         | Ok () ->

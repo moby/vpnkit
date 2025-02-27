@@ -261,6 +261,11 @@ module Make (Flow : Mirage_flow.S) = struct
     (* boilerplate: *)
     let shutdown_read _chanel = Lwt.return_unit
 
+    let shutdown channel = function
+      | `write -> shutdown_write channel
+      | `read -> shutdown_read channel
+      | `read_write -> shutdown_read channel >>= fun () -> shutdown_write channel
+
     let write channel buf = writev channel [buf]
 
     type flow = channel

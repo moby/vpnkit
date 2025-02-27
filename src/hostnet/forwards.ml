@@ -80,13 +80,13 @@ let update xs =
    Ideally we would use channel, but we need to access the underlying flow
    without leaving data trapped in the buffer. *)
 module type Read_some = sig
-  include Mirage_flow_combinators.SHUTDOWNABLE
+  include Mirage_flow.S
 
   val read_some :
     flow -> int -> (Cstructs.t Mirage_flow.or_eof, error) result Lwt.t
 end
 
-module Read_some (FLOW : Mirage_flow_combinators.SHUTDOWNABLE) : sig
+module Read_some (FLOW : Mirage_flow.S) : sig
   include Read_some
 
   val connect : FLOW.flow -> flow
@@ -135,8 +135,16 @@ end = struct
   let write flow = FLOW.write flow.flow
   let writev flow = FLOW.writev flow.flow
   let close flow = FLOW.close flow.flow
-  let shutdown_write flow = FLOW.shutdown_write flow.flow
-  let shutdown_read flow = FLOW.shutdown_read flow.flow
+  let shutdown_write flow = FLOW.shutdown flow.flow `write
+  let shutdown_read flow = FLOW.shutdown flow.flow `read 
+
+  let shutdown f = function
+    | `read -> shutdown_read f
+    | `write -> shutdown_write f
+    | `read_write ->
+       let open Lwt.Infix in
+       shutdown_read f >>= fun () ->
+       shutdown_write f
 end
 
 module Handshake (FLOW : Read_some) = struct
@@ -338,8 +346,7 @@ module Unix = struct
   let write flow = Remote.write flow.flow
   let writev flow = Remote.writev flow.flow
   let close flow = Remote.close flow.flow
-  let shutdown_write flow = Remote.shutdown_write flow.flow
-  let shutdown_read flow = Remote.shutdown_read flow.flow
+  let shutdown flow = Remote.shutdown flow.flow
 end
 
 module Stream = struct
@@ -407,13 +414,9 @@ module Stream = struct
       | `Direct flow -> Direct.close flow
       | `Forwarded flow -> Forwarded.close flow
 
-    let shutdown_write = function
-      | `Direct flow -> Direct.shutdown_write flow
-      | `Forwarded flow -> Forwarded.shutdown_write flow
-
-    let shutdown_read = function
-      | `Direct flow -> Direct.shutdown_read flow
-      | `Forwarded flow -> Forwarded.shutdown_read flow
+    let shutdown f v = match f with
+      | `Direct flow -> Direct.shutdown flow v
+      | `Forwarded flow -> Forwarded.shutdown flow v
   end
 end
 
@@ -421,7 +424,7 @@ module Test (Clock : Mirage_clock.MCLOCK) = struct
   module Remote = Read_some (Host.Sockets.Stream.Unix)
 
   module Proxy =
-    Mirage_flow_combinators.Proxy (Clock) (Remote) (Host.Sockets.Stream.Tcp)
+    Mirage_flow_combinators.Proxy (Remote) (Host.Sockets.Stream.Tcp)
 
   module Handshake = Handshake (Remote)
   open Lwt.Infix
@@ -483,5 +486,5 @@ module Test (Clock : Mirage_clock.MCLOCK) = struct
                     Host.Sockets.Stream.Tcp.close remote)));
     Lwt.return s
 
-  let shutdown = Host.Sockets.Stream.Unix.shutdown
+  let stop = Host.Sockets.Stream.Unix.stop
 end

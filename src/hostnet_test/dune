@@ -2,5 +2,5 @@
  (name main)
  (libraries hostnet cmdliner alcotest logs.fmt protocol-9p mirage_dns
    mirage-clock-unix charrua-client.mirage forwarder sha
-   mirage-random-stdlib arp.mirage)
+   mirage-random-stdlib arp.mirage tcpip.ipv6 mirage-crypto-rng.unix)
  (preprocess no_preprocessing))

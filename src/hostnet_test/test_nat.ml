@@ -61,7 +61,7 @@ module EchoServer = struct
 
   let to_string t =
     Printf.sprintf "udp:127.0.0.1:%d" t.local_port
-  let destroy t = Host.Sockets.Datagram.Udp.shutdown t.server
+  let destroy t = Host.Sockets.Datagram.Udp.stop t.server
   let with_server f =
     create () >>= fun server ->
     Lwt.finalize (fun () -> f server) (fun () -> destroy server)
@@ -84,7 +84,7 @@ module UdpServer = struct
     let seen_source_ports = PortSet.empty in
     let num_received = 0 in
     let t = { port; highest; num_received; seen_source_ports; c } in
-    Client.UDPV4.listen (Client.udpv4 stack) ~port (fun ~src:_ ~dst:_ ~src_port buffer ->
+    Client.UDP.listen (Client.udp stack) ~port (fun ~src:_ ~dst:_ ~src_port buffer ->
         t.highest <- max t.highest (Cstruct.get_uint8 buffer 0);
         t.seen_source_ports <- PortSet.add src_port t.seen_source_ports;
         t.num_received <- t.num_received + 1;
@@ -118,7 +118,7 @@ module UdpServer = struct
       Lwt.return false
 end
 
-let err_udp e = Fmt.kstr failwith "%a" Client.UDPV4.pp_error e
+let err_udp e = Fmt.kstr failwith "%a" Client.UDP.pp_error e
 
 (* Start a local UDP echo server, send traffic to it and listen for
    a response *)
@@ -128,7 +128,7 @@ let test_udp () =
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
-          let udpv4 = Client.udpv4 stack.t in
+          let udpv4 = Client.udp stack.t in
           let virtual_port = 1024 in
           let server = UdpServer.make stack.t virtual_port in
           let rec loop remaining =
@@ -137,9 +137,9 @@ let test_udp () =
             Log.debug (fun f ->
                 f "Sending %d -> %d value %d" virtual_port local_port
                   (Cstruct.get_uint8 buffer 0));
-            Client.UDPV4.write
+            Client.UDP.write
               ~src_port:virtual_port
-              ~dst:Ipaddr.V4.localhost
+              ~dst:(V4 Ipaddr.V4.localhost)
               ~dst_port:local_port udpv4 buffer
             >>= function
             | Error e -> err_udp e
@@ -160,7 +160,7 @@ let test_udp_reply_last_use () =
       let buffer = Cstruct.create 1024 in
       (* Send '1' *)
       Cstruct.set_uint8 buffer 0 1;
-      let udpv4 = Client.udpv4 stack.t in
+      let udpv4 = Client.udp stack.t in
       let virtual_port = 1024 in
       let server = UdpServer.make stack.t virtual_port in
       let rec loop remaining =
@@ -169,9 +169,9 @@ let test_udp_reply_last_use () =
         Log.debug (fun f ->
             f "Sending %d -> %d value %d" virtual_port local_port
               (Cstruct.get_uint8 buffer 0));
-        Client.UDPV4.write
+        Client.UDP.write
           ~src_port:virtual_port
-          ~dst:Ipaddr.V4.localhost
+          ~dst:(V4 Ipaddr.V4.localhost)
           ~dst_port:local_port udpv4 buffer
         >>= function
         | Error e -> err_udp e
@@ -218,7 +218,7 @@ let test_udp_expiry () =
     let buffer = Cstruct.create 1024 in
     (* Send '1' *)
     Cstruct.set_uint8 buffer 0 1;
-    let udpv4 = Client.udpv4 stack.t in
+    let udpv4 = Client.udp stack.t in
     let virtual_port = 1024 in
     let server = UdpServer.make stack.t virtual_port in
     (* Send spam to almost fill up the table. Leave one entry. *)
@@ -226,9 +226,9 @@ let test_udp_expiry () =
     let rec spam from_port remaining = match remaining with
       | 0 -> Lwt.return_unit
       | n ->
-        Client.UDPV4.write
+        Client.UDP.write
           ~src_port:(from_port + n)
-          ~dst:Ipaddr.V4.localhost
+          ~dst:(V4 Ipaddr.V4.localhost)
           ~dst_port:(local_port + 1) (* not the echo server *)
           udpv4 buffer
         >>= function
@@ -244,9 +244,9 @@ let test_udp_expiry () =
       Log.debug (fun f ->
           f "Sending %d -> %d value %d" virtual_port local_port
             (Cstruct.get_uint8 buffer 0));
-      Client.UDPV4.write
+      Client.UDP.write
         ~src_port:virtual_port
-        ~dst:Ipaddr.V4.localhost
+        ~dst:(V4 Ipaddr.V4.localhost)
         ~dst_port:local_port udpv4 buffer
       >>= function
       | Error e -> err_udp e
@@ -305,7 +305,7 @@ let test_udp_2 () =
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
-          let udpv4 = Client.udpv4 stack.t in
+          let udpv4 = Client.udp stack.t in
 
           (* Listen on one virtual source port and count received packets *)
           let virtual_port1 = 1024 in
@@ -317,9 +317,9 @@ let test_udp_2 () =
             Log.debug (fun f ->
                 f "Sending %d -> %d value %d" virtual_port1 local_port
                   (Cstruct.get_uint8 buffer 0));
-            Client.UDPV4.write
+            Client.UDP.write
               ~src_port:virtual_port1
-              ~dst:Ipaddr.V4.localhost
+              ~dst:(V4 Ipaddr.V4.localhost)
               ~dst_port:local_port udpv4 buffer
             >>= function
             | Error e -> err_udp e
@@ -341,9 +341,9 @@ let test_udp_2 () =
             Log.debug (fun f ->
                 f "Sending %d -> %d value %d" virtual_port2 local_port
                   (Cstruct.get_uint8 buffer 0));
-            Client.UDPV4.write
+            Client.UDP.write
               ~src_port:virtual_port2
-              ~dst:Ipaddr.V4.localhost
+              ~dst:(V4 Ipaddr.V4.localhost)
               ~dst_port:local_port udpv4 buffer
             >>= function
             | Error e -> err_udp e
@@ -369,7 +369,7 @@ let test_nat_punch () =
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
-          let udpv4 = Client.udpv4 stack.t in
+          let udpv4 = Client.udp stack.t in
 
           (* Listen on one virtual source port and count received packets *)
           let virtual_port1 = 1024 in
@@ -382,9 +382,9 @@ let test_nat_punch () =
             Log.debug (fun f ->
                 f "Sending %d -> %d value %d" virtual_port1 dst_port
                   (Cstruct.get_uint8 buffer 0));
-            Client.UDPV4.write
+            Client.UDP.write
               ~src_port:virtual_port1
-              ~dst:Ipaddr.V4.localhost
+              ~dst:(V4 Ipaddr.V4.localhost)
               ~dst_port  udpv4 buffer
             >>= function
             | Error e -> err_udp e
@@ -431,7 +431,7 @@ let test_shared_nat_rule () =
           let buffer = Cstruct.create 1024 in
           (* Send '1' *)
           Cstruct.set_uint8 buffer 0 1;
-          let udpv4 = Client.udpv4 stack.t in
+          let udpv4 = Client.udp stack.t in
           let virtual_port = 1024 in
           let server = UdpServer.make stack.t virtual_port in
           let init_table_size =
@@ -444,9 +444,9 @@ let test_shared_nat_rule () =
             Log.debug (fun f ->
                 f "Sending %d -> %d value %d" virtual_port local_port
                   (Cstruct.get_uint8 buffer 0));
-            Client.UDPV4.write
+            Client.UDP.write
               ~src_port:virtual_port
-              ~dst:Ipaddr.V4.localhost
+              ~dst:(V4 Ipaddr.V4.localhost)
               ~dst_port:local_port udpv4 buffer
             >>= function
             | Error e -> err_udp e
@@ -470,8 +470,8 @@ let test_shared_nat_rule () =
                 Log.debug (fun f ->
                     f "Sending %d -> %d value %d" virtual_port local_port
                       (Cstruct.get_uint8 buffer 0));
-                Client.UDPV4.write ~src_port:virtual_port
-                  ~dst:Ipaddr.V4.localhost
+                Client.UDP.write ~src_port:virtual_port
+                  ~dst:(V4 Ipaddr.V4.localhost)
                   ~dst_port:local_port udpv4 buffer
                 >>= function
                 | Error e -> err_udp e
@@ -497,7 +497,7 @@ let test_source_ports () =
            (fun { EchoServer.local_port = local_port2; _ } ->
               with_stack ~pcap:"test_source_ports.pcap" (fun _ stack ->
                   let buffer = Cstruct.create 1024 in
-                  let udpv4 = Client.udpv4 stack.t in
+                  let udpv4 = Client.udp stack.t in
                   (* This is the port we shall send from *)
                   let virtual_port = 1024 in
                   let server = UdpServer.make stack.t virtual_port in
@@ -508,9 +508,9 @@ let test_source_ports () =
                     Log.debug (fun f ->
                         f "Sending %d -> %d value %d" virtual_port local_port1
                           (Cstruct.get_uint8 buffer 0));
-                    Client.UDPV4.write
+                    Client.UDP.write
                       ~src_port:virtual_port
-                      ~dst:Ipaddr.V4.localhost
+                      ~dst:(V4 Ipaddr.V4.localhost)
                       ~dst_port:local_port1 udpv4 buffer
                     >>= function
                     | Error e -> err_udp e
@@ -518,9 +518,9 @@ let test_source_ports () =
                       Log.debug (fun f ->
                           f "Sending %d -> %d value %d" virtual_port local_port2
                             (Cstruct.get_uint8 buffer 0));
-                      Client.UDPV4.write
+                      Client.UDP.write
                         ~src_port:virtual_port
-                        ~dst:Ipaddr.V4.localhost
+                        ~dst:(V4 Ipaddr.V4.localhost)
                         ~dst_port:local_port2 udpv4 buffer
                       >>= function
                       | Error e -> err_udp e

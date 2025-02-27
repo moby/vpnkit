@@ -579,7 +579,7 @@ let test_cache () =
       >>= function
       | Error _ -> failwith "failed initial lookup"
       | Ok _ ->
-          S.shutdown server
+          S.stop server
           >>= fun () ->
           R.answer request r
           >>= function

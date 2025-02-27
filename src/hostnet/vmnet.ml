@@ -88,7 +88,7 @@ module Command = struct
     let process_uuid uuid_str =
       if (String.compare (String.make 36 '\000') uuid_str) = 0 then
         begin
-          let random_uuid = (Uuidm.v `V4) in
+          let random_uuid = Uuidm.v4_gen (Random.State.make_self_init ()) () in
           Log.info (fun f ->
               f "Generated UUID on behalf of client: %a" Uuidm.pp random_uuid);
           (* generate random uuid on behalf of client if client sent

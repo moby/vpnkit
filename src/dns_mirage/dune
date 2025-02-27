@@ -1,4 +1,4 @@
 (library
   (name        mirage_dns)
-  (libraries   dns_lwt duration mirage-time mirage-stack mirage-kv)
+  (libraries   dns_lwt duration mirage-time tcpip mirage-kv)
   (wrapped     false))

@@ -9,7 +9,7 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 let pp_ips = Fmt.(list ~sep:(any ", ") Ipaddr.pp)
-let pp_ip4s = Fmt.(list ~sep:(any ", ") Ipaddr.V4.pp)
+let pp_ip_prefix = Fmt.(list ~sep:(any ", ") Ipaddr.Prefix.pp)
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
@@ -22,8 +22,8 @@ let run ?timeout ~pcap t = run_test ?timeout (with_stack ~pcap t)
 
 let test_dhcp_query () =
   let t _ stack =
-    let ips = Client.IPV4.get_ip (Client.ipv4 stack.Client.t) in
-    Log.info (fun f -> f "Got an IP: %a" pp_ip4s ips);
+    let ips = Client.IP.configured_ips (Client.ip stack.Client.t) in
+    Log.info (fun f -> f "Got an IP: %a" pp_ip_prefix ips);
     Lwt.return ()
   in
   run ~pcap:"test_dhcp_query.pcap" t
@@ -38,7 +38,7 @@ let test_max_connections () =
           Log.info (fun f -> f "Setting max connections to 0");
           Connection_limit.set_max (Some 0);
           begin
-            Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
+            Client.TCP.create_connection (Client.tcp stack.Client.t) (Ipaddr.V4 ip, 80)
             >|= function
             | Ok _ ->
               Log.err (fun f ->
@@ -53,7 +53,7 @@ let test_max_connections () =
           Connection_limit.set_max None;
           (* Check that connections work again *)
           begin
-            Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
+            Client.TCP.create_connection (Client.tcp stack.Client.t) (Ipaddr.V4 ip, 80)
             >|= function
             | Ok _ ->
               Log.debug (fun f -> f "Connected to www.google.com");
@@ -81,7 +81,7 @@ let test_http_fetch () =
     DNS.gethostbyname resolver "www.google.com" >>= function
     | Ipaddr.V4 ip :: _ ->
       begin
-        Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
+        Client.TCP.create_connection (Client.tcp stack.Client.t) (Ipaddr.V4 ip, 80)
         >>= function
         | Error _ ->
           Log.err (fun f -> f "Failed to connect to www.google.com:80");
@@ -92,7 +92,7 @@ let test_http_fetch () =
           let http_get = "GET / HTTP/1.0\nHost: anil.recoil.org\n\n" in
           Cstruct.blit_from_string http_get 0 page 0 (String.length http_get);
           let buf = Cstruct.sub page 0 (String.length http_get) in
-          Client.TCPV4.write flow buf >>= function
+          Client.TCP.write flow buf >>= function
           | Error `Closed ->
             Log.err (fun f ->
                 f "EOF writing HTTP request to www.google.com:80");
@@ -103,7 +103,7 @@ let test_http_fetch () =
             failwith "Failure on writing HTTP GET"
           | Ok () ->
             let rec loop total_bytes =
-              Client.TCPV4.read flow >>= function
+              Client.TCP.read flow >>= function
               | Ok `Eof     -> Lwt.return total_bytes
               | Error _ ->
                 Log.err (fun f ->
@@ -146,7 +146,7 @@ let test_tcp_forwards () =
         DNS.gethostbyname resolver "www.google.com" >>= function
         | Ipaddr.V4 ip :: _ ->
           begin
-            Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (ip, 80)
+            Client.TCP.create_connection (Client.tcp stack.Client.t) (Ipaddr.V4 ip, 80)
             >>= function
             | Error _ ->
               Log.err (fun f -> f "Failed to connect to www.google.com:80");
@@ -157,7 +157,7 @@ let test_tcp_forwards () =
               let http_get = "GET / HTTP/1.0\nHost: anil.recoil.org\n\n" in
               Cstruct.blit_from_string http_get 0 page 0 (String.length http_get);
               let buf = Cstruct.sub page 0 (String.length http_get) in
-              Client.TCPV4.write flow buf >>= function
+              Client.TCP.write flow buf >>= function
               | Error `Closed ->
                 Log.err (fun f ->
                     f "EOF writing HTTP request to www.google.com:80");
@@ -168,7 +168,7 @@ let test_tcp_forwards () =
                 failwith "Failure on writing HTTP GET"
               | Ok () ->
                 let rec loop total_bytes =
-                  Client.TCPV4.read flow >>= function
+                  Client.TCP.read flow >>= function
                   | Ok `Eof     -> Lwt.return total_bytes
                   | Error _ ->
                     Log.err (fun f ->
@@ -190,7 +190,7 @@ let test_tcp_forwards () =
           failwith "http_fetch dns"
       ) (fun () ->
         Forwards.update [];
-        ForwardsTest.shutdown forwarder
+        ForwardsTest.stop forwarder
       )
   in
   run ~pcap:"test_tcp_forwards.pcap" t
@@ -232,7 +232,7 @@ module DevNullServer = struct
     { local_port; server }
 
   let to_string t = Printf.sprintf "tcp:127.0.0.1:%d" t.local_port
-  let destroy t = Host.Sockets.Stream.Tcp.shutdown t.server
+  let destroy t = Host.Sockets.Stream.Tcp.stop t.server
   let with_server f =
     create () >>= fun server ->
     Lwt.finalize (fun () -> f server) (fun () -> destroy server)
@@ -258,8 +258,8 @@ let test_many_connections n () =
       if Connection_limit.get_num_connections () >= n
       then Lwt.return acc
       else
-        Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t)
-          (Ipaddr.V4.localhost, local_port)
+        Client.TCP.create_connection (Client.tcp stack.Client.t)
+          (Ipaddr.V4 Ipaddr.V4.localhost, local_port)
         >>= function
         | Ok c ->
           Log.info (fun f ->
@@ -283,8 +283,8 @@ let test_stream_data connections length () =
   let t local_port _ stack =
     Lwt_list.iter_p (fun () ->
         let rec connect () =
-          Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t)
-            (Ipaddr.V4.localhost, local_port)
+          Client.TCP.create_connection (Client.tcp stack.Client.t)
+            (Ipaddr.V4 Ipaddr.V4.localhost, local_port)
           >>= function
           | Error `Refused ->
             Log.info (fun f -> f "DevNullServer Refused connection");
@@ -297,8 +297,8 @@ let test_stream_data connections length () =
           | Error e ->
             Log.err (fun f ->
                 f "DevNullServer connnection failure: %a"
-                  Client.TCPV4.pp_error e);
-            Fmt.kstr failwith "%a" Client.TCPV4.pp_error e
+                  Client.TCP.pp_error e);
+            Fmt.kstr failwith "%a" Client.TCP.pp_error e
           | Ok flow ->
             Log.info (fun f -> f "Connected to local server");
             Lwt.return flow
@@ -313,7 +313,7 @@ let test_stream_data connections length () =
           else begin
             let this_time = min remaining (Cstruct.length page) in
             let buf = Cstruct.sub page 0 this_time in
-            Client.TCPV4.write flow buf >>= function
+            Client.TCP.write flow buf >>= function
             | Error `Closed ->
               Log.err (fun f ->
                   f "EOF writing to DevNullServerwith %d bytes left"
@@ -331,8 +331,8 @@ let test_stream_data connections length () =
           end
         in
         loop length >>= fun () ->
-        Client.TCPV4.close flow >>= fun () ->
-        Client.TCPV4.read flow >|= function
+        Client.TCP.close flow >>= fun () ->
+        Client.TCP.read flow >|= function
         | Ok `Eof ->
           Log.err (fun f -> f "EOF reading result from DevNullServer");
           (* failwith "EOF reading result from DevNullServer" *)

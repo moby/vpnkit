@@ -85,7 +85,7 @@ struct
 
   let expire table by_last_use flow =
     Lwt.catch (fun () ->
-        Udp.shutdown flow.server
+        Udp.stop flow.server
       ) (fun e ->
         Log.err (fun f ->
             f "Hostnet_udp %s: close raised %a" flow.description Fmt.exn e);

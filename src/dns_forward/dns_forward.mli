@@ -37,7 +37,7 @@ module Flow: sig
       on a well-known address (see Server) *)
 
   module type Client = sig
-    include Mirage_flow_combinators.SHUTDOWNABLE
+    include Mirage_flow.S
 
     type address
     (** Identifies an endpoint for [connect] *)
@@ -64,7 +64,7 @@ module Flow: sig
     (** Accept connections forever, calling the callback with each one.
         Connections are closed automatically when the callback finishes. *)
 
-    val shutdown: server -> unit Lwt.t
+    val stop: server -> unit Lwt.t
     (** Stop accepting connections on the given server *)
   end
 end
@@ -253,7 +253,7 @@ module Rpc: sig
       (** Listen and accept incoming connections, use the provided callback to
           answer requests. *)
 
-      val shutdown: server -> unit Lwt.t
+      val stop: server -> unit Lwt.t
       (** Shutdown the server and free any allocated resources. *)
     end
 

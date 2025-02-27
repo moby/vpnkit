@@ -22,7 +22,7 @@ module Server = struct
     Host.Sockets.Stream.Tcp.listen server on_accept;
     Lwt.return { server; port }
   let destroy t =
-    Host.Sockets.Stream.Tcp.shutdown t.server
+    Host.Sockets.Stream.Tcp.stop t.server
 end
 let with_server on_accept f =
   Server.create on_accept
@@ -30,7 +30,7 @@ let with_server on_accept f =
   Lwt.finalize (fun () -> f server) (fun () -> Server.destroy server)
 
 module Outgoing = struct
-  module C = Mirage_channel.Make(Slirp_stack.Client.TCPV4)
+  module C = Mirage_channel.Make(Slirp_stack.Client.TCP)
 end
 module Incoming = struct
   module C = Mirage_channel.Make(Host.Sockets.Stream.Tcp)
@@ -85,7 +85,7 @@ let test_mirage_half_close () =
         let open Slirp_stack in
         let ip = Ipaddr.V4.localhost in
         let port = server.Server.port in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
+        Client.TCP.create_connection (Client.tcp stack.t) (Ipaddr.V4 ip, port)
         >|= flow ip port >>= fun flow ->
         Log.info (fun f -> f "Connected to %a:%d" Ipaddr.V4.pp ip port);
         let oc = Outgoing.C.create flow in
@@ -93,7 +93,7 @@ let test_mirage_half_close () =
         Outgoing.C.flush oc >|= unit >>= fun () ->
 
         (* This will perform a TCP half-close *)
-        Client.TCPV4.close flow >>= fun () ->
+        Client.TCP.close flow >>= fun () ->
 
         (* Verify the response is still intact *)
         Outgoing.C.read_line oc >|= data >>= fun bufs ->
@@ -124,7 +124,7 @@ let test_host_half_close () =
         Incoming.C.flush ic >|= unit >>= fun () ->
 
         (* This will perform a TCP half-close *)
-        Host.Sockets.Stream.Tcp.shutdown_write flow >>= fun () ->
+        Host.Sockets.Stream.Tcp.shutdown flow `write >>= fun () ->
 
         (* Read the response from the other side of the connection *)
         Incoming.C.read_line ic >|= data
@@ -141,7 +141,7 @@ let test_host_half_close () =
         let open Slirp_stack in
         let ip = Ipaddr.V4.localhost in
         let port = server.Server.port in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
+        Client.TCP.create_connection (Client.tcp stack.t) (Ipaddr.V4 ip, port)
         >|= flow ip port >>= fun flow ->
         Log.info (fun f -> f "Connected to %a:%d" Ipaddr.V4.pp ip port);
         let oc = Outgoing.C.create flow in
@@ -176,7 +176,7 @@ let test_connect_valid_invalid_port () =
             let open Slirp_stack in
             let ip = Ipaddr.V4.localhost in
             let port = server.Server.port in
-            let mkconn = Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
+            let mkconn = Client.TCP.create_connection (Client.tcp stack.t) (Ipaddr.V4 ip, port)
             >|= function
             | Ok _ ->
               Log.debug (fun f ->
@@ -189,7 +189,7 @@ let test_connect_valid_invalid_port () =
               Server.destroy server;
             >>= fun () ->
               (* Now that a server is down, connect to an invalid port and ensure it fails quickly *)
-              Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
+              Client.TCP.create_connection (Client.tcp stack.t) (Ipaddr.V4 ip, port)
               >|= function
               | Ok _ ->
                 Log.err (fun f ->
@@ -218,7 +218,7 @@ let test_connect_valid_invalid_port () =
               let rec mkconn = function
               | 0 -> Lwt.return ();
               | 3 -> Server.destroy server >>= fun () -> mkconn 1;
-              | count -> Client.TCPV4.create_connection (Client.tcpv4 stack.t) (ip, port)
+              | count -> Client.TCP.create_connection (Client.tcp stack.t) (Ipaddr.V4 ip, port)
                 >|= function
                 | Ok _ ->
                   Log.debug (fun f ->

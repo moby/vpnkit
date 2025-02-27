@@ -370,8 +370,8 @@ module Server = struct
         );
       Lwt_result.return ()
 
-    let shutdown server =
-      Sockets.shutdown server.server
+    let stop server =
+      Sockets.stop server.server
 
   end
 end

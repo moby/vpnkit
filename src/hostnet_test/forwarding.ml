@@ -27,8 +27,7 @@ module ForwardServer = struct
   module Mux = Forwarder.Multiplexer.Make(Host.Sockets.Stream.Tcp)
 
   module Proxy =
-    Mirage_flow_combinators.Proxy
-      (Mclock)(Mux.Channel)(Host.Sockets.Stream.Tcp)
+    Mirage_flow_combinators.Proxy (Mux.Channel)(Host.Sockets.Stream.Tcp)
 
   let accept flow =
     let forever, _u = Lwt.task () in
@@ -171,7 +170,7 @@ module PortsServer = struct
       );
     f port
     >>= fun () ->
-    Host.Sockets.Stream.Tcp.shutdown server
+    Host.Sockets.Stream.Tcp.stop server
 end
 
 module LocalTCPClient = struct
@@ -270,7 +269,7 @@ module LocalTCPServer = struct
     { local_port; server }
 
   let to_string t = Printf.sprintf "tcp:127.0.0.1:%d" t.local_port
-  let destroy t = Host.Sockets.Stream.Tcp.shutdown t.server
+  let destroy t = Host.Sockets.Stream.Tcp.stop t.server
   let with_server f =
     create () >>= fun server ->
     Lwt.finalize (fun () -> f server) (fun () -> destroy server)
@@ -313,7 +312,7 @@ module LocalUDPServer = struct
     { local_port; server }
 
   let to_string t = Printf.sprintf "udp:127.0.0.1:%d" t.local_port
-  let destroy t = Host.Sockets.Datagram.Udp.shutdown t.server
+  let destroy t = Host.Sockets.Datagram.Udp.stop t.server
   let with_server f =
     create () >>= fun server ->
     Lwt.finalize (fun () -> f server) (fun () -> Log.info (fun f -> f "LocalUDPServer closing server socket"); destroy server)
@@ -394,7 +393,7 @@ let http_get flow =
   Channel.flush ch >>= function
   | Error e -> Fmt.kstr failwith "%a" Channel.pp_write_error e
   | Ok ()   ->
-    Host.Sockets.Stream.Tcp.shutdown_write flow
+    Host.Sockets.Stream.Tcp.shutdown flow `write
     >>= fun () ->
     read_http ch
     >|= fun response ->
@@ -511,7 +510,7 @@ let test_tcpv4_forwarded_configuration () =
       (fun () ->
         Host.Sockets.Stream.Tcp.listen server LocalTCPServer.accept;
         let open Slirp_stack in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.Client.t) (primary_dns_ip, local_tcpv4_forwarded_port)
+        Client.TCP.create_connection (Client.tcp stack.Client.t) (primary_dns_ip, local_tcpv4_forwarded_port)
         >>= function
         | Error _ ->
           Log.err (fun f -> f "Failed to connect to gateway:%d" local_tcpv4_forwarded_port);
@@ -522,7 +521,7 @@ let test_tcpv4_forwarded_configuration () =
           let http_get = "GET / HTTP/1.0\nHost: dave.recoil.org\n\n" in
           Cstruct.blit_from_string http_get 0 page 0 (String.length http_get);
           let buf = Cstruct.sub page 0 (String.length http_get) in
-          Client.TCPV4.write flow buf >>= function
+          Client.TCP.write flow buf >>= function
           | Error `Closed ->
             Log.err (fun f ->
                 f "EOF writing HTTP request to gateway:%d" local_tcpv4_forwarded_port);
@@ -533,7 +532,7 @@ let test_tcpv4_forwarded_configuration () =
             failwith "Failure on writing HTTP GET"
           | Ok () ->
             let rec loop total_bytes =
-              Client.TCPV4.read flow >>= function
+              Client.TCP.read flow >>= function
               | Ok `Eof     -> Lwt.return total_bytes
               | Error _ ->
                 Log.err (fun f ->
@@ -548,7 +547,7 @@ let test_tcpv4_forwarded_configuration () =
             loop 0 >|= fun total_bytes ->
             Log.info (fun f -> f "Response had %d total bytes" total_bytes);
     ) (fun () ->
-      Host.Sockets.Stream.Tcp.shutdown server
+      Host.Sockets.Stream.Tcp.stop server
     )
     in
     run ~pcap:"test_tcpv4_forwarded_configuration" t

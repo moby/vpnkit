@@ -84,18 +84,19 @@ struct
   (* This stack will attach to a switch port and represent a single remote IP *)
   module Stack_ethif = Ethernet.Make(Switch.Port)
   module Stack_arpv4 = Static_arp.Make(Stack_ethif)
-  module Stack_ipv4 = Static_ipv4.Make(Random)(Clock)(Stack_ethif)(Stack_arpv4)
+  module Stack_ipv4 = Static_ipv4.Make(Stack_ethif)(Stack_arpv4)
   module Stack_icmpv4 = Icmpv4.Make(Stack_ipv4)
   module Stack_tcp_wire = Tcp.Wire.Make(Stack_ipv4)
-  module Stack_udp = Udp.Make(Stack_ipv4)(Random)
+  module Stack_udp = Udp.Make(Stack_ipv4)
   module Stack_tcp = struct
-    include Tcp.Flow.Make(Stack_ipv4)(Host.Time)(Clock)(Random)
-    let shutdown_read _flow =
+    include Tcp.Flow.Make(Stack_ipv4)
+    let shutdown flow = function
+      | `read ->
       (* No change to the TCP PCB: all this means is that I've
          got my finders in my ears and am nolonger listening to
          what you say. *)
       Lwt.return ()
-    let shutdown_write = close
+      | `write | `read_write -> close flow
     (* Disable Nagle's algorithm *)
     let write = write_nodelay
   end
@@ -377,7 +378,7 @@ struct
       end
 
     module Proxy =
-      Mirage_flow_combinators.Proxy(Clock)(Stack_tcp)(Forwards.Stream.Tcp)
+      Mirage_flow_combinators.Proxy (Stack_tcp)(Forwards.Stream.Tcp)
 
     let forward_via_tcp_socket t ~id (ip, port) () =
       Forwards.Stream.Tcp.connect (ip, port)
@@ -429,12 +430,12 @@ struct
       let would_fragment ~ip_header ~ip_payload =
         let open Icmpv4_wire in
         let header = Cstruct.create sizeof_icmpv4 in
-        set_icmpv4_ty header 0x03;
-        set_icmpv4_code header 0x04;
-        set_icmpv4_csum header 0x0000;
+        set_ty header 0x03;
+        set_code header 0x04;
+        set_checksum header 0x0000;
         (* this field is unused for icmp destination unreachable *)
-        set_icmpv4_id header 0x00;
-        set_icmpv4_seq header safe_outgoing_mtu;
+        Cstruct.BE.set_uint16 header 5 0x00; (* Set ID *)
+        Cstruct.BE.set_uint16 header 7 safe_outgoing_mtu; (* Set seq *)
         let icmp_payload = match ip_payload with
         | Some ip_payload ->
           if (Cstruct.length ip_payload > 8) then begin
@@ -443,7 +444,7 @@ struct
           end else Cstruct.append ip_header ip_payload
         | None -> ip_header
         in
-        set_icmpv4_csum header
+        set_checksum header
           (Tcpip_checksum.ones_complement_list [ header;
                                                  icmp_payload ]);
         let icmp_packet = Cstruct.append header icmp_payload in

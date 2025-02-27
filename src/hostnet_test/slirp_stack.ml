@@ -72,10 +72,10 @@ module Slirp_stack =
 module Client = struct
   module Netif = VMNET
   module Ethif1 = Ethernet.Make(Netif)
-  module Arpv41 = Arp.Make(Ethif1)(Host.Time)
+  module Arpv41 = Arp.Make(Ethif1)
 
-  module Dhcp_client_mirage1 = Dhcp_client_mirage.Make(Mirage_random_stdlib)(Host.Time)(Netif)
-  module Ipv41 = Dhcp_ipv4.Make(Mirage_random_stdlib)(Mclock)(Host.Time)(Netif)(Ethif1)(Arpv41)
+  module Dhcp_client_mirage1 = Dhcp_client_mirage.Make(Netif)
+  module Ipv41 = Dhcp_ipv4.Make(Netif)(Ethif1)(Arpv41)
   module Icmpv41 = struct
     include Icmpv4.Make(Ipv41)
     let packets = Queue.create ()
@@ -97,10 +97,11 @@ module Client = struct
               Lwt.return_unit
         end
   end
-  module Udp1 = Udp.Make(Ipv41)(Mirage_random_stdlib)
-  module Tcp1 = Tcp.Flow.Make(Ipv41)(Host.Time)(Mclock)(Mirage_random_stdlib)
-  include Tcpip_stack_direct.Make(Host.Time)
-      (Mirage_random_stdlib)(Netif)(Ethif1)(Arpv41)(Ipv41)(Icmpv41)(Udp1)(Tcp1)
+  module Ipv61 = Ipv6.Make(Netif)(Ethif1)
+  module Ipv = Tcpip_stack_direct.IPV4V6(Ipv41)(Ipv61)
+  module Udp1 = Udp.Make(Ipv)
+  module Tcp1 = Tcp.Flow.Make(Ipv)
+  include Tcpip_stack_direct.MakeV4V6 (Netif)(Ethif1)(Arpv41)(Ipv)(Icmpv41)(Udp1)(Tcp1)
 
   let or_error name m =
     m >>= function
@@ -118,10 +119,12 @@ module Client = struct
     Arpv41.connect ethif >>= fun arp ->
     Dhcp_client_mirage1.connect interface >>= fun _dhcp ->
     Ipv41.connect interface ethif arp >>= fun ipv4 ->
+    Ipv61.connect interface ethif >>= fun ipv6 ->
+    Ipv.connect ~ipv4_only:true ~ipv6_only:false ipv4 ipv6 >>= fun ip ->
     Icmpv41.connect ipv4 >>= fun icmpv4 ->
-    Udp1.connect ipv4 >>= fun udp4 ->
-    Tcp1.connect ipv4 >>= fun tcp4 ->
-    connect interface ethif arp ipv4 icmpv4 udp4 tcp4
+    Udp1.connect ip >>= fun udp4 ->
+    Tcp1.connect ip >>= fun tcp4 ->
+    connect interface ethif arp ip icmpv4 udp4 tcp4
     >>= fun t ->
     Log.info (fun f -> f "Client has connected");
     Lwt.return { t; icmpv4 ; netif=interface }
@@ -129,9 +132,9 @@ end
 
 module DNS = Dns_resolver_mirage.Make(Host.Time)(Client)
 
-let primary_dns_ip = Ipaddr.V4.of_string_exn "192.168.65.1"
+let primary_dns_ip = Ipaddr.of_string_exn "192.168.65.1"
 
-let localhost_ip = Ipaddr.V4.of_string_exn "192.168.65.2"
+let localhost_ip = Ipaddr.of_string_exn "192.168.65.2"
 
 let preferred_ip1 = Ipaddr.V4.of_string_exn "192.168.65.250"
 
@@ -185,11 +188,12 @@ let start_stack config () =
 
 let stop_stack server =
   Log.info (fun f -> f "Shutting down slirp stack");
-  Host.Sockets.Stream.Tcp.shutdown server
+  Host.Sockets.Stream.Tcp.stop server
 
 let pcap_dir = "./_pcap/"
 
 let with_stack ?uuid ?preferred_ip ~pcap f =
+
   config >>= fun config ->
   start_stack config ()
   >>= fun (server, port) ->

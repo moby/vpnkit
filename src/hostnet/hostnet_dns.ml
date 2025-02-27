@@ -260,23 +260,23 @@ struct
       Ethernet__Ethernet_wire.set_ethernet_src smac 0 frame;
       Ethernet__Ethernet_wire.set_ethernet_ethertype frame 0x0800;
       let buf = Cstruct.shift frame Ethernet.Packet.sizeof_ethernet in
-      Ipv4_wire.set_ipv4_hlen_version buf ((4 lsl 4) + (5));
-      Ipv4_wire.set_ipv4_tos buf 0;
-      Ipv4_wire.set_ipv4_ttl buf 38;
+      Ipv4_wire.set_hlen_version buf ((4 lsl 4) + (5));
+      Cstruct.set_uint8 buf 0 0;
+      Ipv4_wire.set_ttl buf 38;
       let proto = Ipv4_packet.Marshal.protocol_to_int `UDP in
-      Ipv4_wire.set_ipv4_proto buf proto;
-      Ipv4_wire.set_ipv4_src buf (Ipaddr.V4.to_int32 source_ip);
-      Ipv4_wire.set_ipv4_dst buf (Ipaddr.V4.to_int32 dest_ip);
+      Ipv4_wire.set_proto buf proto;
+      Ipv4_wire.set_src buf source_ip;
+      Ipv4_wire.set_dst buf dest_ip;
       let header_len =
         Ethernet.Packet.sizeof_ethernet + Ipv4_wire.sizeof_ipv4
       in
 
       let frame = Cstruct.sub frame 0 (header_len + Udp_wire.sizeof_udp) in
       let udp_buf = Cstruct.shift frame header_len in
-      Udp_wire.set_udp_source_port udp_buf source_port;
-      Udp_wire.set_udp_dest_port udp_buf dest_port;
-      Udp_wire.set_udp_length udp_buf (Udp_wire.sizeof_udp + Cstruct.lenv bufs);
-      Udp_wire.set_udp_checksum udp_buf 0;
+      Udp_wire.set_src_port udp_buf source_port;
+      Udp_wire.set_dst_port udp_buf dest_port;
+      Udp_wire.set_length udp_buf (Udp_wire.sizeof_udp + Cstruct.lenv bufs);
+      Udp_wire.set_checksum udp_buf 0;
       (* Only for recording, no need to set a checksum. *)
       (* Ip.writev *)
       let bufs = frame :: bufs in
@@ -288,9 +288,9 @@ struct
         Cstruct.sub frame Ethernet.Packet.sizeof_ethernet Ipv4_wire.sizeof_ipv4
       in
       (* Set the mutable values in the ipv4 header *)
-      Ipv4_wire.set_ipv4_len buf tlen;
-      Ipv4_wire.set_ipv4_id buf (Random.int 65535); (* TODO *)
-      Ipv4_wire.set_ipv4_csum buf 0;
+      Ipv4_wire.set_len buf tlen;
+      Ipv4_wire.set_id buf (Random.int 65535); (* TODO *)
+      Ipv4_wire.set_checksum buf 0;
       (* Only for recording, no need to set a checksum *)
       Recorder.record recorder bufs
     | None ->

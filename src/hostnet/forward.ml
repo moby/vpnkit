@@ -142,7 +142,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
     Mux.Channel.connect mux destination
 
   let start_tcp_proxy description remote_port server =
-    let module Proxy = Mirage_flow_combinators.Proxy(Clock)(Mux.Channel)(Socket.Stream.Tcp) in
+    let module Proxy = Mirage_flow_combinators.Proxy(Mux.Channel)(Socket.Stream.Tcp) in
     Socket.Stream.Tcp.listen server (fun local ->
         open_channel remote_port
         >>= fun remote ->
@@ -155,8 +155,8 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
             | Ok (l_stats, r_stats) ->
               Log.debug (fun f ->
                   f "%s completed: l2r = %a; r2l = %a" description
-                    Mirage_flow.pp_stats l_stats
-                    Mirage_flow.pp_stats r_stats
+                    Mirage_flow_combinators.pp_stats l_stats
+                    Mirage_flow_combinators.pp_stats r_stats
                 )
           ) (fun () ->
             Mux.Channel.close remote
@@ -165,7 +165,7 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
     Lwt.return ()
 
   let start_unix_proxy description remote_port server =
-    let module Proxy = Mirage_flow_combinators.Proxy(Clock)(Mux.Channel)(Socket.Stream.Unix) in
+    let module Proxy = Mirage_flow_combinators.Proxy(Mux.Channel)(Socket.Stream.Unix) in
     Socket.Stream.Unix.listen server (fun local ->
         open_channel remote_port
         >>= fun remote ->
@@ -178,8 +178,8 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
             | Ok (l_stats, r_stats) ->
               Log.debug (fun f ->
                   f "%s completed: l2r = %a; r2l = %a" description
-                    Mirage_flow.pp_stats l_stats
-                    Mirage_flow.pp_stats r_stats
+                    Mirage_flow_combinators.pp_stats l_stats
+                    Mirage_flow_combinators.pp_stats r_stats
                 )
           ) (fun () ->
             Mux.Channel.close remote
@@ -379,9 +379,9 @@ unix:<base64-encoded local path>:unix:<base64-encoded remote path>"
   let stop t =
     Log.debug (fun f -> f "%s: closing listening socket" (to_string t));
     match t.server with
-    | Some (`Tcp s) -> Socket.Stream.Tcp.shutdown s
-    | Some (`Udp s) -> Socket.Datagram.Udp.shutdown s
-    | Some (`Unix s) -> Socket.Stream.Unix.shutdown s
+    | Some (`Tcp s) -> Socket.Stream.Tcp.stop s
+    | Some (`Udp s) -> Socket.Datagram.Udp.stop s
+    | Some (`Unix s) -> Socket.Stream.Unix.stop s
     | None -> Lwt.return_unit
 
   let of_string x =

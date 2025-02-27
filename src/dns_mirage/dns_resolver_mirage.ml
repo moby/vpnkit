@@ -20,7 +20,7 @@ open Dns_resolver
 
 module DP = Packet
 
-let default_ns = Ipaddr.V4.of_string_exn "8.8.8.8"
+let default_ns = Ipaddr.of_string_exn "8.8.8.8"
 let default_port = 53
 
 module type S = sig
@@ -31,20 +31,20 @@ module type S = sig
 
   val resolve :
     (module Protocol.CLIENT) ->
-    t -> Ipaddr.V4.t -> int ->
+    t -> Ipaddr.t -> int ->
     Packet.q_class ->
     Packet.q_type ->
     Name.t ->
     Packet.t Lwt.t
 
   val gethostbyname : t ->
-    ?server:Ipaddr.V4.t -> ?dns_port:int ->
+    ?server:Ipaddr.t -> ?dns_port:int ->
     ?q_class:Dns.Packet.q_class ->
     ?q_type:Dns.Packet.q_type ->
     string -> Ipaddr.t list Lwt.t
 
   val gethostbyaddr : t ->
-    ?server:Ipaddr.V4.t -> ?dns_port:int ->
+    ?server:Ipaddr.t -> ?dns_port:int ->
     ?q_class:Dns.Packet.q_class ->
     ?q_type:Dns.Packet.q_type ->
     Ipaddr.V4.t -> string list Lwt.t
@@ -80,10 +80,10 @@ module Static = struct
    return (Hashtbl.find_all s.rev addr)
 end
 
-module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4) = struct
+module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4V6) = struct
 
   type stack = S.t
-  type endp = Ipaddr.V4.t * int
+  type endp = Ipaddr.t * int
 
   type t = {
     s: S.t;
@@ -95,7 +95,7 @@ module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4) = struct
     { s; res }
 
   let connect_to_resolver {s; res} ((dst,dst_port) as endp) =
-    let udp = S.udpv4 s in
+    let udp = S.udp s in
     try
       Hashtbl.find res endp
     with Not_found ->
@@ -105,13 +105,13 @@ module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4) = struct
       let src_port = (Random.int 64511) + 1024 in
       let callback ~src:_ ~dst:_ ~src_port:_ buf = Lwt_mvar.put mvar buf in
       let cleanfn () = return () in
-      S.UDPV4.listen (S.udpv4 s) ~port:src_port callback;
+      S.UDP.listen (S.udp s) ~port:src_port callback;
       let txfn buf =
-        S.UDPV4.write ~src_port ~dst ~dst_port udp buf >>= function
+        S.UDP.write ~src_port ~dst ~dst_port udp buf >>= function
         | Error e ->
           Fmt.kstr fail_with
             "Attempting to communicate with remote resolver: %a"
-            S.UDPV4.pp_error e
+            S.UDP.pp_error e
         | Ok () -> Lwt.return_unit
       in
       let rec rxfn f =

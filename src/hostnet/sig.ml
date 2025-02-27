@@ -8,7 +8,7 @@ module type READ_INTO = sig
 end
 
 module type FLOW_CLIENT = sig
-  include Mirage_flow_combinators.SHUTDOWNABLE
+  include Mirage_flow.S
 
   type address
 
@@ -53,7 +53,7 @@ module type FLOW_SERVER = sig
   (** Accept connections forever, calling the callback with each one.
       Connections are closed automatically when the callback finishes. *)
 
-  val shutdown: server -> unit Lwt.t
+  val stop : server -> unit Lwt.t
   (** Stop accepting connections on the given server *)
 end
 

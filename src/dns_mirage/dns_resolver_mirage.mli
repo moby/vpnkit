@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-val default_ns : Ipaddr.V4.t
+val default_ns : Ipaddr.t
 val default_port : int
 
 module type S = sig
@@ -25,20 +25,20 @@ module type S = sig
 
   val resolve :
     (module Dns.Protocol.CLIENT) ->
-    t -> Ipaddr.V4.t -> int ->
+    t -> Ipaddr.t -> int ->
     Dns.Packet.q_class ->
     Dns.Packet.q_type ->
     Dns.Name.t ->
     Dns.Packet.t Lwt.t
 
   val gethostbyname : t ->
-    ?server:Ipaddr.V4.t -> ?dns_port:int ->
+    ?server:Ipaddr.t -> ?dns_port:int ->
     ?q_class:Dns.Packet.q_class ->
     ?q_type:Dns.Packet.q_type ->
     string -> Ipaddr.t list Lwt.t
 
   val gethostbyaddr : t ->
-    ?server:Ipaddr.V4.t -> ?dns_port:int ->
+    ?server:Ipaddr.t -> ?dns_port:int ->
     ?q_class:Dns.Packet.q_class ->
     ?q_type:Dns.Packet.q_type ->
     Ipaddr.V4.t -> string list Lwt.t
@@ -52,4 +52,4 @@ type static_dns =
 
 module Static : S with type stack = static_dns
 
-module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4) : S with type stack = S.t
+module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4V6) : S with type stack = S.t

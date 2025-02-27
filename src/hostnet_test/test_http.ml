@@ -87,7 +87,7 @@ module Server = struct
     Host.Sockets.Stream.Tcp.listen server on_accept;
     Lwt.return { server; port }
   let destroy t =
-    Host.Sockets.Stream.Tcp.shutdown t.server
+    Host.Sockets.Stream.Tcp.stop t.server
 end
 let with_server on_accept f =
   Server.create on_accept
@@ -95,7 +95,7 @@ let with_server on_accept f =
   Lwt.finalize (fun () -> f server) (fun () -> Server.destroy server)
 
 module Outgoing = struct
-  module C = Mirage_channel.Make(Slirp_stack.Client.TCPV4)
+  module C = Mirage_channel.Make(Slirp_stack.Client.TCP)
   module IO = Cohttp_mirage_io.Make(C)
   module Request = Cohttp.Request.Make(IO)
   module Response = Cohttp.Response.Make(IO)
@@ -109,15 +109,15 @@ end
 
 let send_http_request stack (ip, port) request =
   let open Slirp_stack in
-  Client.TCPV4.create_connection (Client.tcpv4 stack) (ip, port)
+  Client.TCP.create_connection (Client.tcp stack) (ip, port)
   >>= function
   | Ok flow ->
-    Log.info (fun f -> f "Connected to %s:80" (Ipaddr.V4.to_string ip));
+    Log.info (fun f -> f "Connected to %s:80" (Ipaddr.to_string ip));
     let oc = Outgoing.C.create flow in
     Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit)
       request oc
   | Error _ ->
-    Log.err (fun f -> f "Failed to connect to %s:80" (Ipaddr.V4.to_string ip));
+    Log.err (fun f -> f "Failed to connect to %s:80" (Ipaddr.to_string ip));
     failwith "http_fetch"
 
 let intercept ~pcap ?(port = 80) proxy request =
@@ -145,7 +145,7 @@ let intercept ~pcap ?(port = 80) proxy request =
           >>= function
           | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
           | Ok () ->
-            send_http_request stack.t (Ipaddr.V4.of_string_exn "127.0.0.1", port)
+            send_http_request stack.t (Ipaddr.of_string_exn "127.0.0.1", port)
               request
             >>= fun () ->
             Lwt.pick [
@@ -335,7 +335,7 @@ let test_proxy_authorization proxy () =
 let err_flush e = Fmt.kstr failwith "%a" Incoming.C.pp_write_error e
 
 let test_http_connect_tunnel proxy () =
-  let test_dst_ip = Ipaddr.V4.of_string_exn "1.2.3.4" in
+  let test_dst_ip = Ipaddr.of_string_exn "1.2.3.4" in
   Host.Main.run begin
     Slirp_stack.with_stack ~pcap:"test_http_connect.pcap" (fun _ stack ->
         with_server (fun flow ->
@@ -356,14 +356,14 @@ let test_http_connect_tunnel proxy () =
                 (Cohttp.Code.string_of_method req.Cohttp.Request.meth);
               let uri = Cohttp.Request.uri req in
               Alcotest.check Alcotest.(option string) "host"
-                (Some (Ipaddr.V4.to_string test_dst_ip)) (Uri.host uri);
+                (Some (Ipaddr.to_string test_dst_ip)) (Uri.host uri);
               Alcotest.check Alcotest.(option int) "port" (Some 443)
                 (Uri.port uri);
               Alcotest.check Alcotest.(option string) "host"
-                (Some (Ipaddr.V4.to_string test_dst_ip ^ ":443"))
+                (Some (Ipaddr.to_string test_dst_ip ^ ":443"))
                 (Cohttp.Header.get req.Cohttp.Request.headers "host");
               Alcotest.check Alcotest.string "resource"
-                (Ipaddr.V4.to_string test_dst_ip ^ ":443")
+                (Ipaddr.to_string test_dst_ip ^ ":443")
                 req.Cohttp.Request.resource;
               (* If the proxy uses auth, then there has to be a Proxy-Authorization
                  header. If theres no auth, there should be no header. *)
@@ -396,13 +396,13 @@ let test_http_connect_tunnel proxy () =
             | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
             | Ok () ->
               let open Slirp_stack in
-              Client.TCPV4.create_connection (Client.tcpv4 stack.t)
+              Client.TCP.create_connection (Client.tcp stack.t)
                 (test_dst_ip, 443)
               >>= function
               | Error _ ->
                 Log.err (fun f ->
                     f "TCPV4.create_connection %a:443 failed"
-                      Ipaddr.V4.pp test_dst_ip);
+                      Ipaddr.pp test_dst_ip);
                 failwith "TCPV4.create_connection"
               | Ok flow ->
                 let ic = Outgoing.C.create flow in
@@ -477,13 +477,13 @@ let test_http_connect_tunnel proxy () =
               | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
               | Ok () ->
                 let open Slirp_stack in
-                Client.TCPV4.create_connection (Client.tcpv4 stack.t)
+                Client.TCP.create_connection (Client.tcp stack.t)
                   (primary_dns_ip, 3129)
                 >>= function
                 | Error _ ->
                   Log.err (fun f ->
                       f "TCPV4.create_connection %s:%d failed"
-                        (Ipaddr.V4.to_string primary_dns_ip) 3129);
+                        (Ipaddr.to_string primary_dns_ip) 3129);
                   failwith "TCPV4.create_connection"
                 | Ok flow ->
                   let oc = Outgoing.C.create flow in
@@ -551,13 +551,13 @@ let test_http_connect_tunnel proxy () =
             | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
             | Ok () ->
               let open Slirp_stack in
-              Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+              Client.TCP.create_connection (Client.tcp stack.t) (primary_dns_ip, 3128)
               >>= function
               | Error _ ->
-                Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+                Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.to_string primary_dns_ip));
                 failwith "test_proxy_connect: connect failed"
               | Ok flow ->
-                Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+                Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.to_string primary_dns_ip));
                 let oc = Outgoing.C.create flow in
                 let request =
                   let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
@@ -615,13 +615,13 @@ let test_http_connect_tunnel proxy () =
       | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
       | Ok () ->
         let open Slirp_stack in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+        Client.TCP.create_connection (Client.tcp stack.t) (primary_dns_ip, 3128)
         >>= function
         | Error _ ->
-          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.to_string primary_dns_ip));
           failwith "test_proxy_connect_rejected: connect failed"
         | Ok flow ->
-          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
           let request =
             let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
@@ -656,13 +656,13 @@ let test_http_connect_tunnel proxy () =
         | Error (`Msg m) -> failwith ("Failed to enable HTTP proxy: " ^ m)
         | Ok () ->
         let open Slirp_stack in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+        Client.TCP.create_connection (Client.tcp stack.t) (primary_dns_ip, 3128)
         >>= function
         | Error _ ->
-          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.to_string primary_dns_ip));
           failwith "test_proxy_connect_fail: connect failed"
         | Ok flow ->
-          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
           let request =
             let connect = Cohttp.Request.make ~meth:`CONNECT (Uri.make ()) in
@@ -691,13 +691,13 @@ let test_http_connect_tunnel proxy () =
     Host.Main.run begin
       Slirp_stack.with_stack ~pcap:"test_http_proxy_get_dns.pcap" (fun _ stack ->
         let open Slirp_stack in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+        Client.TCP.create_connection (Client.tcp stack.t) (primary_dns_ip, 3128)
         >>= function
         | Error _ ->
-          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.to_string primary_dns_ip));
           failwith "test_proxy_get_dns: connect failed"
         | Ok flow ->
-          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
           let host = "does.not.exist.recoil.org" in
           let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ()) in
@@ -722,13 +722,13 @@ let test_http_connect_tunnel proxy () =
     Host.Main.run begin
       Slirp_stack.with_stack ~pcap:"test_http_proxy_get.pcap" (fun _ stack ->
         let open Slirp_stack in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+        Client.TCP.create_connection (Client.tcp stack.t) (primary_dns_ip, 3128)
         >>= function
         | Error _ ->
-          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.to_string primary_dns_ip));
           failwith "test_proxy_get: connect failed"
         | Ok flow ->
-          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
           let host = "www.mobyproject.org" in
           let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ()) in
@@ -767,13 +767,13 @@ let test_http_connect_tunnel proxy () =
             let host = "127.0.0.1" in
             let port = server.Server.port in
             let open Slirp_stack in
-            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+            Client.TCP.create_connection (Client.tcp stack.t) (primary_dns_ip, 3128)
             >>= function
             | Error _ ->
-              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.to_string primary_dns_ip));
               failwith "test_proxy_get: connect failed"
             | Ok flow ->
-              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.to_string primary_dns_ip));
               let oc = Outgoing.C.create flow in
               let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ~port ()) in
               Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
@@ -839,13 +839,13 @@ let test_http_connect_tunnel proxy () =
             | Error (`Msg m) -> failwith ("Failed to disable HTTP proxy: " ^ m)
             | Ok () ->
               (* Connect to the builtin HTTP Proxy *)
-              Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+              Client.TCP.create_connection (Client.tcp stack.t) (primary_dns_ip, 3128)
               >>= function
               | Error _ ->
-                Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+                Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.to_string primary_dns_ip));
                 failwith "test_connection_close: connect failed"
               | Ok flow ->
-                Log.info (fun f -> f "Connected to %a:3128" Ipaddr.V4.pp primary_dns_ip);
+                Log.info (fun f -> f "Connected to %a:3128" Ipaddr.pp primary_dns_ip);
                 let oc = Outgoing.C.create flow in
                 let request =
                   let uri = Uri.make ~scheme:"http" ~host:"localhost" ~port () in
@@ -911,13 +911,13 @@ let test_http_connect_tunnel proxy () =
             let host = host_or_ip in
             let port = server.Server.port in
             let open Slirp_stack in
-            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+            Client.TCP.create_connection (Client.tcp stack.t) (primary_dns_ip, 3128)
             >>= function
             | Error _ ->
-              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.to_string primary_dns_ip));
               failwith "test_proxy_get: connect failed"
             | Ok flow ->
-              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+              Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.to_string primary_dns_ip));
               let oc = Outgoing.C.create flow in
               let request = Cohttp.Request.make ~meth:`GET (Uri.make ~host ~port ()) in
               Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
@@ -952,13 +952,13 @@ let test_http_connect_tunnel proxy () =
     Host.Main.run begin
       Slirp_stack.with_stack ~pcap:"test_http_proxy_head.pcap" (fun _ stack ->
         let open Slirp_stack in
-        Client.TCPV4.create_connection (Client.tcpv4 stack.t) (primary_dns_ip, 3128)
+        Client.TCP.create_connection (Client.tcp stack.t) (primary_dns_ip, 3128)
         >>= function
         | Error _ ->
-          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.err (fun f -> f "Failed to connect to %s:3128" (Ipaddr.to_string primary_dns_ip));
           failwith "test_proxy_head: connect failed"
         | Ok flow ->
-          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.V4.to_string primary_dns_ip));
+          Log.info (fun f -> f "Connected to %s:3128" (Ipaddr.to_string primary_dns_ip));
           let oc = Outgoing.C.create flow in
           let host = "www.mobyproject.org" in
           let request = Cohttp.Request.make ~meth:`HEAD (Uri.make ~host ()) in
@@ -1028,7 +1028,7 @@ let test_http_connect_tunnel proxy () =
           | Ok () ->
             (* Create a regular HTTP connection, this should be caught by the transparent
                proxy *)
-            Client.TCPV4.create_connection (Client.tcpv4 stack.t) (Ipaddr.V4.of_string_exn host, port)
+            Client.TCP.create_connection (Client.tcp stack.t) (Ipaddr.of_string_exn host, port)
             >>= function
             | Error _ ->
               Log.err (fun f -> f "Failed to connect to %s:%d" host port);
@@ -1090,7 +1090,7 @@ let tests = [
   [ "check that HTTP GET headers are correct", `Quick, test_http_proxy_headers ];
 
   "HTTP proxy: GET to localhost works",
-  [ "check that HTTP GET to localhost via IP", `Quick, test_http_proxy_localhost (Ipaddr.V4.to_string Slirp_stack.localhost_ip) ];
+  [ "check that HTTP GET to localhost via IP", `Quick, test_http_proxy_localhost (Ipaddr.to_string Slirp_stack.localhost_ip) ];
 
   "HTTP proxy: transparent proxy respects excludes",
   [ "check that the transparent proxy will inspect and respect the Host: header", `Quick, test_transparent_http_proxy_exclude ];

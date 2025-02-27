@@ -193,6 +193,13 @@ module Tcp = struct
               Lwt.return_unit
           )
 
+  let shutdown t = function
+    | `read -> shutdown_read t
+    | `write -> shutdown_write t
+    | `read_write ->
+        shutdown_read t >>= fun () ->
+        shutdown_write t
+
   type server = {
     mutable server_fd: Lwt_unix.file_descr option;
     read_buffer_size: int;
@@ -221,7 +228,7 @@ module Tcp = struct
 
   let getsockname server = getsockname "Tcp.getsockname" server.server_fd
 
-  let shutdown server = match server.server_fd with
+  let stop server = match server.server_fd with
   | None -> Lwt.return_unit
   | Some fd ->
       server.server_fd <- None;
@@ -279,7 +286,7 @@ module Tcp = struct
                        Lwt_unix.listen fd 32;
                        loop fd
                     ) (fun () ->
-                        shutdown server
+                         stop server
                       )
                ) (fun e ->
                    Log.info (fun f -> f "%s: caught %s so shutting down server"
@@ -373,8 +380,7 @@ module Udp = struct
       Log.debug (fun f -> f "%s: close" (string_of_flow t));
       Lwt_unix.close fd
 
-  let shutdown_read _t = Lwt.return_unit
-  let shutdown_write _t = Lwt.return_unit
+  let shutdown _t _ = Lwt.return_unit
 
   type server = {
     mutable server_fd: Lwt_unix.file_descr option;
@@ -396,7 +402,7 @@ module Udp = struct
     | e -> errorf "udp:%s: bind caught %s"
              (string_of_address address) (Printexc.to_string e)
 
-  let shutdown t = match t.server_fd with
+  let stop t = match t.server_fd with
   | None -> Lwt.return_unit
   | Some fd ->
       t.server_fd <- None;
