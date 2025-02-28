@@ -58,7 +58,6 @@ module Port = struct
 end
 
 module Make
-    (Clock: Mirage_clock.MCLOCK)
     (Connector: Sig.Connector)
     (Socket: Sig.SOCKETS) =
 struct

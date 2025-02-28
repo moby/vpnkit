@@ -12,7 +12,7 @@ let failf fmt = Fmt.kstr failwith fmt
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
-    Host.Time.sleep_ns timeout >>= fun () ->
+    Mirage_sleep.ns timeout >>= fun () ->
     Lwt.fail_with "timeout"
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
@@ -67,7 +67,7 @@ let test_nmap () =
         scan_all_ports ip (first + 1) last
       end in
     let rec show_status () =
-      Host.Time.sleep_ns (Duration.of_sec 5)
+      Mirage_sleep.ns (Duration.of_sec 5)
       >>= fun () ->
       Log.info (fun f -> f "Connections completed: %d; connections in progress: %d" !completed !cur_concurrent);
       show_status () in
@@ -97,7 +97,7 @@ let test_nmap () =
         >>= function
         | Error e -> failf "Icmpv41.write failed: %a" Client.Icmpv41.pp_error e
         | Ok () ->
-          Host.Time.sleep_ns (Duration.of_sec 1)
+          Mirage_sleep.ns (Duration.of_sec 1)
           >>= fun () ->
           loop (seq + 1)
       end in

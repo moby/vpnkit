@@ -455,26 +455,21 @@ module Udp = struct
         Lwt.async loop
 end
 
-module Time = struct
-  let sleep_ns ns = Lwt_unix.sleep (Duration.to_f ns)
-end
-module Clock = Mclock
-
 module R = struct
   open Dns_forward
-  module Udp_client = Rpc.Client.Nonpersistent.Make(Udp)(Framing.Udp(Udp))(Time)
-  module Udp = Resolver.Make(Udp_client)(Time)(Clock)
+  module Udp_client = Rpc.Client.Nonpersistent.Make(Udp)(Framing.Udp(Udp))
+  module Udp = Resolver.Make(Udp_client)
 
-  module Tcp_client = Rpc.Client.Persistent.Make(Tcp)(Framing.Tcp(Tcp))(Time)
-  module Tcp = Resolver.Make(Tcp_client)(Time)(Clock)
+  module Tcp_client = Rpc.Client.Persistent.Make(Tcp)(Framing.Tcp(Tcp))
+  module Tcp = Resolver.Make(Tcp_client)
 end
 
 module Server = struct
   open Dns_forward
-  module Udp_server = Rpc.Server.Make(Udp)(Framing.Udp(Udp))(Time)
+  module Udp_server = Rpc.Server.Make(Udp)(Framing.Udp(Udp))
   module Udp = Server.Make(Udp_server)(R.Udp)
 
-  module Tcp_server = Rpc.Server.Make(Tcp)(Framing.Tcp(Tcp))(Time)
+  module Tcp_server = Rpc.Server.Make(Tcp)(Framing.Tcp(Tcp))
   module Tcp = Server.Make(Tcp_server)(R.Tcp)
 end
 

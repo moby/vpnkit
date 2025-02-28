@@ -80,7 +80,7 @@ module Static = struct
    return (Hashtbl.find_all s.rev addr)
 end
 
-module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4V6) = struct
+module Make(S:Tcpip.Stack.V4V6) = struct
 
   type stack = S.t
   type endp = Ipaddr.t * int
@@ -99,7 +99,7 @@ module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4V6) = struct
     try
       Hashtbl.find res endp
     with Not_found ->
-      let timerfn () = Time.sleep_ns (Duration.of_sec 5) in
+      let timerfn () = Mirage_sleep.ns (Duration.of_sec 5) in
       let mvar = Lwt_mvar.create_empty () in
       (* TODO: test that port is free. Needs more functions exposed in tcpip *)
       let src_port = (Random.int 64511) + 1024 in

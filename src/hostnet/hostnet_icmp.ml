@@ -22,10 +22,7 @@ type datagram = {
 }
 
 module Make
-    (Sockets: Sig.SOCKETS)
-    (Clock: Mirage_clock.MCLOCK)
-    (Time: Mirage_time.S)
-= struct
+    (Sockets: Sig.SOCKETS) = struct
 
   module Icmp = Sockets.Datagram.Udp
 
@@ -53,8 +50,8 @@ module Make
 
   let start_background_gc phys_to_flow virt_to_flow ids_in_use max_idle_time =
     let rec loop () =
-      Time.sleep_ns max_idle_time >>= fun () ->
-      let now_ns = Clock.elapsed_ns () in
+      Mirage_sleep.ns max_idle_time >>= fun () ->
+      let now_ns = Mirage_mtime.elapsed_ns () in
       let to_shutdown =
         Hashtbl.fold (fun phys flow acc ->
             if Int64.(sub now_ns flow.last_use) > max_idle_time then begin
@@ -265,7 +262,7 @@ module Make
             let phys = dst, id' in
             let description = Printf.sprintf "%s id=%d -> %s id=%d"
               (Ipaddr.V4.to_string @@ fst virt) (snd virt) (Ipaddr.V4.to_string @@ fst phys) (snd phys) in
-            let last_use = Clock.elapsed_ns () in
+            let last_use = Mirage_mtime.elapsed_ns () in
             let flow = { description; virt; phys; last_use } in
             Hashtbl.replace t.phys_to_flow phys flow;
             Hashtbl.replace t.virt_to_flow virt flow;

@@ -37,7 +37,6 @@ type answer = {
   timeout: unit Lwt.t;
 }
 
-module Make(Time: Mirage_time.S) = struct
   type t = {
     max_bindings: int;
     (* For every question we store a mapping of server address to the answer *)
@@ -89,7 +88,7 @@ module Make(Time: Mirage_time.S) = struct
     in
     let timeout =
       let open Lwt.Infix in
-      Time.sleep_ns (Duration.of_sec @@ Int32.to_int min_ttl)
+      Mirage_sleep.ns (Duration.of_sec @@ Int32.to_int min_ttl)
       >>= fun () ->
       if Question.Map.mem question t.cache then begin
         let address_to_answer =
@@ -109,4 +108,3 @@ module Make(Time: Mirage_time.S) = struct
     in
     t.cache <- Question.Map.add question
         (Address.Map.add address answer address_to_answer) t.cache
-end

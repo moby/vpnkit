@@ -13,7 +13,7 @@ let pp_ip_prefix = Fmt.(list ~sep:(any ", ") Ipaddr.Prefix.pp)
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
-    Host.Time.sleep_ns timeout >>= fun () ->
+    Mirage_sleep.ns timeout >>= fun () ->
     Lwt.fail_with "timeout"
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
@@ -129,7 +129,7 @@ let test_http_fetch () =
 let test_tcp_forwards () =
   let t _ stack =
     let path = "/tmp/forwards.sock" in
-    let module ForwardsTest = Forwards.Test(Mclock) in
+    let module ForwardsTest = Forwards.Test in
     ForwardsTest.start_forwarder path
     >>= fun forwarder ->
     Forwards.update [
@@ -288,7 +288,7 @@ let test_stream_data connections length () =
           >>= function
           | Error `Refused ->
             Log.info (fun f -> f "DevNullServer Refused connection");
-            Host.Time.sleep_ns (Duration.of_ms 200)
+            Mirage_sleep.ns (Duration.of_ms 200)
             >>= fun () ->
             connect ()
           | Error `Timeout ->

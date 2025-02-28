@@ -149,7 +149,7 @@ let intercept ~pcap ?(port = 80) proxy request =
               request
             >>= fun () ->
             Lwt.pick [
-              (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () ->
+              (Mirage_sleep.ns (Duration.of_sec 100) >|= fun () ->
                `Timeout);
               (forwarded >>= fun x -> Lwt.return (`Result x))
             ]
@@ -589,7 +589,7 @@ let test_http_connect_tunnel proxy () =
                       let txt = Cstruct.to_string buf in
                       Alcotest.check Alcotest.string "message" "there" txt;
                       Lwt.pick [
-                        (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () ->
+                        (Mirage_sleep.ns (Duration.of_sec 100) >|= fun () ->
                         `Timeout);
                         (forwarded >>= fun x -> Lwt.return (`Result x))
                       ]
@@ -879,7 +879,7 @@ let test_http_connect_tunnel proxy () =
                     Alcotest.check Alcotest.string "body" body txt;
                     Lwt.return (`Result ()) in
                   Lwt.pick [
-                    (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () ->
+                    (Mirage_sleep.ns (Duration.of_sec 100) >|= fun () ->
                     `Timeout);
                     response;
                   ]
@@ -987,7 +987,7 @@ let test_http_connect_tunnel proxy () =
                 (* any HTTP response will do *)
                 Lwt.return `Ok in
             Lwt.pick [
-              (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () -> `Timeout);
+              (Mirage_sleep.ns (Duration.of_sec 100) >|= fun () -> `Timeout);
               t
             ] >>= function
             | `Timeout -> failwith "test_proxy_head timed out"
@@ -1045,7 +1045,7 @@ let test_http_connect_tunnel proxy () =
               Outgoing.Request.write ~flush:true (fun _writer -> Lwt.return_unit) request oc
               >>= fun () ->
               Lwt.pick [
-                  (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () -> `Timeout);
+                  (Mirage_sleep.ns (Duration.of_sec 100) >|= fun () -> `Timeout);
                   forwarded >|= fun request ->
                   Log.info (fun f ->
                     f "Successfully received: %s"

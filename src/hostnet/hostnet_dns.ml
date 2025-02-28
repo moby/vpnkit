@@ -189,8 +189,6 @@ module Make
     (Tcp: Tcpip.Tcp.S with type ipaddr = Ipaddr.V4.t)
     (Socket: Sig.SOCKETS)
     (D: Sig.DNS)
-    (Time: Mirage_time.S)
-    (Clock: Mirage_clock.MCLOCK)
     (Recorder: Sig.RECORDER) =
 struct
 
@@ -201,17 +199,17 @@ struct
 
   module Dns_tcp_client =
     Dns_forward.Rpc.Client.Persistent.Make(Socket.Stream.Tcp)
-      (Dns_forward.Framing.Tcp(Socket.Stream.Tcp))(Time)
+      (Dns_forward.Framing.Tcp(Socket.Stream.Tcp))
 
   module Dns_tcp_resolver =
-    Dns_forward.Resolver.Make(Dns_tcp_client)(Time)(Clock)
+    Dns_forward.Resolver.Make(Dns_tcp_client)
 
   module Dns_udp_client =
     Dns_forward.Rpc.Client.Nonpersistent.Make(Socket.Datagram.Udp)
-      (Dns_forward.Framing.Udp(Socket.Datagram.Udp))(Time)
+      (Dns_forward.Framing.Udp(Socket.Datagram.Udp))
 
   module Dns_udp_resolver =
-    Dns_forward.Resolver.Make(Dns_udp_client)(Time)(Clock)
+    Dns_forward.Resolver.Make(Dns_udp_client)
 
   (* We need to be able to parse the incoming framed TCP messages *)
   module Dns_tcp_framing = Dns_forward.Framing.Tcp(Tcp)
@@ -257,8 +255,8 @@ struct
          packet creation fn *)
       let frame = Io_page.to_cstruct (Io_page.get 1) in
       let smac = "\000\000\000\000\000\000" in
-      Ethernet__Ethernet_wire.set_ethernet_src smac 0 frame;
-      Ethernet__Ethernet_wire.set_ethernet_ethertype frame 0x0800;
+      Cstruct.blit_from_string smac 0 frame 6 6;
+      Cstruct.BE.set_uint16 frame 12 0x0800;
       let buf = Cstruct.shift frame Ethernet.Packet.sizeof_ethernet in
       Ipv4_wire.set_hlen_version buf ((4 lsl 4) + (5));
       Cstruct.set_uint8 buf 0 0;
@@ -283,7 +281,7 @@ struct
       let tlen = Cstruct.lenv bufs - Ethernet.Packet.sizeof_ethernet in
       let dmac = String.make 6 '\000' in
       (* Ip.adjust_output_header *)
-      Ethernet__Ethernet_wire.set_ethernet_dst dmac 0 frame;
+      Cstruct.blit_from_string dmac 0 frame 0 6;
       let buf =
         Cstruct.sub frame Ethernet.Packet.sizeof_ethernet Ipv4_wire.sizeof_ipv4
       in

@@ -13,7 +13,7 @@ let (>>*=) m f = m >>= function
 
 let run ?(timeout=Duration.of_sec 60) t =
   let timeout =
-    Host.Time.sleep_ns timeout >>= fun () ->
+    Mirage_sleep.ns timeout >>= fun () ->
     Lwt.fail_with "timeout"
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
@@ -133,7 +133,7 @@ module ForwardServer = struct
   }
 end
 
-module Forward = Forward.Make(Mclock)(struct
+module Forward = Forward.Make(struct
     include Host.Sockets.Stream.Tcp
 
     open Lwt.Infix
@@ -217,7 +217,7 @@ let udp_echo t len =
       >>= function
       | Error _ -> Lwt.fail_with "Datagram.Udp.write error"
       | Ok () ->
-        Host.Time.sleep_ns (Duration.of_sec 1)
+        Mirage_sleep.ns (Duration.of_sec 1)
         >>= fun () ->
         loop () in
     loop () in
@@ -238,7 +238,7 @@ let udp_echo t len =
     | Error _ ->
       Lwt.fail_with "Datagram.Udp.read Error" in
   let timeout () =
-    Host.Time.sleep_ns (Duration.of_sec 5)
+    Mirage_sleep.ns (Duration.of_sec 5)
     >>= fun () ->
     Lwt.fail_with "udp_echo timeout" in
   Lwt.pick [ sender (); receiver (); timeout () ]
@@ -494,7 +494,7 @@ let test_10_tcp_connections () =
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
-    Host.Time.sleep_ns timeout >>= fun () ->
+    Mirage_sleep.ns timeout >>= fun () ->
     Lwt.fail_with "timeout"
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]

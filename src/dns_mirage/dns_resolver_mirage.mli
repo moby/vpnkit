@@ -52,4 +52,4 @@ type static_dns =
 
 module Static : S with type stack = static_dns
 
-module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4V6) : S with type stack = S.t
+module Make(S:Tcpip.Stack.V4V6) : S with type stack = S.t

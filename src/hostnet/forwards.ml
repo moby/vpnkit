@@ -420,7 +420,7 @@ module Stream = struct
   end
 end
 
-module Test (Clock : Mirage_clock.MCLOCK) = struct
+module Test = struct
   module Remote = Read_some (Host.Sockets.Stream.Unix)
 
   module Proxy =

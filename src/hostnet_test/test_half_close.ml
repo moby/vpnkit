@@ -102,7 +102,7 @@ let test_mirage_half_close () =
         then failf "Expected to read '%s', got '%s'" response txt;
         Log.info (fun f -> f "Read the response. Waiting for cleanup");
         Lwt.pick [
-          (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () -> `Timeout);
+          (Mirage_sleep.ns (Duration.of_sec 100) >|= fun () -> `Timeout);
           (forwarded >|= fun x -> `Result x) ]
       ) >>= function
         | `Timeout  -> failwith "TCP half close test timed-out"
@@ -159,7 +159,7 @@ let test_host_half_close () =
         Outgoing.C.flush oc >|= unit >>= fun () ->
         Log.info (fun f -> f "Written response and will wait.");
         Lwt.pick [
-          (Host.Time.sleep_ns (Duration.of_sec 100) >|= fun () -> `Timeout);
+          (Mirage_sleep.ns (Duration.of_sec 100) >|= fun () -> `Timeout);
           (forwarded >|= fun x -> `Result x) ]
       ) >>= function
         | `Timeout  -> failwith "TCP half close test timed-out"
@@ -199,7 +199,7 @@ let test_connect_valid_invalid_port () =
                 Log.debug (fun f ->
                     f "Expected failure to connect to localhost:%d" port);
             in Lwt.pick [
-              (Host.Time.sleep_ns (Duration.of_sec 5) >|= fun () -> `Timeout);
+              (Mirage_sleep.ns (Duration.of_sec 5) >|= fun () -> `Timeout);
               (mkconn >|= fun x -> `Result x) ]
           ) >>= function
         | `Timeout  -> failwith "TCP server invalid port test timed-out"
@@ -230,7 +230,7 @@ let test_connect_valid_invalid_port () =
                   fun () -> mkconn (count-1);
               in
               Lwt.pick [
-                (Host.Time.sleep_ns (Duration.of_sec 5) >|= fun () -> `Timeout);
+                (Mirage_sleep.ns (Duration.of_sec 5) >|= fun () -> `Timeout);
                 (mkconn 8 >|= fun x -> `Result x) ]
           ) >>= function
           | `Timeout  -> failwith "TCP server valid port test timed-out"

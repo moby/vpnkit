@@ -55,10 +55,10 @@ let hvsock_addr_of_uri ~default_serviceid uri =
   module Connect_hvsock = Connect.Hvsock
   module Bind = Bind.Make(Host.Sockets)
   module Dns_policy = Hostnet_dns.Policy(Host.Files)
-  module Forward_unix = Forward.Make(Mclock)(Connect_unix)(Bind)
-  module Forward_hvsock = Forward.Make(Mclock)(Connect_hvsock)(Bind)
-  module HV = Hvsock_lwt.Flow.Make(Host.Time)(Host.Fn)(Hvsock.Af_hyperv)
-  module HV_generic = Hvsock_lwt.Flow.Make(Host.Time)(Host.Fn)(Hvsock.Socket)
+  module Forward_unix = Forward.Make(Connect_unix)(Bind)
+  module Forward_hvsock = Forward.Make(Connect_hvsock)(Bind)
+  module HV = Hvsock_lwt.Flow.Make(Host.Fn)(Hvsock.Af_hyperv)
+  module HV_generic = Hvsock_lwt.Flow.Make(Host.Fn)(Hvsock.Socket)
   module HostsFile = Hosts.Make(Host.Files)
 
   let file_descr_of_int (x: int) : Unix.file_descr =
@@ -100,7 +100,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       | x -> Lwt.return x
       | exception e ->
         Log.err (fun f -> f "Caught %s while creating Hyper-V socket" (Printexc.to_string e));
-        Host.Time.sleep_ns (Duration.of_sec 1)
+        Mirage_sleep.ns (Duration.of_sec 1)
         >>= fun () ->
         loop () in
     loop ()
@@ -126,7 +126,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
             (Hvsock.Af_hyperv.string_of_sockaddr sockaddr));
           log_exception_continue "HV.Socket.close" (fun () -> HV.Socket.close socket)
           >>= fun () ->
-          Host.Time.sleep_ns (Duration.of_sec 1)
+          Mirage_sleep.ns (Duration.of_sec 1)
       )
       >>= fun () ->
       aux () in
@@ -138,7 +138,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       | x -> Lwt.return x
       | exception e ->
         Log.err (fun f -> f "Caught %s while creating hypervisor socket" (Printexc.to_string e));
-        Host.Time.sleep_ns (Duration.of_sec 1)
+        Mirage_sleep.ns (Duration.of_sec 1)
         >>= fun () ->
         loop () in
     loop ()
@@ -165,7 +165,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
             (Hvsock.Socket.string_of_sockaddr sockaddr));
           log_exception_continue "HV_generic.Socket.close" (fun () -> HV_generic.Socket.close socket)
           >>= fun () ->
-          Host.Time.sleep_ns (Duration.of_sec 1)
+          Mirage_sleep.ns (Duration.of_sec 1)
       )
       >>= fun () ->
       aux () in
@@ -187,11 +187,11 @@ let hvsock_addr_of_uri ~default_serviceid uri =
         | Unix.Unix_error(_, _, _) ->
           log_exception_continue "HV.Socket.close" (fun () -> HV.Socket.close socket)
           >>= fun () ->
-          Host.Time.sleep_ns (Duration.of_sec 1)
+          Mirage_sleep.ns (Duration.of_sec 1)
         | _ ->
           log_exception_continue "HV.Socket.close" (fun () -> HV.Socket.close socket)
           >>= fun () ->
-          Host.Time.sleep_ns (Duration.of_sec 1)
+          Mirage_sleep.ns (Duration.of_sec 1)
         )
       >>= fun () ->
       aux ()
@@ -398,8 +398,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     match Uri.scheme uri with
     | Some ("hyperv-connect"|"hyperv-listen") ->
       let module Slirp_stack =
-        Slirp.Make(Vmnet.Make(HV))(Dns_policy)
-          (Mclock)(Mirage_random_stdlib)(Vnet)
+        Slirp.Make(Vmnet.Make(HV))(Dns_policy)(Vnet)
       in
       let sockaddr =
         hvsock_addr_of_uri ~default_serviceid:ethernet_serviceid
@@ -431,8 +430,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       else hvsock_listen sockaddr callback
     | Some "fd" | None ->
       let module Slirp_stack =
-        Slirp.Make(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)
-          (Mclock)(Mirage_random_stdlib)(Vnet)
+        Slirp.Make(Vmnet.Make(Host.Sockets.Stream.Unix))(Dns_policy)(Vnet)
       in
       begin match http_intercept_api_path with
       | None -> ()
@@ -466,8 +464,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
       end
     | _ ->
       let module Slirp_stack =
-        Slirp.Make(Vmnet.Make(HV_generic))(Dns_policy)
-          (Mclock)(Mirage_random_stdlib)(Vnet)
+        Slirp.Make(Vmnet.Make(HV_generic))(Dns_policy)(Vnet)
       in
       Slirp_stack.create_static vnet_switch configuration
       >>= fun stack_config ->

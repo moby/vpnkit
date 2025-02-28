@@ -72,12 +72,10 @@ let or_fail_msg m = m >>= function
 module type S = Dns_forward_s.RESOLVER
 
 module Make
-    (Client: Dns_forward_s.RPC_CLIENT)
-    (Time  : Mirage_time.S)
-    (Clock : Mirage_clock.MCLOCK) =
+    (Client: Dns_forward_s.RPC_CLIENT) =
 struct
 
-  module Cache = Dns_forward_cache.Make(Time)
+  module Cache = Dns_forward_cache
   type address = Dns_forward_config.Address.t
   type message_cb = ?src:address -> ?dst:address -> buf:Cstruct.t -> unit -> unit Lwt.t
 
@@ -153,7 +151,7 @@ struct
                 | None ->
                     let c = List.find (fun c -> c.server = server) t.connections in
                     begin
-                      let now_ns = Clock.elapsed_ns () in
+                      let now_ns = Mirage_mtime.elapsed_ns () in
                       (* If no timeout is configured, we will stop listening after
                          5s to avoid leaking threads if a server is offline *)
                       let timeout_ns =
@@ -177,11 +175,11 @@ struct
                         in
                         make 0L in
                       let requests = List.map (fun delay_ns ->
-                          Time.sleep_ns delay_ns >>= fun () ->
+                          Mirage_sleep.ns delay_ns >>= fun () ->
                           Client.rpc c.client buffer
                         ) delays_ns in
                       let timeout =
-                        Time.sleep_ns timeout_ns >|= fun () ->
+                        Mirage_sleep.ns timeout_ns >|= fun () ->
                         Error (`Msg "timeout")
                       in
                       Lwt.pick (timeout :: requests)

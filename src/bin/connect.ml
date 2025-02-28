@@ -46,7 +46,7 @@ module Hvsock = struct
   (* Avoid using `detach` because we don't want to exhaust the
      thread pool since this will block the main TCP/IP stack. *)
   module F =
-    Hvsock_lwt.Flow_shutdown.Make(Host.Time)
+    Hvsock_lwt.Flow_shutdown.Make
       (Hvsock_lwt.In_main_thread.Make(Host.Main))
       (Hvsock.Af_hyperv)
 

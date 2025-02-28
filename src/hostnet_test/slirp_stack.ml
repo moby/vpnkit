@@ -66,8 +66,7 @@ end
 
 module VMNET = Vmnet.Make(Host.Sockets.Stream.Tcp)
 module Vnet = Basic_backend.Make
-module Slirp_stack =
-  Slirp.Make(VMNET)(Dns_policy)(Mclock)(Mirage_random_stdlib)(Vnet)
+module Slirp_stack = Slirp.Make(VMNET)(Dns_policy)(Vnet)
 
 module Client = struct
   module Netif = VMNET
@@ -130,7 +129,7 @@ module Client = struct
     Lwt.return { t; icmpv4 ; netif=interface }
 end
 
-module DNS = Dns_resolver_mirage.Make(Host.Time)(Client)
+module DNS = Dns_resolver_mirage.Make(Client)
 
 let primary_dns_ip = Ipaddr.of_string_exn "192.168.65.1"
 

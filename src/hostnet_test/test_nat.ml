@@ -10,7 +10,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 let run ?(timeout=Duration.of_sec 60) t =
   let timeout =
-    Host.Time.sleep_ns timeout >>= fun () ->
+    Mirage_sleep.ns timeout >>= fun () ->
     Lwt.fail_with "timeout"
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
@@ -97,14 +97,14 @@ module UdpServer = struct
   let wait_for_data ~highest t =
     if t.highest < highest then begin
       Lwt.pick [ Lwt_condition.wait t.c;
-                 Host.Time.sleep_ns (Duration.of_sec 1) ]
+                 Mirage_sleep.ns (Duration.of_sec 1) ]
       >>= fun () ->
       Lwt.return (t.highest >= highest)
     end else Lwt.return true
   let wait_for_ports ~num t =
     if PortSet.cardinal t.seen_source_ports < num then begin
       Lwt.pick [ Lwt_condition.wait t.c;
-                 Host.Time.sleep_ns (Duration.of_sec 1) ]
+                 Mirage_sleep.ns (Duration.of_sec 1) ]
       >|= fun () ->
       PortSet.cardinal t.seen_source_ports >= num
     end else Lwt.return true
@@ -113,7 +113,7 @@ module UdpServer = struct
     then Lwt.return true
     else
       Lwt.pick [ Lwt_condition.wait t.c;
-                  Host.Time.sleep_ns (Duration.of_sec 1) ]
+                  Mirage_sleep.ns (Duration.of_sec 1) ]
       >>= fun () ->
       Lwt.return false
 end
@@ -201,7 +201,7 @@ let test_udp_reply_last_use () =
           if get_last_use () <> last_use
           then Lwt.return_unit
           else
-            Host.Time.sleep_ns (Duration.of_sec 5)
+            Mirage_sleep.ns (Duration.of_sec 5)
             >>= fun () ->
             loop (remaining - 1) in
       loop 5
@@ -264,7 +264,7 @@ let test_udp_expiry () =
       | 0 -> failwith (Printf.sprintf "Failed to fill NAT table, active = %d, limit = %d" active limit)
       | _ ->
         if active <> limit
-        then Host.Time.sleep_ns (Duration.of_sec 1) >>= fun () -> loop (remaining - 1)
+        then Mirage_sleep.ns (Duration.of_sec 1) >>= fun () -> loop (remaining - 1)
         else Lwt.return_unit in
     loop 5
     >>= fun () ->
@@ -278,7 +278,7 @@ let test_udp_expiry () =
       | 0 -> failwith (Printf.sprintf "Failed to expire NAT table, active = %d, limit = %d" active limit)
       | _ ->
         if active >= limit
-        then Host.Time.sleep_ns (Duration.of_sec 1) >>= fun () -> loop (remaining - 1)
+        then Mirage_sleep.ns (Duration.of_sec 1) >>= fun () -> loop (remaining - 1)
         else Lwt.return_unit in
     loop 5
     >>= fun () ->

@@ -29,8 +29,7 @@ module Client = struct
   module Nonpersistent = struct
     module Make
       (Sockets: Dns_forward_s.FLOW_CLIENT with type address = Ipaddr.t * int)
-      (Packet: Dns_forward_s.READERWRITER with type flow = Sockets.flow)
-      (Time: Mirage_time.S) = struct
+      (Packet: Dns_forward_s.READERWRITER with type flow = Sockets.flow) = struct
         type address = Dns_forward_config.Address.t
         type request = Cstruct.t
         type response = Cstruct.t
@@ -115,8 +114,7 @@ module Client = struct
   module Persistent = struct
   module Make
       (Sockets: Dns_forward_s.FLOW_CLIENT with type address = Ipaddr.t * int)
-      (Packet: Dns_forward_s.READERWRITER with type flow = Sockets.flow)
-      (Time: Mirage_time.S) = struct
+      (Packet: Dns_forward_s.READERWRITER with type flow = Sockets.flow) = struct
     type address = Dns_forward_config.Address.t
     type request = Cstruct.t
     type response = Cstruct.t
@@ -220,7 +218,7 @@ module Client = struct
               Lwt_result.return rw)
       >>= fun rw ->
       (* Add a fresh idle timer *)
-      t.disconnect_on_idle <- (let open Lwt.Infix in Time.sleep_ns Duration.(of_sec 30) >>= fun () -> disconnect t);
+      t.disconnect_on_idle <- (let open Lwt.Infix in Mirage_sleep.ns Duration.(of_sec 30) >>= fun () -> disconnect t);
       Lwt_result.return rw
 
     let connect ~gen_transaction_id ?(message_cb = fun ?src:_ ?dst:_ ~buf:_ () -> Lwt.return_unit) address =
@@ -320,8 +318,7 @@ module Server = struct
 
   module Make
       (Sockets: Dns_forward_s.FLOW_SERVER with type address = Ipaddr.t * int)
-      (Packet : Dns_forward_s.READERWRITER with type flow = Sockets.flow)
-      (Time   : Mirage_time.S) =
+      (Packet : Dns_forward_s.READERWRITER with type flow = Sockets.flow) =
   struct
 
     type address = Dns_forward_config.Address.t

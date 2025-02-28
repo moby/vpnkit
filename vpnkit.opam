@@ -63,7 +63,6 @@ depends: [
   "mirage-clock" {>= "4.0.0"}
   "mirage-clock-unix" {>= "4.0.0"}
   "mirage-random" {>= "3.0.0"}
-  "mirage-random-stdlib"
   "re" {>= "1.9.0"}
   "ppx_inline_test"
 ]

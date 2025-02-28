@@ -25,9 +25,7 @@ type datagram = {
 let external_to_internal = Hashtbl.create 7
 
 module Make
-    (Sockets: Sig.SOCKETS)
-    (Clock: Mirage_clock.MCLOCK)
-    (Time: Mirage_time.S) =
+    (Sockets: Sig.SOCKETS) =
 struct
 
   module Udp = Sockets.Datagram.Udp
@@ -98,17 +96,17 @@ struct
     Lwt.return_unit
 
   let touch t flow =
-    let last_use = Clock.elapsed_ns () in
+    let last_use = Mirage_mtime.elapsed_ns () in
     (* Remove the old entry t.last_use and add a new one for last_use *)
     t.by_last_use := By_last_use.(add last_use flow @@ remove flow.last_use !(t.by_last_use));
     flow.last_use <- last_use
 
   let start_background_gc table by_last_use max_idle_time new_flow_lock =
     let rec loop () =
-      Time.sleep_ns max_idle_time >>= fun () ->
+      Mirage_sleep.ns max_idle_time >>= fun () ->
       Lwt_mutex.with_lock new_flow_lock
         (fun () ->
-          let now_ns = Clock.elapsed_ns () in
+          let now_ns = Mirage_mtime.elapsed_ns () in
           let to_shutdown =
             Hashtbl.fold (fun _ flow acc ->
                 if Int64.(sub now_ns flow.last_use) > max_idle_time then begin
@@ -230,7 +228,7 @@ struct
                   >>= fun server ->
                   Udp.getsockname server
                   >>= fun external_address ->  
-                  let last_use = Clock.elapsed_ns () in
+                  let last_use = Mirage_mtime.elapsed_ns () in
                   let flow = { description = d; src = datagram.src; server; external_address; last_use } in
                   Hashtbl.replace t.table datagram.src flow;
                   t.by_last_use := By_last_use.add last_use flow !(t.by_last_use);

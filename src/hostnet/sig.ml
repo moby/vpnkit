@@ -146,8 +146,6 @@ module type HOST = sig
     include FILES
   end
 
-  module Time: Mirage_time.S
-
   module Dns: sig
     include DNS
   end

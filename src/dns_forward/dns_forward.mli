@@ -215,16 +215,14 @@ module Rpc: sig
     module Persistent: sig
       module Make
           (Flow: Flow.Client with type address = Ipaddr.t * int)
-          (Framing: Framing.S with type flow = Flow.flow)
-          (Time: Mirage_time.S): S
+          (Framing: Framing.S with type flow = Flow.flow) : S
       (** Construct a multiplexing RPC client given a Flow and a method of Framing messages
           over the flow. *)
     end
     module Nonpersistent: sig
       module Make
           (Flow: Flow.Client with type address = Ipaddr.t * int)
-          (Framing: Framing.S with type flow = Flow.flow)
-          (Time: Mirage_time.S): S
+          (Framing: Framing.S with type flow = Flow.flow): S
       (** Construct an RPC client given a Flow which sends one message per fresh connection
           over the flow. *)
     end
@@ -259,8 +257,7 @@ module Rpc: sig
 
     module Make
         (Flow: Flow.Server with type address = Ipaddr.t * int)
-        (Framing: Framing.S with type flow = Flow.flow)
-        (Time: Mirage_time.S): S
+        (Framing: Framing.S with type flow = Flow.flow): S
     (** Construct an RPC server given a Flow and a method of Framing messages
         over the flow. *)
   end
@@ -297,10 +294,7 @@ module Resolver: sig
   end
 
   module Make
-      (Client: Rpc.Client.S)
-      (Time  : Mirage_time.S)
-      (Clock : Mirage_clock.MCLOCK):
-    S
+      (Client: Rpc.Client.S) : S
   (** Construct a DNS resolver which will use the given [Client] Implementation
       to contact upstream servers, and the given [Time] implementation to handle
       timeouts. *)

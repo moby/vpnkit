@@ -13,7 +13,7 @@ let pp_ip4s = Fmt.(list ~sep:(any ", ") Ipaddr.V4.pp)
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
-    Host.Time.sleep_ns timeout >>= fun () ->
+    Mirage_sleep.ns timeout >>= fun () ->
     Lwt.fail_with "timeout"
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
@@ -249,7 +249,7 @@ let udp_rpc client src_port dst dst_port buffer =
     match !response with
     | Some x -> Lwt.return x
     | None ->
-      Host.Time.sleep_ns (Duration.of_sec 1)
+      Mirage_sleep.ns (Duration.of_sec 1)
       >>= fun () ->
       loop () in
   loop ()

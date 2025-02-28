@@ -33,7 +33,7 @@ module Stream : sig
   module Tcp : Sig.FLOW_CLIENT with type address = Ipaddr.t * int
 end
 
-module Test (Clock : Mirage_clock.MCLOCK) : sig
+module Test : sig
   type server
 
   val start_forwarder : string -> server Lwt.t

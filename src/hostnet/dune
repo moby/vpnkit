@@ -8,6 +8,6 @@
    luv_unix lwt.unix threads astring fs9p dns_forward tar
    mirage-vnetif uuidm cohttp-lwt mirage-channel ezjsonm
    duration mirage-time mirage-clock
-   mirage-random tcpip.checksum forwarder cstructs sha)
+   tcpip.checksum forwarder cstructs sha)
  (foreign_stubs (language c) (names stubs_utils))
  (wrapped false))
