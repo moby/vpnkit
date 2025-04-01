@@ -1294,10 +1294,11 @@ module Dns = struct
               in
               return (Ok ips)))
     >>= function
-    | Error (`Msg _) ->
-        (* FIXME: error handling completely missing *)
-        Lwt.return []
-    | Ok ips -> Lwt.return ips
+    | Error e ->
+      (* FIXME: error handling completely missing *)
+      Lwt.return (Error e)
+    | Ok ips -> 
+      Lwt.return (Ok ips)
 
   let localhost_local = Dns.Name.of_string "localhost.local"
 
@@ -1306,17 +1307,19 @@ module Dns = struct
     (match question with
     | { q_class = Q_IN; q_name; _ } when q_name = localhost_local ->
         Log.debug (fun f -> f "DNS lookup of localhost.local: return NXDomain");
-        Lwt.return (q_name, [])
+        Lwt.return (Error q_name)
     | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
-        getaddrinfo (Dns.Name.to_string q_name) `INET >>= fun ips ->
-        Lwt.return (q_name, ips)
+        (getaddrinfo (Dns.Name.to_string q_name) `INET >>= function
+          | Error _ -> Lwt.return (Error q_name)
+          | Ok ips -> Lwt.return (Ok (q_name, ips)))
     | { q_class = Q_IN; q_type = Q_AAAA; q_name; _ } ->
-        getaddrinfo (Dns.Name.to_string q_name) `INET6 >>= fun ips ->
-        Lwt.return (q_name, ips)
-    | _ -> Lwt.return (Dns.Name.of_string "", []))
+        (getaddrinfo (Dns.Name.to_string q_name) `INET6 >>= function
+          | Error _ -> Lwt.return (Error q_name)
+          | Ok ips -> Lwt.return (Ok (q_name, ips)))
+    | _ -> 
+        Lwt.return (Error (Dns.Name.of_string "")))
     >>= function
-    | _, [] -> Lwt.return []
-    | q_name, ips ->
+    | Ok (q_name, ips) ->
         let answers =
           List.map
             (function
@@ -1338,7 +1341,9 @@ module Dns = struct
                   })
             ips
         in
-        Lwt.return answers
+        Lwt.return (Ok answers)
+    | Error _ ->
+        Lwt.return (Error ())
 
   let resolve = resolve_getaddrinfo
 end

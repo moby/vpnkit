@@ -110,6 +110,37 @@ let test_etc_hosts_priority server config () =
   in
   run ~pcap:"test_etc_hosts_priority.pcap" t
 
+let test_noerror_empty_response server config () =
+  let name = "ipv4.tlund.se" in (* FIXME: Use a better address? *)
+  let t _ stack =
+    set_dns_policy config;
+    let resolver = DNS.create stack.Client.t in
+    (* Query for an AAAA record on a domain that might only have A records *)
+    DNS.gethostbyname ~server ~q_type:Dns.Packet.Q_AAAA resolver name >>= function
+    | [] -> (* Expected: NOERROR with an empty answer list *)
+      Log.info (fun f -> f "%s returned NOERROR with no AAAA records" name);
+      Lwt.return ()
+    | _ ->
+      Log.err (fun f -> f "Expected no AAAA records for %s, but got some" name);
+      failwith ("Expected NOERROR with no AAAA records for " ^ name)
+  in
+  run ~pcap:"test_noerror_empty_response.pcap" t
+
+let test_nxdomain_response server config () =
+  let name = "nonexistent.example.com" in (* Use a domain that doesn’t exist *)
+  let t _ stack =
+    set_dns_policy config;
+    let resolver = DNS.create stack.Client.t in
+    DNS.gethostbyname ~server resolver name >>= function
+    | [] -> (* Expected: NXDOMAIN (empty answer list) *)
+      Log.info (fun f -> f "%s returned NXDOMAIN as expected" name);
+      Lwt.return ()
+    | _ ->
+      Log.err (fun f -> f "Expected NXDOMAIN for %s, but got answers" name);
+      failwith ("Expected NXDOMAIN for " ^ name)
+  in
+  run ~pcap:"test_nxdomain_response.pcap" t
+
 let test_dns config =
   let prefix = Dns_policy.(Config.to_string @@ config ()) in [
     prefix ^ ": lookup ",
@@ -123,6 +154,12 @@ let test_dns config =
 
     prefix ^ ": _etc_hosts_priority",
     [ "", `Quick, test_etc_hosts_priority primary_dns_ip config ];
+
+    prefix ^ ": noerror_empty_response",
+    [ "", `Quick, test_noerror_empty_response primary_dns_ip config ];
+
+    prefix ^ ": nxdomain_response",
+    [ "", `Quick, test_nxdomain_response primary_dns_ip config ];
   ]
 
 (* A real UDP server listening on a physical port *)
