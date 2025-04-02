@@ -6,10 +6,8 @@ type pcap = (string * int64 option) option
 
 module Make
     (Vmnet: Sig.VMNET)
-    (Dns_policy: Sig.DNS_POLICY)
-    (Clock: Mirage_clock.MCLOCK)
-    (Random: Mirage_random.S)
-    (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) :
+    (_ : Sig.DNS_POLICY)
+    (Vnet : Vnetif.BACKEND) :
 sig
 
   type stack

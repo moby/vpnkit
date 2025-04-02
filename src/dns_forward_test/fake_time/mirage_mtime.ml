@@ -15,35 +15,5 @@
  *
  *)
 
-(* A fake Time and Clock module for testing the timing without having to actually
-   wait. *)
-
-let timeofday = ref 0L
-let c = Lwt_condition.create ()
-
-let advance nsecs =
-  timeofday := Int64.add !timeofday nsecs;
-  Lwt_condition.broadcast c ()
-
-let reset () =
-  timeofday := 0L;
-  Lwt_condition.broadcast c ()
-
-module Time = struct
-  let sleep_ns n =
-    let open Lwt.Infix in
-    (* All sleeping is relative to the start of the program for now *)
-    let now = 0L in
-    let rec loop () =
-      if !timeofday > Int64.add now n then Lwt.return_unit else (
-        Lwt_condition.wait c >>= fun () ->
-        loop ()
-      ) in
-    loop ()
-
-end
-
-module Clock = struct
-  let elapsed_ns () = !timeofday
-  let period_ns () = None
-end
+let elapsed_ns () = !Fake_time_state.timeofday
+let period_ns () = None

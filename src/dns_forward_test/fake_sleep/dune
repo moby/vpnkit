@@ -1,0 +1,4 @@
+(library
+  (name fake_sleep)
+  (libraries lwt fake_time)
+  (implements mirage-sleep))

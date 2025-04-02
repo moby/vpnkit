@@ -7,7 +7,6 @@ module Port : sig
 end
 
 module Make
-    (Clock: Mirage_clock.MCLOCK)
     (Connector: Sig.Connector)
     (Socket: Sig.SOCKETS):
   Active_list.Instance

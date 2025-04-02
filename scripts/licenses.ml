@@ -1155,11 +1155,6 @@ let speclist =
   [("-out", Arg.Set_string output_file, "Set output file name");
    ("-in", Arg.Set_string input_file, "Set input file name")]
 
-let run cmd = match Unix.system cmd with
-  | Unix.WEXITED 0 -> ()
-  | Unix.WEXITED n -> failwith (Printf.sprintf "%s: %d" cmd n)
-  | _ -> failwith (Printf.sprintf "%s: unexpected signal" cmd)
-
 let trim_comment line = match Stringext.cut ~on:"#" line with
   | None -> line
   | Some (line, _comment) -> line
