@@ -2,7 +2,7 @@ FROM ocaml/opam:alpine-3.15-ocaml-4.14 as build
 RUN opam update
 
 ADD . /home/opam/vpnkit
-RUN opam pin add vpnkit /home/opam/vpnkit -n
+RUN opam pin add vpnkit /home/opam/vpnkit --kind=path -n
 RUN opam depext vpnkit -y
 
 RUN opam install vpnkit -y
