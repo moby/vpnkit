@@ -67,7 +67,7 @@ jobs:
           echo "matrix=$(docker buildx bake bin-image --print | jq -cr '.target."bin-image".platforms')" >>${GITHUB_OUTPUT}
 
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ contains(matrix.platform, 'arm') && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 120 # guardrails timeout for the whole job
     needs:
       - prepare
