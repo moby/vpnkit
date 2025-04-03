@@ -7,5 +7,8 @@ RUN opam depext vpnkit -y
 
 RUN opam install vpnkit -y
 
-FROM alpine:latest
+FROM scratch AS binary
 COPY --from=build /home/opam/.opam/4.14/bin/vpnkit /vpnkit
+
+FROM alpine:latest
+COPY --from=binary /vpnkit /vpnkit
