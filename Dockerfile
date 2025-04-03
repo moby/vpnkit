@@ -1,4 +1,4 @@
-FROM ocaml/opam:alpine-3.15-ocaml-4.14 AS build
+FROM ocaml/opam:alpine-3.19-ocaml-4.14 AS build
 RUN opam update
 
 ADD . /home/opam/vpnkit
