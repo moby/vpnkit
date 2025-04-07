@@ -27,7 +27,7 @@ env:
 jobs:
   prepare:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20 # guardrails timeout for the whole job
+    timeout-minutes: 20
     outputs:
       platforms: ${{ steps.platforms.outputs.matrix }}
     steps:
@@ -68,7 +68,7 @@ jobs:
 
   build:
     runs-on: ${{ contains(matrix.platform, 'arm') && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-    timeout-minutes: 120 # guardrails timeout for the whole job
+    timeout-minutes: 45 # guardrails timeout for the whole job
     needs:
       - prepare
     if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
@@ -141,7 +141,7 @@ jobs:
 
   merge:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120 # guardrails timeout for the whole job
+    timeout-minutes: 20
     needs:
       - build
     if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name != 'pull_request' && github.repository == 'moby/vpnkit'
