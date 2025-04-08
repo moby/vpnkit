@@ -25,160 +25,18 @@ on:
 env:
   REPO_SLUG: moby/vpnkit-bin
 jobs:
-  prepare:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    outputs:
-      platforms: ${{ steps.platforms.outputs.matrix }}
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v4
-      -
-        name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.REPO_SLUG }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-      -
-        name: Rename meta bake definition file
-        # see https://github.com/docker/metadata-action/issues/381#issuecomment-1918607161
-        run: |
-          bakeFile="${{ steps.meta.outputs.bake-file }}"
-          mv "${bakeFile#cwd://}" "/tmp/bake-meta.json"
-      -
-        name: Upload meta bake definition
-        uses: actions/upload-artifact@v4
-        with:
-          name: bake-meta
-          path: /tmp/bake-meta.json
-          if-no-files-found: error
-          retention-days: 1
-      -
-        name: Create platforms matrix
-        id: platforms
-        run: |
-          echo "matrix=$(docker buildx bake bin-image --print | jq -cr '.target."bin-image".platforms')" >>${GITHUB_OUTPUT}
-
   build:
-    runs-on: ${{ contains(matrix.platform, 'arm') && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-    timeout-minutes: 45 # guardrails timeout for the whole job
-    needs:
-      - prepare
-    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: ${{ fromJson(needs.prepare.outputs.platforms) }}
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      -
-        name: Prepare
-        run: |
-          platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-      -
-        name: Download meta bake definition
-        uses: actions/download-artifact@v4
-        with:
-          name: bake-meta
-          path: /tmp
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          buildkitd-flags: --debug
-      -
-        name: Login to Docker Hub
-        if: github.event_name != 'pull_request' && github.repository == 'moby/vpnkit'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: Build
-        id: bake
-        uses: docker/bake-action@v6
-        with:
-          source: .
-          files: |
-            ./docker-bake.hcl
-            /tmp/bake-meta.json
-          targets: bin-image
-          set: |
-            *.platform=${{ matrix.platform }}
-            *.output=type=image,name=${{ env.REPO_SLUG }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' && github.repository == 'moby/vpnkit' }}
-            *.tags=
-      -
-        name: Export digest
-        if: github.event_name != 'pull_request' && github.repository == 'moby/vpnkit'
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ fromJSON(steps.bake.outputs.metadata)['bin-image']['containerimage.digest'] }}"
-          touch "/tmp/digests/${digest#sha256:}"
-      -
-        name: Upload digest
-        if: github.event_name != 'pull_request' && github.repository == 'moby/vpnkit'
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  merge:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    needs:
-      - build
-    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name != 'pull_request' && github.repository == 'moby/vpnkit'
-    steps:
-      -
-        name: Download meta bake definition
-        uses: actions/download-artifact@v4
-        with:
-          name: bake-meta
-          path: /tmp
-      -
-        name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/digests
-          pattern: digests-*
-          merge-multiple: true
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          buildkitd-flags: --debug
-      -
-        name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: Create manifest list and push
-        working-directory: /tmp/digests
-        run: |
-          set -x
-          docker buildx imagetools create $(jq -cr '.target."docker-metadata-action".tags | map("-t " + .) | join(" ")' /tmp/bake-meta.json) \
-            $(printf '${{ env.REPO_SLUG }}@sha256:%s ' *)
-      -
-        name: Inspect image
-        run: |
-          set -x
-          docker buildx imagetools inspect ${{ env.REPO_SLUG }}:$(jq -cr '.target."docker-metadata-action".args.DOCKER_META_VERSION' /tmp/bake-meta.json)
+    uses: crazy-max/.github/.github/workflows/bake-distribute-mp.yml@d9a10e2737504a6e253f96e344cef684b0e00cb5
+    with:
+      target: bin-image
+      push: ${{ github.event_name != 'pull_request' && github.repository == 'moby/vpnkit' }}
+      cache: false # See: https://github.com/moby/vpnkit/pull/647/files/3d4f258e7514b9cc878639f724cbb0caffa8fd98#r2032880337
+      meta-image: moby/vpnkit
+      meta-tags: |
+        type=semver,pattern={{version}}
+        type=ref,event=branch
+        type=ref,event=pr
+        type=sha
+    secrets:
+      login-username: ${{ secrets.DOCKERHUB_USERNAME }}
+      login-password: ${{ secrets.DOCKERHUB_TOKEN }}
