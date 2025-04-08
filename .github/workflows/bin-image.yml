@@ -1,0 +1,42 @@
+name: bin-image
+
+# Default to 'contents: read', which grants actions to read commits.
+#
+# If any permission is set, any permission not included in the list is
+# implicitly set to "none".
+#
+# see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'master'
+    tags:
+      - 'v*'
+  pull_request:
+
+env:
+  REPO_SLUG: moby/vpnkit-bin
+jobs:
+  build:
+    uses: crazy-max/.github/.github/workflows/bake-distribute-mp.yml@d9a10e2737504a6e253f96e344cef684b0e00cb5
+    with:
+      target: bin-image
+      push: ${{ github.event_name != 'pull_request' && github.repository == 'moby/vpnkit' }}
+      cache: false # See: https://github.com/moby/vpnkit/pull/647/files/3d4f258e7514b9cc878639f724cbb0caffa8fd98#r2032880337
+      meta-image: moby/vpnkit
+      meta-tags: |
+        type=semver,pattern={{version}}
+        type=ref,event=branch
+        type=ref,event=pr
+        type=sha
+    secrets:
+      login-username: ${{ secrets.DOCKERHUB_USERNAME }}
+      login-password: ${{ secrets.DOCKERHUB_TOKEN }}
