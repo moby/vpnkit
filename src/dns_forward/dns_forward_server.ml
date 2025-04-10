@@ -52,5 +52,5 @@ module Make(Server: Dns_forward_s.RPC_SERVER)(Resolver: Dns_forward_s.RESOLVER) 
     >>= fun () ->
     match server with
     | None -> Lwt.return_unit
-    | Some server -> Server.shutdown server
+    | Some server -> Server.stop server
 end

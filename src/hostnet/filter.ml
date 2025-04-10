@@ -40,7 +40,7 @@ module Make(Input: Sig.VMNET) = struct
   let filter valid_subnets valid_sources next buf =
     match Ethernet.Packet.of_cstruct buf with
     | Ok (_header, payload) ->
-      let src = Ipaddr.V4.of_int32 @@ Ipv4_wire.get_ipv4_src payload in
+      let src = Ipv4_wire.get_src payload in
       let from_valid_networks =
         List.fold_left (fun acc network ->
             acc || (Ipaddr.V4.Prefix.mem src network)
@@ -57,17 +57,16 @@ module Make(Input: Sig.VMNET) = struct
         let src = Ipaddr.V4.to_string src in
         let dst =
           Ipaddr.V4.to_string @@
-          Ipaddr.V4.of_int32 @@
-          Ipv4_wire.get_ipv4_dst payload
+          Ipv4_wire.get_dst payload
         in
         let body = Cstruct.shift payload Ipv4_wire.sizeof_ipv4 in
         begin match
           Ipv4_packet.Unmarshal.int_to_protocol
-          @@ Ipv4_wire.get_ipv4_proto payload
+          @@ Ipv4_wire.get_proto payload
         with
         | Some `UDP ->
-          let src_port = Udp_wire.get_udp_source_port body in
-          let dst_port = Udp_wire.get_udp_dest_port body in
+          let src_port = Udp_wire.get_src_port body in
+          let dst_port = Udp_wire.get_dst_port body in
           Log.warn (fun f ->
               f "dropping unexpected UDP packet sent from %s:%d to %s:%d \
                  (valid subnets = %s; valid sources = %s)"
@@ -78,8 +77,8 @@ module Make(Input: Sig.VMNET) = struct
                    (List.map Ipaddr.V4.to_string valid_sources))
             )
         | Some `TCP ->
-          let src_port = Tcp.Tcp_wire.get_tcp_src_port body in
-          let dst_port = Tcp.Tcp_wire.get_tcp_dst_port body in
+          let src_port = Tcp.Tcp_wire.get_src_port body in
+          let dst_port = Tcp.Tcp_wire.get_dst_port body in
           Log.warn (fun f ->
               f "dropping unexpected TCP packet sent from %s:%d to %s:%d \
                  (valid subnets = %s; valid sources = %s)"
@@ -93,7 +92,7 @@ module Make(Input: Sig.VMNET) = struct
           Log.warn (fun f ->
               f "dropping unknown IP protocol %d sent from %s to %s (valid \
                  subnets = %s; valid sources = %s)"
-                (Ipv4_wire.get_ipv4_proto payload) src dst
+                (Ipv4_wire.get_proto payload) src dst
                 (String.concat ", "
                    (List.map Ipaddr.V4.Prefix.to_string valid_subnets))
                 (String.concat ", "

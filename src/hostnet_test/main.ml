@@ -23,6 +23,7 @@ let reporter =
 (* Run it *)
 let () =
   Logs.set_reporter (reporter ());
+  Mirage_crypto_rng_unix.use_default ();
   Lwt.async_exception_hook := (fun exn ->
       Log.err (fun f -> f "Lwt.async failure %s: %s"
                   (Printexc.to_string exn)

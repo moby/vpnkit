@@ -193,6 +193,13 @@ module Tcp = struct
               Lwt.return_unit
           )
 
+  let shutdown t = function
+    | `read -> shutdown_read t
+    | `write -> shutdown_write t
+    | `read_write ->
+        shutdown_read t >>= fun () ->
+        shutdown_write t
+
   type server = {
     mutable server_fd: Lwt_unix.file_descr option;
     read_buffer_size: int;
@@ -221,7 +228,7 @@ module Tcp = struct
 
   let getsockname server = getsockname "Tcp.getsockname" server.server_fd
 
-  let shutdown server = match server.server_fd with
+  let stop server = match server.server_fd with
   | None -> Lwt.return_unit
   | Some fd ->
       server.server_fd <- None;
@@ -279,7 +286,7 @@ module Tcp = struct
                        Lwt_unix.listen fd 32;
                        loop fd
                     ) (fun () ->
-                        shutdown server
+                         stop server
                       )
                ) (fun e ->
                    Log.info (fun f -> f "%s: caught %s so shutting down server"
@@ -373,8 +380,7 @@ module Udp = struct
       Log.debug (fun f -> f "%s: close" (string_of_flow t));
       Lwt_unix.close fd
 
-  let shutdown_read _t = Lwt.return_unit
-  let shutdown_write _t = Lwt.return_unit
+  let shutdown _t _ = Lwt.return_unit
 
   type server = {
     mutable server_fd: Lwt_unix.file_descr option;
@@ -396,7 +402,7 @@ module Udp = struct
     | e -> errorf "udp:%s: bind caught %s"
              (string_of_address address) (Printexc.to_string e)
 
-  let shutdown t = match t.server_fd with
+  let stop t = match t.server_fd with
   | None -> Lwt.return_unit
   | Some fd ->
       t.server_fd <- None;
@@ -449,26 +455,21 @@ module Udp = struct
         Lwt.async loop
 end
 
-module Time = struct
-  let sleep_ns ns = Lwt_unix.sleep (Duration.to_f ns)
-end
-module Clock = Mclock
-
 module R = struct
   open Dns_forward
-  module Udp_client = Rpc.Client.Nonpersistent.Make(Udp)(Framing.Udp(Udp))(Time)
-  module Udp = Resolver.Make(Udp_client)(Time)(Clock)
+  module Udp_client = Rpc.Client.Nonpersistent.Make(Udp)(Framing.Udp(Udp))
+  module Udp = Resolver.Make(Udp_client)
 
-  module Tcp_client = Rpc.Client.Persistent.Make(Tcp)(Framing.Tcp(Tcp))(Time)
-  module Tcp = Resolver.Make(Tcp_client)(Time)(Clock)
+  module Tcp_client = Rpc.Client.Persistent.Make(Tcp)(Framing.Tcp(Tcp))
+  module Tcp = Resolver.Make(Tcp_client)
 end
 
 module Server = struct
   open Dns_forward
-  module Udp_server = Rpc.Server.Make(Udp)(Framing.Udp(Udp))(Time)
+  module Udp_server = Rpc.Server.Make(Udp)(Framing.Udp(Udp))
   module Udp = Server.Make(Udp_server)(R.Udp)
 
-  module Tcp_server = Rpc.Server.Make(Tcp)(Framing.Tcp(Tcp))(Time)
+  module Tcp_server = Rpc.Server.Make(Tcp)(Framing.Tcp(Tcp))
   module Tcp = Server.Make(Tcp_server)(R.Tcp)
 end
 

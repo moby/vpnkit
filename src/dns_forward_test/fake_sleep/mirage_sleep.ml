@@ -1,3 +1,4 @@
+
 (*
  * Copyright (C) 2017 Docker Inc
  *
@@ -15,17 +16,18 @@
  *
  *)
 
-(** A fake Time and Clock module for testing the timing without having to actually
-    wait. *)
+type t = { time : int64; mutable canceled : bool; thread : unit Lwt.u }
 
-module Time: Mirage_time.S
+let ns n =
+  let open Lwt.Infix in
+  (* All sleeping is relative to the start of the program for now *)
+  let now = 0L in
+  let rec loop () =
+    let tod = !Fake_time_state.timeofday in
+    if tod > Int64.add now n then Lwt.return_unit else (
+      Lwt_condition.wait Fake_time_state.c >>= fun () ->
+      loop ()
+    ) in
+    loop ()
 
-module Clock: Mirage_clock.MCLOCK
-
-val advance: int64 -> unit
-(** [advance nsecs]: advances the clock by [nsecs]. Note this will make sleeping
-    threads runnable but it will not wait for them to finish or even to run.
-    External synchronisation still needs to be used. *)
-
-val reset: unit -> unit
-(** [reset ()] sets the clock back to the initial value for another test. *)
+let new_sleepers () = []

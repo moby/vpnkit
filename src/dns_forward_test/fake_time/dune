@@ -1,0 +1,4 @@
+(library
+  (name fake_time)
+  (implements mirage-mtime)
+  (libraries lwt))

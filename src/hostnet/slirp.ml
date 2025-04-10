@@ -58,9 +58,7 @@ type uuid_table = {
 module Make
     (Vmnet: Sig.VMNET)
     (Dns_policy: Sig.DNS_POLICY)
-    (Clock: Mirage_clock.MCLOCK)
-    (Random: Mirage_random.S)
-    (Vnet : Vnetif.BACKEND with type macaddr = Macaddr.t) =
+    (Vnet : Vnetif.BACKEND) =
 struct
   (* module Tcpip_stack = Tcpip_stack.Make(Vmnet)(Host.Time) *)
 
@@ -75,7 +73,7 @@ struct
   module Netif = Capture.Make(Filteredif)
   module Recorder = (Netif: Sig.RECORDER with type t = Netif.t)
   module Switch = Mux.Make(Netif)
-  module Dhcp = Hostnet_dhcp.Make(Clock)(Switch)
+  module Dhcp = Hostnet_dhcp.Make(Switch)
 
   (* This ARP implementation will respond to the VM: *)
   module Global_arp_ethif = Ethernet.Make(Switch)
@@ -84,30 +82,30 @@ struct
   (* This stack will attach to a switch port and represent a single remote IP *)
   module Stack_ethif = Ethernet.Make(Switch.Port)
   module Stack_arpv4 = Static_arp.Make(Stack_ethif)
-  module Stack_ipv4 = Static_ipv4.Make(Random)(Clock)(Stack_ethif)(Stack_arpv4)
+  module Stack_ipv4 = Static_ipv4.Make(Stack_ethif)(Stack_arpv4)
   module Stack_icmpv4 = Icmpv4.Make(Stack_ipv4)
   module Stack_tcp_wire = Tcp.Wire.Make(Stack_ipv4)
-  module Stack_udp = Udp.Make(Stack_ipv4)(Random)
+  module Stack_udp = Udp.Make(Stack_ipv4)
   module Stack_tcp = struct
-    include Tcp.Flow.Make(Stack_ipv4)(Host.Time)(Clock)(Random)
-    let shutdown_read _flow =
+    include Tcp.Flow.Make(Stack_ipv4)
+    let shutdown flow = function
+      | `read ->
       (* No change to the TCP PCB: all this means is that I've
          got my finders in my ears and am nolonger listening to
          what you say. *)
       Lwt.return ()
-    let shutdown_write = close
+      | `write | `read_write -> close flow
     (* Disable Nagle's algorithm *)
     let write = write_nodelay
   end
 
   module Dns_forwarder =
-    Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)
-      (Host.Time)(Clock)(Recorder)
+    Hostnet_dns.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Host.Sockets)(Host.Dns)(Recorder)
   module Http_forwarder =
     Hostnet_http.Make(Stack_ipv4)(Stack_udp)(Stack_tcp)(Forwards.Stream.Tcp)(Host.Dns)
 
-  module Udp_nat = Hostnet_udp.Make(Host.Sockets)(Clock)(Host.Time)
-  module Icmp_nat = Hostnet_icmp.Make(Host.Sockets)(Clock)(Host.Time)
+  module Udp_nat = Hostnet_udp.Make(Host.Sockets)
+  module Icmp_nat = Hostnet_icmp.Make(Host.Sockets)
   
   let dns_forwarder ~local_address ~builtin_names =
     Dns_forwarder.create ~local_address ~builtin_names (Dns_policy.config ())
@@ -202,7 +200,7 @@ struct
          and possibly terminate them.
          If we use a monotonic clock driven from a CPU counter: the clock will be paused while the
          computer is asleep so we will conclude the flows are still active. *)
-      let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns ()) t.last_active_time_ns
+      let idle_time t : Duration.t = Int64.sub (Mirage_mtime.elapsed_ns ()) t.last_active_time_ns
 
       let to_string t =
         Printf.sprintf "%s socket = %s last_active = %s"
@@ -219,7 +217,7 @@ struct
 
       let create id socket =
         let socket = Some socket in
-        let last_active_time_ns = Clock.elapsed_ns () in
+        let last_active_time_ns = Mirage_mtime.elapsed_ns () in
         let t = { id; socket; last_active_time_ns } in
         all := Id.Map.add id t !all;
         t
@@ -242,7 +240,7 @@ struct
       let touch id =
         if Id.Map.mem id !all then begin
           let flow = Id.Map.find id !all in
-          flow.last_active_time_ns <- Clock.elapsed_ns ()
+          flow.last_active_time_ns <- Mirage_mtime.elapsed_ns ()
         end
     end
   end
@@ -268,9 +266,9 @@ struct
     (** A generic TCP/IP endpoint *)
 
     let touch t =
-      t.last_active_time_ns <- Clock.elapsed_ns ()
+      t.last_active_time_ns <- Mirage_mtime.elapsed_ns ()
 
-    let idle_time t : Duration.t = Int64.sub (Clock.elapsed_ns ()) t.last_active_time_ns
+    let idle_time t : Duration.t = Int64.sub (Mirage_mtime.elapsed_ns ()) t.last_active_time_ns
 
     let create recorder switch arp_table remote local mtu =
       let netif = Switch.port switch remote in
@@ -286,7 +284,7 @@ struct
       Stack_tcp.connect ipv4 >>= fun tcp4 ->
 
       let pending = Tcp.Id.Set.empty in
-      let last_active_time_ns = Clock.elapsed_ns () in
+      let last_active_time_ns = Mirage_mtime.elapsed_ns () in
       let established = Tcp.Id.Set.empty in
       let tcp_stack =
         { recorder; netif; ethif; arp; ipv4; icmpv4; udp4; tcp4; remote; mtu; pending;
@@ -377,7 +375,7 @@ struct
       end
 
     module Proxy =
-      Mirage_flow_combinators.Proxy(Clock)(Stack_tcp)(Forwards.Stream.Tcp)
+      Mirage_flow_combinators.Proxy (Stack_tcp)(Forwards.Stream.Tcp)
 
     let forward_via_tcp_socket t ~id (ip, port) () =
       Forwards.Stream.Tcp.connect (ip, port)
@@ -429,12 +427,12 @@ struct
       let would_fragment ~ip_header ~ip_payload =
         let open Icmpv4_wire in
         let header = Cstruct.create sizeof_icmpv4 in
-        set_icmpv4_ty header 0x03;
-        set_icmpv4_code header 0x04;
-        set_icmpv4_csum header 0x0000;
+        set_ty header 0x03;
+        set_code header 0x04;
+        set_checksum header 0x0000;
         (* this field is unused for icmp destination unreachable *)
-        set_icmpv4_id header 0x00;
-        set_icmpv4_seq header safe_outgoing_mtu;
+        Cstruct.BE.set_uint16 header 5 0x00; (* Set ID *)
+        Cstruct.BE.set_uint16 header 7 safe_outgoing_mtu; (* Set seq *)
         let icmp_payload = match ip_payload with
         | Some ip_payload ->
           if (Cstruct.length ip_payload > 8) then begin
@@ -443,7 +441,7 @@ struct
           end else Cstruct.append ip_header ip_payload
         | None -> ip_header
         in
-        set_icmpv4_csum header
+        set_checksum header
           (Tcpip_checksum.ones_complement_list [ header;
                                                  icmp_payload ]);
         let icmp_packet = Cstruct.append header icmp_payload in
@@ -466,7 +464,7 @@ struct
   end
 
   type connection = {
-    vnet_client_id: Vnet.id;
+    vnet_client_id: int;
     after_disconnect: unit Lwt.t;
     interface: Netif.t;
     switch: Switch.t;
@@ -1036,7 +1034,7 @@ struct
     if port_max_idle_time <= 0
     then Lwt.return_unit (* never delete a port *)
     else begin
-      Host.Time.sleep_ns (Duration.of_sec 30)
+      Mirage_sleep.ns (Duration.of_sec 30)
       >>= fun () ->
       let max_age = Duration.of_sec port_max_idle_time in
       Lwt_mutex.with_lock t.endpoints_m

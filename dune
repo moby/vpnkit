@@ -23,6 +23,7 @@
 
 (rule
  (target vpnkit.tgz)
+ (enabled_if (= %{os_type} "macOS"))
  (deps    vpnkit.exe (:gen ./scripts/mac_package.exe))
  (action  (run %{gen} -out %{target} -in %{deps})))
 
