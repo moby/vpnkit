@@ -1,0 +1,12 @@
+FROM ocaml/opam:windows-mingw-ocaml-4.14 as build
+
+ADD . /home/opam/vpnkit
+RUN opam pin add vpnkit /home/opam/vpnkit -n
+RUN opam depext vpnkit -y
+
+ENV OPAMJOBS=20
+RUN opam install vpnkit -y
+
+# FROM scratch doesn't work. Is there a Windows equivalent?
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
+COPY --from=build c:\\opam\\.opam\\4.14\\bin\\vpnkit.exe \\vpnkit.exe
