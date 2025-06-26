@@ -1267,6 +1267,10 @@ module Dns = struct
   let getaddrinfo node family =
     Luv_lwt.in_luv (fun return ->
         Luv.DNS.getaddrinfo ~family ~node () (function
+          | Error `EAI_NODATA ->
+              (* Special handling for EAI_NODATA: Treat as success (host exists, but no address data) and
+                 Return an empty list. See https://github.com/moby/moby/issues/47628 for more context. *)
+              return (Ok [])
           | Error err -> return (Error (`Msg (Luv.Error.strerror err)))
           | Ok x ->
               let ips =
