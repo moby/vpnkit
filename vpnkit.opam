@@ -45,16 +45,15 @@ depends: [
   "logs"
   "fmt"
   "astring"
-  "ethernet" {>= "3.0.0" & < "3.1.0"}
+  "ethernet" {>= "3.0.0"}
   "arp" {>= "3.0.0"}
   "mirage-flow-combinators" {>= "5.0.0"}
-  "mirage-entropy" {>= "0.5.0"}
   "mirage-kv" {>= "4.0.0" & < "6.0.0"}
   "mirage-net" {>= "4.0.0"}
   "mirage-channel" {>= "4.0.1"}
   "cohttp-lwt" {>= "0.99.0" & < "6.0.0"}
   "protocol-9p" {>= "2.0.2"}
-  "mirage-vnetif" {>= "0.5.0" & < "0.6.0"}
+  "mirage-vnetif" {>= "0.5.0"}
   "io-page-unix"
   "uuidm"
   "ezjsonm" {>= "0.4.0"}
