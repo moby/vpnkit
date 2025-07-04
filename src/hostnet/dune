@@ -7,7 +7,7 @@
    tcpip.tcp tcpip.stack-direct charrua charrua-server dns dns_lwt ofs luv
    luv_unix lwt.unix threads astring fs9p dns_forward tar
    mirage-vnetif uuidm cohttp-lwt mirage-channel ezjsonm
-   duration mirage-time mirage-clock
+   duration mirage-time
    tcpip.checksum forwarder cstructs sha)
  (foreign_stubs (language c) (names stubs_utils))
  (wrapped false))
