@@ -11,9 +11,12 @@ module Log = (val Logs.src_log src : Logs.LOG)
 exception Test_failure of string
 
 let get_ips c =
-  (* TODO: Check logic *)
   Client.Ipv.configured_ips c
-  |> List.map Ipaddr.Prefix.netmask
+  |> List.map Ipaddr.Prefix.address
+
+(* TODO: invocations of with_stack seem to remember the MAC -> IP bindings, so there's
+   unexpected state somewhere. Work around this by using unique UUIDs. *)
+let uuid_gen = Uuidm.v4_gen (Random.get_state ())
 
 (* Open multiple connections and verify that the connection succeeds and MAC and IP changes *)
 let test_connect n () =
@@ -22,22 +25,25 @@ let test_connect n () =
             match x, used_ips, used_macs with 
             | 0, _, _ -> Lwt.return_unit
             | x, used_ips, used_macs -> 
-                let uuid = (Uuidm.v4_gen (Random.get_state ()) ()) in
+                let uuid = uuid_gen () in
                 with_stack ~uuid ~pcap:"test_connect.pcap" (fun _ client_stack ->
                     (* Same IP should not appear twice *)
                     let ips = get_ips (Client.ip client_stack.t) in
-                    assert(List.length ips == 1);
-                    let ip = List.hd ips in
-                    assert((List.mem ip used_ips) == false);
+                    List.iter (fun ip ->
+                        if List.mem ip used_ips then begin
+                          Log.err (fun f -> f "IP %s is a duplicate" (Ipaddr.to_string ip));
+                          assert(false)
+                        end
+                    ) ips;
 
                     (* Same MAC should not appear twice *)
                     let mac = (VMNET.mac client_stack.netif) in
                     assert((List.mem mac used_macs) == false);
 
-                    Lwt.return (ip, mac)
-                ) >>= fun (ip, mac) -> 
-                Log.info (fun f -> f "Stack %d got IP %s and MAC %s" x (Ipaddr.to_string ip) (Macaddr.to_string mac));
-                loop (x - 1) ([ip] @ used_ips) ([mac] @ used_macs)
+                    Lwt.return (ips, mac)
+                ) >>= fun (ips, mac) ->
+                Log.info (fun f -> f "Stack %d got IPs %s and MAC %s" x (String.concat ", " (List.map Ipaddr.to_string ips)) (Macaddr.to_string mac));
+                loop (x - 1) (ips @ used_ips) ([mac] @ used_macs)
         in
         loop n [] []
     end
@@ -45,7 +51,7 @@ let test_connect n () =
 (* Connect twice with the same UUID and verify that MAC and IP are the same *)
 let test_reconnect () =
     Host.Main.run begin
-        let uuid = (Uuidm.v4_gen (Random.get_state ()) ()) in
+        let uuid = uuid_gen () in
         Log.info (fun f -> f "Using UUID %s" (Uuidm.to_string uuid));
         with_stack ~uuid ~pcap:"test_reconnect.pcap" (fun _ client_stack ->
             let ips = get_ips (Client.ip client_stack.t) in
@@ -69,7 +75,7 @@ let test_reconnect () =
 (* Connect with random UUID and request an unused IP *)
 let test_connect_preferred_ipv4 preferred_ip () =
     Host.Main.run begin
-        let uuid = (Uuidm.v4_gen (Random.get_state ()) ()) in
+        let uuid = uuid_gen () in
         Log.info (fun f -> f "Using UUID %s, requesting IP %s" (Uuidm.to_string uuid) (Ipaddr.V4.to_string preferred_ip));
         with_stack ~uuid ~preferred_ip ~pcap:"test_connect_preferred_ipv4.pcap" (fun _ client_stack ->
             let ips = get_ips (Client.ip client_stack.t) in
@@ -106,7 +112,7 @@ let test_connect_preferred_ipv4 preferred_ip () =
              | e -> raise e) >>= fun () ->
         (* Try to reconnect with a different UUID, but request a used IP (this should fail) *)
         Lwt.catch (fun () ->
-            let uuid = (Uuidm.v4_gen (Random.get_state ()) ()) in
+            let uuid = uuid_gen () in
             with_stack ~uuid ~preferred_ip ~pcap:"test_connect_preferred_ipv4.4.pcap" (fun _ client_stack ->
                 let ips = get_ips (Client.ip client_stack.t) in
                 let ip = List.hd ips in
