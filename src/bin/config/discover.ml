@@ -11,7 +11,7 @@ let os_type () =
 let flags () =
   match os_type () with
   | "Linux" ->
-    [ "-ccopt"; "-static" ]
+      [ "-ccopt"; "-static" ]
   | _ ->
     []
 

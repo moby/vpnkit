@@ -97,7 +97,7 @@ end
 module Make
     (Ip: Tcpip.Ip.S with type ipaddr = Ipaddr.V4.t)
     (Udp: Tcpip.Udp.S with type ipaddr = Ipaddr.V4.t)
-    (Tcp:Mirage_flow_combinators.SHUTDOWNABLE)
+    (Tcp:Mirage_flow.S)
     (Remote: Sig.FLOW_CLIENT with type address = Ipaddr.t * int)
     (Dns_resolver: Sig.DNS)
 = struct
@@ -298,7 +298,7 @@ module Make
             Lwt.return false
           )
         >>= fun continue ->
-        if continue then loop () else Remote.shutdown_write remote
+        if continue then loop () else Remote.shutdown remote `write
       in
       loop () in
     Lwt.join [

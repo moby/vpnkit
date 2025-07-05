@@ -13,7 +13,7 @@ let pp_ip4s = Fmt.(list ~sep:(any ", ") Ipaddr.V4.pp)
 
 let run_test ?(timeout=Duration.of_sec 60) t =
   let timeout =
-    Host.Time.sleep_ns timeout >>= fun () ->
+    Mirage_sleep.ns timeout >>= fun () ->
     Lwt.fail_with "timeout"
   in
   Host.Main.run @@ Lwt.pick [ timeout; t ]
@@ -220,21 +220,21 @@ module Server = struct
     Udp.getsockname server
     >>= fun (_, realport) ->
     let t = { ip; port = realport; server } in
-    Lwt.finalize (fun () -> f t.port) (fun () -> Udp.shutdown t.server)
+    Lwt.finalize (fun () -> f t.port) (fun () -> Udp.stop t.server)
 end
 
-let err_udp e = Fmt.kstr failwith "%a" Client.UDPV4.pp_error e
+let err_udp e = Fmt.kstr failwith "%a" Client.UDP.pp_error e
 
 let udp_rpc client src_port dst dst_port buffer =
-  let udpv4 = Client.udpv4 client.Client.t in
+  let udpv4 = Client.udp client.Client.t in
   let send_request () =
-    Client.UDPV4.write ~src_port ~dst ~dst_port udpv4 buffer
+    Client.UDP.write ~src_port ~dst ~dst_port udpv4 buffer
     >>= function
     | Error e -> err_udp e
     | Ok ()   -> Lwt.return_unit in
 
   let response = ref None in
-  Client.UDPV4.listen (Client.udpv4 client.Client.t) ~port:src_port (fun ~src:_ ~dst:_ ~src_port:remote_src_port buffer ->
+  Client.UDP.listen (Client.udp client.Client.t) ~port:src_port (fun ~src:_ ~dst:_ ~src_port:remote_src_port buffer ->
     Log.debug (fun f ->
         f "Received UDP %d -> %d" remote_src_port src_port);
     begin match !response with
@@ -249,7 +249,7 @@ let udp_rpc client src_port dst dst_port buffer =
     match !response with
     | Some x -> Lwt.return x
     | None ->
-      Host.Time.sleep_ns (Duration.of_sec 1)
+      Mirage_sleep.ns (Duration.of_sec 1)
       >>= fun () ->
       loop () in
   loop ()

@@ -22,10 +22,7 @@ type datagram = {
 }
 
 module Make
-    (Sockets: Sig.SOCKETS)
-    (Clock: Mirage_clock.MCLOCK)
-    (Time: Mirage_time.S)
-= struct
+    (Sockets: Sig.SOCKETS) = struct
 
   module Icmp = Sockets.Datagram.Udp
 
@@ -53,8 +50,8 @@ module Make
 
   let start_background_gc phys_to_flow virt_to_flow ids_in_use max_idle_time =
     let rec loop () =
-      Time.sleep_ns max_idle_time >>= fun () ->
-      let now_ns = Clock.elapsed_ns () in
+      Mirage_sleep.ns max_idle_time >>= fun () ->
+      let now_ns = Mirage_mtime.elapsed_ns () in
       let to_shutdown =
         Hashtbl.fold (fun phys flow acc ->
             if Int64.(sub now_ns flow.last_use) > max_idle_time then begin
@@ -134,8 +131,8 @@ module Make
            probably reflects some kernel datastructure size rather than the real
            on-the-wire size. This confuses our IPv4 parser so we correct the size
            here. *)
-        let len = Ipv4_wire.get_ipv4_len datagram in
-        Ipv4_wire.set_ipv4_len datagram (min len n);
+        let len = Ipv4_wire.get_len datagram in
+        Ipv4_wire.set_len datagram (min len n);
         match Frame.ipv4 [ datagram ] with
         | Error (`Msg m) ->
           Log.err (fun f -> f "Error unmarshalling IP datagram: %s" m);
@@ -145,9 +142,9 @@ module Make
             let flow = Hashtbl.find t.phys_to_flow (src, id) in
             let id' = snd flow.virt in
             (* Rewrite the id in the Echo response *)
-            Icmpv4_wire.set_icmpv4_id raw id';
-            Icmpv4_wire.set_icmpv4_csum raw 0;
-            Icmpv4_wire.set_icmpv4_csum raw (Tcpip_checksum.ones_complement raw);
+            Cstruct.BE.set_uint16 raw 5 id'; (* TODO: Upstream *)
+            Icmpv4_wire.set_checksum raw 0;
+            Icmpv4_wire.set_checksum raw (Tcpip_checksum.ones_complement raw);
             try_to_send ~src ~dst:(fst flow.virt) ~payload:raw
           end else begin
             Log.debug (fun f ->
@@ -163,15 +160,15 @@ module Make
             let flow = Hashtbl.find t.phys_to_flow (dst, id) in
             let id' = snd flow.virt in
             (* Rewrite the id in the nested original packet *)
-            Icmpv4_wire.set_icmpv4_id original_icmp id';
-            Icmpv4_wire.set_icmpv4_csum original_icmp 0;
-            Icmpv4_wire.set_icmpv4_csum original_icmp (Tcpip_checksum.ones_complement original_icmp);
+            Cstruct.BE.set_uint16 original_icmp 5 id'; (* TODO: Upstream *)
+            Icmpv4_wire.set_checksum original_icmp 0;
+            Icmpv4_wire.set_checksum original_icmp (Tcpip_checksum.ones_complement original_icmp);
             (* Rewrite the src address to use the internal address *)
-            let new_src = Ipaddr.V4.to_int32 @@ fst flow.virt in
-            Ipv4_wire.set_ipv4_src original_ipv4 new_src;
+            let new_src = fst flow.virt in
+            Ipv4_wire.set_src original_ipv4 new_src;
             (* Note we don't recompute the IPv4 checksum since the packet is truncated *)
-            Icmpv4_wire.set_icmpv4_csum icmp_buffer 0;
-            Icmpv4_wire.set_icmpv4_csum icmp_buffer (Tcpip_checksum.ones_complement icmp_buffer);
+            Icmpv4_wire.set_checksum icmp_buffer 0;
+            Icmpv4_wire.set_checksum icmp_buffer (Tcpip_checksum.ones_complement icmp_buffer);
             try_to_send ~src:src' ~dst:(fst flow.virt) ~payload:icmp_buffer
           end else begin
             Log.debug (fun f -> f "Dropping TTL exceeded src' = %a dst' = %a; src = %a; dst = %a; id = %d"
@@ -190,11 +187,11 @@ module Make
             match Hashtbl.find Hostnet_udp.external_to_internal src_port with
             | Ipaddr.V4 internal_src, internal_port ->
               (* Rewrite the src address on the IPv4 to use the internal address *)
-              Ipv4_wire.set_ipv4_src original_ipv4 (Ipaddr.V4.to_int32 internal_src);
+              Ipv4_wire.set_src original_ipv4 internal_src;
               (* Rewrite the src_port on the UDP to use the internal address *)
-              Udp_wire.set_udp_source_port original_udp internal_port;
-              Icmpv4_wire.set_icmpv4_csum icmp_buffer 0;
-              Icmpv4_wire.set_icmpv4_csum icmp_buffer (Tcpip_checksum.ones_complement icmp_buffer);
+              Udp_wire.set_src_port original_udp internal_port;
+              Icmpv4_wire.set_checksum icmp_buffer 0;
+              Icmpv4_wire.set_checksum icmp_buffer (Tcpip_checksum.ones_complement icmp_buffer);
               try_to_send ~src:src' ~dst:internal_src ~payload:icmp_buffer
             | _, _ ->
               Log.debug (fun f -> f "Dropping TTL exceeded from internal IPv6 address");
@@ -265,7 +262,7 @@ module Make
             let phys = dst, id' in
             let description = Printf.sprintf "%s id=%d -> %s id=%d"
               (Ipaddr.V4.to_string @@ fst virt) (snd virt) (Ipaddr.V4.to_string @@ fst phys) (snd phys) in
-            let last_use = Clock.elapsed_ns () in
+            let last_use = Mirage_mtime.elapsed_ns () in
             let flow = { description; virt; phys; last_use } in
             Hashtbl.replace t.phys_to_flow phys flow;
             Hashtbl.replace t.virt_to_flow virt flow;

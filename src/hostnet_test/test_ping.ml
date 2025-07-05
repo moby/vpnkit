@@ -27,7 +27,7 @@ let test_ping () =
           >>= function
           | Error e -> failf "Icmpv41.write failed: %a" Slirp_stack.Client.Icmpv41.pp_error e
           | Ok () ->
-            Host.Time.sleep_ns (Duration.of_sec 1)
+            Mirage_sleep.ns (Duration.of_sec 1)
             >>= fun () ->
             loop (seq + 1)
         end in
@@ -54,7 +54,7 @@ let test_two_pings () =
           >>= function
           | Error e -> failf "Icmpv41.write failed: %a" Slirp_stack.Client.Icmpv41.pp_error e
           | Ok () ->
-            Host.Time.sleep_ns (Duration.of_sec 1)
+            Mirage_sleep.ns (Duration.of_sec 1)
             >>= fun () ->
             if Queue.length Slirp_stack.Client.Icmpv41.packets > 0 then begin
               let all = Queue.fold (fun xs x -> x :: xs) [] Slirp_stack.Client.Icmpv41.packets in

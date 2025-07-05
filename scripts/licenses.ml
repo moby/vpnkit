@@ -446,8 +446,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 |}
 
-let licenses = function
-  | "angstrom.0.15.0" | "angstrom.0.16.0" -> {
+let licenses name_dot_version =
+  (* Assume the license doesn't change across versions *)
+  let bits = Stringext.split ~on:'.' name_dot_version in match List.hd bits with
+  | "angstrom" -> {
     link = "https://github.com/inhabitedtype/angstrom/blob/21333c8629ade0b99732a7c34c9513096d7efa05/LICENSE";
     text = {|
   Copyright (c) 2016, Inhabited Type LLC
@@ -481,7 +483,7 @@ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.|}
   }
-  | "arp.3.0.0" | "arp.3.1.1" -> {
+  | "arp" -> {
     link = "https://github.com/mirage/arp/blob/7222488873ae6d54233480322cb2f92a8df312ba/LICENSE.md";
     text = {|
 Copyright (c) 2016 Hannes Mehnert hannes@mehnert.org
@@ -489,73 +491,75 @@ Portions copyright to MirageOS team under ISC license:
 src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
     |} ^ isc
   }
-  | "asetmap.0.8.1" -> {
+  | "asetmap" -> {
     link = "https://github.com/dbuenzli/asetmap/blob/a3b70cfd95c6db04a1618db0bb3e8b77dbf164a9/LICENSE.md";
     text = {|
     Copyright (c) 2016 Daniel C. Bünzli
     |} ^ isc
   }
-  | "astring.0.8.5" -> {
+  | "astring" -> {
     link = "https://github.com/dbuenzli/astring/blob/ec7a266a3a680e5d246689855c639da53d713428/LICENSE.md";
     text = {|
     Copyright (c) 2016 The astring programmers
     |} ^ isc
   }
-  | "fpath.0.7.3" -> {
+  | "fpath" -> {
     link = "https://raw.githubusercontent.com/dbuenzli/fpath/master/LICENSE.md";
     text = {|
     Copyright (c) 2014 The fpath programmers
     |} ^ isc
   }
-  | "octavius.1.2.2" -> {
+  | "octavius" -> {
     link = "https://raw.githubusercontent.com/ocaml-doc/octavius/master/LICENSE.md";
     text = {|
     Copyright (c) 2015 Leo White <leo@lpw25.net>
     |} ^ isc
   }
-  | "luv_unix.0.5.0" | "luv.0.5.11" | "luv.0.5.13" | "luv_unix.0.5.1" -> {
+  | "luv_unix" | "luv" -> {
     link = "https://raw.githubusercontent.com/aantron/luv/master/LICENSE.md";
     text = {|
     Copyright (c) 2018-2021 Anton Bachin
     |} ^ mit
   }
-  | "integers.0.7.0" -> {
+  | "integers" -> {
     link = "https://raw.githubusercontent.com/ocamllabs/ocaml-integers/0.7.0/LICENSE.md";
     text = {|
     Copyright (c) 2013-2016 Jeremy Yallop
     |} ^ mit
   }
-  | "ctypes.0.20.1" | "ctypes.0.22.0" | "ctypes.0.23.0" -> {
+  | "ctypes" -> {
     link = "https://raw.githubusercontent.com/ocamllabs/ocaml-ctypes/master/LICENSE";
     text = {|
     Copyright (c) 2013 Jeremy Yallop
     |} ^ mit
   }
-  | "time_now.v0.14.0"
-  | "stdio.v0.14.0"
-  | "ppx_optcomp.v0.14.3"
-  | "ppx_js_style.v0.14.1"
-  | "ppx_inline_test.v0.14.1"
-  | "ppx_here.v0.14.0"
-  | "ppx_hash.v0.14.0"
-  | "ppx_enumerate.v0.14.0"
-  | "ppx_compare.v0.14.0"
-  | "ppx_cold.v0.14.0"
-  | "ppx_base.v0.14.0"
-  | "ppx_assert.v0.14.0"
-  | "jst-config.v0.14.1"
-  | "jane-street-headers.v0.14.0"
-  | "base.v0.14.2" | "base.v0.14.3"
-  | "csexp.1.5.1" | "csexp.1.5.2"
-  | "dune.2.9.1" | "dune.2.9.2" | "dune.2.9.3" | "dune.3.0.2" | "dune.3.0.3" | "dune.3.1.1" | "dune.3.2.0" | "dune.3.3.0" | "dune.3.4.1" | "dune.3.5.0" | "dune.3.16.0"
-  | "dune-configurator.2.9.1" | "dune-configurator.2.9.3" | "dune-configurator.3.0.2" | "dune-configurator.3.0.3" | "dune-configurator.3.1.1" | "dune-configurator.3.3.0" | "dune-configurator.3.5.0" | "dune-configurator.3.16.0"
-  | "dune-configurator.3.2.0" | "dune-configurator.3.4.1"
-  | "ocaml-compiler-libs.v0.12.4"
-  | "ocaml-syntax-shims.1.0.0"
-  | "parsexp.v0.14.2"
-  | "result.1.5"
-  | "sexplib.v0.14.0"
-  | "sexplib0.v0.14.0" -> {
+  | "time_now"
+  | "stdio"
+  | "ppx_optcomp"
+  | "ppx_js_style"
+  | "ppx_inline_test"
+  | "ppx_here"
+  | "ppx_hash"
+  | "ppx_enumerate"
+  | "ppx_compare"
+  | "ppx_cold"
+  | "ppx_base"
+  | "ppx_assert"
+  | "ppx_globalize"
+  | "ppxlib_jane"
+  | "jst-config"
+  | "jane-street-headers"
+  | "base"
+  | "csexp"
+  | "dune"
+  | "dune-configurator"
+  | "ocaml-compiler-libs"
+  | "ocaml-syntax-shims"
+  | "ocaml_intrinsics_kernel"
+  | "parsexp"
+  | "result"
+  | "sexplib"
+  | "sexplib0" -> {
     link = "https://github.com/janestreet/base/blob/83a70d184c98fb192d2030df1c3defea499195af/LICENSE.md";
     text = {|
     The MIT License
@@ -563,21 +567,21 @@ src/arp_packet.ml mirage/arpv4.mli mirage/arpv4.ml
 Copyright (c) 2016--2020 Jane Street Group, LLC opensource@janestreet.com
     |} ^ mit
   }
-  | "base64.3.5.0" | "base64.3.5.1" -> {
+  | "base64" -> {
     link = "https://github.com/mirage/ocaml-base64/blob/3a5e259895acef979a0fab8bb59d396e1bccead0/LICENSE.md";
     text = {|
     Copyright (c) 2006-2009 Citrix Systems Inc.
     Copyright (c) 2010 Thomas Gazagnaire thomas@gazagnaire.com
     |} ^ isc
   }
-  | "bigarray-compat.1.0.0" | "bigarray-compat.1.1.0" -> {
+  | "bigarray-compat" -> {
     link = "https://github.com/mirage/bigarray-compat/blob/757e11302b40619322fb839a8ef0cb0e16ba0828/LICENSE.md";
     text = {|
     Copyright (c) 2019-2021 Lucas Pluvinage lucas.pluvinage@gmail.com
 
     |} ^ isc
   }
-  | "bigstringaf.0.8.0" | "bigstringaf.0.9.0" | "bigstringaf.0.10.0" -> {
+  | "bigstringaf" -> {
     link = "https://github.com/inhabitedtype/bigstringaf/blob/9c1e57375f3da15cf344c228e2cc14a36513923d/LICENSE";
     text = {|
     Copyright (c) 2018, Inhabited Type LLC
@@ -612,50 +616,48 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
     |}
   }
-  | "cmdliner.1.0.4" | "cmdliner.1.1.1" -> {
+  | "cmdliner" -> {
     link = "https://github.com/dbuenzli/cmdliner/blob/93ee8854625a312d9ce69f83398bbc1e8443402f/LICENSE.md";
     text = {|
     Copyright (c) 2011 Daniel C. Bünzli
     |} ^ isc
   }
-  | "cohttp.5.0.0" | "cohttp.5.3.1" | "cohttp-lwt.5.0.0" | "cohttp-lwt.5.3.0" -> {
+  | "cohttp" | "cohttp-lwt" -> {
     link = "https://github.com/mirage/ocaml-cohttp/blob/5f9c0ae88a69e4280810fe73344367e90954dea5/LICENSE.md";
     text = {|
     ISC License
 Copyright (c) 2009-2018 <the authors, see individual headers on files>
     |} ^isc
   }
-  | "cstruct.6.0.1" | "cstruct-lwt.6.0.1" | "cstruct-sexp.6.0.1" | "ppx_cstruct.6.0.1"
-  | "cstruct.6.1.0" | "cstruct-lwt.6.1.0" | "cstruct-sexp.6.1.0" | "ppx_cstruct.6.1.0"
-  | "cstruct.6.1.1" | "cstruct-lwt.6.1.1" | "cstruct-sexp.6.1.1" | "ppx_cstruct.6.1.1" -> {
+  | "cstruct" | "cstruct-lwt" | "cstruct-sexp" | "ppx_cstruct" -> {
     link = "https://raw.githubusercontent.com/mirage/ocaml-cstruct/v6.1.0/LICENSE.md";
     text = {|
     Copyright (c) 2012 Anil Madhavapeddy anil@recoil.org Copyright (c) 2012 Pierre Chambart Copyright (c) Christiano F. Haesbaert haesbaert@haesbaert.org Copyright (c) Citrix Inc Copyright (c) David Sheets sheets@alum.mit.edu Copyright (c) Drup drupyog@zoho.com Copyright (c) Hannes Mehnert hannes@mehnert.org Copyright (c) Jeremy Yallop yallop@gmail.com Copyright (c) Mindy Preston meetup@yomimono.org Copyright (c) Nicolas Ojeda Bar n.oje.bar@gmail.com Copyright (c) Richard Mortier mort@cantab.net Copyright (c) Rudi Grinberg rudi.grinberg@gmail.com Copyright (c) Thomas Gazagnaire thomas@gazagnaire.com Copyright (c) Thomas Leonard talex5@gmail.com Copyright (c) Vincent Bernardoff vb@luminar.eu.org Copyright (c) pqwy david@numm.org
 
     |}^isc
   }
-  | "ethernet.3.0.0" -> {
+  | "ethernet" -> {
     link = "https://github.com/mirage/ethernet/blob/6c93d92d0363165729a4d1f51c63b43bc4987c3c/LICENSE.md";
     text = {|
     Copyright (c) Anil Madhavapeddy anil@recoil.org Copyright (c) Balraj Singh balrajsingh@ieee.org Copyright (c) Citrix Inc Copyright (c) David Scott dave@recoil.org Copyright (c) Docker Inc Copyright (c) Drup drupyog@zoho.com Copyright (c) Gabor Pali pali.gabor@gmail.com Copyright (c) Hannes Mehnert hannes@mehnert.org Copyright (c) Haris Rotsos cr409@cam.ac.uk Copyright (c) Kia sadieperkins@riseup.net Copyright (c) Luke Dunstan LukeDunstan81@gmail.com Copyright (c) Magnus Skjegstad magnus@skjegstad.com Copyright (c) Mindy Preston meetup@yomimono.org Copyright (c) Nicolas Ojeda Bar n.oje.bar@gmail.com Copyright (c) Pablo Polvorin ppolvorin@process-one.net Copyright (c) Richard Mortier mort@cantab.net Copyright (c) Thomas Gazagnaire thomas@gazagnaire.org Copyright (c) Thomas Leonard talex5@gmail.com Copyright (c) Tim Cuthbertson tim@gfxmonk.net Copyright (c) Vincent Bernardoff vb@luminar.eu.org Copyright (c) lnmx len@lnmx.org Copyright (c) pqwy david@numm.org
     
     |} ^ isc
   }
-  | "ezjsonm.1.3.0" -> {
+  | "ezjsonm" -> {
     link = "https://github.com/mirage/ezjsonm/blob/a2b724b3bb084ce5045aca6f3431bf1abb096b6f/LICENSE";
     text = {|
     Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
 
     |} ^ isc
   }
-  | "functoria-runtime.3.0.3" | "functoria-runtime.3.1.2" -> {
+  | "functoria-runtime" -> {
     link = "https://github.com/mirage/functoria/blob/d89fadb14bef0b1eb43761cdced0816e7772a533/LICENSE.md";
     text = {|
     Copyright (c) 2015-2018, Thomas Gazagnaire, Anil Madhavapeddy, Dave Scott, Thomas Leonard, Gabriel Radanne
 
     |} ^ isc
   }
-  | "hex.1.4.0" | "hex.1.5.0" -> {
+  | "hex" -> {
     link = "https://github.com/mirage/ocaml-hex/blob/a248fd213bd2248f610e8c5a7eeb39c92283896e/LICENSE.md";
     text = {|
     Copyright (c) 2015 Trevor Summers Smith trevorsummerssmith@gmail.com
@@ -663,31 +665,31 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
 
     |} ^ isc
   }
-  | "hvsock.3.0.0" -> {
+  | "hvsock" -> {
     link = "https://github.com/mirage/ocaml-hvsock/blob/f4f4ff02b90f2c12568140b30fb8fceeedd8e2f1/LICENSE.md";
     text = {|
     Copyright (c) 2016, Dave Scott
 
     |} ^ isc
   }
-  | "io-page.2.3.0" | "io-page-unix.2.3.0" -> {
+  | "io-page" | "io-page-unix" -> {
     link = "https://github.com/mirage/io-page/blob/3e5b66ffbe922550c9b8b4c9c48b616efec65e61/LICENSE.md";
     text = {|
     Copyright (c) 2013 Thomas Gazagnaire thomas@gazagnaire.org Copyright (C) 2012-2013 Citrix Inc Copyright (c) 2010-2012 Anil Madhavapeddy anil@recoil.org
     |} ^ isc
   }
-  | "ipaddr.5.2.0" | "ipaddr.5.3.0" | "ipaddr.5.3.1" | "ipaddr.5.6.0" | "ipaddr-sexp.5.2.0" | "ipaddr-sexp.5.3.0" | "ipaddr-sexp.5.3.1" | "ipaddr-sexp.5.6.0"| "macaddr.5.2.0" | "macaddr.5.3.0" | "macaddr.5.3.1" | "macaddr.5.6.0" | "macaddr-cstruct.5.2.0" | "macaddr-cstruct.5.3.0" | "macaddr-cstruct.5.3.1" | "macaddr-cstruct.5.6.0" | "macaddr-sexp.5.2.0" | "macaddr-sexp.5.3.0" | "macaddr-sexp.5.3.1" | "macaddr-sexp.5.6.0" -> {
+  | "ipaddr" | "ipaddr-sexp" | "ipaddr-cstruct" | "macaddr" | "macaddr-cstruct" | "macaddr-sexp" -> {
     link = "https://github.com/mirage/ocaml-ipaddr/blob/7745ea4be2c1c5a7ab95908b26a6ed81a0947ab5/LICENSE.md";
     text = {|
     Copyright (c) 2013-2015 David Sheets sheets@alum.mit.edu Copyright (c) 2010-2011, 2014 Anil Madhavapeddy anil@recoil.org
 
     |} ^ isc
   }
-  | "metrics.0.3.0" | "metrics.0.4.0" | "metrics.0.4.1" -> {
+  | "metrics" -> {
     link = "https://github.com/mirage/metrics/blob/0f48d63c5e1c0e33d7043b2c6e053ba380516433/LICENSE.md";
     text = isc;
   }
-  | "mirage-channel.4.0.1" | "mirage-channel.4.1.0" -> {
+  | "mirage-channel" -> {
     link = "https://raw.githubusercontent.com/mirage/mirage-channel/v4.1.0/LICENSE.md";
     text = {|
     Copyright (c) 2011-2015 Anil Madhavapeddy anil@recoil.org
@@ -695,81 +697,123 @@ Copyright (c) 2009-2018 <the authors, see individual headers on files>
     Copyright (c) 2015 Thomas Gazagnaire thomas@gazagnaire.org
     |} ^ isc
   }
-  | "mirage-clock.4.0.0" | "mirage-clock-unix.4.0.0" | "mirage-clock.4.1.0" | "mirage-clock-unix.4.1.0" | "mirage-clock.4.2.0" | "mirage-clock-unix.4.2.0" -> {
+  | "mirage-crypto" | "mirage-crypto-rng" -> {
+    link = "https://raw.githubusercontent.com/mirage/mirage-crypto/refs/heads/main/LICENSE.md";
+    text = isc;
+  }
+  | "mirage-clock" | "mirage-clock-unix" -> {
     link = "https://github.com/mirage/mirage-clock/blob/5c1fa5e5818d1a5d8600894e95f07d48ad705c6f/LICENSE.md";
     text = {|
     Copyright (c) 2010 Anil Madhavapeddy anil@recoil.org 2014 Daniel C. Bünzli
 
     |} ^ isc
   }
-  | "mirage-flow.3.0.0" | "mirage-flow-combinators.3.0.0" -> {
+  | "mirage-flow" | "mirage-flow-combinators" -> {
     link = "https://github.com/mirage/mirage-flow/blob/f5f6c131a9e72ac473719eb8740058385638a524/LICENSE.md";
     text = isc;
   }
-  | "mirage-net.4.0.0" -> {
+  | "mirage-net" -> {
     link = "https://github.com/mirage/mirage-net/blob/f440f203ed2d1653f11d6c0b184dbbdfb94ef723/LICENSE.md";
     text = isc;
   }
-  | "mirage-profile.0.9.1" -> {
+  | "mirage-profile" -> {
     link = "https://github.com/mirage/mirage-profile/blob/5b6e0c3a6c2fe622eb081b0cc61c5c8637ab71d6/LICENSE.md";
     text = {|
     Copyright (c) 2014, Thomas Leonard All rights reserved.
     |} ^ bsd_2_clause_simplified;
   }
-  | "mirage-random.3.0.0" -> {
+  | "mirage-random" -> {
     link = "https://github.com/mirage/mirage-random/blob/2f2434c30cedb476b44b10c55cec0052f1eaa1f4/LICENSE.md";
     text = isc;
   }
-  | "mirage-random-stdlib.0.1.0" -> {
+  | "mirage-random-stdlib" -> {
     link = "https://github.com/mirage/mirage-random-stdlib/blob/ee19066dbfa6f541d34261bdba65415bf1552b28/LICENSE.md";
     text = isc;
   }
-  | "mirage-runtime.3.10.8" -> {
+  | "mirage-runtime" -> {
     link = "https://github.com/mirage/mirage/blob/main/LICENSE.md";
     text = {|
     Copyright (X) 2011-2018, the MirageOS contributors
     |} ^ isc
   }
-  | "mirage-time.3.0.0" -> {
+  | "mirage-time" -> {
     link = "https://github.com/mirage/mirage-time/blob/c68f199b1952f0656526a3212f82afd2a49c1f00/LICENSE.md";
     text = isc;
   }
-  | "mirage-vnetif.0.5.0" | "mirage-vnetif.0.6.0" -> {
+  | "mirage-mtime" -> {
+    link = "https://raw.githubusercontent.com/mirage/mirage-mtime/refs/heads/main/LICENSE.md";
+    text = isc;
+  }
+  | "mirage-vnetif" -> {
     link = "https://github.com/mirage/mirage-vnetif/blob/8582e89c194b1253550daa755b4a4ff608bd07ca/LICENSE.md";
     text = {|
     Copyright (c) 2015, Magnus Skjegstad magnus@skjegstad.com
 
     |} ^ isc
   }
-  | "mirage-stack.4.0.0" -> {
+  | "mirage-stack" -> {
     link = "https://github.com/mirage/mirage-stack/blob/2d0fe8f5a198e04415eafd6496d5719f0a610e7e/LICENSE.md";
     text = isc;
   }
-  | "pcap-format.0.5.2" | "pcap-format.0.6.0" -> {
+  | "mirage-sleep" -> {
+    link = "https://raw.githubusercontent.com/mirage/mirage-sleep/refs/heads/main/LICENSE.md";
+    text = isc;
+  }
+  | "pcap-format" -> {
     link = "https://github.com/mirage/ocaml-pcap/blob/76bf3ce75fed04a0625fc2a1c83545c0437bf823/LICENSE.md";
     text = {|
     Copyright (c) 2012-2018 The ocaml-pcap contributors
 
     |} ^ isc
   }
-  | "prometheus.1.1" -> {
+  | "prometheus" -> {
     link = "https://github.com/mirage/prometheus/blob/4a85699fa5e37975484fc99bdf3ff944a315a1ed/LICENSE.md";
     text = apache2 "Copyright 2016-2017 Docker, Inc."
   }
-  | "protocol-9p.2.0.2" | "protocol-9p-unix.2.0.2" -> {
+  | "protocol-9p" | "protocol-9p-unix" -> {
     link = "https://github.com/mirage/ocaml-9p/blob/931c745e45d685f4351f14ce50d2ca128895316f/LICENSE.md";
     text = {|
     Copyright (c) 2015, MirageOS
     |} ^ isc
   }
-  | "uri.4.2.0" | "uri.4.4.0" | "uri-sexp.4.2.0" | "uri-sexp.4.4.0" -> {
+  | "uri" | "uri-sexp" -> {
     link = "https://github.com/mirage/ocaml-uri/blob/0ff3efbbc235bef5a7d67cc01bc1dadbe2e859b9/LICENSE.md";
     text = {|
     Copyright (c) <the authors, see individual headers on files>
 
     |} ^ isc
   }
-  | "mirage-entropy.0.4.1" | "mirage-entropy.0.5.0" | "mirage-entropy.0.5.1" -> {
+  | "eqaf" -> {
+    link = "https://raw.githubusercontent.com/mirage/eqaf/refs/heads/master/LICENSE.md";
+    text = {|
+    Copyright (c) 2018 Romain Calascibetta
+|} ^ mit;
+  }
+  | "decompress" -> {
+    link = "https://raw.githubusercontent.com/mirage/decompress/refs/heads/main/LICENSE.md";
+    text = mit;
+  }
+  | "digestif" -> {
+    link = "https://raw.githubusercontent.com/mirage/digestif/refs/heads/main/LICENSE.md";
+    text = mit;
+  }
+  | "ohex" -> {
+    link = "https://ocaml.org/p/ohex/0.2.0";
+    text = bsd_2_clause_simplified;
+  }
+  | "optint" -> {
+    link = "https://raw.githubusercontent.com/mirage/optint/refs/heads/master/LICENSE.md";
+    text = {|
+    Copyright (c) 2018 Romain Calascibetta
+ |} ^ isc;
+  }
+ | "checkseum" -> {
+      link = "https://raw.githubusercontent.com/mirage/checkseum/refs/heads/main/LICENSE.md";
+    text = {|
+    Copyright (c) 2018 Romain Calascibetta
+ |} ^ isc;
+  }
+  | "mirage-entropy" -> {
     link = "https://github.com/mirage/mirage-entropy/blob/8d4c9ed42dbea225b306af082acd8e15464287ba/LICENSE.md";
     text = {|
     Copyright (c) 2014-2016, Hannes Mehnert, Anil Madhavapeddy, David Kaloper Meršinjak
@@ -777,29 +821,29 @@ All rights reserved.
 
     |} ^ bsd_2_clause_simplified
   }
-  | "mirage-kv.4.0.0" | "mirage-kv.4.0.1" | "mirage-kv.5.0.0" -> {
+  | "mirage-kv" -> {
     link = "https://github.com/mirage/mirage-kv/blob/5c2c75e5a0efc0c9390b11fab75b1e706ea8d4ab/LICENSE.md";
     text = isc
   }
-  | "mirage-protocols.8.0.0" -> {
+  | "mirage-protocols" -> {
     link = "https://github.com/mirage/mirage-protocols/blob/37aa4a86f9f423bb7fe1d70c8a71331060a45048/LICENSE.md";
     text = isc;
   }
-  | "psq.0.2.0" | "psq.0.2.1" -> {
+  | "psq" -> {
     link = "https://github.com/pqwy/psq/blob/beeaf9396655d195f9a20243102c9773d826d3b0/LICENSE.md";
     text = {|
     Copyright (c) 2016 David Kaloper Meršinjak
 
     |} ^ isc
   }
-  | "randomconv.0.1.3" -> {
+  | "randomconv" -> {
     link = "https://github.com/hannesm/randomconv/blob/045d7fd3454151930cb9941b0cd3a228ddebe68b/LICENSE.md";
     text = {|
     Copyright (c) 2016 Hannes Mehnert hannes@mehnert.org
 
     |} ^ isc
   }
-  | "re.1.10.3" | "re.1.10.4" | "re.1.11.0" -> {
+  | "re" -> {
     link = "https://github.com/ocaml/ocaml-re/blob/c5d5df80e128c3d7646b7d8b1322012c5fcc35f3/LICENSE.md";
     text = {|
     This Software is distributed under the terms of the GNU Lesser
@@ -823,7 +867,7 @@ covered by the GNU Library General Public License.
 
     |} ^ lgpl21
   }
-  | "mmap.1.1.0" | "mmap.1.2.0" -> {
+  | "mmap" -> {
     link = "https://github.com/mirage/mmap/blob/46f613db11c00667764523ccbb3d63e53e1c666c/LICENSE";
     text = {|
     In the following, "the OCaml Core System" refers to all files marked
@@ -850,7 +894,7 @@ might be covered by the GNU Lesser General Public License.
 
     |} ^ lgpl21
   }
-  | "num.1.4" | "num.1.5-1" -> {
+  | "num" -> {
     link = "https://github.com/ocaml/num/blob/814c159ea6cebff3b1f61b2055b893be87084ae3/LICENSE";
     text = {|
     The Num library is copyright Institut National de Recherche en
@@ -878,7 +922,7 @@ the license in file toplevel/LICENSE-findlib.
 
     |} ^ lgpl21
   }
-  | "camlp-streams.5.0" | "camlp-streams.5.0.1" -> {
+  | "camlp-streams" -> {
     link = "https://github.com/ocaml/camlp-streams/blob/trunk/LICENSE";
     text = {|
     The Camlp-streams library is copyright Institut National de Recherche
@@ -906,16 +950,9 @@ the license in file toplevel/LICENSE-findlib.
   
     |} ^ lgpl21
   }
-  | "ocaml.4.08.0" | "ocaml-base-compiler.4.08.0"
-  | "ocaml.4.12.0" | "ocaml-base-compiler.4.12.0"
-  | "ocaml.4.13.0" | "ocaml-base-compiler.4.13.0"
-  | "ocaml.4.13.1" | "ocaml-base-compiler.4.13.1"
-  | "ocaml.4.14.0" | "ocaml-base-compiler.4.14.0"
-  | "ocaml.4.14.1" | "ocaml-base-compiler.4.14.1"
-  | "ocaml.4.14.2" | "ocaml-base-compiler.4.14.2"
-  | "ocaml-variants.4.08.0+mingw64c"
-  | "ocaml-variants.4.13.1+mingw64c"
-  | "seq.base" | "stdlib-shims.0.3.0" | "uchar.0.0.2" -> {
+  | "ocaml" | "ocaml-base-compiler" | "ocaml-compiler"
+  | "ocaml-variants"
+  | "seq" | "stdlib-shims" | "uchar" -> {
     link = "https://github.com/ocaml/ocaml/blob/a095535e5c02a95da4908a82d9f75a62609cc592/LICENSE";
     text = {|
     In the following, "the OCaml Core System" refers to all files marked
@@ -942,85 +979,89 @@ might be covered by the GNU Lesser General Public License.
 
     |} ^ lgpl21
   }
-  | "domain-name.0.4.0" | "duration.0.2.0" | "duration.0.2.1" -> {
+  | "domain-name" | "duration" -> {
     link = "https://github.com/hannesm/domain-name/blob/e9833486ee40ef2c49c43dd72976022a627b4a34/LICENSE.md";
     text = {|
     Copyright (c) 2017 2018 Hannes Mehnert hannes@mehnert.org
     |} ^ isc
   }
-  | "cppo.1.6.8" | "cppo.1.6.9" -> {
+  | "cppo" -> {
     link = "https://github.com/ocaml-community/cppo/blob/94b2d0f21fcda5473773518a12afbcff45a52990/LICENSE.md";
     text = {|
     Copyright (c) 2009-2011 Martin Jambon All rights reserved.
 
     |}^bsd_3_clause_new_or_revised
   }
-  | "fd-send-recv.2.0.1" -> {
+  | "fd-send-recv" -> {
     link = "https://github.com/xapi-project/ocaml-fd-send-recv/blob/7c9b151a7cc54f11c45280177027d9d42473737c/LICENSE";
     text = lgpl21_with_ocaml_linking_exception;
   }
-  | "fmt.0.9.0" -> {
+  | "fmt" -> {
     link = "https://github.com/dbuenzli/fmt/blob/11221dcfd08c9b21c2dc63378fd6ffe75333fb33/LICENSE.md";
     text = {|
     Copyright (c) 2016 The fmt programmers
 
     |} ^ isc
   }
-  | "logs.0.7.0" -> {
+  | "logs" -> {
     link = "https://github.com/dbuenzli/logs/blob/346f2cb5279a0dfee0e57fff109b8994982ce66f/LICENSE.md";
     text = {|
     Copyright (c) 2016 The logs programmers
 
     |} ^ isc
   }
-  | "rresult.0.7.0" -> {
+  | "rresult" -> {
     link = "https://github.com/dbuenzli/rresult/blob/e94378d2b216632970dc41f8ca6c71611acbaf03/LICENSE.md";
     text = {|
     Copyright (c) 2014 The rresult programmers
 
     |} ^ isc
   }
-  | "jsonm.1.0.1" | "jsonm.1.0.2" -> {
+  | "jsonm" -> {
     link = "https://github.com/dbuenzli/jsonm/blob/15ba785854b8b6e45958570d23238b603cd3f8d6/LICENSE.md";
     text = {|
     Copyright (c) 2012 Daniel C. Bünzli
     |} ^ isc
   }
-  | "uuidm.0.9.7" -> {
+  | "mtime" -> {
+    link = "https://raw.githubusercontent.com/dbuenzli/mtime/refs/heads/master/LICENSE.md";
+    text = {|
+    Copyright (c) 2015 The mtime programmers
+    |} ^ isc 
+  }
+  | "uuidm" -> {
     link = "https://github.com/dbuenzli/uuidm/blob/091571745bc207eaf9aec450e36ff885b0b631e9/LICENSE.md";
     text = {|
     Copyright (c) 2008 Daniel C. Bünzli
     |} ^ isc
   }
-  | "uutf.1.0.2" | "uutf.1.0.3" -> {
+  | "uutf" -> {
     link = "https://github.com/dbuenzli/uutf/blob/d43c88c0673b0d30dc34960645d0f992d68b23a1/LICENSE.md";
     text = {|
     Copyright (c) 2016 Daniel C. Bünzli
     |} ^ isc
   }
-  | "uwt.0.3.3" | "uwt.0.3.4~dev" -> {
+  | "uwt" -> {
     link = "https://github.com/fdopen/uwt/blob/44276aa6755b92eddc9ad58662a968afad243e8b/LICENSE.md";
     text = {|
     Copyright (c) 2015-2018, the Authors of uwt (dist/AUTHORS)
 
     |} ^ mit
   }
-  | "lru.0.3.0" | "lru.0.3.1" -> {
+  | "lru" -> {
     link = "https://github.com/pqwy/lru/blob/3a0b5f9effa86f6615501a648069b9a12c5096e5/LICENSE.md";
     text = {|
     Copyright (c) 2016 David Kaloper Meršinjak
     |} ^ isc
   }
-  | "lwt.5.5.0" | "lwt.5.6.1" | "lwt.5.7.0" | "lwt-dllist.1.0.1" -> {
+  | "lwt" | "lwt-dllist" -> {
     link = "https://github.com/ocsigen/lwt/blob/bab52d9744cb2d5cd3cfe86cda65ba73752998ee/LICENSE.md";
     text = {|
     Copyright (c) 1999-2020, the Authors of Lwt (docs/AUTHORS)
 
     |} ^ mit
   }
-  | "menhir.20211230" | "menhirLib.20211230" | "menhirSdk.20211230"
-  | "menhir.20220210" | "menhirLib.20220210" | "menhirSdk.20220210"
-  | "menhirSdk.20240715" | "menhirLib.20240715" | "menhirCST.20240715" | "menhir.20240715"
+  | "menhir" | "menhirLib" | "menhirSdk" | "menhirCST"
   -> {
     link = "https://gitlab.inria.fr/fpottier/menhir/-/blob/20211230/LICENSE";
     text = {|
@@ -1030,11 +1071,11 @@ Public License version 2 (included below).
     
     |} ^ lgpl21_with_ocaml_linking_exception
   }
-  | "ocplib-endian.1.2" -> {
+  | "ocplib-endian" -> {
     link = "https://github.com/OCamlPro/ocplib-endian/blob/10292cd3ffa4d23d737e3f855ad04f22d3d95460/COPYING.txt";
     text = lgpl21_with_ocaml_linking_exception;
   }
-  | "ounit.2.2.4" | "ounit.2.2.6" | "ounit.2.2.7" | "ounit2.2.2.4" | "ounit2.2.2.6" | "ounit2.2.2.7" -> {
+  | "ounit" -> {
     link = "https://github.com/gildor478/ounit/blob/faf4936b17507406c7592186dcaa3f25c6fc138a/LICENSE.txt";
     text = {|
     Copyright (c) 2002, 2003 by Maas-Maarten Zeeman
@@ -1063,25 +1104,25 @@ otherwise, arising from, out of or in connection with the Software or
 the use or other dealings in the software.
     |}
   }
-  | "sha.1.15.1" | "sha.1.15.2" | "sha.1.15.4" -> {
+  | "sha" -> {
     link = "https://github.com/djs55/ocaml-sha/blob/af5c7b1c7d3b8f9492038b7b40ba9cad82fb4ee8/LICENSE.md";
     text = isc;
   }
-  | "stringext.1.6.0" -> {
+  | "stringext" -> {
     link = "https://github.com/rgrinberg/stringext/blob/2bce0a6fe54e8f8782f7a3b2be44a5e1fb37a522/LICENSE.md";
     text = {|
     Copyright (c) 2017 Rudi Grinberg
 
     |} ^ mit
   }
-  | "tar.2.0.0" | "tar.2.0.1" -> {
+  | "tar" -> {
     link = "https://github.com/mirage/ocaml-tar/blob/4da72c48eb1ea1066052216cdcfa12c5931c6eec/LICENSE.md";
     text = {|
     Copyright (c) 2012-2018 The ocaml-tar contributors
 
     |} ^ isc
   }
-  | "tcpip.7.0.1" | "tcpip.7.1.0" | "tcpip.7.1.1" | "tcpip.7.1.2" -> {
+  | "tcpip" -> {
     link = "https://github.com/mirage/mirage-tcpip/blob/353f7b92a1a8747923ce6918426fd3f82aa27445/LICENSE.md";
     text = {|
     Copyright (c) Anil Madhavapeddy <anil@recoil.org>
@@ -1108,7 +1149,7 @@ Copyright (c) lnmx <len@lnmx.org>
 Copyright (c) pqwy <david@numm.org> 
     |} ^ isc
   }
-  | "charrua.1.5.0" | "charrua-client.1.5.0" | "charrua-server.1.5.0"-> {
+  | "charrua" | "charrua-client" | "charrua-server"-> {
     link = "https://github.com/mirage/charrua/blob/fb614f77b8f4cbd5f6409453a8f030b21d7e1a93/LICENSE.md";
     text = {|
     Copyright (c) 2015-2017 Christiano F. Haesbaert <haesbaert@haesbaert.org>
@@ -1118,11 +1159,11 @@ Copyright (c) 2016-2017 Mindy Preston
     |} ^ isc
 
   }
-  | "vpnkit.0.2.0" | "vpnkit.0.5.0" -> {
+  | "vpnkit" -> {
     link = "https://github.com/moby/vpnkit/blob/master/LICENSE";
     text = apache2 "Copyright 2013-2016 Docker, Inc."
   }
-  | "win-error.1.0" -> {
+  | "win-error" -> {
     link = "https://github.com/mirage/ocaml-win-error/blob/4cf370285d1d2e45cf750b037222cee0c6f52e9f/LICENSE";
     text = {|
     Copyright (c) 2016, Dave Scott
@@ -1154,11 +1195,6 @@ let input_file = ref "deps.csv"
 let speclist =
   [("-out", Arg.Set_string output_file, "Set output file name");
    ("-in", Arg.Set_string input_file, "Set input file name")]
-
-let run cmd = match Unix.system cmd with
-  | Unix.WEXITED 0 -> ()
-  | Unix.WEXITED n -> failwith (Printf.sprintf "%s: %d" cmd n)
-  | _ -> failwith (Printf.sprintf "%s: unexpected signal" cmd)
 
 let trim_comment line = match Stringext.cut ~on:"#" line with
   | None -> line

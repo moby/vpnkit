@@ -1,8 +1,8 @@
 (executable
  (name main)
  (libraries cmdliner ofs logs.fmt hostnet hvsock hvsock.lwt
-   fd-send-recv duration mirage-clock-unix mirage-random
-   fs9p mirage-random-stdlib)
+   fd-send-recv duration
+   fs9p)
  (flags
   :standard
   (:include flags.sexp))

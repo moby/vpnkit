@@ -2,6 +2,14 @@
  (names test)
  (libraries dns_forward dns_forward_lwt_unix lwt-dllist logs logs.fmt alcotest))
 
+(executable
+  (name test_fake)
+  (libraries dns_forward dns_forward_lwt_unix lwt-dllist logs logs.fmt alcotest fake_sleep fake_time))
+
 (rule
  (alias  runtest)
  (action (run ./test.exe)))
+
+(rule
+ (alias  runtest)
+ (action (run ./test_fake.exe)))

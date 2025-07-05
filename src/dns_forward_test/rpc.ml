@@ -85,7 +85,7 @@ let bind address =
 let listen server cb =
   server.listen_cb <- cb;
   Lwt.return (Result.Ok ())
-let shutdown server =
+let stop server =
   server.listen_cb <- (fun _ -> Lwt.return (Result.Error (`Msg "shutdown")));
   Hashtbl.remove bound server.address;
   Lwt.return_unit

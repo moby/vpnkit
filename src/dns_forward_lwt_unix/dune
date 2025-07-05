@@ -1,4 +1,3 @@
 (library
  (name dns_forward_lwt_unix)
- (libraries dns_forward lwt lwt.unix cstruct-lwt io-page.unix
-   mirage-clock-unix))
+ (libraries dns_forward lwt lwt.unix cstruct-lwt io-page.unix))
