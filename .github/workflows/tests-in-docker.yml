@@ -15,4 +15,4 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Run the integration tests
-      run: docker run --file Dockerfile.test --tag test-image .
+      run: docker build --file Dockerfile.test --tag test-image .
