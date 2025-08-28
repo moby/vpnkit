@@ -64,11 +64,11 @@ let test_good_dead_server () =
       let t = R.answer request r in
       (* First request will trigger the internal timeout and mark the bad server
          as offline. The sleep timeout here will only trigger if this fails. *)
-      Fake_time_state.advance Duration.(of_sec 1);
+      Mirage_mtime_set.tick_for Duration.(of_sec 1);
       (* HACK: we want to let all threads run until they block but we don't have
          an API for that. This assumes that all computation will finish in 0.1s *)
       Lwt_unix.sleep 0.1 >>= fun () ->
-      Fake_time_state.advance Duration.(of_sec 1);
+      Mirage_mtime_set.tick_for Duration.(of_sec 1);
       Lwt_unix.sleep 0.1 >>= fun () ->
       Lwt.pick [
         (Lwt_unix.sleep 1. >>= fun () -> Lwt.fail_with "test_good_dead_server: initial request had no response");
@@ -76,8 +76,8 @@ let test_good_dead_server () =
       ]
       >>= fun () ->
       (* The bad server should be marked offline and no-one will wait for it *)
-      Fake_time_state.reset ();
-      Fake_time_state.advance Duration.(of_ms 500); (* avoid the timeouts winning the race with the actual result *)
+      Mirage_mtime_set.reset ();
+      Mirage_mtime_set.tick_for Duration.(of_ms 500); (* avoid the timeouts winning the race with the actual result *)
       let request =
         R.answer request r
         >>= function
