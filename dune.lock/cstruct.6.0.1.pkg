@@ -1,0 +1,19 @@
+(version 6.0.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune bigarray-compat)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-cstruct/releases/download/v6.0.1/cstruct-v6.0.1.tbz)
+  (checksum
+   sha256=4a67bb8f042753453c59eabf0e47865631253ba694091ce6062aac05d47a9bed)))

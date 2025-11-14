@@ -1,0 +1,15 @@
+(version v0.14.0)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml base jane-street-headers jst-config ppx_base ppx_optcomp dune)))
+
+(source
+ (fetch
+  (url
+   https://ocaml.janestreet.com/ocaml-core/v0.14/files/time_now-v0.14.0.tar.gz)
+  (checksum
+   sha256=1033819ee471bba975edaa4a0e555eff7c7379a153d3a52d75affc46b8147642)))

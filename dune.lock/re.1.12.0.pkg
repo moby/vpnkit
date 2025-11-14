@@ -1,0 +1,19 @@
+(version 1.12.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune seq)))
+
+(source
+ (fetch
+  (url
+   https://github.com/ocaml/ocaml-re/releases/download/1.12.0/re-1.12.0.tbz)
+  (checksum
+   sha256=a01f2bf22f72c2f4ababd8d3e7635e35c1bf6bc5a41ad6d5a007454ddabad1d4)))

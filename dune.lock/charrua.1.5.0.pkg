@@ -1,0 +1,30 @@
+(version 1.5.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml
+   dune
+   ppx_sexp_conv
+   ppx_cstruct
+   cstruct
+   sexplib
+   ipaddr
+   macaddr
+   ipaddr-sexp
+   macaddr-sexp
+   ethernet
+   tcpip)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/charrua/releases/download/v1.5.0/charrua-v1.5.0.tbz)
+  (checksum
+   sha256=4ce74a5e78402f3d645ddcb344aaa1348349a8d5a35b8b55112aff0cb84db8e1)))

@@ -1,0 +1,87 @@
+(version 4)
+
+(build
+ (choice
+  ((((arch x86_64)
+     (os linux))
+    ((arch arm64)
+     (os linux)))
+   ((action
+     (run pkg-config --help))))
+  ((((arch x86_64)
+     (os macos))
+    ((arch arm64)
+     (os macos)))
+   ((action
+     (progn
+      (when
+       (and_absorb_undefined_var
+        true
+        (not
+         (and_absorb_undefined_var
+          true
+          (= %{os_distribution} homebrew))))
+       (run pkg-config --help))
+      (when
+       (or_absorb_undefined_var
+        false
+        (and_absorb_undefined_var
+         true
+         (= %{os_distribution} homebrew)))
+       (run pkgconf --version))))))))
+
+(depexts
+ ((pkg-config)
+  (or_absorb_undefined_var
+   (= %{os_family} debian)
+   (= %{os_family} ubuntu)))
+ ((pkgconf)
+  (= %{os_distribution} arch))
+ ((pkgconf-pkg-config)
+  (= %{os_family} fedora))
+ ((pkgconfig)
+  (and_absorb_undefined_var
+   (= %{os_distribution} centos)
+   (<= %{os_version} 7)))
+ ((pkgconf-pkg-config)
+  (= %{os_distribution} mageia))
+ ((pkgconfig)
+  (and_absorb_undefined_var
+   (= %{os_distribution} rhel)
+   (<= %{os_version} 7)))
+ ((pkgconfig)
+  (and_absorb_undefined_var
+   (= %{os_distribution} ol)
+   (<= %{os_version} 7)))
+ ((pkgconf)
+  (= %{os_distribution} alpine))
+ ((pkg-config)
+  (= %{os_distribution} nixos))
+ ((pkgconf)
+  (and_absorb_undefined_var
+   (= %{os} macos)
+   (= %{os_distribution} homebrew)))
+ ((pkgconfig)
+  (and_absorb_undefined_var
+   (= %{os} macos)
+   (= %{os_distribution} macports)))
+ ((pkgconf)
+  (= %{os} freebsd))
+ ((pkgconf-pkg-config)
+  (and_absorb_undefined_var
+   (= %{os_distribution} rhel)
+   (>= %{os_version} 8)))
+ ((pkgconf-pkg-config)
+  (and_absorb_undefined_var
+   (= %{os_distribution} centos)
+   (>= %{os_version} 8)))
+ ((pkgconf-pkg-config)
+  (and_absorb_undefined_var
+   (= %{os_distribution} ol)
+   (>= %{os_version} 8)))
+ ((system:pkgconf)
+  (and_absorb_undefined_var
+   (= %{os} win32)
+   (= %{os_distribution} cygwinports)))
+ ((pkgconf)
+  (= %{os_distribution} cygwin)))

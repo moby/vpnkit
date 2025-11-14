@@ -1,0 +1,28 @@
+(version 3.1.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml
+   dune
+   cstruct
+   ipaddr
+   macaddr
+   logs
+   mirage-time
+   lwt
+   duration
+   ethernet
+   fmt)))
+
+(source
+ (fetch
+  (url https://github.com/mirage/arp/releases/download/v3.1.1/arp-3.1.1.tbz)
+  (checksum
+   sha256=ea33c589e9deea300fb62bc2ba0b557cfdfeea4f40e600685b3a68c6868f06f1)))

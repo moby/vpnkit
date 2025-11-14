@@ -1,0 +1,28 @@
+(version v0.14.3)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when
+      (and_absorb_undefined_var (= %{arch} arm64) (= %{os} macos))
+      (patch fix-mpopcnt.patch))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml sexplib0 dune dune-configurator)))
+
+(source
+ (fetch
+  (url https://github.com/janestreet/base/archive/v0.14.3.tar.gz)
+  (checksum
+   sha256=e34dc0dd052a386c84f5f67e71a90720dff76e0edd01f431604404bee86ebe5a)))
+
+(extra_sources
+ (fix-mpopcnt.patch
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/base/base-pr-184.diff)
+   (checksum
+    sha256=0fa6c87a379b3b35ffe3db3c8e1674dbc70cef91b5b457a35ed6d758a8f9ca80))))

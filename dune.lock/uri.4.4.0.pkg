@@ -1,0 +1,19 @@
+(version 4.4.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune stringext angstrom)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-uri/releases/download/v4.4.0/uri-4.4.0.tbz)
+  (checksum
+   sha256=cdabaf6ef5cd2161e59cc7b74c6e4a68ecb80a9f4e96002e338e1b6bf17adec4)))

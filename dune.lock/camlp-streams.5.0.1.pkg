@@ -1,0 +1,17 @@
+(version 5.0.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml)))
+
+(source
+ (fetch
+  (url https://github.com/ocaml/camlp-streams/archive/v5.0.1.tar.gz)
+  (checksum md5=afc874b25f7a1f13e8f5cfc1182b51a7)))

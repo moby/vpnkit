@@ -1,0 +1,18 @@
+(version 1.2.2)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml)))
+
+(source
+ (fetch
+  (url https://github.com/ocaml-doc/octavius/archive/v1.2.2.tar.gz)
+  (checksum
+   sha256=eac9104ce0316b69da9c44b9c477700fe0b52a888c89ce4bdf1d2b782a73e0ad)))

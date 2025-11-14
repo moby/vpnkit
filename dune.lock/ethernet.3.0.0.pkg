@@ -1,0 +1,19 @@
+(version 3.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (dune ocaml cstruct ppx_cstruct mirage-net macaddr mirage-profile lwt logs)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ethernet/releases/download/v3.0.0/ethernet-v3.0.0.tbz)
+  (checksum
+   sha256=e95974f6363bd21e995a1c72ca03d09674c32ed2fbffada5aa82f096ee460929)))
