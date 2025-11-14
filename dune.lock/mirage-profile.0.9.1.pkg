@@ -1,0 +1,15 @@
+(version 0.9.1)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune cstruct ppx_cstruct ocplib-endian lwt)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-profile/releases/download/v0.9.1/mirage-profile-v0.9.1.tbz)
+  (checksum
+   sha256=2bb6cf03c73c6f45dedc34365c9131b8bdda62390b04d26eb76793a6422a0352)))

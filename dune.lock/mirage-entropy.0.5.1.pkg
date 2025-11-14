@@ -1,0 +1,19 @@
+(version 0.5.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (conf-pkg-config dune ocaml cstruct mirage-runtime lwt)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-entropy/releases/download/v0.5.1/mirage-entropy-v0.5.1.tbz)
+  (checksum
+   sha256=612b2c17f18a56ed5cacc35006be6869016c26668eeaf301fd068b6467755d40)))

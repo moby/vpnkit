@@ -1,0 +1,17 @@
+(version 0.16.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune bigstringaf ocaml-syntax-shims)))
+
+(source
+ (fetch
+  (url https://github.com/inhabitedtype/angstrom/archive/0.16.1.tar.gz)
+  (checksum md5=a9e096b4b2b8e4e3bb17d472bbccaad0)))

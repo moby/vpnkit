@@ -1,0 +1,19 @@
+(version 0.1.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (dune cstruct ocaml lwt mirage-random mirage-entropy)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-random-stdlib/releases/download/v0.1.0/mirage-random-stdlib-v0.1.0.tbz)
+  (checksum
+   sha256=51783442c9b97711715ce62a15bcbefd3b01ae32c737f998eede395bc2dbfda3)))

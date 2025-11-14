@@ -1,0 +1,15 @@
+(version 2.0.3)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/xapi-project/ocaml-fd-send-recv/releases/download/v2.0.3/fd-send-recv-2.0.3.tbz)
+  (checksum
+   sha256=34970f254a14885daaabb98f5410160530aa6e994747ad1eab99ec4f61dc9934)))

@@ -1,0 +1,15 @@
+(version 1.2)
+
+(build
+ (all_platforms
+  ((action (run dune build -p %{pkg-self:name} -j %{jobs} @install)))))
+
+(depends
+ (all_platforms
+  (base-bytes ocaml cppo dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/OCamlPro/ocplib-endian/archive/refs/tags/1.2.tar.gz)
+  (checksum md5=8d5492eeb7c6815ade72a7415ea30949)))

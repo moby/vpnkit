@@ -1,0 +1,17 @@
+(version 1.8.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (ocaml dune base-unix)))
+
+(source
+ (fetch
+  (url https://github.com/ocaml-community/cppo/archive/v1.8.0.tar.gz)
+  (checksum md5=a197cb393b84f6b30e0ff55080ac429b)))

@@ -1,0 +1,19 @@
+(version 0.6.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune cstruct ppx_cstruct)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-pcap/releases/download/v0.6.0/pcap-format-0.6.0.tbz)
+  (checksum
+   sha256=2d48f2f179ba56c9ccab51472b398983bba8ae44efedc393b282f09ad34791a6)))

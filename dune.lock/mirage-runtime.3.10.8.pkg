@@ -1,0 +1,19 @@
+(version 3.10.8)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune ipaddr functoria-runtime fmt logs lwt)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage/releases/download/v3.10.8/mirage-v3.10.8.tbz)
+  (checksum
+   sha256=135d86ca74e68ddb61d4ef304d43fb951a10b7cbc488bf3d638fca4294016fb4)))

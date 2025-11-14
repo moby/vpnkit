@@ -1,0 +1,19 @@
+(version 5.3.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune re uri uri-sexp sexplib0 ppx_sexp_conv stringext base64 jsonm)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-cohttp/releases/download/v5.3.1/cohttp-5.3.1.tbz)
+  (checksum
+   sha256=f5e273d3c2f29ff47bd7e16db23e1f3d6cd01a40be00208985bc434c88d4576b)))

@@ -67,6 +67,7 @@ depends: [
   "mirage-random-stdlib"
   "re" {>= "1.9.0"}
   "ppx_inline_test"
+  "cohttp" {< "6"}
 ]
 synopsis: "VPN-friendly networking devices for HyperKit"
 description: """

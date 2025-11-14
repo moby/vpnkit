@@ -1,0 +1,19 @@
+(version 1.6.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/rgrinberg/stringext/releases/download/1.6.0/stringext-1.6.0.tbz)
+  (checksum
+   sha256=db41f5d52e9eab17615f110b899dfeb27dd7e7f89cd35ae43827c5119db206ea)))

@@ -1,0 +1,19 @@
+(version 1.1.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/lwt-dllist/releases/download/v1.1.0/lwt-dllist-1.1.0.tbz)
+  (checksum
+   sha256=b0200651e37eaa24f027177bc01e266db43da48aa18146973d1d18336c325d69)))

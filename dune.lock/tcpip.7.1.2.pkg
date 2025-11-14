@@ -1,0 +1,43 @@
+(version 7.1.2)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (conf-pkg-config
+   dune
+   ocaml
+   cstruct
+   cstruct-lwt
+   ppx_cstruct
+   mirage-net
+   mirage-clock
+   mirage-random
+   mirage-time
+   ipaddr
+   macaddr
+   macaddr-cstruct
+   mirage-profile
+   fmt
+   lwt
+   lwt-dllist
+   logs
+   duration
+   randomconv
+   ethernet
+   arp
+   mirage-flow
+   lru
+   metrics)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-tcpip/releases/download/v7.1.2/tcpip-7.1.2.tbz)
+  (checksum
+   sha256=96b6aeafa35f143f7275d1becb6d639472adf3680b8180416de765b6581c466d)))

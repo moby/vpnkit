@@ -1,0 +1,19 @@
+(version 2.3.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune dune-configurator cstruct bigarray-compat)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/io-page/releases/download/v2.3.0/io-page-v2.3.0.tbz)
+  (checksum
+   sha256=9605a8a03e53bc12682212c371bc477f2a44ed829725ae38cc3005e2f83da2c3)))

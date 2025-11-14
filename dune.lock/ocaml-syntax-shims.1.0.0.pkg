@@ -1,0 +1,19 @@
+(version 1.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml)))
+
+(source
+ (fetch
+  (url
+   https://github.com/ocaml-ppx/ocaml-syntax-shims/releases/download/1.0.0/ocaml-syntax-shims-1.0.0.tbz)
+  (checksum
+   sha256=89b2e193e90a0c168b6ec5ddf6fef09033681bdcb64e11913c97440a2722e8c8)))
