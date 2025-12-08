@@ -2,7 +2,8 @@ version: 2
 jobs:
   build:
     macos:
-      xcode: "14.0.0"
+      xcode: "14.3.1"
+    resource_class: m4pro.medium
     environment:
       OPAMYES: "1"
       OPAMJOBS: "2"
