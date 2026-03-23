@@ -1,4 +1,4 @@
-name: release
+name: Build and upload binary releases
 
 on:
   release:
@@ -19,20 +19,20 @@ jobs:
             name: x86_64-linux-gnu
     steps:
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: ocaml-dune/setup-dune@v0
+      - uses: ocaml-dune/setup-dune@v2
 
       - name: Build the project
-        run: DUNE_CONFIG__PKG_BUILD_PROGRESS=enabled dune build @install --release --only-packages vpnkit
-
-      - run: echo OUT_NAME=vpnkit-${{ github.ref_name }}-${{ matrix.name }} >> $GITHUB_ENV
+        run: dune build @install --release --only-packages vpnkit --display=short
 
       - name: Release a tarball of build outputs
         run: |
+          OUT_NAME=vpnkit-${{ github.ref_name }}-${{ matrix.name }}
           mkdir -p "$OUT_NAME"
           cp -rlf _build/install/default/* "$OUT_NAME"
-          tar czf "$OUT_NAME.tar.gz" "$OUT_NAME"
+          tar --format=posix -cf "$OUT_NAME.tar" "$OUT_NAME"
+          gzip -v9 "${OUT_NAME}.tar"
 
       - name: Upload assets
         uses: ncipollo/release-action@v1
