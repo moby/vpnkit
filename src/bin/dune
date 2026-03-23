@@ -1,5 +1,6 @@
 (executable
  (name main)
+ (public_name vpnkit)
  (libraries cmdliner ofs logs.fmt hostnet hvsock hvsock.lwt
    fd-send-recv duration mirage-clock-unix mirage-random
    fs9p mirage-random-stdlib)
@@ -21,9 +22,3 @@
   (chdir
    %{workspace_root}
    (run make src/bin/version.ml))))
-
-(install
- (section bin)
- (package vpnkit)
- (files
-  (main.exe as vpnkit)))
