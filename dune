@@ -1,11 +1,3 @@
-(executable
- (libraries unix)
- (name gen_commit))
-
-(rule
- (targets COMMIT)
- (action  (with-outputs-to %{targets} (run git rev-parse HEAD))))
-
 (rule
  (target deps.csv)
  (deps vpnkit.opam)
