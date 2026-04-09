@@ -1,0 +1,10 @@
+image: vpnkit-tap-vsockd
+config:
+  capabilities:
+    - CAP_NET_ADMIN
+  devices:
+    - path: "/dev/net/tun"
+      type: c
+      major: 10
+      minor: 200
+      mode: 0666
