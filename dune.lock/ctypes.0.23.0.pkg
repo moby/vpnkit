@@ -1,0 +1,34 @@
+(version 0.23.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run
+      dune
+      build
+      -p
+      %{pkg-self:name}
+      -j
+      %{jobs}
+      --promote-install-files=false
+      @install)
+     (run
+      dune
+      install
+      -p
+      %{pkg-self:name}
+      --create-install-files
+      %{pkg-self:name}))))))
+
+(depends
+ (all_platforms
+  (dune ocaml integers dune-configurator bigarray-compat)))
+
+(source
+ (fetch
+  (url
+   https://github.com/yallop/ocaml-ctypes/archive/refs/tags/0.23.0.tar.gz)
+  (checksum
+   sha256=cae47d815b27dd4c824a007f1145856044542fe2588d23a443ef4eefec360bf1)))

@@ -1,0 +1,19 @@
+(version 0.5.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune fmt)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/metrics/releases/download/v0.5.0/metrics-0.5.0.tbz)
+  (checksum
+   sha256=df356380909d06461bcd097ef6063ca9f3c51365f476a797c03664b53c05715d)))

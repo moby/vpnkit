@@ -1,0 +1,19 @@
+(version 1.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml base-bytes base-unix dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-win-error/releases/download/1.0/win-error-1.0.tbz)
+  (checksum
+   sha256=c00aecc776b1cd6ac2d2aa442e2355ae6a44e4760f3ba1fc7117dc1e2231a400)))

@@ -1,0 +1,19 @@
+(version 1.0.4)
+
+(install
+ (all_platforms
+  (progn
+   (run %{make} install LIBDIR=%{pkg-self:lib} DOCDIR=%{pkg-self:doc})
+   (run %{make} install-doc LIBDIR=%{pkg-self:lib} DOCDIR=%{pkg-self:doc}))))
+
+(build
+ (all_platforms ((action (run %{make} all PREFIX=%{prefix})))))
+
+(depends
+ (all_platforms (ocaml)))
+
+(source
+ (fetch
+  (url http://erratique.ch/software/cmdliner/releases/cmdliner-1.0.4.tbz)
+  (checksum
+   sha256=5c2a93d44af8a38996a2c0f80fbd7970fe4751f104be470cafa069353fc004c0)))

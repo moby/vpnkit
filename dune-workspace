@@ -1,0 +1,8 @@
+(lang dune 3.19)
+
+(repository
+ (name archive)
+ (url git+https://github.com/ocaml/opam-repository-archive))
+
+(lock_dir
+ (repositories upstream overlay archive))

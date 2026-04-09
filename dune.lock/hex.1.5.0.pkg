@@ -1,0 +1,19 @@
+(version 1.5.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune cstruct)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-hex/releases/download/v1.5.0/hex-1.5.0.tbz)
+  (checksum
+   sha256=2e67eeca1b03049307a30831b5cd694bcb2d3e7f2a6b4fb597fbdb647351b4dc)))

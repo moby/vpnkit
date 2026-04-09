@@ -1,0 +1,16 @@
+(version 2.2.7)
+
+(build
+ (all_platforms
+  ((action (run dune build -p %{pkg-self:name} -j %{jobs} @install)))))
+
+(depends
+ (all_platforms
+  (dune ocaml base-unix seq stdlib-shims)))
+
+(source
+ (fetch
+  (url
+   https://github.com/gildor478/ounit/releases/download/v2.2.7/ounit-2.2.7.tbz)
+  (checksum
+   sha256=90f6e63bd1240a51d8b9b2f722059bd79ce00b5276bdd6238b8f5c613c0e7388)))

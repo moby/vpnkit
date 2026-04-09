@@ -1,0 +1,15 @@
+(version 0.5.1)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (base-unix ctypes dune luv ocaml)))
+
+(source
+ (fetch
+  (url
+   https://github.com/aantron/luv/releases/download/0.5.12/luv-0.5.12.tar.gz)
+  (checksum
+   sha256=769f6a08862a49d44e20043e270ef7177bcc7bb8679037bc06065622634c56c0)))

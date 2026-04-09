@@ -1,0 +1,18 @@
+(version 0.7.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune stdlib-shims)))
+
+(source
+ (fetch
+  (url https://github.com/yallop/ocaml-integers/archive/0.7.0.tar.gz)
+  (checksum
+   sha256=8bb517fa9a1818246eb8c4ce34ee1489fbebb4b92defa3a25d13cab8d23ec685)))

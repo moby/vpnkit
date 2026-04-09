@@ -1,0 +1,14 @@
+(version 20250912)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune menhirLib menhirSdk menhirCST)))
+
+(source
+ (fetch
+  (url
+   https://gitlab.inria.fr/fpottier/menhir/-/archive/20250912/archive.tar.gz)
+  (checksum md5=b8f83df02226419f99e49f1b637dcb11)))

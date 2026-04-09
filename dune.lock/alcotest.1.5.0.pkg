@@ -1,0 +1,19 @@
+(version 1.5.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml fmt astring cmdliner re stdlib-shims uutf ocaml-syntax-shims)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/alcotest/releases/download/1.5.0/alcotest-js-1.5.0.tbz)
+  (checksum
+   sha256=54281907e02d78995df246dc2e10ed182828294ad2059347a1e3a13354848f6c)))

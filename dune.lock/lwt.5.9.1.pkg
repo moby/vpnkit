@@ -1,0 +1,27 @@
+(version 5.9.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run
+      dune
+      exec
+      -p
+      %{pkg-self:name}
+      src/unix/config/discover.exe
+      --
+      --save
+      --use-libev
+      %{pkg:conf-libev:installed})
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune ocaml cppo dune-configurator ocplib-endian base-threads base-unix)))
+
+(source
+ (fetch
+  (url https://github.com/ocsigen/lwt/archive/refs/tags/5.9.1.tar.gz)
+  (checksum md5=18742da8b8fe3618e3fa700b7a884fe7)))

@@ -1,0 +1,19 @@
+(version 4.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune tcpip)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-stack/releases/download/v4.0.0/mirage-stack-v4.0.0.tbz)
+  (checksum
+   sha256=abbd33190bd3e4a4eabcbdfb6d98d20fc4aed0fef628251eb327d625c23cccfc)))

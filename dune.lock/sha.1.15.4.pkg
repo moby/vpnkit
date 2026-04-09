@@ -1,0 +1,34 @@
+(version 1.15.4)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run
+      dune
+      build
+      -p
+      %{pkg-self:name}
+      -j
+      %{jobs}
+      --promote-install-files=false
+      @install)
+     (run
+      dune
+      install
+      -p
+      %{pkg-self:name}
+      --create-install-files
+      %{pkg-self:name}))))))
+
+(depends
+ (all_platforms
+  (dune ocaml stdlib-shims)))
+
+(source
+ (fetch
+  (url
+   https://github.com/djs55/ocaml-sha/releases/download/v1.15.4/sha-1.15.4.tbz)
+  (checksum
+   sha256=6de5b12139b1999ce9df4cc78a5a31886c2a547c9d448bf2853f8b53bcf1f1b1)))

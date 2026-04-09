@@ -1,0 +1,19 @@
+(version 3.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (dune cstruct ocaml)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-random/releases/download/v3.0.0/mirage-random-v3.0.0.tbz)
+  (checksum
+   sha256=49fe3f281d6430cc1723ecabe47fc9b8e9b29d83cd5f0964f5d000fa014066cf)))

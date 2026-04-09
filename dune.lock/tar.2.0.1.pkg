@@ -1,0 +1,34 @@
+(version 2.0.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run
+      dune
+      build
+      -p
+      %{pkg-self:name}
+      -j
+      %{jobs}
+      --promote-install-files=false
+      @install)
+     (run
+      dune
+      install
+      -p
+      %{pkg-self:name}
+      --create-install-files
+      %{pkg-self:name}))))))
+
+(depends
+ (all_platforms
+  (dune camlp-streams ocaml ppx_cstruct cstruct re)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-tar/releases/download/v2.0.1/tar-mirage-2.0.1.tbz)
+  (checksum
+   sha256=e9565fb43dab9e944d1860f9a3b5c681df72211b859c66ee1d7085cafc13ee9b)))

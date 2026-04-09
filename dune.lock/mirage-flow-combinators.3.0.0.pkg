@@ -1,0 +1,19 @@
+(version 3.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune fmt lwt logs cstruct mirage-clock mirage-flow)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-flow/releases/download/v3.0.0/mirage-flow-v3.0.0.tbz)
+  (checksum
+   sha256=d70bda6c85ec2747bed88bc4d95f269d2810503b92913f0807be5291696138fc)))

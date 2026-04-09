@@ -1,0 +1,19 @@
+(version 3.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune lwt)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-time/releases/download/v3.0.0/mirage-time-v3.0.0.tbz)
+  (checksum
+   sha256=0d40949b58e2c7e8b762ccc8ce066345046233c8c95d0e3d17a242ff289cbd7c)))

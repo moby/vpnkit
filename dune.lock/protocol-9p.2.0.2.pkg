@@ -1,0 +1,33 @@
+(version 2.0.2)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml
+   dune
+   base-bytes
+   cstruct
+   cstruct-sexp
+   sexplib
+   rresult
+   mirage-flow
+   mirage-channel
+   lwt
+   astring
+   fmt
+   logs
+   win-error
+   ppx_sexp_conv)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-9p/releases/download/2.0.2/protocol-9p-2.0.2.tbz)
+  (checksum
+   sha256=a4c0585e81f5c57c879560318016aeb022163044f2c7ae086af3dfcbbe1b8164)))
