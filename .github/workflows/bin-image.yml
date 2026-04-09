@@ -26,7 +26,7 @@ env:
   REPO_SLUG: moby/vpnkit-bin
 jobs:
   build:
-    uses: crazy-max/.github/.github/workflows/bake-distribute-mp.yml@d9a10e2737504a6e253f96e344cef684b0e00cb5
+    uses: crazy-max/.github/.github/workflows/bake-distribute-mp.yml@387d336cac5f20cba622a6b9a866a80ea4c2c575
     with:
       target: bin-image
       push: ${{ github.event_name != 'pull_request' && github.repository == 'moby/vpnkit' }}
