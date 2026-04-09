@@ -13,6 +13,7 @@ authors: [
   "Thomas Gazagnaire <thomas@gazagnaire.com>"
   "Thomas Leonard <thomas.leonard@docker.com>"
 ]
+license: "Apache-2.0"
 homepage:     "https://github.com/moby/vpnkit"
 bug-reports:  "https://github.com/moby/vpnkit/issues"
 dev-repo: "git+https://github.com/moby/vpnkit.git"
@@ -53,6 +54,7 @@ depends: [
   "mirage-time" {>= "3.0.0"}
   "mirage-channel" {>= "4.0.1"}
   "mirage-stack"
+  "cohttp" {< "6"}
   "cohttp-lwt" {>= "0.99.0"}
   "protocol-9p" {>= "2.0.0"}
   "mirage-vnetif" {>= "0.5.0" & < "0.6.0"}
