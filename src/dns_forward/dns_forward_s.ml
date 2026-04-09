@@ -22,7 +22,7 @@ module type Comparable = sig
 end
 
 module type FLOW_CLIENT = sig
-  include Mirage_flow_combinators.SHUTDOWNABLE
+  include Mirage_flow.S
   type address
   val connect: ?read_buffer_size:int -> address
     -> (flow, [ `Msg of string ]) Lwt_result.t
@@ -35,7 +35,7 @@ module type FLOW_SERVER = sig
   val getsockname: server -> address
   type flow
   val listen: server -> (flow -> unit Lwt.t) -> unit
-  val shutdown: server -> unit Lwt.t
+  val stop: server -> unit Lwt.t
 end
 
 module type RPC_CLIENT = sig
@@ -57,7 +57,7 @@ module type RPC_SERVER = sig
   type server
   val bind: address -> (server, [ `Msg of string ]) Lwt_result.t
   val listen: server -> (request -> (response, [ `Msg of string ]) Lwt_result.t) -> (unit, [ `Msg of string ]) Lwt_result.t
-  val shutdown: server -> unit Lwt.t
+  val stop: server -> unit Lwt.t
 end
 
 module type RESOLVER = sig

@@ -1,7 +1,11 @@
 (executables
- (names test)
- (libraries dns_forward dns_forward_lwt_unix lwt-dllist logs logs.fmt alcotest))
+ (names test test_fake)
+ (libraries dns_forward dns_forward_lwt_unix lwt-dllist logs logs.fmt alcotest mirage-mtime.mock))
 
 (rule
  (alias  runtest)
  (action (run ./test.exe)))
+
+(rule
+ (alias  runtest)
+ (action (run ./test_fake.exe)))

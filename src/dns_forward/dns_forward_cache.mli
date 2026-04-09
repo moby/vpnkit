@@ -15,7 +15,6 @@
  *
  *)
 
-module Make(Time: Mirage_time.S): sig
   type t
   (** A cache of DNS answers *)
 
@@ -32,4 +31,3 @@ module Make(Time: Mirage_time.S): sig
 
   val insert: t -> Dns_forward_config.Address.t -> Dns.Packet.question -> Dns.Packet.rr list -> unit
   (** Insert the answer to the question into the cache *)
-end

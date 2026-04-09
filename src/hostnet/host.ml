@@ -202,8 +202,7 @@ module Sockets = struct
                 Luv.Handle.close fd return)
             >>= fun () -> Lwt.return_unit
 
-      let shutdown_read _t = Lwt.return_unit
-      let shutdown_write _t = Lwt.return_unit
+      let shutdown _t _ = Lwt.return_unit
 
       type server = {
         idx : int;
@@ -317,7 +316,7 @@ module Sockets = struct
         >>*= fun x ->
         Lwt.return x
 
-      let shutdown server =
+      let stop server =
         if not server.closed then (
           server.closed <- true;
           Luv_lwt.in_luv (fun return ->
@@ -573,6 +572,12 @@ module Sockets = struct
                 | Ok () -> return ()))
         else Lwt.return_unit
 
+      let shutdown flow = function
+        | `read -> shutdown_read flow
+        | `read_write | `write ->
+          shutdown_read flow >>= fun () ->
+          shutdown_write flow
+
       let read_into t buf =
         if t.closed
         then (Log.info (fun f -> f "read_into %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
@@ -696,7 +701,7 @@ module Sockets = struct
                 Lwt.return [])
             >|= fun extra -> make ip ((idx, (ip, bound_port), fd) :: extra)
 
-      let shutdown server =
+      let stop server =
         let fds = server.listening_fds in
         server.listening_fds <- [];
         Lwt_list.iter_s
@@ -889,6 +894,17 @@ module Sockets = struct
                 | Ok () -> return ()))
         else Lwt.return_unit
 
+      let shutdown flow = function
+        | `read -> shutdown_read flow
+        | `write -> shutdown_write flow
+        | `read_write ->
+          if not flow.closed then (
+            flow.closed <- true;
+            Luv_lwt.in_luv (fun return ->
+                Connection_limit.deregister flow.idx;
+                Luv.Handle.close flow.fd return))
+          else Lwt.return_unit
+
       let read_into t buf =
         if t.closed
         then (Log.info (fun f -> f "read_into %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
@@ -917,6 +933,14 @@ module Sockets = struct
         mutable closed : bool;
         mutable disable_connection_tracking : bool;
       }
+
+      let stop server =
+         if not server.closed then (
+           server.closed <- true;
+           Luv_lwt.in_luv (fun return ->
+               Connection_limit.deregister server.idx;
+               Luv.Handle.close server.fd return))
+         else Lwt.return_unit
 
       let bind ?(description = "") path =
         let description = Fmt.str "unix:%s %s" path description in
@@ -1042,14 +1066,6 @@ module Sockets = struct
         | Ok (fd, idx) ->
             Lwt.return
               { idx; fd; closed = false; disable_connection_tracking = false }
-
-      let shutdown server =
-        if not server.closed then (
-          server.closed <- true;
-          Luv_lwt.in_luv (fun return ->
-              Connection_limit.deregister server.idx;
-              Luv.Handle.close server.fd return))
-        else Lwt.return_unit
     end
   end
 end
@@ -1064,7 +1080,7 @@ end
 module TestServer (F : ClientServer) = struct
   let with_server address f =
     F.bind address >>= fun server ->
-    Lwt.finalize (fun () -> f server) (fun () -> F.shutdown server)
+    Lwt.finalize (fun () -> f server) (fun () -> F.stop server)
 
   let with_flow flow f = Lwt.finalize f (fun () -> F.close flow)
 

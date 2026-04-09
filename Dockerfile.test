@@ -1,18 +1,17 @@
-FROM ocaml/opam:alpine-3.19-ocaml-4.14 AS build
-RUN opam update
+FROM ocaml/opam:alpine-ocaml-5.3 AS build
+RUN opam-2.2 update
 
 ADD . /home/opam/vpnkit
 RUN sudo chown opam:opam -R vpnkit
 WORKDIR /home/opam/vpnkit
-RUN opam pin add vpnkit /home/opam/vpnkit --kind=path -n
-RUN opam depext vpnkit -y
+RUN opam-2.2 pin add vpnkit /home/opam/vpnkit --kind=path -n
 
-RUN opam install vpnkit -y -t
+RUN opam-2.2 install vpnkit -y -t
 
 # unit tests
-RUN opam exec -- dune runtest
+RUN opam-2.2 exec -- dune runtest
 # integration tests
-RUN opam exec -- dune build @e2e
+RUN opam-2.2 exec -- dune build @e2e
 
 # we're not interested in the intermediate artifacts
 FROM scratch
