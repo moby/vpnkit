@@ -39,6 +39,9 @@ jobs:
       - run: opam exec -- dune build COMMIT
       - store_artifacts:
           path: ./_build/default/COMMIT
+      - run: opam exec -- dune build vpnkit.spdx.json
+      - store_artifacts:
+          path: ./_build/default/vpnkit.spdx.json
       - run: opam exec -- dune build licenses.json
       - store_artifacts:
           path: ./_build/default/licenses.json
