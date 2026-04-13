@@ -1,5 +1,3 @@
-REPO_ROOT=$(shell git rev-parse --show-toplevel)
-
 build: vpnkit.exe
 
 vpnkit.exe:
