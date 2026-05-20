@@ -13,7 +13,7 @@ let global_dhcp_configuration = ref None
 let update_global_configuration x =
     global_dhcp_configuration := x
 
-module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
+module Make (Netif: Mirage_net.S) = struct
 
   type t = {
     netif: Netif.t;
@@ -111,7 +111,7 @@ module Make (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S) = struct
       Lwt.return database
     | Ok pkt ->
       let elapsed_seconds =
-        Clock.elapsed_ns ()
+        Mirage_mtime.elapsed_ns ()
         |> Duration.to_sec
         |> Int32.of_int
       in

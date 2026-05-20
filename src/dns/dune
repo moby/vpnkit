@@ -1,4 +1,4 @@
 (library
   (name        dns)
-  (libraries   re re.str ipaddr uri uri.services base64 cstruct result)
+  (libraries   re re.str ipaddr uri uri.services base64 cstruct)
   (preprocess (pps ppx_cstruct)))

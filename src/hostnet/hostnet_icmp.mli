@@ -18,10 +18,7 @@ type datagram = {
 type reply = Cstruct.t -> unit Lwt.t
 
 module Make
-    (Sockets: Sig.SOCKETS)
-    (Clock: Mirage_clock.MCLOCK)
-    (Time: Mirage_time.S)
-: sig
+    (Sockets: Sig.SOCKETS) : sig
 
   type t
   (** An ICMP NAT implementation *)

@@ -1,0 +1,8 @@
+(lang dune 3.4)
+(env
+ (dev
+  (flags
+   (:standard -warn-error +A-67-69))) ; Disable some unused warnings.
+ (release
+  (flags
+   (:standard -warn-error +A-58))))

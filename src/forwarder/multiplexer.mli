@@ -6,7 +6,7 @@ module Make (Flow : Mirage_flow.S) : sig
 
     val connect : flow -> Frame.Destination.t -> channel Lwt.t
 
-    include Mirage_flow_combinators.SHUTDOWNABLE with type flow = channel
+    include Mirage_flow.S with type flow = channel
 
     val read_into: channel -> Cstruct.t -> (unit Mirage_flow.or_eof, error) result Lwt.t
   end

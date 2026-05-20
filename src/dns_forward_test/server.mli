@@ -32,7 +32,7 @@ module Make(Server: Rpc.Server.S): sig
   val serve: address: Config.Address.t -> t -> server Error.t
   (** Serve requests on the given IP and port forever *)
 
-  val shutdown: server -> unit Lwt.t
+  val stop: server -> unit Lwt.t
   (** Shutdown the running server *)
 
   val get_nr_queries: t -> int

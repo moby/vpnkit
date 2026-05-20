@@ -1,4 +1,4 @@
-module Make  (Clock: Mirage_clock.MCLOCK) (Netif: Mirage_net.S): sig
+module Make (Netif: Mirage_net.S): sig
   type t
 
   val make: configuration:Configuration.t -> Netif.t -> t

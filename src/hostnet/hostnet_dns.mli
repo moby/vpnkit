@@ -16,8 +16,6 @@ module Make
     (Tcp: Tcpip.Tcp.S with type ipaddr = Ipaddr.V4.t)
     (Socket: Sig.SOCKETS)
     (Dns_resolver: Sig.DNS)
-    (Time: Mirage_time.S)
-    (Clock: Mirage_clock.MCLOCK)
     (Recorder: Sig.RECORDER) :
 sig
 

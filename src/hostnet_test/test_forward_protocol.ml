@@ -103,8 +103,10 @@ module Shared_memory = struct
 
   let otherend t = {write= t.read; read= t.write; closed= false}
 
-  let shutdown_write t =
-    Pipe.shutdown_write t.write ;
+  let shutdown t = function
+    | `read -> Lwt.return_unit
+    | `write | `read_write ->
+    Pipe.shutdown_write t.write;
     Lwt.return_unit
 
   let close t =
@@ -125,8 +127,6 @@ module Shared_memory = struct
 
   let writev t bufs = Lwt.return (Pipe.write t.write bufs)
 
-  let shutdown_read _chanel = Lwt.return_unit
-
   let write channel buf = writev channel [buf]
 
   type flow = t
@@ -142,7 +142,7 @@ module Shared_memory = struct
 end
 
 (* Check it matches the signature *)
-module Test : Mirage_flow_combinators.SHUTDOWNABLE = Shared_memory
+module Test : Mirage_flow.S = Shared_memory
 
 module Mux = Forwarder.Multiplexer.Make (Shared_memory)
 
@@ -211,7 +211,7 @@ let test_close_shutdown () =
      >>= fun channel ->
      Mux.Channel.close channel
      >>= fun () ->
-     Mux.Channel.shutdown_write channel
+     Mux.Channel.shutdown channel `write
      >>= fun () ->
      if not (Mux.is_running left_mux)
      then failwith "left_mux has failed";
@@ -276,7 +276,7 @@ let read_and_write channel to_write =
   let read = count_recv channel in
   send channel to_write
   >>= fun written_sha ->
-  Mux.Channel.shutdown_write channel
+  Mux.Channel.shutdown channel `write
   >>= fun () ->
   read
   >>= fun (num_read, sha) ->

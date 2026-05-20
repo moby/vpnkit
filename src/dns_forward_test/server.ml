@@ -87,6 +87,6 @@ module Make(Server: Rpc.Server.S) = struct
     >>= fun () ->
     Lwt.return (Ok server)
 
-  let shutdown = Server.shutdown
+  let stop = Server.stop
 
 end

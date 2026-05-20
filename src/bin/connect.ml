@@ -46,7 +46,7 @@ module Hvsock = struct
   (* Avoid using `detach` because we don't want to exhaust the
      thread pool since this will block the main TCP/IP stack. *)
   module F =
-    Hvsock_lwt.Flow_shutdown.Make(Host.Time)
+    Hvsock_lwt.Flow_shutdown.Make
       (Hvsock_lwt.In_main_thread.Make(Host.Main))
       (Hvsock.Af_hyperv)
 
@@ -83,8 +83,7 @@ module Hvsock = struct
   let read t = F.read t.flow
   let write t = F.write t.flow
   let writev t = F.writev t.flow
-  let shutdown_read t = F.shutdown_read t.flow
-  let shutdown_write t = F.shutdown_write t.flow
+  let shutdown t = F.shutdown t.flow
   let pp_error = F.pp_error
   let pp_write_error = F.pp_write_error
   type error = F.error

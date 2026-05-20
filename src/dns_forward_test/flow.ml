@@ -84,6 +84,14 @@ let shutdown_write flow =
   Lwt_condition.signal flow.l2r_c ();
   Lwt.return_unit
 
+let shutdown flow = function
+  | `read -> shutdown_read flow
+  | `write -> shutdown_write flow
+  | `read_write ->
+      let open Lwt.Infix in
+      shutdown_read flow >>= fun () ->
+      shutdown_write flow
+
 let writev flow bufs =
   if flow.l2r_closed then Lwt.return (Error `Closed) else (
     List.iter (fun buf -> ignore @@ Lwt_dllist.add_l buf flow.l2r) bufs;
@@ -145,7 +153,8 @@ let listen server (cb: flow -> unit Lwt.t) =
       );
     Lwt.return (Result.Ok flow) in
   server.listen_cb <- listen_cb
-let shutdown server =
+
+let stop server =
   server.listen_cb <- (fun _ -> Lwt.return (Result.Error (`Msg "shutdown")));
   Hashtbl.remove bound server.address;
   Lwt.return_unit

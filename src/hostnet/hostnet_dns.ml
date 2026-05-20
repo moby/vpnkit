@@ -189,8 +189,6 @@ module Make
     (Tcp: Tcpip.Tcp.S with type ipaddr = Ipaddr.V4.t)
     (Socket: Sig.SOCKETS)
     (D: Sig.DNS)
-    (Time: Mirage_time.S)
-    (Clock: Mirage_clock.MCLOCK)
     (Recorder: Sig.RECORDER) =
 struct
 
@@ -201,17 +199,17 @@ struct
 
   module Dns_tcp_client =
     Dns_forward.Rpc.Client.Persistent.Make(Socket.Stream.Tcp)
-      (Dns_forward.Framing.Tcp(Socket.Stream.Tcp))(Time)
+      (Dns_forward.Framing.Tcp(Socket.Stream.Tcp))
 
   module Dns_tcp_resolver =
-    Dns_forward.Resolver.Make(Dns_tcp_client)(Time)(Clock)
+    Dns_forward.Resolver.Make(Dns_tcp_client)
 
   module Dns_udp_client =
     Dns_forward.Rpc.Client.Nonpersistent.Make(Socket.Datagram.Udp)
-      (Dns_forward.Framing.Udp(Socket.Datagram.Udp))(Time)
+      (Dns_forward.Framing.Udp(Socket.Datagram.Udp))
 
   module Dns_udp_resolver =
-    Dns_forward.Resolver.Make(Dns_udp_client)(Time)(Clock)
+    Dns_forward.Resolver.Make(Dns_udp_client)
 
   (* We need to be able to parse the incoming framed TCP messages *)
   module Dns_tcp_framing = Dns_forward.Framing.Tcp(Tcp)
@@ -257,40 +255,40 @@ struct
          packet creation fn *)
       let frame = Io_page.to_cstruct (Io_page.get 1) in
       let smac = "\000\000\000\000\000\000" in
-      Ethernet__Ethernet_wire.set_ethernet_src smac 0 frame;
-      Ethernet__Ethernet_wire.set_ethernet_ethertype frame 0x0800;
+      Cstruct.blit_from_string smac 0 frame 6 6;
+      Cstruct.BE.set_uint16 frame 12 0x0800;
       let buf = Cstruct.shift frame Ethernet.Packet.sizeof_ethernet in
-      Ipv4_wire.set_ipv4_hlen_version buf ((4 lsl 4) + (5));
-      Ipv4_wire.set_ipv4_tos buf 0;
-      Ipv4_wire.set_ipv4_ttl buf 38;
+      Ipv4_wire.set_hlen_version buf ((4 lsl 4) + (5));
+      Cstruct.set_uint8 buf 0 0;
+      Ipv4_wire.set_ttl buf 38;
       let proto = Ipv4_packet.Marshal.protocol_to_int `UDP in
-      Ipv4_wire.set_ipv4_proto buf proto;
-      Ipv4_wire.set_ipv4_src buf (Ipaddr.V4.to_int32 source_ip);
-      Ipv4_wire.set_ipv4_dst buf (Ipaddr.V4.to_int32 dest_ip);
+      Ipv4_wire.set_proto buf proto;
+      Ipv4_wire.set_src buf source_ip;
+      Ipv4_wire.set_dst buf dest_ip;
       let header_len =
         Ethernet.Packet.sizeof_ethernet + Ipv4_wire.sizeof_ipv4
       in
 
       let frame = Cstruct.sub frame 0 (header_len + Udp_wire.sizeof_udp) in
       let udp_buf = Cstruct.shift frame header_len in
-      Udp_wire.set_udp_source_port udp_buf source_port;
-      Udp_wire.set_udp_dest_port udp_buf dest_port;
-      Udp_wire.set_udp_length udp_buf (Udp_wire.sizeof_udp + Cstruct.lenv bufs);
-      Udp_wire.set_udp_checksum udp_buf 0;
+      Udp_wire.set_src_port udp_buf source_port;
+      Udp_wire.set_dst_port udp_buf dest_port;
+      Udp_wire.set_length udp_buf (Udp_wire.sizeof_udp + Cstruct.lenv bufs);
+      Udp_wire.set_checksum udp_buf 0;
       (* Only for recording, no need to set a checksum. *)
       (* Ip.writev *)
       let bufs = frame :: bufs in
       let tlen = Cstruct.lenv bufs - Ethernet.Packet.sizeof_ethernet in
       let dmac = String.make 6 '\000' in
       (* Ip.adjust_output_header *)
-      Ethernet__Ethernet_wire.set_ethernet_dst dmac 0 frame;
+      Cstruct.blit_from_string dmac 0 frame 0 6;
       let buf =
         Cstruct.sub frame Ethernet.Packet.sizeof_ethernet Ipv4_wire.sizeof_ipv4
       in
       (* Set the mutable values in the ipv4 header *)
-      Ipv4_wire.set_ipv4_len buf tlen;
-      Ipv4_wire.set_ipv4_id buf (Random.int 65535); (* TODO *)
-      Ipv4_wire.set_ipv4_csum buf 0;
+      Ipv4_wire.set_len buf tlen;
+      Ipv4_wire.set_id buf (Random.int 65535); (* TODO *)
+      Ipv4_wire.set_checksum buf 0;
       (* Only for recording, no need to set a checksum *)
       Recorder.record recorder bufs
     | None ->
