@@ -1,6 +1,0 @@
-VPN-friendly networking devices for HyperKit
-
-HyperKit is a hypervisor which runs on macOS using the "hypervisor.framework".
-VPNKit implements a virtual ethernet device for HyperKit VMs in a VPN-friendly
-way, by terminating and proxying all the TCP flows, caching and forwarding
-DNS requests etc. HyperKit and VPNKit are used in Docker for Mac and Windows.
