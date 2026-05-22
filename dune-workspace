@@ -1,8 +1,8 @@
 (lang dune 3.19)
 
 (repository
- (name archive)
- (url git+https://github.com/ocaml/opam-repository-archive))
+ (name archive-without-constraint)
+ (url git+https://github.com/tarides/moby-vpnkit-opam-repository-archive#remove-dune-upper-constraint))
 
 (lock_dir
- (repositories upstream overlay archive))
+ (repositories upstream overlay archive-without-constraint))
