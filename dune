@@ -10,7 +10,7 @@
 
 (rule
  (target vpnkit.tgz)
- (deps    vpnkit.exe (:gen ./scripts/mac_package.exe))
+ (deps    %{bin:vpnkit} (:gen ./scripts/mac_package.exe))
  (action  (run %{gen} -out %{target} -in %{deps})))
 
 (rule
