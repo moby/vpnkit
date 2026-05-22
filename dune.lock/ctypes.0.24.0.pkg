@@ -1,4 +1,4 @@
-(version 0.23.0)
+(version 0.24.0)
 
 (build
  (all_platforms
@@ -24,11 +24,11 @@
 
 (depends
  (all_platforms
-  (dune ocaml integers dune-configurator bigarray-compat)))
+  (dune ocaml integers dune-configurator)))
 
 (source
  (fetch
   (url
-   https://github.com/yallop/ocaml-ctypes/archive/refs/tags/0.23.0.tar.gz)
+   https://github.com/yallop/ocaml-ctypes/archive/refs/tags/0.24.0.tar.gz)
   (checksum
-   sha256=cae47d815b27dd4c824a007f1145856044542fe2588d23a443ef4eefec360bf1)))
+   sha256=249c5604c8554659761a7282db4ad200aa8c0fdc408cdb53102bd70feeb51955)))

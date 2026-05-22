@@ -1,4 +1,4 @@
-(version 0.7.0)
+(version 0.8.0)
 
 (build
  (all_platforms
@@ -13,6 +13,6 @@
 
 (source
  (fetch
-  (url https://github.com/yallop/ocaml-integers/archive/0.7.0.tar.gz)
+  (url https://github.com/yallop/ocaml-integers/archive/0.8.0.tar.gz)
   (checksum
-   sha256=8bb517fa9a1818246eb8c4ce34ee1489fbebb4b92defa3a25d13cab8d23ec685)))
+   sha256=04a1a6d5cc1ecfd3f354a83caed27e59995bb26adec64d88193ccc36268929fa)))

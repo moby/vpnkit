@@ -1,4 +1,4 @@
-(version 4.14.2)
+(version 4.14.3)
 
 (install
  (all_platforms
@@ -101,9 +101,9 @@
 
 (source
  (fetch
-  (url https://github.com/ocaml/ocaml/archive/4.14.2.tar.gz)
+  (url https://github.com/ocaml/ocaml/archive/4.14.3.tar.gz)
   (checksum
-   sha256=c2d706432f93ba85bd3383fa451d74543c32a4e84a1afaf3e8ace18f7f097b43)))
+   sha256=e510689183b2d62b0a7513ea7e47be80ddb9173377a2df436dbc1ca927a64689)))
 
 (exported_env
  (= CAML_LD_LIBRARY_PATH "\%{lib}%/stublibs"))
@@ -112,6 +112,6 @@
  (ocaml-base-compiler.install
   (fetch
    (url
-    https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/ocaml-base-compiler/ocaml-base-compiler.install)
+    https://raw.githubusercontent.com/ocaml/ocaml/8c17fd444391392c5f9801241374d749c080c1a8/ocaml-variants.install)
    (checksum
     sha256=79f2a1a5044a91350a0eb6ce12e261a72a2855c094c425cddf3860e58c486678))))
