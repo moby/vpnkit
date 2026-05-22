@@ -16,9 +16,7 @@
   (run config/discover.exe -ocamlc "\%{OCAMLC}")))
 
 (rule
- (targets version.ml)
- (deps version.ml.in ../../Makefile)
- (action
-  (chdir
-   %{workspace_root}
-   (run make src/bin/version.ml))))
+  (target version.ml)
+  (action
+    (with-stdout-to %{target}
+                    (system "git rev-parse HEAD | xargs printf 'let git = \"%s\"'"))))

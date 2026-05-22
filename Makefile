@@ -11,10 +11,4 @@ depends:
 	opam install --deps-only -t vpnkit
 
 test:
-	opam exec -- dune test
-	opam exec -- dune build @e2e
-
-%: %.in
-	@echo "  GEN     " $@
-	@sed -e "s/@COMMIT@/$$(git rev-parse HEAD)/" $< >$@.tmp
-	@mv $@.tmp $@
+	opam exec -- dune build @runtest @e2e
