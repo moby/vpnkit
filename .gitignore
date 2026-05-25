@@ -6,8 +6,9 @@ _opam/
 *~
 COMMIT
 OSS-LICENSES
-vpnkit.exe
 vpnkit.tgz
 opam/licenses/dependency.slirp
 src/hostnet_test/_tests/
 .merlin
+deps.csv
+licenses.json
