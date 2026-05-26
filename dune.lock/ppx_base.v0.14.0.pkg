@@ -1,0 +1,23 @@
+(version v0.14.0)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml
+   ppx_cold
+   ppx_compare
+   ppx_enumerate
+   ppx_hash
+   ppx_js_style
+   ppx_sexp_conv
+   dune
+   ppxlib)))
+
+(source
+ (fetch
+  (url
+   https://ocaml.janestreet.com/ocaml-core/v0.14/files/ppx_base-v0.14.0.tar.gz)
+  (checksum
+   sha256=26ca13a9638b27b862c94886b8b25d0e1c83d5f7663cf0d545538214ab1bea2c)))

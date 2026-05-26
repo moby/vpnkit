@@ -1,0 +1,31 @@
+(version 0.7.0)
+
+(build
+ (all_platforms
+  ((action
+    (run
+     ocaml
+     pkg/pkg.ml
+     build
+     --pinned
+     %{pkg-self:pinned}
+     --with-js_of_ocaml
+     %{pkg:js_of_ocaml:installed}
+     --with-fmt
+     %{pkg:fmt:installed}
+     --with-cmdliner
+     %{pkg:cmdliner:installed}
+     --with-lwt
+     %{pkg:lwt:installed}
+     --with-base-threads
+     %{pkg:base-threads:installed})))))
+
+(depends
+ (all_platforms
+  (ocaml ocamlfind ocamlbuild topkg fmt cmdliner lwt base-threads)))
+
+(source
+ (fetch
+  (url https://erratique.ch/software/logs/releases/logs-0.7.0.tbz)
+  (checksum
+   sha256=86f4a02807eb1a297aae44977d9f61e419c31458a5d7b23c6f55575e8e69d5ca)))

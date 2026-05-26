@@ -1,0 +1,19 @@
+(version 4.2.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-clock/releases/download/v4.2.0/mirage-clock-4.2.0.tbz)
+  (checksum
+   sha256=fa17d15d5be23c79ba741f5f7cb88ed7112de16a4410cea81c71b98086889847)))

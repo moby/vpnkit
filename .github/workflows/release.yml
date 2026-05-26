@@ -1,0 +1,41 @@
+name: Build and upload binary releases
+
+on:
+  release:
+    types: [released]
+
+jobs:
+  release-unix:
+    name: Release for ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-15-intel
+            name: x86_64-macos
+          - os: macos-15
+            name: aarch64-macos
+          - os: ubuntu-latest
+            name: x86_64-linux-gnu
+    steps:
+
+      - uses: actions/checkout@v6
+
+      - uses: ocaml-dune/setup-dune@v2
+
+      - name: Build the project
+        run: dune build @install --release --only-packages vpnkit --display=short
+
+      - name: Release a tarball of build outputs
+        run: |
+          OUT_NAME=vpnkit-${{ github.ref_name }}-${{ matrix.name }}
+          mkdir -p "$OUT_NAME"
+          cp -rlf _build/install/default/* "$OUT_NAME"
+          tar --format=posix -cf "$OUT_NAME.tar" "$OUT_NAME"
+          gzip -v9 "${OUT_NAME}.tar"
+
+      - name: Upload assets
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "*.tar.gz"

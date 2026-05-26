@@ -1,0 +1,19 @@
+(version 5.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune fmt lwt)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-kv/releases/download/v5.0.0/mirage-kv-5.0.0.tbz)
+  (checksum
+   sha256=1036d74392461017ca8d9e32ccf94a5be6e03a056fa9ee551d4a7f49f6385462)))

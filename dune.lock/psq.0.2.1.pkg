@@ -1,0 +1,18 @@
+(version 0.2.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune seq)))
+
+(source
+ (fetch
+  (url https://github.com/pqwy/psq/releases/download/v0.2.1/psq-0.2.1.tbz)
+  (checksum
+   sha256=42005f533eabe74b1799ee32b8905654cd66a22bed4af2bd266b28d8462cd344)))

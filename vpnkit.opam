@@ -25,7 +25,7 @@ build: [
 
 depends: [
   "ocaml" {>="4.08.0"}
-  "dune" {>= "3.0"}
+  "dune" {>= "3.19"}
   "alcotest" {with-test}
   "ounit" {with-test}
   "tar" {>= "1.0.1"}
@@ -69,6 +69,7 @@ depends: [
   "mirage-random-stdlib"
   "re" {>= "1.9.0"}
   "ppx_inline_test"
+  "cohttp" {< "6"}
 ]
 synopsis: "VPN-friendly networking devices for HyperKit"
 description: """

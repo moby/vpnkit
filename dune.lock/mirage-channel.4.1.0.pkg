@@ -1,0 +1,19 @@
+(version 4.1.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune mirage-flow lwt cstruct logs)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-channel/releases/download/v4.1.0/mirage-channel-4.1.0.tbz)
+  (checksum
+   sha256=b0176851d4ddf5978d7072b420118178e6030ea50b33b1185fe3f3d9fda72100)))

@@ -1,0 +1,13 @@
+(version v0.14.4)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml sexplib0 dune dune-configurator)))
+
+(source
+ (fetch
+  (url https://github.com/janestreet/base/archive/refs/tags/v0.14.4.tar.gz)
+  (checksum md5=89c571906217b5513682123b74327522)))

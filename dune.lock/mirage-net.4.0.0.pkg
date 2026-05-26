@@ -1,0 +1,19 @@
+(version 4.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune fmt macaddr cstruct lwt)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-net/releases/download/v4.0.0/mirage-net-v4.0.0.tbz)
+  (checksum
+   sha256=668effd187b81a0ab32450870c15dbb89ff911397ff338a8951807e250e194ce)))

@@ -1,0 +1,19 @@
+(version 3.1.2)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune cmdliner)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/functoria/releases/download/v3.1.2/functoria-3.1.2.tbz)
+  (checksum
+   sha256=847a5e59afca3874c056f3130f51ca5fe73e24a4f166cb2a30e90967dc7c00fa)))
