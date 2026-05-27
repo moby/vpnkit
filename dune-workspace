@@ -1,4 +1,4 @@
-(lang dune 3.19)
+(lang dune 3.23)
 
 (repository
  (name archive-without-constraint)
@@ -6,3 +6,5 @@
 
 (lock_dir
  (repositories upstream overlay archive-without-constraint))
+
+(pkg disabled)
