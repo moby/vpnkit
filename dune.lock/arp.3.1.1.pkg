@@ -25,4 +25,4 @@
  (fetch
   (url https://github.com/mirage/arp/releases/download/v3.1.1/arp-3.1.1.tbz)
   (checksum
-   sha256=ea33c589e9deea300fb62bc2ba0b557cfdfeea4f40e600685b3a68c6868f06f1)))
+   sha512=5824ea057094d6035cac4235f0dd984af9d56fb9ec9aa621af3bc24674c97df328cd77efb749743f295f94c040e39d9b1caf68a13253393685dfae02fce6e869)))

@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/ocaml-uri/releases/download/v4.4.0/uri-4.4.0.tbz)
   (checksum
-   sha256=cdabaf6ef5cd2161e59cc7b74c6e4a68ecb80a9f4e96002e338e1b6bf17adec4)))
+   sha512=88374143e0d8aaf6d40aa3cbd7593f9832e9c9727738c6e651498125150c83d5646e13b5737d5c3e81484dd041127f67f8acea13fdc0300ac4e46107559f8ae2)))

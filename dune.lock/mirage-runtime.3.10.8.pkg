@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage/releases/download/v3.10.8/mirage-v3.10.8.tbz)
   (checksum
-   sha256=135d86ca74e68ddb61d4ef304d43fb951a10b7cbc488bf3d638fca4294016fb4)))
+   sha512=beaaa4e238bd5d785f073e62c3ebaa71a1f0e7f7287be73106ba5c20f3b3bc6cfe6825700521ce39dfed92f12857296a9137673e89e112d1461df02df070a6ca)))

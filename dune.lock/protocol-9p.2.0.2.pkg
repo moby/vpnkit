@@ -30,4 +30,4 @@
   (url
    https://github.com/mirage/ocaml-9p/releases/download/2.0.2/protocol-9p-2.0.2.tbz)
   (checksum
-   sha256=a4c0585e81f5c57c879560318016aeb022163044f2c7ae086af3dfcbbe1b8164)))
+   sha512=253bafb9a41d7e641d8f8c117de4a561f7b0a81dd7e54ab9ea322375818fe1e4d952bc7b4fdabc88cab30b2df082f0cf5c0764e5d63474c1ee43a8e3f591694e)))

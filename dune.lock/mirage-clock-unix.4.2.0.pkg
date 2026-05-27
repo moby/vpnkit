@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage-clock/releases/download/v4.2.0/mirage-clock-4.2.0.tbz)
   (checksum
-   sha256=fa17d15d5be23c79ba741f5f7cb88ed7112de16a4410cea81c71b98086889847)))
+   sha512=05a359dc8400d4ca200ff255dbd030acd33d2c4acb5020838f772c02cdb5f243f3dbafbc43a8cd51e6b5923a140f84c9e7ea25b2c0fa277bb68b996190d36e3b)))

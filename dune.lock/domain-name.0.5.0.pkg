@@ -16,4 +16,4 @@
   (url
    https://github.com/hannesm/domain-name/releases/download/v0.5.0/domain-name-0.5.0.tbz)
   (checksum
-   sha256=9ec7ae2c22772c150b84cfa3f21d9bf25fae14a796f31e20df52d86f46499d89)))
+   sha512=923acab434ebb197f44075711030fd1b7f61783e20cc6f74387ce0acf1bc5f48eb8a8a5e29d3440e7c249ab00673e250ddfdc7e53d71c5a1613f1dbb557c0ae1)))

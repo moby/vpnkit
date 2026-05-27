@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage-channel/releases/download/v4.1.0/mirage-channel-4.1.0.tbz)
   (checksum
-   sha256=b0176851d4ddf5978d7072b420118178e6030ea50b33b1185fe3f3d9fda72100)))
+   sha512=d6e085cc7c61387fa651757704dd0c76d2fee728725e06174ea8a1c47e63b13217d3683094939a3862fe2f23f18f74dfcdbe4577ba0e9e45609c15d1539edd10)))

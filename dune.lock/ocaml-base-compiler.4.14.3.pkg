@@ -18,36 +18,10 @@
       (progn
        (run
         ./configure
-        (when
-         (catch_undefined_var
-          (and_absorb_undefined_var
-           %{pkg:system-msvc:installed}
-           %{pkg:arch-x86_64:installed})
-          false)
-         --host=x86_64-pc-windows)
-        (when
-         (catch_undefined_var
-          (and_absorb_undefined_var
-           (= %{os_distribution} cygwin)
-           %{pkg:system-mingw:installed}
-           %{pkg:arch-x86_64:installed})
-          false)
-         --host=x86_64-w64-mingw32)
-        (when
-         (catch_undefined_var
-          (and_absorb_undefined_var
-           %{pkg:system-msvc:installed}
-           %{pkg:arch-x86_32:installed})
-          false)
-         --host=i686-pc-windows)
-        (when
-         (catch_undefined_var
-          (and_absorb_undefined_var
-           (= %{os_distribution} cygwin)
-           %{pkg:system-mingw:installed}
-           %{pkg:arch-x86_32:installed})
-          false)
-         --host=i686-w64-mingw32)
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
         --prefix=%{prefix}
         --docdir=%{doc}/ocaml
         -C)
@@ -62,36 +36,10 @@
       (progn
        (run
         ./configure
-        (when
-         (catch_undefined_var
-          (and_absorb_undefined_var
-           %{pkg:system-msvc:installed}
-           %{pkg:arch-x86_64:installed})
-          false)
-         --host=x86_64-pc-windows)
-        (when
-         (catch_undefined_var
-          (and_absorb_undefined_var
-           (= %{os_distribution} cygwin)
-           %{pkg:system-mingw:installed}
-           %{pkg:arch-x86_64:installed})
-          false)
-         --host=x86_64-w64-mingw32)
-        (when
-         (catch_undefined_var
-          (and_absorb_undefined_var
-           %{pkg:system-msvc:installed}
-           %{pkg:arch-x86_32:installed})
-          false)
-         --host=i686-pc-windows)
-        (when
-         (catch_undefined_var
-          (and_absorb_undefined_var
-           (= %{os_distribution} cygwin)
-           %{pkg:system-mingw:installed}
-           %{pkg:arch-x86_32:installed})
-          false)
-         --host=i686-w64-mingw32)
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
         --prefix=%{prefix}
         --docdir=%{doc}/ocaml
         -C

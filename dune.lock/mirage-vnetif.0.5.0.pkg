@@ -28,4 +28,4 @@
   (url
    https://github.com/mirage/mirage-vnetif/releases/download/v0.5.0/mirage-vnetif-v0.5.0.tbz)
   (checksum
-   sha256=b85460222a780c9b99151b40a00cf57c29bd865baa63d702f997891d8ae3f832)))
+   sha512=7889d12b35647868bea34ecd8fd1976411f2e74bc0b97b49e9b0eafca67ca2c37f2fd360afc3362d447f9b93445e888d52f4da484bece86ecb4075bb6e225491)))

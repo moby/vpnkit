@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage-flow/releases/download/v3.0.0/mirage-flow-v3.0.0.tbz)
   (checksum
-   sha256=d70bda6c85ec2747bed88bc4d95f269d2810503b92913f0807be5291696138fc)))
+   sha512=2aeb397799621bc0ea2485b68058949c99b3da8d454939d594a9b2d39ef47aa2c16489f06adfa2dea3b34fd15e60a23abc6b8e214dfbc8b7da2e958de7c36b57)))

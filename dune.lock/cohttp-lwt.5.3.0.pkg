@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/ocaml-cohttp/releases/download/v5.3.0/cohttp-5.3.0.tbz)
   (checksum
-   sha256=b3bd91c704e5ea510e924b83ab2ede1fc46a2cce448b0f8cef4883b9a16eeddd)))
+   sha512=529930d9b1f38737d91f47cb94f8bae381df87ea941cb8e75ee798354763bdf5091f4f3be31d0ba14b9944dc68203a3d98e235c38c66e7e176a114be9ff4acf3)))

@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/lwt-dllist/releases/download/v1.1.0/lwt-dllist-1.1.0.tbz)
   (checksum
-   sha256=b0200651e37eaa24f027177bc01e266db43da48aa18146973d1d18336c325d69)))
+   sha512=0a34795203d1d6601285b631ac5016beece436ffe49eb2896fdf730913b66b0dc6192fdad6bd3d5cc3ad22a19627a9d6198189597ecd520af44b0b3db5e81f00)))

@@ -40,4 +40,4 @@
   (url
    https://github.com/mirage/mirage-tcpip/releases/download/v7.1.2/tcpip-7.1.2.tbz)
   (checksum
-   sha256=96b6aeafa35f143f7275d1becb6d639472adf3680b8180416de765b6581c466d)))
+   sha512=3f873c986de5c58df72db2953c6b2a6319963dbbbd0781b55c2878fd1eaa081ebb7cecbee595db7cb3680a6f438904f98cb69ca17e70c7a6d2d1f61277e929bd)))

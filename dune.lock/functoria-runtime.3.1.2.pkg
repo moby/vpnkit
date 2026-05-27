@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/functoria/releases/download/v3.1.2/functoria-3.1.2.tbz)
   (checksum
-   sha256=847a5e59afca3874c056f3130f51ca5fe73e24a4f166cb2a30e90967dc7c00fa)))
+   sha512=b25dd0c66bf689b6c850210e1882f4711372a22b6df9c7487c0fb3e0d52c1cbb0160adec4873c94f87022e06322e87e565afebf974d02d1bdfad6b6e6594147c)))

@@ -15,4 +15,4 @@
  (fetch
   (url https://github.com/pqwy/psq/releases/download/v0.2.1/psq-0.2.1.tbz)
   (checksum
-   sha256=42005f533eabe74b1799ee32b8905654cd66a22bed4af2bd266b28d8462cd344)))
+   sha512=8a8dfe20dc77e1cf38a7b1a7fc76f815c71a4ffe04627151b855feaba8f1ae742594739d1b7a45580b5b24a2cd99b58516f6b5c8d858aa314201f4a6422101ee)))

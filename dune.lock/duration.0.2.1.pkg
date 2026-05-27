@@ -16,4 +16,4 @@
   (url
    https://github.com/hannesm/duration/releases/download/v0.2.1/duration-0.2.1.tbz)
   (checksum
-   sha256=c738c1f38cfb99820c121cd3ddf819de4b2228f0d50eacbd1cc3ce99e7c71e2b)))
+   sha512=0de9e15c7d6188872ddd9994f08616c4a1822e4ac92724efa2c312fbb2fc44cd7cbe4b36bcf66a8451d510c1fc95de481760afbcacb8f83e183262595dcf5f0c)))

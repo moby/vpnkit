@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/ocaml-hex/releases/download/v1.5.0/hex-1.5.0.tbz)
   (checksum
-   sha256=2e67eeca1b03049307a30831b5cd694bcb2d3e7f2a6b4fb597fbdb647351b4dc)))
+   sha512=baa09b47a90f0a54ad2becfb272f0674219e4fc0c03559deff26aaf13ccd59258b31bf98e56c44a5a8fa03437e3eba2bf5f0cd76e52d184d26cfb1170c490462)))
