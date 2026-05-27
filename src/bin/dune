@@ -9,11 +9,17 @@
   (:include flags.sexp))
  (preprocess no_preprocessing))
 
+(env
+  (dynamic
+    ;; set DYNAMIC to some value when building in dynamic profile
+    (env-vars
+      (DYNAMIC 1))))
+
 (rule
  (targets flags.sexp)
- (deps config/discover.exe)
+ (deps (env_var DYNAMIC))
  (action
-  (run config/discover.exe -ocamlc "\%{OCAMLC}")))
+  (run config/discover.exe)))
 
 (rule
   (target version.ml)

@@ -8,10 +8,18 @@ let os_type () =
     line
   | x -> x
 
+let static_build () =
+  (* if DYNAMIC is set (to anything) its not a static build *)
+  match Unix.getenv "DYNAMIC" with
+  | _ -> false
+  | exception Not_found -> true
+
 let flags () =
   match os_type () with
-  | "Linux" ->
-    [ "-ccopt"; "-static" ]
+  | "Linux" -> (
+    match static_build () with
+    | true -> [ "-ccopt"; "-static" ]
+    | false -> [])
   | _ ->
     []
 
