@@ -20,12 +20,9 @@ Building on Unix (including Mac)
 First install `wget`, `opam`, `pkg-config`, and `dylibbundler` using your
 package manager of choice.
 
-If you are an existing `opam` user then you can either build against your existing `opam`
-package universe, or the custom universe contained in this repo. To use the custom universe,
-ensure that you unset your `OPAMROOT` environment variable:
-```
-unset OPAMROOT
-```
+If you are an existing `opam` user then you can either build against your
+existing `opam` package universe, or the custom universe contained in this
+repo.
 
 To set up the OCaml build environment, type:
 ```
@@ -40,7 +37,16 @@ To build:
 make
 ```
 
-When the build succeeds the `vpnkit.exe` binary should be available in the current directory.
+When the build succeeds the `vpnkit` binary should be available in
+`_build/install/default/bin/vpnkit`.
+
+Alternatively you can run it with Dune:
+
+```
+dune exec vpnkit
+```
+
+which will automatically build and execute `vpnkit`.
 
 Building on Windows
 -------------------

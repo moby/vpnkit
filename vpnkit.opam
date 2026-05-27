@@ -25,7 +25,7 @@ build: [
 
 depends: [
   "ocaml" {>="4.08.0"}
-  "dune" {>= "3.19"}
+  "dune" {>= "3.23"}
   "alcotest" {with-test}
   "ounit" {with-test}
   "tar" {>= "1.0.1"}
