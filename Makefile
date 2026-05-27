@@ -7,7 +7,7 @@ vpnkit.exe:
 .PHONY: ocaml
 ocaml:
 	opam switch create ./ ocaml-base-compiler.4.14.3 --no-install
-	opam repo add archive git+https://github.com/ocaml/opam-repository-archive
+	opam repo add archive-without-constraint git+https://github.com/tarides/moby-vpnkit-opam-repository-archive#remove-dune-upper-constraint
 	opam pin add vpnkit . --kind=path --no-action
 
 .PHONY: depends
