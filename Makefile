@@ -2,16 +2,17 @@ build: vpnkit.exe
 
 .PHONY: vpnkit.exe
 vpnkit.exe:
-	opam exec -- dune build --profile release
+	opam exec -- dune build --profile release @install
 
 .PHONY: ocaml
 ocaml:
-	ocaml -version || opam init --compiler=4.14.0
-	opam pin add vpnkit . -n
+	opam switch create ./ ocaml-base-compiler.4.14.3 --no-install
+	opam repo add archive git+https://github.com/ocaml/opam-repository-archive
+	opam pin add vpnkit . --kind=path --no-action
 
 .PHONY: depends
 depends:
-	opam install --deps-only -t vpnkit
+	opam install vpnkit --deps-only --with-test
 
 .PHONY: test
 test:
