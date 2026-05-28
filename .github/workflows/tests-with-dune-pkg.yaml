@@ -1,0 +1,24 @@
+name: test with dune pkg
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        runs-on: [ ubuntu-latest, macos-latest ]
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+    - name: Check out sources
+      uses: actions/checkout@v6
+    - name: Install and test
+      uses: ocaml-dune/setup-dune@v2
+      with:
+        workspace: dune-workspace.ci
