@@ -46,7 +46,7 @@ Alternatively you can use Dune package management to download and install the
 dependencies automatically:
 
 ```
-dune build --pkg=enabled
+dune build --workspace=dune-workspace.ci
 ```
 
 When the build succeeds the `vpnkit` binary should be available in
@@ -55,12 +55,8 @@ When the build succeeds the `vpnkit` binary should be available in
 You can also automatically build and execute the `vpnkit` binary:
 
 ```
-dune exec --pkg=enabled vpnkit
+dune exec --workspace=dune-workspace.ci vpnkit
 ```
-
-If you want to enable Dune package management by default (and avoid having to
-specify `--pkg=enabled`) you can edit the `dune-workspace` and remove the `(pkg
-disabled)` line.
 
 ## Building on Windows
 
