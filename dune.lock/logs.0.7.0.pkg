@@ -10,7 +10,7 @@
      --pinned
      %{pkg-self:pinned}
      --with-js_of_ocaml
-     %{pkg:js_of_ocaml:installed}
+     false
      --with-fmt
      %{pkg:fmt:installed}
      --with-cmdliner

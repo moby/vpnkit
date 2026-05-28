@@ -1,5 +1,4 @@
-VPN-friendly networking devices for [HyperKit](https://github.com/moby/hyperkit)
-===============================
+# VPN-friendly networking devices for [HyperKit](https://github.com/moby/hyperkit)
 
 [![Build Status (OSX)](https://circleci.com/gh/moby/vpnkit.png)](https://circleci.com/gh/moby/vpnkit)
 
@@ -14,11 +13,12 @@ VPNKit is a set of tools and services for helping [HyperKit](https://github.com/
 VMs interoperate with host VPN configurations.
 
 
-Building on Unix (including Mac)
---------------------------------
+## Building on Unix (including Mac)
 
 First install `wget`, `opam`, `pkg-config`, and `dylibbundler` using your
 package manager of choice.
+
+### Building with opam
 
 If you are an existing `opam` user then you can either build against your
 existing `opam` package universe, or the custom universe contained in this
@@ -40,16 +40,29 @@ make
 When the build succeeds the `vpnkit` binary should be available in
 `_build/install/default/bin/vpnkit`.
 
-Alternatively you can run it with Dune:
+### Building with Dune
+
+Alternatively you can use Dune package management to download and install the
+dependencies automatically:
 
 ```
-dune exec vpnkit
+dune build --pkg=enabled
 ```
 
-which will automatically build and execute `vpnkit`.
+When the build succeeds the `vpnkit` binary should be available in
+`_build/install/default/bin/vpnkit`.
 
-Building on Windows
--------------------
+You can also automatically build and execute the `vpnkit` binary:
+
+```
+dune exec --pkg=enabled vpnkit
+```
+
+If you want to enable Dune package management by default (and avoid having to
+specify `--pkg=enabled`) you can edit the `dune-workspace` and remove the `(pkg
+disabled)` line.
+
+## Building on Windows
 
 First install the [OCaml environment with Cygwin](https://fdopen.github.io/opam-repository-mingw/installation/).
 Note that although the Cygwin tools are needed for the build scripts, Cygwin itself will not
@@ -65,8 +78,7 @@ The first build will take a little longer as it will build all the package depen
 
 When the build succeeds the `vpnkit.exe` binary should be available in the current directory.
 
-Running with hyperkit
----------------------
+## Running with hyperkit
 
 First ask `vpnkit` to listen for ethernet connections on a local Unix domain socket:
 ```
@@ -76,8 +88,7 @@ Next ask [com.docker.hyperkit](https://github.com/moby/hyperkit) to connect a NI
 socket by adding a command-line option like `-s 2:0,virtio-vpnkit,path=/tmp/ethernet`. Note:
 you may need to change the slot `2:0` to a free slot in your VM configuration.
 
-Why is this needed?
--------------------
+## Why is this needed?
 
 Running a VM usually involves modifying the network configuration on the host, for example
 by activating Ethernet bridges, new routing table entries, DNS and firewall/NAT configurations.
@@ -94,16 +105,14 @@ VPNKit operates by reconstructing Ethernet traffic from the VM and translating i
 relevant socket API calls on OSX or Windows. This allows the host application to generate
 traffic without requiring low-level Ethernet bridging support.
 
-Design
-------
+## Design
 
 - [Using vpnkit as a default gateway](docs/ethernet.md): describes the flow of ethernet traffic to/from the VM
 - [Port forwarding](docs/ports.md): describes how ports are forwarded from the host into the VM
 - [Experimental transparent HTTP proxy](docs/transparent-http-proxy.md): describes the
   experimental support for transparent HTTP(S) proxying
 
-Licensing
----------
+## Licensing
 
 VPNKit is licensed under the Apache License, Version 2.0. See
 [LICENSE](https://github.com/moby/vpnkit/blob/master/LICENSE) for the full

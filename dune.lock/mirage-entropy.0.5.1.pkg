@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage-entropy/releases/download/v0.5.1/mirage-entropy-v0.5.1.tbz)
   (checksum
-   sha256=612b2c17f18a56ed5cacc35006be6869016c26668eeaf301fd068b6467755d40)))
+   sha512=194624c9084664b41fbac88c45542a862762e8c0eaec7aa8af2e9fed4b8a5dbaf91303676f279defb4f57eaf74d9e11550d0233a471ef61e0b9f278287ecb031)))

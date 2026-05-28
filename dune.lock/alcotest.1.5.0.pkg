@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/alcotest/releases/download/1.5.0/alcotest-js-1.5.0.tbz)
   (checksum
-   sha256=54281907e02d78995df246dc2e10ed182828294ad2059347a1e3a13354848f6c)))
+   sha512=1aea91de40795ec4f6603d510107e4b663c1a94bd223f162ad231316d8595e9e098cabbe28a46bdcb588942f3d103d8377373d533bcc7413ba3868a577469b45)))

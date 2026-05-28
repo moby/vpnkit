@@ -26,4 +26,4 @@
   (url
    https://github.com/mirage/charrua/releases/download/v1.5.0/charrua-v1.5.0.tbz)
   (checksum
-   sha256=4ce74a5e78402f3d645ddcb344aaa1348349a8d5a35b8b55112aff0cb84db8e1)))
+   sha512=ac6960de516642793b928224c95da997042d2907829496843481894b38804e3b465b5f9703bd8c02e5202059847ee5c16db6975c630b462448db511b39f34f87)))

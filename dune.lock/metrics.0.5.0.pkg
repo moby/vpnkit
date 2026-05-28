@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/metrics/releases/download/v0.5.0/metrics-0.5.0.tbz)
   (checksum
-   sha256=df356380909d06461bcd097ef6063ca9f3c51365f476a797c03664b53c05715d)))
+   sha512=06e0aef8ba7a09a350cbf7219822c01047afcc9cd2870ca153040e1232d2b8560882ae6823e7797f061fa0b34da750d88365c8817cd025715b2e891320d77c19)))

@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/ethernet/releases/download/v3.0.0/ethernet-v3.0.0.tbz)
   (checksum
-   sha256=e95974f6363bd21e995a1c72ca03d09674c32ed2fbffada5aa82f096ee460929)))
+   sha512=171d061b16f2e00b9caa3dfc1cd9b5b358d380e892281ac5c137dc2a3119c3fa288ea927dcb4e9efbcf4850f6857ed0d4b754f56dbb248c1c6150779e57d24e4)))

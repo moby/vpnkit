@@ -43,4 +43,5 @@
  (fetch
   (url
    https://github.com/ocaml/ocamlfind/archive/refs/tags/findlib-1.9.8.tar.gz)
-  (checksum md5=ca770e5806032a96131b670f6e07f146)))
+  (checksum
+   sha512=8967986de2ab4ec5993f437b0a4206742adf37aa7a292a3bba0a04438d78539b84d001191e60b2d5bde98a695b38cba2593b7051f7749adbdb964a0df3c4b661)))

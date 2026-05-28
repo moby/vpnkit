@@ -28,4 +28,4 @@
  (fetch
   (url https://github.com/ocaml/num/archive/refs/tags/v1.6.tar.gz)
   (checksum
-   sha256=b5cce325449aac746d5ca963d84688a627cca5b38d41e636cf71c68b60495b3e)))
+   sha512=5cb32dfa9a9f0ad375bfd89079e9b1422979f3c089f61ef2300ad9cc64fb1fc25ed1f86b0267eb017f12ae41a574a959df5bfa39ab22c2be2f1ac84c3c671bdf)))

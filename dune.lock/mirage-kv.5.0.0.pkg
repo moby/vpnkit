@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage-kv/releases/download/v5.0.0/mirage-kv-5.0.0.tbz)
   (checksum
-   sha256=1036d74392461017ca8d9e32ccf94a5be6e03a056fa9ee551d4a7f49f6385462)))
+   sha512=f5acef8f8deedf5489e66fe5a088b468e1e691287f67563081564e3d66ad20c542dd600b3a0b118bc3d3d76bd91656ecb1fa31e9645fe9f6b224280a0876d939)))

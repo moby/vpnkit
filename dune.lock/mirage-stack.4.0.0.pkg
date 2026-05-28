@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage-stack/releases/download/v4.0.0/mirage-stack-v4.0.0.tbz)
   (checksum
-   sha256=abbd33190bd3e4a4eabcbdfb6d98d20fc4aed0fef628251eb327d625c23cccfc)))
+   sha512=83f121a22ce7a00aa2fc01d88603dafb6dd8d4cff0a2a9c6f73d8b1626aa43604ab797c793689190035289d2d00c77a60aa8d1b9f8fa66425dd19a08e7ccd518)))

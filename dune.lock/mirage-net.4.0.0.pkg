@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage-net/releases/download/v4.0.0/mirage-net-v4.0.0.tbz)
   (checksum
-   sha256=668effd187b81a0ab32450870c15dbb89ff911397ff338a8951807e250e194ce)))
+   sha512=52064dc704ebd0d305fd234b6d89fc313d5a80016d8875ef93212a1962ad8b1f332f7b0338244afbb2d2f207a28d476e7d7639be9dc607d95145afee7fccc483)))

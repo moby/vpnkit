@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage-random/releases/download/v3.0.0/mirage-random-v3.0.0.tbz)
   (checksum
-   sha256=49fe3f281d6430cc1723ecabe47fc9b8e9b29d83cd5f0964f5d000fa014066cf)))
+   sha512=5d16855740e04f8efe5bcd5a7596ccffb5b927a616c5e6de4a5f5bd96e2f9f8f3b030d8b216156cac897d49a64b0f5bd7f89c30c787c3d9be63ab952c9984160)))

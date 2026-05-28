@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/io-page/releases/download/v2.3.0/io-page-v2.3.0.tbz)
   (checksum
-   sha256=9605a8a03e53bc12682212c371bc477f2a44ed829725ae38cc3005e2f83da2c3)))
+   sha512=ce1775bff151d62bb85405a13fe75f912c11b09cbc0a6dd81dd27b3f4c767f0b9c4d3e7383d494eb5c130311482ea69877c45b71b91153177562ffc47de4da2f)))

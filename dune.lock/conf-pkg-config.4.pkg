@@ -15,19 +15,11 @@
    ((action
      (progn
       (when
-       (and_absorb_undefined_var
-        true
-        (not
-         (and_absorb_undefined_var
-          true
-          (= %{os_distribution} homebrew))))
+       (not
+        (= %{os_distribution} homebrew))
        (run pkg-config --help))
       (when
-       (or_absorb_undefined_var
-        false
-        (and_absorb_undefined_var
-         true
-         (= %{os_distribution} homebrew)))
+       (= %{os_distribution} homebrew)
        (run pkgconf --version))))))))
 
 (depexts

@@ -12,4 +12,4 @@
   (url
    https://github.com/xapi-project/ocaml-fd-send-recv/releases/download/v2.0.3/fd-send-recv-2.0.3.tbz)
   (checksum
-   sha256=34970f254a14885daaabb98f5410160530aa6e994747ad1eab99ec4f61dc9934)))
+   sha512=c50d836212d9b0e05ffa9fe83dc208929b7aab3c88340f0d7ea7a13bec802bdb15d4279c9dc146bb0b6b59d9baf7db7802d57cd35f3ecda6c2ee053c6b3c69c7)))

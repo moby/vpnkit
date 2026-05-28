@@ -44,4 +44,4 @@
   (url
    https://github.com/mirage/ocaml-hvsock/releases/download/3.0.0/hvsock-3.0.0.tbz)
   (checksum
-   sha256=46d179976f153a7723890ba78fbcfee60e70b3cc9cc3574eb4bb8a682525e4e2)))
+   sha512=f38d53ba07ed77d39c1e92864506ebc7daab0321c8fc2709660c7a55bb43de82af56571d827cbc03443c1b5ccb3a898f6a2163d32d9c5c52b5f4e36507b56969)))

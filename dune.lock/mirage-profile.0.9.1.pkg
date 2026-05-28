@@ -12,4 +12,4 @@
   (url
    https://github.com/mirage/mirage-profile/releases/download/v0.9.1/mirage-profile-v0.9.1.tbz)
   (checksum
-   sha256=2bb6cf03c73c6f45dedc34365c9131b8bdda62390b04d26eb76793a6422a0352)))
+   sha512=23cc4a2a62f5cc05b48d626bd6c8171a442fd46490da6810b1c507fcd7661c7fcd901d8328cddf687af4144136bf0d34b63f8484e32550077ab63d23e6eaea2b)))

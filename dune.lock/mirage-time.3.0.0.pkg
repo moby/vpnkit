@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/mirage-time/releases/download/v3.0.0/mirage-time-v3.0.0.tbz)
   (checksum
-   sha256=0d40949b58e2c7e8b762ccc8ce066345046233c8c95d0e3d17a242ff289cbd7c)))
+   sha512=066f9271c7871eb754cf9b3f8853f4861ce80d1cc31eb9a2384f3cd62441e15aa7636d19cc3bee6d56219fa5653b9f7da7d9b9d659fd1f7cd17326e7ba1715eb)))

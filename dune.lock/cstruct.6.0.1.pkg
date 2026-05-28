@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/ocaml-cstruct/releases/download/v6.0.1/cstruct-v6.0.1.tbz)
   (checksum
-   sha256=4a67bb8f042753453c59eabf0e47865631253ba694091ce6062aac05d47a9bed)))
+   sha512=3eeeb6ae0fd3b625cf1d308498f0a1e6951d16566561f3362fdf74e7158d92d8f6c6d9fa968ff15f8c19a1886dce99d0ef17b44dbb37b97cc68c9b088fdc2248)))

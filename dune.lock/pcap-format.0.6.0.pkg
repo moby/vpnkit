@@ -16,4 +16,4 @@
   (url
    https://github.com/mirage/ocaml-pcap/releases/download/v0.6.0/pcap-format-0.6.0.tbz)
   (checksum
-   sha256=2d48f2f179ba56c9ccab51472b398983bba8ae44efedc393b282f09ad34791a6)))
+   sha512=6c46b314b665eff3e46550e28a88f6de5370ed5299e88fa76f612330fa704bea5e436608e4f0eff489b444cc8b534e1f5710a0d92083469ec52f375d6435baf8)))
