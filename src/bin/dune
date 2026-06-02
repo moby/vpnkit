@@ -23,6 +23,9 @@
 
 (rule
   (target version.ml)
+  (deps
+    (glob_files_rec %{project_root}/.git/**)
+    (sandbox preserve_file_kind))
   (action
     (with-stdout-to %{target}
-                    (system "git rev-parse HEAD | xargs printf 'let git = \"%s\"'"))))
+                    (system "git -C %{project_root} rev-parse HEAD | xargs printf 'let git = \"%s\"'"))))
