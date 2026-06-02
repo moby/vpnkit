@@ -1,5 +1,3 @@
-(data_only_dirs .git)
-
 (rule
  (alias e2e)
  (deps src/hostnet_test/main.exe

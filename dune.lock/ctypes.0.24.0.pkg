@@ -5,22 +5,7 @@
   ((action
     (progn
      (when %{pkg-self:dev} (run dune subst))
-     (run
-      dune
-      build
-      -p
-      %{pkg-self:name}
-      -j
-      %{jobs}
-      --promote-install-files=false
-      @install)
-     (run
-      dune
-      install
-      -p
-      %{pkg-self:name}
-      --create-install-files
-      %{pkg-self:name}))))))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
 
 (depends
  (all_platforms

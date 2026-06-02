@@ -3,7 +3,7 @@
  (public_name vpnkit)
  (libraries cmdliner ofs logs.fmt hostnet hvsock hvsock.lwt
    fd-send-recv duration mirage-clock-unix mirage-random
-   fs9p mirage-random-stdlib)
+   fs9p mirage-random-stdlib dune-build-info)
  (flags
   :standard
   (:include flags.sexp))
@@ -20,12 +20,3 @@
  (deps (env_var DYNAMIC))
  (action
   (run config/discover.exe)))
-
-(rule
-  (target version.ml)
-  (deps
-    (glob_files_rec %{project_root}/.git/**)
-    (sandbox preserve_file_kind))
-  (action
-    (with-stdout-to %{target}
-                    (system "git -C %{project_root} rev-parse HEAD | xargs printf 'let git = \"%s\"'"))))

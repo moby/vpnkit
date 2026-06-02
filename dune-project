@@ -1,2 +1,72 @@
 (lang dune 3.23)
 (name vpnkit)
+(generate_opam_files true)
+
+(maintainers "David Scott <dave.scott@docker.com>")
+(authors
+  "Anil Madhavapeddy <anil@recoil.org>"
+  "David Scott <dave.scott@docker.com>"
+  "David Sheets <dsheets@docker.com>"
+  "Gaetan de Villele <gdevillele@gmail.com>"
+  "Ian Campbell <ian.campbell@docker.com>"
+  "Magnus Skjegstad <magnus@skjegstad.com>"
+  "Mindy Preston <mindy.preston@docker.com>"
+  "Sebastiaan van Stijn <github@gone.nl>"
+  "Thomas Gazagnaire <thomas@gazagnaire.com>"
+  "Thomas Leonard <thomas.leonard@docker.com>")
+(license Apache-2.0)
+(source (github moby/vpnkit))
+
+(package
+  (name vpnkit)
+  (synopsis "VPN-friendly networking devices for HyperKit")
+  (description "HyperKit is a hypervisor which runs on macOS using the \"hypervisor.framework\".
+VPNKit implements a virtual ethernet device for HyperKit VMs in a VPN-friendly
+way, by terminating and proxying all the TCP flows, caching and forwarding
+DNS requests etc. HyperKit and VPNKit are used in Docker for Mac and Windows.")
+  (depends
+    (ocaml (>= 4.08.0))
+    dune-build-info
+    (alcotest :with-test)
+    (ounit :with-test)
+    (tar (>= 1.0.1))
+    (ipaddr (>= 5.0.1))
+    (lwt (>= 5.4.0))
+    luv
+    luv_unix
+    (tcpip (>= 7.0.0))
+    (base64 (>= 3.5.0))
+    (cstruct (>= 6.0.0))
+    (pcap-format (>= 0.4.0))
+    (cmdliner (< 1.1.0))
+    (charrua (>= 1.3.0))
+    charrua-client
+    charrua-server
+    (hvsock (>= 2.0.0))
+    (fd-send-recv (>= 2.0.0))
+    logs
+    fmt
+    astring
+    (ethernet (and (>= 3.0.0) (< 3.1.0)))
+    (arp (>= 3.0.0))
+    (mirage-entropy (>= 0.5.0))
+    (mirage-kv (and (>= 4.0.0) (< 6.0.0)))
+    (mirage-net (>= 4.0.0))
+    (mirage-time (>= 3.0.0))
+    (mirage-channel (>= 4.0.1))
+    mirage-stack
+    (cohttp (< 6))
+    (cohttp-lwt (>= 0.99.0))
+    (protocol-9p (>= 2.0.0))
+    (mirage-vnetif (and (>= 0.5.0) (< 0.6.0)))
+    io-page-unix
+    uuidm
+    (ezjsonm (>= 0.4.0))
+    (sha :with-test)
+    stringext
+    (mirage-clock (>= 4.0.0))
+    (mirage-clock-unix (>= 4.0.0))
+    (mirage-random (>= 3.0.0))
+    mirage-random-stdlib
+    (re (>= 1.9.0))
+    ppx_inline_test))
