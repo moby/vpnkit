@@ -26,6 +26,7 @@ way, by terminating and proxying all the TCP flows, caching and forwarding
 DNS requests etc. HyperKit and VPNKit are used in Docker for Mac and Windows.")
   (depends
     (ocaml (>= 4.08.0))
+    dune-build-info
     (alcotest :with-test)
     (ounit :with-test)
     (tar (>= 1.0.1))
