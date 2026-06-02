@@ -358,7 +358,7 @@ let hvsock_addr_of_uri ~default_serviceid uri =
     (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore
     with Invalid_argument _ -> ());
     Log.info (fun f ->
-        f "Version is %s" Version.git
+        f "Version is %s" (Lazy.force Version.version)
     );
 
     Log.info (fun f -> f "System SOMAXCONN is %d" !Utils.somaxconn);
@@ -877,7 +877,7 @@ let command =
         $ server_macaddr $ domain $ allowed_bind_addresses $ gateway_ip $ host_ip
         $ lowest_ip $ highest_ip $ dhcp_json_path $ mtu $ udpv4_forwards $ tcpv4_forwards
         $ gateway_forwards_path $ forwards_path $ gc_compact),
-  Term.info (Filename.basename Sys.argv.(0)) ~version:Version.git ~doc ~man
+  Term.info (Filename.basename Sys.argv.(0)) ~version:(Lazy.force Version.version) ~doc ~man
 
 let () =
   Printexc.record_backtrace true;
