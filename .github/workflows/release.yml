@@ -22,9 +22,11 @@ jobs:
       - uses: actions/checkout@v6
 
       - uses: ocaml-dune/setup-dune@v2
+        with:
+          workspace: dune-workspace.ci
 
       - name: Build the project
-        run: dune build @install --release --only-packages vpnkit --display=short
+        run: dune build --workspace=dune-workspace.ci @install --release --only-packages vpnkit --display=short
 
       - name: Release a tarball of build outputs
         run: |
