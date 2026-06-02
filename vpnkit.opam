@@ -25,6 +25,7 @@ bug-reports: "https://github.com/moby/vpnkit/issues"
 depends: [
   "dune" {>= "3.23"}
   "ocaml" {>= "4.08.0"}
+  "dune-build-info"
   "alcotest" {with-test}
   "ounit" {with-test}
   "tar" {>= "1.0.1"}
