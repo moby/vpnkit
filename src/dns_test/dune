@@ -3,7 +3,3 @@
   (libraries  dns ounit2 pcap-format bigarray bigarray-compat lwt)
   (deps       (glob_files *.pcap) (glob_files *.zone))
   (preprocess (pps ppx_cstruct)))
-
-(rule
- (alias  runtest)
- (action (run ./test.exe)))
