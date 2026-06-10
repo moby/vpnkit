@@ -1,4 +1,10 @@
 (rule
+  (alias sbom)
+  (target vpnkit.spdx.json)
+  (deps (:gen ./scripts/sbom.sh))
+  (action (run %{gen} %{target})))
+
+(rule
  (alias e2e)
  (deps src/hostnet_test/main.exe
    go/test_inputs/open_dedicated_connection.bin
