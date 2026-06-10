@@ -257,8 +257,8 @@ struct
          packet creation fn *)
       let frame = Io_page.to_cstruct (Io_page.get 1) in
       let smac = "\000\000\000\000\000\000" in
-      Ethernet__Ethernet_wire.set_ethernet_src smac 0 frame;
-      Ethernet__Ethernet_wire.set_ethernet_ethertype frame 0x0800;
+      Cstruct.blit_from_string smac 0 frame 6 6;
+      Cstruct.BE.set_uint16 frame 12 0x0800;
       let buf = Cstruct.shift frame Ethernet.Packet.sizeof_ethernet in
       Ipv4_wire.set_ipv4_hlen_version buf ((4 lsl 4) + (5));
       Ipv4_wire.set_ipv4_tos buf 0;
@@ -283,7 +283,7 @@ struct
       let tlen = Cstruct.lenv bufs - Ethernet.Packet.sizeof_ethernet in
       let dmac = String.make 6 '\000' in
       (* Ip.adjust_output_header *)
-      Ethernet__Ethernet_wire.set_ethernet_dst dmac 0 frame;
+      Cstruct.blit_from_string dmac 0 frame 0 6;
       let buf =
         Cstruct.sub frame Ethernet.Packet.sizeof_ethernet Ipv4_wire.sizeof_ipv4
       in
