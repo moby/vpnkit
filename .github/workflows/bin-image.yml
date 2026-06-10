@@ -22,21 +22,27 @@ on:
       - 'v*'
   pull_request:
 
-env:
-  REPO_SLUG: moby/vpnkit-bin
 jobs:
   build:
-    uses: crazy-max/.github/.github/workflows/bake-distribute-mp.yml@d9a10e2737504a6e253f96e344cef684b0e00cb5
+    uses: docker/github-builder/.github/workflows/bake.yml@70ac3fc303efa83d2b94905e6ab78bb83cbdc2ae # v1.11.0
+    permissions:
+      contents: read # same as global permission
+      id-token: write # for signing attestation(s) with GitHub OIDC Token
     with:
+      setup-qemu: true
       target: bin-image
-      push: ${{ github.event_name != 'pull_request' && github.repository == 'moby/vpnkit' }}
       cache: false # See: https://github.com/moby/vpnkit/pull/647/files/3d4f258e7514b9cc878639f724cbb0caffa8fd98#r2032880337
-      meta-image: moby/vpnkit-bin
+      output: image
+      push: ${{ github.event_name != 'pull_request' && github.repository == 'moby/vpnkit' }}
+      meta-images: |
+        moby/vpnkit-bin
       meta-tags: |
         type=semver,pattern={{version}}
         type=ref,event=branch
         type=ref,event=pr
         type=sha
     secrets:
-      login-username: ${{ secrets.DOCKERHUB_USERNAME }}
-      login-password: ${{ secrets.DOCKERHUB_TOKEN }}
+      registry-auths: |
+        - registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
