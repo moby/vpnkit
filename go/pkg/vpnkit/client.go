@@ -50,7 +50,7 @@ func (e *ExposeError) Error() string {
 	return e.Message
 }
 
-func (h *httpClient) Expose(_ context.Context, port *Port) error {
+func (h *httpClient) Expose(ctx context.Context, port *Port) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	if err := enc.Encode(port); err != nil {
@@ -60,7 +60,7 @@ func (h *httpClient) Expose(_ context.Context, port *Port) error {
 	if port.Proto == Unix {
 		path = ExposePipePath
 	}
-	request, err := http.NewRequest("PUT", "http://unix"+path, &buf)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPut, "http://unix"+path, &buf)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func (h *httpClient) Expose(_ context.Context, port *Port) error {
 	return nil
 }
 
-func (h *httpClient) Unexpose(_ context.Context, port *Port) error {
+func (h *httpClient) Unexpose(ctx context.Context, port *Port) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	if err := enc.Encode(port); err != nil {
@@ -95,7 +95,7 @@ func (h *httpClient) Unexpose(_ context.Context, port *Port) error {
 	if port.Proto == Unix {
 		path = UnexposePipePath
 	}
-	request, err := http.NewRequest("DELETE", "http://unix"+path, &buf)
+	request, err := http.NewRequestWithContext(ctx, http.MethodDelete, "http://unix"+path, &buf)
 	if err != nil {
 		return err
 	}
@@ -111,8 +111,12 @@ func (h *httpClient) Unexpose(_ context.Context, port *Port) error {
 	return nil
 }
 
-func (h *httpClient) ListExposed(context.Context) ([]Port, error) {
-	res, err := h.client.Get("http://unix" + ListPath)
+func (h *httpClient) ListExposed(ctx context.Context) ([]Port, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix"+ListPath, nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := h.client.Do(request)
 	if err != nil {
 		fmt.Printf("GET failed with %v\n", err)
 		return nil, err
@@ -129,8 +133,12 @@ func (h *httpClient) ListExposed(context.Context) ([]Port, error) {
 	return ports, nil
 }
 
-func (h *httpClient) DumpState(_ context.Context, w io.Writer) error {
-	res, err := h.client.Get("http://unix" + DumpStatePath)
+func (h *httpClient) DumpState(ctx context.Context, w io.Writer) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix"+DumpStatePath, nil)
+	if err != nil {
+		return err
+	}
+	res, err := h.client.Do(request)
 	if err != nil {
 		fmt.Printf("GET failed with %v\n", err)
 		return err
