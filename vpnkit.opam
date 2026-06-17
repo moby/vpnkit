@@ -28,45 +28,41 @@ depends: [
   "dune-build-info"
   "alcotest" {with-test}
   "ounit" {with-test}
-  "tar" {>= "1.0.1"}
+  "tar" {>= "1.0.1" & < "3.0.0"}
   "ipaddr" {>= "5.0.1"}
   "lwt" {>= "5.4.0"}
   "luv"
   "luv_unix"
-  "tcpip" {>= "7.0.0"}
+  "tcpip" {>= "9.0.0"}
   "base64" {>= "3.5.0"}
   "cstruct" {>= "6.0.0"}
   "pcap-format" {>= "0.4.0"}
-  "cmdliner" {< "1.1.0"}
-  "charrua" {>= "1.3.0"}
+  "cmdliner" {>= "1.1.0"}
+  "charrua" {>= "1.3.0" & < "2.1.0"}
   "charrua-client"
   "charrua-server"
-  "hvsock" {>= "2.0.0"}
+  "hvsock" {>= "3.1.0"}
   "fd-send-recv" {>= "2.0.0"}
   "logs"
   "fmt"
   "astring"
-  "ethernet" {>= "3.0.0" & < "3.1.0"}
+  "ethernet" {>= "3.0.0"}
   "arp" {>= "3.0.0"}
-  "mirage-entropy" {>= "0.5.0"}
+  "mirage-flow-combinators" {>= "5.0.0"}
   "mirage-kv" {>= "4.0.0" & < "6.0.0"}
   "mirage-net" {>= "4.0.0"}
-  "mirage-time" {>= "3.0.0"}
   "mirage-channel" {>= "4.0.1"}
-  "mirage-stack"
   "cohttp" {< "6"}
-  "cohttp-lwt" {>= "0.99.0"}
-  "protocol-9p" {>= "2.0.0"}
-  "mirage-vnetif" {>= "0.5.0" & < "0.6.0"}
-  "io-page-unix"
+  "cohttp-lwt" {>= "0.99.0" & < "6.0.0"}
+  "protocol-9p" {>= "2.1.0"}
+  "mirage-vnetif" {>= "0.5.0"}
+  "io-page" {>= "3.0.0"}
   "uuidm"
   "ezjsonm" {>= "0.4.0"}
-  "sha" {with-test}
+  "sha" {>= "1.15" & with-test}
   "stringext"
-  "mirage-clock" {>= "4.0.0"}
-  "mirage-clock-unix" {>= "4.0.0"}
-  "mirage-random" {>= "3.0.0"}
-  "mirage-random-stdlib"
+  "mirage-sleep" {>= "4.0.0"}
+  "mirage-mtime" {>= "5.1.0"}
   "re" {>= "1.9.0"}
   "ppx_inline_test"
   "odoc" {with-doc}
@@ -87,3 +83,10 @@ build: [
 ]
 dev-repo: "git+https://github.com/moby/vpnkit.git"
 x-maintenance-intent: ["(latest)"]
+depexts: [
+  # vpnkit links statically (-ccopt -static, see src/bin/config/discover.ml).
+  # On glibc distros that split out the static libc/libm we must pull them in;
+  # Debian/Ubuntu ship them in libc6-dev by default, Fedora/RHEL and SUSE do not.
+  ["glibc-static"] {os-distribution = "fedora"}
+  ["glibc-devel-static"] {os-family = "suse"}
+]

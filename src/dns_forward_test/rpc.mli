@@ -21,15 +21,17 @@ type request = Cstruct.t
 type response = Cstruct.t
 type address = Dns_forward.Config.Address.t
 
-include Dns_forward.Rpc.Client.S
-  with type request  := request
-   and type response := response
-   and type address  := address
+include
+  Dns_forward.Rpc.Client.S
+    with type request := request
+     and type response := response
+     and type address := address
 
-include Dns_forward.Rpc.Server.S
-  with type request  := request
-   and type response := response
-   and type address  := address
+include
+  Dns_forward.Rpc.Server.S
+    with type request := request
+     and type response := response
+     and type address := address
 
-val get_connections: unit -> (address * int) list
+val get_connections : unit -> (address * int) list
 (** Return a list of [server address, number of clients still connected] *)

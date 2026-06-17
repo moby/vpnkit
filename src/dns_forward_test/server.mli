@@ -16,11 +16,12 @@
  *)
 open Dns_forward
 
-module Make(Server: Rpc.Server.S): sig
+module Make (Server : Rpc.Server.S) : sig
   type t
   (** A DNS server for testing *)
 
-  val make: ?delay:float -> ?simulate_bad_question:bool -> (string * Ipaddr.t) list -> t
+  val make :
+    ?delay:float -> ?simulate_bad_question:bool -> (string * Ipaddr.t) list -> t
   (** Construct a server with a fixed set of name mappings. If the ?delay
       argument is provided then an artificial delay will be added before all
       responses. If ?simulate_bad_question is true then the responses will contain
@@ -29,13 +30,12 @@ module Make(Server: Rpc.Server.S): sig
   type server
   (** A running server *)
 
-  val serve: address: Config.Address.t -> t -> server Error.t
+  val serve : address:Config.Address.t -> t -> server Error.t
   (** Serve requests on the given IP and port forever *)
 
-  val shutdown: server -> unit Lwt.t
+  val stop : server -> unit Lwt.t
   (** Shutdown the running server *)
 
-  val get_nr_queries: t -> int
+  val get_nr_queries : t -> int
   (** Return the number of queries which reached this server *)
-
 end

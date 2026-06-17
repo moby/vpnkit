@@ -21,35 +21,38 @@
      @author Richard Mortier <mort\@cantab.net> (documentation)
 *)
 
+type answer = {
+  rcode : Packet.rcode;
+  aa : bool;
+  answer : Packet.rr list;
+  authority : Packet.rr list;
+  additional : Packet.rr list;
+}
 (** Partially-marshalled query response; that is, it has been uncompacted from
     the compact {! Trie} representation, but not yet rendered into a {!
     Cstruct.buf }.
 *)
-type answer = {
-  rcode : Packet.rcode;
-  aa: bool;
-  answer: Packet.rr list;
-  authority: Packet.rr list;
-  additional: Packet.rr list;
-}
 
 type filter = Name.t -> RR.rrset -> RR.rrset
-
 type flush = Name.t -> Packet.rdata -> bool
 
+val response_of_answer : ?mdns:bool -> Packet.t -> answer -> Packet.t
 (** [response_of_answer query answer] is the {! Packet.t } constructed
     from the [answer] to the [query]
 *)
-val response_of_answer : ?mdns:bool ->
-  Packet.t -> answer -> Packet.t
 
+val answer_of_response : ?preserve_aa:bool -> Packet.t -> answer
 (** [answer_of_response response] is the {! answer } corresponding
     to the upstream [response] for proxied or forwarded response.
 *)
-val answer_of_response : ?preserve_aa:bool -> Packet.t -> answer
 
+val create :
+  ?dnssec:bool ->
+  id:int ->
+  Packet.q_class ->
+  Packet.q_type ->
+  Name.t ->
+  Packet.t
 (** [create ~id q_class q_type q_name] creates a query for [q_name] with the
     supplied [id], [q_class], and [q_type].
 *)
-val create : ?dnssec:bool -> id:int -> Packet.q_class -> Packet.q_type ->
-             Name.t -> Packet.t

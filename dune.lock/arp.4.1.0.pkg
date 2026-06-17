@@ -1,0 +1,29 @@
+(version 4.1.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml
+   dune
+   cstruct
+   ipaddr
+   macaddr
+   logs
+   mirage-sleep
+   lru
+   lwt
+   duration
+   ethernet
+   fmt)))
+
+(source
+ (fetch
+  (url https://github.com/mirage/arp/releases/download/v4.1.0/arp-4.1.0.tbz)
+  (checksum
+   sha512=9a602b22cc25becf8cc28248356931ffe4b37dc403881745ea73103165b0b8dab85007ab9e7bc024b59be92fc93165a996ca71a01d132aa79eb7c5b2a1839b90)))

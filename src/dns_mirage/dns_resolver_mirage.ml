@@ -17,10 +17,9 @@
 open Lwt
 open Dns
 open Dns_resolver
-
 module DP = Packet
 
-let default_ns = Ipaddr.V4.of_string_exn "8.8.8.8"
+let default_ns = Ipaddr.of_string_exn "8.8.8.8"
 let default_port = 53
 
 module type S = sig
@@ -31,28 +30,36 @@ module type S = sig
 
   val resolve :
     (module Protocol.CLIENT) ->
-    t -> Ipaddr.V4.t -> int ->
+    t ->
+    Ipaddr.t ->
+    int ->
     Packet.q_class ->
     Packet.q_type ->
     Name.t ->
     Packet.t Lwt.t
 
-  val gethostbyname : t ->
-    ?server:Ipaddr.V4.t -> ?dns_port:int ->
+  val gethostbyname :
+    t ->
+    ?server:Ipaddr.t ->
+    ?dns_port:int ->
     ?q_class:Dns.Packet.q_class ->
     ?q_type:Dns.Packet.q_type ->
-    string -> Ipaddr.t list Lwt.t
+    string ->
+    Ipaddr.t list Lwt.t
 
-  val gethostbyaddr : t ->
-    ?server:Ipaddr.V4.t -> ?dns_port:int ->
+  val gethostbyaddr :
+    t ->
+    ?server:Ipaddr.t ->
+    ?dns_port:int ->
     ?q_class:Dns.Packet.q_class ->
     ?q_type:Dns.Packet.q_type ->
-    Ipaddr.V4.t -> string list Lwt.t
+    Ipaddr.V4.t ->
+    string list Lwt.t
 end
 
 type static_dns = {
-  names: (string, Ipaddr.t) Hashtbl.t;
-  rev: (Ipaddr.V4.t, string) Hashtbl.t;
+  names : (string, Ipaddr.t) Hashtbl.t;
+  rev : (Ipaddr.V4.t, string) Hashtbl.t;
 }
 
 module Static = struct
@@ -61,89 +68,65 @@ module Static = struct
 
   let create s = s
 
-  let resolve _client
-      _s _server _dns_port
-      (_q_class:DP.q_class) (_q_type:DP.q_type)
-      (_q_name:Name.t) =
+  let resolve _client _s _server _dns_port (_q_class : DP.q_class)
+      (_q_type : DP.q_type) (_q_name : Name.t) =
     fail (Failure "Dummy stack cannot call resolve")
 
-  let gethostbyname
-      s ?server:_ ?dns_port:_
-      ?q_class:_ ?q_type:_
-      name =
+  let gethostbyname s ?server:_ ?dns_port:_ ?q_class:_ ?q_type:_ name =
     return (Hashtbl.find_all s.names name)
 
-  let gethostbyaddr
-      s ?server:_ ?dns_port:_
-      ?q_class:_ ?q_type:_
-      addr =
-   return (Hashtbl.find_all s.rev addr)
+  let gethostbyaddr s ?server:_ ?dns_port:_ ?q_class:_ ?q_type:_ addr =
+    return (Hashtbl.find_all s.rev addr)
 end
 
-module Make(Time:Mirage_time.S)(S:Tcpip.Stack.V4) = struct
-
+module Make (S : Tcpip.Stack.V4V6) = struct
   type stack = S.t
-  type endp = Ipaddr.V4.t * int
-
-  type t = {
-    s: S.t;
-    res: (endp, Dns_resolver.commfn) Hashtbl.t;
-  }
+  type endp = Ipaddr.t * int
+  type t = { s : S.t; res : (endp, Dns_resolver.commfn) Hashtbl.t }
 
   let create s =
     let res = Hashtbl.create 3 in
     { s; res }
 
-  let connect_to_resolver {s; res} ((dst,dst_port) as endp) =
-    let udp = S.udpv4 s in
-    try
-      Hashtbl.find res endp
+  let connect_to_resolver { s; res } ((dst, dst_port) as endp) =
+    let udp = S.udp s in
+    try Hashtbl.find res endp
     with Not_found ->
-      let timerfn () = Time.sleep_ns (Duration.of_sec 5) in
+      let timerfn () = Mirage_sleep.ns (Duration.of_sec 5) in
       let mvar = Lwt_mvar.create_empty () in
       (* TODO: test that port is free. Needs more functions exposed in tcpip *)
-      let src_port = (Random.int 64511) + 1024 in
+      let src_port = Random.int 64511 + 1024 in
       let callback ~src:_ ~dst:_ ~src_port:_ buf = Lwt_mvar.put mvar buf in
       let cleanfn () = return () in
-      S.UDPV4.listen (S.udpv4 s) ~port:src_port callback;
+      S.UDP.listen (S.udp s) ~port:src_port callback;
       let txfn buf =
-        S.UDPV4.write ~src_port ~dst ~dst_port udp buf >>= function
+        S.UDP.write ~src_port ~dst ~dst_port udp buf >>= function
         | Error e ->
-          Fmt.kstr fail_with
-            "Attempting to communicate with remote resolver: %a"
-            S.UDPV4.pp_error e
+            Fmt.kstr fail_with
+              "Attempting to communicate with remote resolver: %a"
+              S.UDP.pp_error e
         | Ok () -> Lwt.return_unit
       in
       let rec rxfn f =
-        Lwt_mvar.take mvar
-        >>= fun buf ->
-        match f buf with
-        | None -> rxfn f
-        | Some packet -> return packet
+        Lwt_mvar.take mvar >>= fun buf ->
+        match f buf with None -> rxfn f | Some packet -> return packet
       in
       let commfn = { txfn; rxfn; timerfn; cleanfn } in
       Hashtbl.add res endp commfn;
       commfn
 
-  let resolve client
-      s server dns_port
-      (q_class:DP.q_class) (q_type:DP.q_type)
-      (q_name:Name.t) =
-    let commfn = connect_to_resolver s (server,dns_port) in
+  let resolve client s server dns_port (q_class : DP.q_class)
+      (q_type : DP.q_type) (q_name : Name.t) =
+    let commfn = connect_to_resolver s (server, dns_port) in
     resolve client commfn q_class q_type q_name
 
-  let gethostbyname
-      s ?(server = default_ns) ?(dns_port = default_port)
-      ?(q_class:DP.q_class = DP.Q_IN) ?(q_type:DP.q_type = DP.Q_A)
-      name =
-    let commfn = connect_to_resolver s (server,dns_port) in
+  let gethostbyname s ?(server = default_ns) ?(dns_port = default_port)
+      ?(q_class : DP.q_class = DP.Q_IN) ?(q_type : DP.q_type = DP.Q_A) name =
+    let commfn = connect_to_resolver s (server, dns_port) in
     gethostbyname ~q_class ~q_type commfn name
 
-  let gethostbyaddr
-      s ?(server = default_ns) ?(dns_port = default_port)
-      ?(q_class:DP.q_class = DP.Q_IN) ?(q_type:DP.q_type = DP.Q_PTR)
-      addr =
-    let commfn = connect_to_resolver s (server,dns_port) in
+  let gethostbyaddr s ?(server = default_ns) ?(dns_port = default_port)
+      ?(q_class : DP.q_class = DP.Q_IN) ?(q_type : DP.q_type = DP.Q_PTR) addr =
+    let commfn = connect_to_resolver s (server, dns_port) in
     gethostbyaddr ~q_class ~q_type commfn addr
-
 end

@@ -15,7 +15,6 @@
  *
  *)
 include Dns_forward_s
-
 module Error = Dns_forward_error
 module Flow = Dns_forward_flow
 module Rpc = Dns_forward_rpc

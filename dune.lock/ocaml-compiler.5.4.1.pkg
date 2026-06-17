@@ -1,0 +1,108 @@
+(version 5.4.1)
+
+(install
+ (all_platforms
+  (withenv
+   ((= MSYS2_ARG_CONV_EXCL *)
+    (= LSAN_OPTIONS detect_leaks=0,exitcode=0)
+    (= ASAN_OPTIONS detect_leaks=0,exitcode=0))
+   (run %{make} install))))
+
+(build
+ (choice
+  ((((arch x86_64)
+     (os linux))
+    ((arch arm64)
+     (os linux)))
+   ((action
+     (withenv
+      ((= MSYS2_ARG_CONV_EXCL *)
+       (= LSAN_OPTIONS detect_leaks=0,exitcode=0)
+       (= ASAN_OPTIONS detect_leaks=0,exitcode=0))
+      (progn
+       (run
+        ./configure
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        --prefix=%{prefix}
+        --docdir=%{doc}/ocaml
+        (when false "")
+        -C
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        --disable-warn-error)
+       (run %{make} -j%{jobs}))))))
+  ((((arch x86_64)
+     (os macos))
+    ((arch arm64)
+     (os macos)))
+   ((action
+     (withenv
+      ((= MSYS2_ARG_CONV_EXCL *)
+       (= LSAN_OPTIONS detect_leaks=0,exitcode=0)
+       (= ASAN_OPTIONS detect_leaks=0,exitcode=0))
+      (progn
+       (run
+        ./configure
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        --prefix=%{prefix}
+        --docdir=%{doc}/ocaml
+        (when false "")
+        -C
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        CC=cc
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        (when false "")
+        --disable-warn-error)
+       (run %{make} -j%{jobs}))))))))
+
+(source
+ (fetch
+  (url
+   https://github.com/ocaml/ocaml/releases/download/5.4.1/ocaml-5.4.1.tar.gz)
+  (checksum
+   sha256=d4528517aaa1a44b8e2b1bc109a1ed0a5e0014f3ddc4feb8906b11a7e063e89a)))
+
+(exported_env
+ (= CAML_LD_LIBRARY_PATH "\%{lib}%/stublibs"))
+
+(extra_sources
+ (ocaml-compiler.install
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/ocaml/899b8f3bece45f55161dad72eaa223c2bb7202e8/ocaml-variants.install)
+   (checksum
+    sha256=7af3dc34e6f9f3be2ffd8d32cd64fa650d6a036c86c4821a7033d24a90fba11c))))

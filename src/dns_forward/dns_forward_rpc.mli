@@ -17,31 +17,26 @@
 
 (** Implement the client and server DNS RPC protocol*)
 
-module Client: sig
+module Client : sig
   module type S = Dns_forward_s.RPC_CLIENT
 
-  module Persistent: sig
+  module Persistent : sig
     module Make
-        (Flow: Dns_forward_s.FLOW_CLIENT with type address = Ipaddr.t * int)
-        (Framing: Dns_forward_s.READERWRITER with type flow = Flow.flow)
-        (Time: Mirage_time.S):
-      S
+        (Flow : Dns_forward_s.FLOW_CLIENT with type address = Ipaddr.t * int)
+        (Framing : Dns_forward_s.READERWRITER with type flow = Flow.flow) : S
   end
-  module Nonpersistent: sig
+
+  module Nonpersistent : sig
     module Make
-        (Flow: Dns_forward_s.FLOW_CLIENT with type address = Ipaddr.t * int)
-        (Framing: Dns_forward_s.READERWRITER with type flow = Flow.flow)
-        (Time: Mirage_time.S):
-      S
+        (Flow : Dns_forward_s.FLOW_CLIENT with type address = Ipaddr.t * int)
+        (Framing : Dns_forward_s.READERWRITER with type flow = Flow.flow) : S
   end
 end
 
-module Server: sig
+module Server : sig
   module type S = Dns_forward_s.RPC_SERVER
 
   module Make
-      (Flow: Dns_forward_s.FLOW_SERVER with type address = Ipaddr.t * int)
-      (Framing: Dns_forward_s.READERWRITER with type flow = Flow.flow)
-      (Time: Mirage_time.S):
-    S
+      (Flow : Dns_forward_s.FLOW_SERVER with type address = Ipaddr.t * int)
+      (Framing : Dns_forward_s.READERWRITER with type flow = Flow.flow) : S
 end

@@ -17,8 +17,4 @@
 
 module type S = Dns_forward_s.RESOLVER
 
-module Make
-    (Client: Dns_forward_s.RPC_CLIENT)
-    (Time: Mirage_time.S)
-    (Clock: Mirage_clock.MCLOCK):
-  S
+module Make (Client : Dns_forward_s.RPC_CLIENT) : S

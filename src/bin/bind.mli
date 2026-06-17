@@ -1,1 +1,1 @@
-module Make(Socket: Sig.SOCKETS): Sig.SOCKETS
+module Make (Socket : Sig.SOCKETS) : Sig.SOCKETS

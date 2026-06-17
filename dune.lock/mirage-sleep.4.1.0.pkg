@@ -1,0 +1,19 @@
+(version 4.1.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune lwt duration)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-sleep/releases/download/v4.1.0/mirage-sleep-4.1.0.tbz)
+  (checksum
+   sha512=30b163bb6bf12d6e14463a286d1eafdc983ef7c687628147b0c42eea042ac490465934cd1bfd7ef6814a8bbcc9cacc9d536c858c2604d3d2ac0ed3fcf97c734d)))

@@ -17,4 +17,6 @@
 
 module type S = Dns_forward_s.SERVER
 
-module Make(Server: Dns_forward_s.RPC_SERVER)(Resolver: Dns_forward_s.RESOLVER): S with type resolver = Resolver.t
+module Make
+    (Server : Dns_forward_s.RPC_SERVER)
+    (Resolver : Dns_forward_s.RESOLVER) : S with type resolver = Resolver.t

@@ -4,8 +4,6 @@
    the other.
 
    A typical example would be:
-
-
 *)
 
 val in_luv : (('a -> unit) -> unit) -> 'a Lwt.t

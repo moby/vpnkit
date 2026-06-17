@@ -12,5 +12,5 @@ module type S = sig
       and returns when the connection has beenn closed. *)
 end
 
-module Make (Flow : Mirage_flow.S) : S with type flow = Flow.flow
 (** Server builder. *)
+module Make (Flow : Mirage_flow.S) : S with type flow = Flow.flow

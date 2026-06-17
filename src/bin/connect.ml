@@ -6,87 +6,75 @@ let src =
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
-
 open Lwt.Infix
 
-let ( >>*= ) m f = m >>= function
-  | Error (`Msg m) -> Lwt.fail_with m
-  | Ok x -> f x
+let ( >>*= ) m f =
+  m >>= function Error (`Msg m) -> Lwt.fail_with m | Ok x -> f x
 
-let (/) = Filename.concat
+let ( / ) = Filename.concat
 let home = try Sys.getenv "HOME" with Not_found -> "/Users/root"
 let vsock_port = 62373l
 
 module Unix = struct
-
   let vsock_path =
     ref (home / "Library/Containers/com.docker.docker/Data/@connect")
 
   include Host.Sockets.Stream.Unix
 
   let connect () =
-    connect (!vsock_path)
-    >>*= fun flow ->
-      let address =
-        Cstruct.of_string (Printf.sprintf "00000003.%08lx\n" vsock_port)
-      in
-      write flow address >>= function
-      | Ok () -> Lwt.return flow
-      | Error `Closed ->
+    connect !vsock_path >>*= fun flow ->
+    let address =
+      Cstruct.of_string (Printf.sprintf "00000003.%08lx\n" vsock_port)
+    in
+    write flow address >>= function
+    | Ok () -> Lwt.return flow
+    | Error `Closed ->
         Log.err (fun f -> f "vsock connect write got Eof");
-        close flow >>= fun () ->
-        Lwt.fail End_of_file
-      | Error e ->
+        close flow >>= fun () -> Lwt.fail End_of_file
+    | Error e ->
         Log.err (fun f -> f "vsock connect write got %a" pp_write_error e);
-        close flow >>= fun () ->
-        Fmt.kstr Lwt.fail_with "%a" pp_write_error e
+        close flow >>= fun () -> Fmt.kstr Lwt.fail_with "%a" pp_write_error e
 end
 
 module Hvsock = struct
   (* Avoid using `detach` because we don't want to exhaust the
      thread pool since this will block the main TCP/IP stack. *)
   module F =
-    Hvsock_lwt.Flow_shutdown.Make(Host.Time)
-      (Hvsock_lwt.In_main_thread.Make(Host.Main))
-      (Hvsock.Af_hyperv)
+    Hvsock_lwt.Flow_shutdown.Make
+      (Hvsock_lwt.In_main_thread.Make (Host.Main)) (Hvsock.Af_hyperv)
 
-  type flow = {
-    idx: int;
-    flow: F.flow;
-  }
-
+  type flow = { idx : int; flow : F.flow }
   type address = unit
 
   let hvsockaddr = ref None
-
   let set_port_forward_addr x = hvsockaddr := Some x
 
   let close flow =
     Connection_limit.deregister flow.idx;
     F.close flow.flow
 
-  let connect () = match !hvsockaddr with
-  | None ->
-    Log.err (fun f ->
-        f "Please set a Hyper-V socket address for port forwarding");
-    failwith "Hyper-V socket forwarding not initialised"
-  | Some sockaddr ->
-    let description = "hvsock" in
-    (Lwt.return @@ Connection_limit.register description)
-    >>*= fun idx ->
-      let fd = F.Socket.create () in
-      F.Socket.connect fd sockaddr >|= fun () ->
-      let flow = F.connect fd in
-      { idx; flow }
+  let connect () =
+    match !hvsockaddr with
+    | None ->
+        Log.err (fun f ->
+            f "Please set a Hyper-V socket address for port forwarding");
+        failwith "Hyper-V socket forwarding not initialised"
+    | Some sockaddr ->
+        let description = "hvsock" in
+        Lwt.return @@ Connection_limit.register description >>*= fun idx ->
+        let fd = F.Socket.create () in
+        F.Socket.connect fd sockaddr >|= fun () ->
+        let flow = F.connect fd in
+        { idx; flow }
 
   let read_into t = F.read_into t.flow
   let read t = F.read t.flow
   let write t = F.write t.flow
   let writev t = F.writev t.flow
-  let shutdown_read t = F.shutdown_read t.flow
-  let shutdown_write t = F.shutdown_write t.flow
+  let shutdown t = F.shutdown t.flow
   let pp_error = F.pp_error
   let pp_write_error = F.pp_write_error
+
   type error = F.error
   type write_error = F.write_error
 end

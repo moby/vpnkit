@@ -1,0 +1,45 @@
+(version 3.1.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml
+   base-bytes
+   base-threads
+   base-unix
+   lwt
+   logs
+   fmt
+   cmdliner
+   sha
+   uri
+   base64
+   uuidm
+   uutf
+   mirage-flow
+   cstruct
+   duration
+   dune)))
+
+(depexts
+ ((linux-headers)
+  (= %{os_distribution} alpine))
+ ((linux-libc-dev)
+  (= %{os_family} debian))
+ ((kernel-headers)
+  (= %{os_distribution} fedora))
+ ((kernel-headers)
+  (= %{os_distribution} rhel)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-hvsock/releases/download/3.1.0/hvsock-3.1.0.tbz)
+  (checksum
+   sha512=cd631f190c63dabd8151e51715d048c828aa9a8207661a6b06c5b7754de030ebec81f06d6c545afc3b7fc2637466ebe4ac5f205e4cbad672591f79f9c5366242)))

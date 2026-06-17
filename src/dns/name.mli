@@ -23,69 +23,73 @@
     @author Richard Mortier <mort\@cantab.net> (documentation)
 *)
 
-(** DNS label, including pointer and zero. *)
 type label
+(** DNS label, including pointer and zero. *)
 
-(** Domain name, as a list of labels ordered from the leaf to the root. *)
 type t
+(** Domain name, as a list of labels ordered from the leaf to the root. *)
 
-(** Lookup key for the {! Trie}. *)
 type key = string
+(** Lookup key for the {! Trie}. *)
 
+module Map : Map.S with type key = t
 (** Domain name map *)
-module Map: Map.S with type key = t
 
+module Set : Set.S with type elt = t
 (** Domain name set *)
-module Set: Set.S with type elt = t
 
+val empty : t
 (** [empty] is the empty {! t}. *)
-val empty: t
 
-(** [to_string_list name] is the label list corresponding to [name]. *)
 val to_string_list : t -> string list
+(** [to_string_list name] is the label list corresponding to [name]. *)
 
+val of_string_list : string list -> t
 (** [of_string_list slist] is the domain name corresponding to label
     list [slist]. *)
-val of_string_list : string list -> t
 
+val append : t -> t -> t
 (** [append a b] is the domain name of the concatenation of [a] and [b]. *)
-val append: t -> t -> t
 
+val cons : string -> t -> t
 (** [cons label name] is the domain name with subdomain [label] under [name]. *)
-val cons: string -> t -> t
 
+val to_string : t -> string
 (** [to_string name] is the normal, human-readable string
     serialization of [name] without the trailing dot. *)
-val to_string : t -> string
 
+val of_string : string -> t
 (** [of_string name] is the domain name parsed out of the normal,
     human-readable serialization [name]. *)
-val of_string : string -> t
 
+val string_to_domain_name : string -> t
 (** [string_to_domain_name] is {! of_string } but retained for
     backward compatibility.
     @deprecated since 0.15.0; use {! of_string } in new developments *)
-val string_to_domain_name : string -> t
 
-(** [of_ipaddr ip] is the name used for reverse lookup of IP address [ip]. *)
 val of_ipaddr : Ipaddr.t -> t
+(** [of_ipaddr ip] is the name used for reverse lookup of IP address [ip]. *)
 
+val parse : (int, label) Hashtbl.t -> int -> Cstruct.t -> t * (int * Cstruct.t)
 (** Parse a {! t} out of a {! Cstruct.t} given a set of already
     observed names from the packet, and the offset we are into the packet.
 
     @return {! t} and the remainder
 *)
-val parse :
-  (int, label) Hashtbl.t -> int -> Cstruct.t -> t * (int * Cstruct.t)
 
-val marshal : ?compress:bool ->
-  int Map.t -> int -> Cstruct.t -> t -> int Map.t * int * Cstruct.t
+val marshal :
+  ?compress:bool ->
+  int Map.t ->
+  int ->
+  Cstruct.t ->
+  t ->
+  int Map.t * int * Cstruct.t
 
-(** Malformed input to {! canon2key}. *)
 exception BadDomainName of string
+(** Malformed input to {! canon2key}. *)
 
-(** Convert a canonical [[ "www"; "example"; "com" ]] domain name into a key. *)
 val to_key : t -> key
+(** Convert a canonical [[ "www"; "example"; "com" ]] domain name into a key. *)
 
 val dnssec_compare : t -> t -> int
 val dnssec_compare_str : string list -> string list -> int

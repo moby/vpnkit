@@ -1,0 +1,19 @@
+(version 0.6.2)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune lwt mirage-net cstruct ipaddr macaddr duration logs)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-vnetif/releases/download/v0.6.2/mirage-vnetif-0.6.2.tbz)
+  (checksum
+   sha512=f186bffb3701bd19817d5c6a01346fbc395f7a6986b6a5e0008f55c0833eb3b1d8bc8fb9b801f09fcde2ad4c8ad898379c0274d6cfd627cdb3780d7f8a5dc2c4)))

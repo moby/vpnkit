@@ -33,9 +33,8 @@ let parse_sockaddr sockaddr =
 let string_of_address (dst, dst_port) =
   Ipaddr.to_string dst ^ ":" ^ string_of_int dst_port
 
-let ( >>*= ) m f = m >>= function
-  | Error (`Msg m) -> Lwt.fail_with m
-  | Ok x -> f x
+let ( >>*= ) m f =
+  m >>= function Error (`Msg m) -> Lwt.fail_with m | Ok x -> f x
 
 module Common = struct
   (** FLOW boilerplate *)
@@ -202,8 +201,7 @@ module Sockets = struct
                 Luv.Handle.close fd return)
             >>= fun () -> Lwt.return_unit
 
-      let shutdown_read _t = Lwt.return_unit
-      let shutdown_write _t = Lwt.return_unit
+      let shutdown _t _ = Lwt.return_unit
 
       type server = {
         idx : int;
@@ -303,8 +301,7 @@ module Sockets = struct
                               Connection_limit.register_no_limit "udp"
                             in
                             return (Ok (idx, label, udp))))))
-        >>*= fun (idx, label, udp) ->
-        Lwt.return (make ~idx ~label udp)
+        >>*= fun (idx, label, udp) -> Lwt.return (make ~idx ~label udp)
 
       let getsockname { fd; _ } =
         Luv_lwt.in_luv (fun return ->
@@ -314,10 +311,9 @@ module Sockets = struct
                 match parse_sockaddr sockaddr with
                 | Error err -> return (Error (`Msg (Luv.Error.strerror err)))
                 | Ok (ip, port) -> return (Ok (ip, port))))
-        >>*= fun x ->
-        Lwt.return x
+        >>*= fun x -> Lwt.return x
 
-      let shutdown server =
+      let stop server =
         if not server.closed then (
           server.closed <- true;
           Luv_lwt.in_luv (fun return ->
@@ -360,8 +356,7 @@ module Sockets = struct
                               return (Error (`Msg (Luv.Error.strerror err)))
                           | Ok () -> return (Ok (Luv.Buffer.size buf, address)))
                     )))
-        >>*= fun (size, address) ->
-        Lwt.return (size, address)
+        >>*= fun (size, address) -> Lwt.return (size, address)
 
       let listen t flow_cb =
         let rec loop () =
@@ -573,18 +568,29 @@ module Sockets = struct
                 | Ok () -> return ()))
         else Lwt.return_unit
 
+      let shutdown flow = function
+        | `read -> shutdown_read flow
+        | `read_write | `write ->
+            shutdown_read flow >>= fun () -> shutdown_write flow
+
       let read_into t buf =
-        if t.closed
-        then (Log.info (fun f -> f "read_into %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
+        if t.closed then (
+          Log.info (fun f -> f "read_into %s already closed: EOF" t.description);
+          Lwt.return (Ok `Eof))
         else read_into t.fd buf
+
       let read t =
-        if t.closed
-        then (Log.info (fun f -> f "read %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
+        if t.closed then (
+          Log.info (fun f -> f "read %s already closed: EOF" t.description);
+          Lwt.return (Ok `Eof))
         else read t.fd
+
       let writev t bufs =
-        if t.closed (* || t.shutdown *)
-        then (Log.info (fun f -> f "writev %s already closed: EPIPE" t.description); Lwt.return (Error (`Msg "EPIPE")))
+        if t.closed (* || t.shutdown *) then (
+          Log.info (fun f -> f "writev %s already closed: EPIPE" t.description);
+          Lwt.return (Error (`Msg "EPIPE")))
         else writev t.fd bufs
+
       let write t buf = writev t [ buf ]
 
       let close t =
@@ -675,28 +681,28 @@ module Sockets = struct
       let bind ?description (ip, requested_port) =
         bind_one ?description (ip, requested_port)
         >>*= fun (idx, _label, fd, bound_port) ->
-            (* On some systems localhost will resolve to ::1 first and this can
-               cause performance problems (particularly on Windows). Perform a
-               best-effort bind to the ::1 address. *)
-            Lwt.catch
-              (fun () ->
-                if
-                  Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.localhost) = 0
-                  || Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.any) = 0
-                then (
-                  Log.debug (fun f ->
-                      f "Attempting a best-effort bind of ::1:%d" bound_port);
-                  bind_one (Ipaddr.(V6 V6.localhost), bound_port)
-                  >>*= fun (idx, _, fd, _) ->
-                  Lwt.return [ (idx, (ip, bound_port), fd) ])
-                else Lwt.return [])
-              (fun e ->
-                Log.debug (fun f ->
-                    f "Ignoring failed bind to ::1:%d (%a)" bound_port Fmt.exn e);
-                Lwt.return [])
-            >|= fun extra -> make ip ((idx, (ip, bound_port), fd) :: extra)
+        (* On some systems localhost will resolve to ::1 first and this can
+           cause performance problems (particularly on Windows). Perform a
+           best-effort bind to the ::1 address. *)
+        Lwt.catch
+          (fun () ->
+            if
+              Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.localhost) = 0
+              || Ipaddr.compare ip (Ipaddr.V4 Ipaddr.V4.any) = 0
+            then (
+              Log.debug (fun f ->
+                  f "Attempting a best-effort bind of ::1:%d" bound_port);
+              bind_one (Ipaddr.(V6 V6.localhost), bound_port)
+              >>*= fun (idx, _, fd, _) ->
+              Lwt.return [ (idx, (ip, bound_port), fd) ])
+            else Lwt.return [])
+          (fun e ->
+            Log.debug (fun f ->
+                f "Ignoring failed bind to ::1:%d (%a)" bound_port Fmt.exn e);
+            Lwt.return [])
+        >|= fun extra -> make ip ((idx, (ip, bound_port), fd) :: extra)
 
-      let shutdown server =
+      let stop server =
         let fds = server.listening_fds in
         server.listening_fds <- [];
         Lwt_list.iter_s
@@ -889,18 +895,35 @@ module Sockets = struct
                 | Ok () -> return ()))
         else Lwt.return_unit
 
+      let shutdown flow = function
+        | `read -> shutdown_read flow
+        | `write -> shutdown_write flow
+        | `read_write ->
+            if not flow.closed then (
+              flow.closed <- true;
+              Luv_lwt.in_luv (fun return ->
+                  Connection_limit.deregister flow.idx;
+                  Luv.Handle.close flow.fd return))
+            else Lwt.return_unit
+
       let read_into t buf =
-        if t.closed
-        then (Log.info (fun f -> f "read_into %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
+        if t.closed then (
+          Log.info (fun f -> f "read_into %s already closed: EOF" t.description);
+          Lwt.return (Ok `Eof))
         else read_into t.fd buf
+
       let read t =
-        if t.closed
-        then (Log.info (fun f -> f "read %s already closed: EOF" t.description); Lwt.return (Ok `Eof))
+        if t.closed then (
+          Log.info (fun f -> f "read %s already closed: EOF" t.description);
+          Lwt.return (Ok `Eof))
         else read t.fd
+
       let writev t bufs =
-        if t.closed (* || t.shutdown *)
-        then (Log.info (fun f -> f "writev %s already closed: EPIPE" t.description); Lwt.return (Error (`Msg "EPIPE")))
+        if t.closed (* || t.shutdown *) then (
+          Log.info (fun f -> f "writev %s already closed: EPIPE" t.description);
+          Lwt.return (Error (`Msg "EPIPE")))
         else writev t.fd bufs
+
       let write t buf = writev t [ buf ]
 
       let close t =
@@ -917,6 +940,14 @@ module Sockets = struct
         mutable closed : bool;
         mutable disable_connection_tracking : bool;
       }
+
+      let stop server =
+        if not server.closed then (
+          server.closed <- true;
+          Luv_lwt.in_luv (fun return ->
+              Connection_limit.deregister server.idx;
+              Luv.Handle.close server.fd return))
+        else Lwt.return_unit
 
       let bind ?(description = "") path =
         let description = Fmt.str "unix:%s %s" path description in
@@ -944,8 +975,7 @@ module Sockets = struct
                                    closed = false;
                                    disable_connection_tracking = false;
                                  })))))
-        >>*= fun x ->
-        Lwt.return x
+        >>*= fun x -> Lwt.return x
 
       let getsockname server =
         Luv_lwt.in_luv (fun return -> return (Luv.Pipe.getsockname server.fd))
@@ -1042,14 +1072,6 @@ module Sockets = struct
         | Ok (fd, idx) ->
             Lwt.return
               { idx; fd; closed = false; disable_connection_tracking = false }
-
-      let shutdown server =
-        if not server.closed then (
-          server.closed <- true;
-          Luv_lwt.in_luv (fun return ->
-              Connection_limit.deregister server.idx;
-              Luv.Handle.close server.fd return))
-        else Lwt.return_unit
     end
   end
 end
@@ -1064,7 +1086,7 @@ end
 module TestServer (F : ClientServer) = struct
   let with_server address f =
     F.bind address >>= fun server ->
-    Lwt.finalize (fun () -> f server) (fun () -> F.shutdown server)
+    Lwt.finalize (fun () -> f server) (fun () -> F.stop server)
 
   let with_flow flow f = Lwt.finalize f (fun () -> F.close flow)
 
@@ -1075,10 +1097,9 @@ module TestServer (F : ClientServer) = struct
            let connected = Lwt_mvar.create_empty () in
            F.listen server (fun flow ->
                Lwt_mvar.put connected () >>= fun () -> F.close flow);
-           F.connect address
-           >>*= fun flow ->
-               with_flow flow (fun () ->
-                   Lwt_mvar.take connected >>= fun () -> Lwt.return_unit)))
+           F.connect address >>*= fun flow ->
+           with_flow flow (fun () ->
+               Lwt_mvar.take connected >>= fun () -> Lwt.return_unit)))
 
   let stream_data () =
     Luv_lwt.run
@@ -1100,35 +1121,33 @@ module TestServer (F : ClientServer) = struct
                    loop () >>= fun () ->
                    Lwt.return Sha1.(to_hex @@ finalize sha))
                >>= fun digest -> Lwt_mvar.put received digest);
-           F.connect address
-           >>*= fun flow ->
-               with_flow flow (fun () ->
-                   let buf = Cstruct.create 1048576 in
-                   let sha = Sha1.init () in
-                   let rec loop = function
-                     | 0 -> Lwt.return_unit
-                     | n -> (
-                         let len = Random.int (Cstruct.length buf - 1) in
-                         let subbuf = Cstruct.sub buf 0 len in
-                         for i = 0 to Cstruct.length subbuf - 1 do
-                           Cstruct.set_uint8 subbuf i (Random.int 256)
-                         done;
-                         let ba = Cstruct.to_bigarray subbuf in
-                         Sha1.update_buffer sha ba;
-                         F.writev flow [ subbuf ] >>= function
-                         | Error `Closed -> Lwt.fail End_of_file
-                         | Error _ -> Lwt.fail_with "write error"
-                         | Ok () -> loop (n - 1))
-                   in
-                   loop 10 >>= fun () ->
-                   Lwt.return Sha1.(to_hex @@ finalize sha))
-               >>= fun sent_digest ->
-               Lwt_mvar.take received >>= fun received_digest ->
-               if received_digest <> sent_digest then
-                 failwith
-                   (Printf.sprintf "received digest (%s) <> sent digest (%s)"
-                      received_digest sent_digest);
-               Lwt.return_unit))
+           F.connect address >>*= fun flow ->
+           with_flow flow (fun () ->
+               let buf = Cstruct.create 1048576 in
+               let sha = Sha1.init () in
+               let rec loop = function
+                 | 0 -> Lwt.return_unit
+                 | n -> (
+                     let len = Random.int (Cstruct.length buf - 1) in
+                     let subbuf = Cstruct.sub buf 0 len in
+                     for i = 0 to Cstruct.length subbuf - 1 do
+                       Cstruct.set_uint8 subbuf i (Random.int 256)
+                     done;
+                     let ba = Cstruct.to_bigarray subbuf in
+                     Sha1.update_buffer sha ba;
+                     F.writev flow [ subbuf ] >>= function
+                     | Error `Closed -> Lwt.fail End_of_file
+                     | Error _ -> Lwt.fail_with "write error"
+                     | Ok () -> loop (n - 1))
+               in
+               loop 10 >>= fun () -> Lwt.return Sha1.(to_hex @@ finalize sha))
+           >>= fun sent_digest ->
+           Lwt_mvar.take received >>= fun received_digest ->
+           if received_digest <> sent_digest then
+             failwith
+               (Printf.sprintf "received digest (%s) <> sent digest (%s)"
+                  received_digest sent_digest);
+           Lwt.return_unit))
 end
 
 let%test_module "Sockets.Stream.Unix" =
@@ -1201,8 +1220,7 @@ module Files = struct
         match Luv.FS_event.stop w.h with
         | Error err -> return (Error (`Msg (Luv.Error.strerror err)))
         | Ok () -> return (Ok ()))
-    >>*= fun () ->
-    Lwt.return_unit
+    >>*= fun () -> Lwt.return_unit
 
   let watch_file path callback =
     Luv_lwt.in_luv (fun return ->
@@ -1253,8 +1271,7 @@ module Time = struct
             with
             | Error err -> return (Error (`Msg (Luv.Error.strerror err)))
             | Ok () -> ()))
-    >>*= fun() ->
-    Lwt.return_unit
+    >>*= fun () -> Lwt.return_unit
 
   let%test "Time.sleep_ns wakes up" =
     let start = Unix.gettimeofday () in
@@ -1299,10 +1316,9 @@ module Dns = struct
               return (Ok ips)))
     >>= function
     | Error e ->
-      (* FIXME: error handling completely missing *)
-      Lwt.return (Error e)
-    | Ok ips -> 
-      Lwt.return (Ok ips)
+        (* FIXME: error handling completely missing *)
+        Lwt.return (Error e)
+    | Ok ips -> Lwt.return (Ok ips)
 
   let localhost_local = Dns.Name.of_string "localhost.local"
 
@@ -1312,16 +1328,15 @@ module Dns = struct
     | { q_class = Q_IN; q_name; _ } when q_name = localhost_local ->
         Log.debug (fun f -> f "DNS lookup of localhost.local: return NXDomain");
         Lwt.return (Error q_name)
-    | { q_class = Q_IN; q_type = Q_A; q_name; _ } ->
-        (getaddrinfo (Dns.Name.to_string q_name) `INET >>= function
-          | Error _ -> Lwt.return (Error q_name)
-          | Ok ips -> Lwt.return (Ok (q_name, ips)))
-    | { q_class = Q_IN; q_type = Q_AAAA; q_name; _ } ->
-        (getaddrinfo (Dns.Name.to_string q_name) `INET6 >>= function
-          | Error _ -> Lwt.return (Error q_name)
-          | Ok ips -> Lwt.return (Ok (q_name, ips)))
-    | _ -> 
-        Lwt.return (Error (Dns.Name.of_string "")))
+    | { q_class = Q_IN; q_type = Q_A; q_name; _ } -> (
+        getaddrinfo (Dns.Name.to_string q_name) `INET >>= function
+        | Error _ -> Lwt.return (Error q_name)
+        | Ok ips -> Lwt.return (Ok (q_name, ips)))
+    | { q_class = Q_IN; q_type = Q_AAAA; q_name; _ } -> (
+        getaddrinfo (Dns.Name.to_string q_name) `INET6 >>= function
+        | Error _ -> Lwt.return (Error q_name)
+        | Ok ips -> Lwt.return (Ok (q_name, ips)))
+    | _ -> Lwt.return (Error (Dns.Name.of_string "")))
     >>= function
     | Ok (q_name, ips) ->
         let answers =
@@ -1346,8 +1361,7 @@ module Dns = struct
             ips
         in
         Lwt.return (Ok answers)
-    | Error _ ->
-        Lwt.return (Error ())
+    | Error _ -> Lwt.return (Error ())
 
   let resolve = resolve_getaddrinfo
 end

@@ -16,5 +16,4 @@
  *)
 
 module type Client = Dns_forward_s.FLOW_CLIENT
-
 module type Server = Dns_forward_s.FLOW_SERVER

@@ -18,24 +18,31 @@
 open Dns_forward
 module Error = Error.Infix
 
-let errorf fmt = Printf.ksprintf (fun s -> Lwt.return (Result.Error (`Msg s))) fmt
+let errorf fmt =
+  Printf.ksprintf (fun s -> Lwt.return (Result.Error (`Msg s))) fmt
 
 type address = Ipaddr.t * int
-let string_of_address (ip, port) = Ipaddr.to_string ip ^ ":" ^ (string_of_int port)
+
+let string_of_address (ip, port) =
+  Ipaddr.to_string ip ^ ":" ^ string_of_int port
+
 type error = [ `Msg of string ]
+
 let pp_error ppf (`Msg x) = Fmt.string ppf x
+
 type write_error = Mirage_flow.write_error
+
 let pp_write_error = Mirage_flow.pp_write_error
 
 type flow = {
-  l2r: Cstruct.t Lwt_dllist.t; (* pending data from left to right *)
-  mutable l2r_closed: bool;
-  l2r_c: unit Lwt_condition.t;
-  r2l: Cstruct.t Lwt_dllist.t; (* pending data from right to left *)
-  mutable r2l_closed: bool;
-  r2l_c: unit Lwt_condition.t;
-  client_address: address;
-  server_address: address;
+  l2r : Cstruct.t Lwt_dllist.t; (* pending data from left to right *)
+  mutable l2r_closed : bool;
+  l2r_c : unit Lwt_condition.t;
+  r2l : Cstruct.t Lwt_dllist.t; (* pending data from right to left *)
+  mutable r2l_closed : bool;
+  r2l_c : unit Lwt_condition.t;
+  client_address : address;
+  server_address : address;
 }
 
 let openflow server_address =
@@ -45,34 +52,47 @@ let openflow server_address =
   let r2l_c = Lwt_condition.create () in
   let l2r_closed = false in
   let r2l_closed = false in
-  let client_address = Ipaddr.V4 Ipaddr.V4.localhost, 32768 in
-  { l2r; r2l; l2r_c; r2l_c; l2r_closed; r2l_closed; client_address; server_address }
+  let client_address = (Ipaddr.V4 Ipaddr.V4.localhost, 32768) in
+  {
+    l2r;
+    r2l;
+    l2r_c;
+    r2l_c;
+    l2r_closed;
+    r2l_closed;
+    client_address;
+    server_address;
+  }
 
 let otherend flow =
-  { l2r = flow.r2l; l2r_c = flow.r2l_c; r2l = flow.l2r; r2l_c = flow.l2r_c;
-    l2r_closed = flow.r2l_closed; r2l_closed = flow.l2r_closed;
-    client_address = flow.server_address; server_address = flow.client_address }
+  {
+    l2r = flow.r2l;
+    l2r_c = flow.r2l_c;
+    r2l = flow.l2r;
+    r2l_c = flow.l2r_c;
+    l2r_closed = flow.r2l_closed;
+    r2l_closed = flow.l2r_closed;
+    client_address = flow.server_address;
+    server_address = flow.client_address;
+  }
 
 let read flow =
   let open Lwt.Infix in
   let rec wait () =
-    if Lwt_dllist.is_empty flow.r2l && not(flow.r2l_closed) then begin
-      Lwt_condition.wait flow.r2l_c
-      >>= fun () ->
-      wait ()
-    end else Lwt.return_unit in
-  wait ()
-  >>= fun () ->
-  if flow.r2l_closed
-  then Lwt.return (Ok `Eof)
+    if Lwt_dllist.is_empty flow.r2l && not flow.r2l_closed then
+      Lwt_condition.wait flow.r2l_c >>= fun () -> wait ()
+    else Lwt.return_unit
+  in
+  wait () >>= fun () ->
+  if flow.r2l_closed then Lwt.return (Ok `Eof)
   else Lwt.return (Ok (`Data (Lwt_dllist.take_r flow.r2l)))
 
 let write flow buf =
-  if flow.l2r_closed then Lwt.return (Error `Closed) else (
+  if flow.l2r_closed then Lwt.return (Error `Closed)
+  else (
     ignore @@ Lwt_dllist.add_l buf flow.l2r;
     Lwt_condition.signal flow.l2r_c ();
-    Lwt.return (Ok ())
-  )
+    Lwt.return (Ok ()))
 
 let shutdown_read flow =
   flow.r2l_closed <- true;
@@ -84,20 +104,29 @@ let shutdown_write flow =
   Lwt_condition.signal flow.l2r_c ();
   Lwt.return_unit
 
+let shutdown flow = function
+  | `read -> shutdown_read flow
+  | `write -> shutdown_write flow
+  | `read_write ->
+      let open Lwt.Infix in
+      shutdown_read flow >>= fun () -> shutdown_write flow
+
 let writev flow bufs =
-  if flow.l2r_closed then Lwt.return (Error `Closed) else (
+  if flow.l2r_closed then Lwt.return (Error `Closed)
+  else (
     List.iter (fun buf -> ignore @@ Lwt_dllist.add_l buf flow.l2r) bufs;
     Lwt_condition.signal flow.l2r_c ();
-    Lwt.return (Ok ())
-  )
+    Lwt.return (Ok ()))
 
 let nr_connects = Hashtbl.create 7
 
-let get_connections () = Hashtbl.fold (fun k v acc -> (k, v) :: acc) nr_connects []
+let get_connections () =
+  Hashtbl.fold (fun k v acc -> (k, v) :: acc) nr_connects []
 
 let close flow =
   let nr = Hashtbl.find nr_connects flow.server_address - 1 in
-  if nr = 0 then Hashtbl.remove nr_connects flow.server_address else Hashtbl.replace nr_connects flow.server_address nr;
+  if nr = 0 then Hashtbl.remove nr_connects flow.server_address
+  else Hashtbl.replace nr_connects flow.server_address nr;
   flow.l2r_closed <- true;
   flow.r2l_closed <- true;
   Lwt_condition.signal flow.l2r_c ();
@@ -105,47 +134,43 @@ let close flow =
   Lwt.return_unit
 
 type server = {
-  mutable listen_cb: unit -> (flow, [ `Msg of string ]) result Lwt.t;
-  address: address;
+  mutable listen_cb : unit -> (flow, [ `Msg of string ]) result Lwt.t;
+  address : address;
 }
-let bound = Hashtbl.create 7
 
+let bound = Hashtbl.create 7
 let getsockname server = server.address
 
 let connect ?read_buffer_size:_ address =
-  if Hashtbl.mem bound address then begin
-    Hashtbl.replace nr_connects address (if Hashtbl.mem nr_connects address then Hashtbl.find nr_connects address + 1 else 1);
+  if Hashtbl.mem bound address then (
+    Hashtbl.replace nr_connects address
+      (if Hashtbl.mem nr_connects address then
+       Hashtbl.find nr_connects address + 1
+      else 1);
     let cb = (Hashtbl.find bound address).listen_cb in
     let open Error in
-    cb ()
-    >>= fun flow ->
-    Lwt.return (Result.Ok flow)
-  end else errorf "connect: no server bound to %s" (string_of_address address)
+    cb () >>= fun flow -> Lwt.return (Result.Ok flow))
+  else errorf "connect: no server bound to %s" (string_of_address address)
 
 let bind address =
   let listen_cb _ = Lwt.return (Result.Error (`Msg "no callback")) in
   let server = { listen_cb; address } in
-  if Hashtbl.mem bound address
-  then Lwt.return (Result.Error (`Msg "address already bound"))
-  else begin
+  if Hashtbl.mem bound address then
+    Lwt.return (Result.Error (`Msg "address already bound"))
+  else (
     Hashtbl.replace bound address server;
-    Lwt.return (Result.Ok server)
-  end
-let listen server (cb: flow -> unit Lwt.t) =
+    Lwt.return (Result.Ok server))
+
+let listen server (cb : flow -> unit Lwt.t) =
   let listen_cb () =
     let flow = openflow server.address in
-    Lwt.async
-      (fun () ->
-         Lwt.catch
-           (fun () ->
-              cb (otherend flow)
-           ) (fun _e ->
-               Lwt.return_unit
-             )
-      );
-    Lwt.return (Result.Ok flow) in
+    Lwt.async (fun () ->
+        Lwt.catch (fun () -> cb (otherend flow)) (fun _e -> Lwt.return_unit));
+    Lwt.return (Result.Ok flow)
+  in
   server.listen_cb <- listen_cb
-let shutdown server =
+
+let stop server =
   server.listen_cb <- (fun _ -> Lwt.return (Result.Error (`Msg "shutdown")));
   Hashtbl.remove bound server.address;
   Lwt.return_unit

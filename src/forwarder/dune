@@ -1,3 +1,9 @@
 (library
  (name forwarder)
- (libraries cstruct cstructs ipaddr mirage-flow mirage-flow-combinators mirage-channel))
+ (libraries
+  cstruct
+  cstructs
+  ipaddr
+  mirage-flow
+  mirage-flow-combinators
+  mirage-channel))

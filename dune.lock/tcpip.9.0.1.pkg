@@ -1,0 +1,42 @@
+(version 9.0.1)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (dune
+   ocaml
+   cstruct
+   cstruct-lwt
+   mirage-net
+   mirage-mtime
+   mirage-crypto-rng
+   mirage-sleep
+   ipaddr
+   macaddr
+   macaddr-cstruct
+   fmt
+   lwt
+   lwt-dllist
+   logs
+   duration
+   randomconv
+   ethernet
+   arp
+   mirage-flow
+   ipaddr-cstruct
+   lru
+   metrics
+   cmdliner)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-tcpip/releases/download/v9.0.1/tcpip-9.0.1.tbz)
+  (checksum
+   sha512=01de13f560d58b1524c39619e4e4cb6ebbf069155eb43d0f264aa12b00e0cc8c39792719e3ca46585dd596b692b8e1e3f8c132f005ed9e2d77747c0c158bf4d9)))

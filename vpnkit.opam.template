@@ -1,0 +1,7 @@
+depexts: [
+  # vpnkit links statically (-ccopt -static, see src/bin/config/discover.ml).
+  # On glibc distros that split out the static libc/libm we must pull them in;
+  # Debian/Ubuntu ship them in libc6-dev by default, Fedora/RHEL and SUSE do not.
+  ["glibc-static"] {os-distribution = "fedora"}
+  ["glibc-devel-static"] {os-family = "suse"}
+]

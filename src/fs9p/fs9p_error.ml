@@ -10,13 +10,9 @@ let error ?(errno = 0l) fmt =
     fmt
 
 let enoent = error "No such file or directory"
-
 let eisdir = error "Is a directory"
-
 let enotdir = error "Is not a directory"
-
 let ero = error "Read-only file"
-
 let eperm = error "Operation not permitted"
 
 let of_error x =
@@ -36,6 +32,5 @@ let map_error = function
 module Infix = struct
   open Lwt.Infix
 
-  let ( >>*= ) x f =
-    x >>= function Ok x -> f x | Error _ as e -> Lwt.return e
+  let ( >>*= ) x f = x >>= function Ok x -> f x | Error _ as e -> Lwt.return e
 end

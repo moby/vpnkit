@@ -9,7 +9,17 @@
 
 (depends
  (all_platforms
-  (ocaml dune re uri uri-sexp sexplib0 ppx_sexp_conv stringext base64 jsonm)))
+  (ocaml
+   base-bytes
+   dune
+   re
+   uri
+   uri-sexp
+   sexplib0
+   ppx_sexp_conv
+   stringext
+   base64
+   jsonm)))
 
 (source
  (fetch

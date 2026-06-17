@@ -1,0 +1,34 @@
+(version 2.6.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run
+      dune
+      build
+      -p
+      %{pkg-self:name}
+      -j
+      %{jobs}
+      --promote-install-files=false
+      @install)
+     (run
+      dune
+      install
+      -p
+      %{pkg-self:name}
+      --create-install-files
+      %{pkg-self:name}))))))
+
+(depends
+ (all_platforms
+  (dune camlp-streams ocaml cstruct decompress)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/ocaml-tar/releases/download/v2.6.0/tar-2.6.0.tbz)
+  (checksum
+   sha512=61cedd25de48cfa8092b4e03e275139ff27aa36f3e24f936bc90e2974e3c52b2460db214b3f8480c6d45bbc59bf2232623dd840b4ce445077393a71e0d005903)))

@@ -1,0 +1,15 @@
+(version 1.5.3)
+
+(build
+ (all_platforms ((action (run dune build -p %{pkg-self:name} -j %{jobs})))))
+
+(depends
+ (all_platforms
+  (ocaml dune cmdliner optint checkseum)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/decompress/releases/download/v1.5.3/decompress-1.5.3.tbz)
+  (checksum
+   sha512=c3f402404f76075e6f692ea36e701134a5d833824d5d1166365c6c81fb18b309270bf288ce4c118ac44fd0366d9b6eea0a6309255678d8e1bd2bbfa7ba843461)))

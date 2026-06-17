@@ -13,39 +13,22 @@ let pp_fid =
 type 'a or_err = 'a Protocol_9p.Error.t Lwt.t
 
 let ok x = Lwt.return (Ok x)
-
 let map_error x = Fs9p_error.map_error x
-
 let error fmt = Fmt.kstr (fun s -> Lwt.return (Fs9p_error.error "%s" s)) fmt
-
 let err_not_a_dir name = error "%S is not a directory" name
-
 let err_can't_set_length_of_dir = error "Can't set length of a directory"
-
 let err_can't_walk_from_file = error "Can't walk from a file"
-
 let err_can't_seek_dir = error "Can't seek in a directory"
-
 let err_unknown_fid fid = error "Unknown fid %a" pp_fid fid
-
 let err_fid_in_use fid = error "Fid %a already in use" pp_fid fid
-
 let err_dot = error "'.' is not valid in 9p"
-
 let err_read_not_open = error "Can't read from unopened fid"
-
 let err_already_open = error "Already open"
-
 let err_create_open = error "Can't create in an opened fid"
-
 let err_write_not_open = error "Can't write to unopened fid"
-
 let err_write_dir = error "Can't write to directories"
-
 let err_rename_root = error "Can't rename /"
-
 let err_multiple_updates = error "Can't rename/truncate/chmod at the same time"
-
 let max_chunk_size = Int32.of_int (100 * 1024)
 
 module type S = sig
@@ -65,7 +48,6 @@ module Inode = struct
     Fmt.pf ppf "offset:%Ld unread:[%a]" t.offset Fmt.(list pp) t.unread
 
   let offset t = t.offset
-
   let unread t = t.unread
 
   type fd = [ `OpenFile of Vfs.File.fd | `OpenDir of open_dir ]
@@ -79,11 +61,8 @@ end
 (* 9p operations. *)
 module Op9p = struct
   let rwx = [ `Read; `Write; `Execute ]
-
   let rw = [ `Read; `Write ]
-
   let rx = [ `Read; `Execute ]
-
   let r = [ `Read ]
 
   let stat ~info inode =
@@ -93,10 +72,10 @@ module Op9p = struct
       if info.P.Info.version <> P.Types.Version.unix then None
       else
         Some
-          (P.Types.Stat.make_extension ?extension ~n_uid:0l ~n_gid:0l
-             ~n_muid:0l ())
+          (P.Types.Stat.make_extension ?extension ~n_uid:0l ~n_gid:0l ~n_muid:0l
+             ())
     in
-    ( match Inode.kind inode with
+    (match Inode.kind inode with
     | `Dir _ ->
         let dir =
           P.Types.FileMode.make ~owner:rwx ~group:rwx ~other:rx
@@ -117,7 +96,7 @@ module Op9p = struct
                   ~other:rx (),
                 u )
         in
-        ok (info.Vfs.length, file, u) )
+        ok (info.Vfs.length, file, u))
     >>*= fun (length, mode, u) ->
     let qid = Inode.qid inode in
     let name = Inode.basename inode in
@@ -156,8 +135,7 @@ module Op9p = struct
   let read inode =
     match Inode.kind inode with
     | `File file ->
-        Vfs.File.open_ file >>= map_error >>*= fun o ->
-        ok (`OpenFile o)
+        Vfs.File.open_ file >>= map_error >>*= fun o -> ok (`OpenFile o)
     | `Dir dir ->
         Vfs.Dir.ls dir >>= map_error >>*= fun items ->
         ok (`OpenDir { Inode.offset = 0L; unread = items })
@@ -173,7 +151,7 @@ module Op9p = struct
             stat ~info x >>*= fun x_info ->
             match P.Types.Stat.write x_info buf with
             | Ok buf -> aux buf xs
-            | Error _ -> ok (buf, items) )
+            | Error _ -> ok (buf, items))
         (* No more room *)
       in
       aux buffer (Inode.unread state) >>*= fun (unused, remaining) ->
@@ -193,8 +171,7 @@ module Op9p = struct
          | `Dir -> Vfs.Dir.mkdir d name >>= map_error
          | #Vfs.perm as perm -> Vfs.Dir.mkfile d ~perm name >>= map_error)
         >>*= fun inode ->
-        read inode >>*= fun open_file ->
-        ok (inode, open_file)
+        read inode >>*= fun open_file -> ok (inode, open_file)
     | `File _ -> err_not_a_dir (Inode.basename parent)
 
   let remove inode =
@@ -250,18 +227,18 @@ module Make (Flow : Mirage_flow.S) = struct
           match Inode.kind inode with
           | `File _ -> err_can't_walk_from_file
           | `Dir dir ->
-              ( match x with
+              (match x with
               | "." -> err_dot
               | ".." -> (
                   match parents with
                   | [] -> ok (inode, parents) (* /.. = / *)
-                  | p :: ps -> ok (p, ps) )
+                  | p :: ps -> ok (p, ps))
               | x ->
                   Vfs.Dir.lookup dir x >>= map_error >>*= fun x_inode ->
-                  ok (x_inode, inode :: parents) )
+                  ok (x_inode, inode :: parents))
               >>*= fun (inode, parents) ->
               let wqids = Inode.qid inode :: wqids in
-              do_walk ~parents ~wqids inode xs )
+              do_walk ~parents ~wqids inode xs)
 
     let walk connection ~cancel:_ { P.Request.Walk.fid; newfid; wnames } =
       lookup connection fid >>*= fun fd ->
@@ -284,8 +261,7 @@ module Make (Flow : Mirage_flow.S) = struct
     let clunk connection ~cancel:_ { P.Request.Clunk.fid } =
       let old = connection.fds in
       clunk_fid connection fid;
-      if connection.fds == old then error "Unknown fid %a" pp_fid fid
-      else ok ()
+      if connection.fds == old then error "Unknown fid %a" pp_fid fid else ok ()
 
     let stat connection ~cancel:_ { P.Request.Stat.fid } =
       lookup connection fid >>*= fun fd ->
@@ -383,12 +359,9 @@ module Make (Flow : Mirage_flow.S) = struct
   let accept ~root ~msg flow =
     Log.info (fun l -> l "accepted a new connection on %s" msg);
     Server.connect root flow () >>= function
-    | Error _ as e ->
-        Flow.close flow >|= fun () ->
-        e
+    | Error _ as e -> Flow.close flow >|= fun () -> e
     | Ok t ->
         (* Close the flow when the 9P connection shuts down *)
         Server.after_disconnect t >>= fun () ->
-        Flow.close flow >>= fun () ->
-        ok ()
+        Flow.close flow >>= fun () -> ok ()
 end

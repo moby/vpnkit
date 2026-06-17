@@ -21,36 +21,29 @@ let src =
   src
 
 module Log = (val Logs.src_log src : Logs.LOG)
-
 open Lwt.Infix
 
 module type S = Dns_forward_s.SERVER
 
-module Make(Server: Dns_forward_s.RPC_SERVER)(Resolver: Dns_forward_s.RESOLVER) = struct
-
+module Make
+    (Server : Dns_forward_s.RPC_SERVER)
+    (Resolver : Dns_forward_s.RESOLVER) =
+struct
   type resolver = Resolver.t
+  type t = { resolver : Resolver.t; mutable server : Server.server option }
 
-  type t = {
-    resolver: Resolver.t;
-    mutable server: Server.server option;
-  }
-
-  let create resolver =
-    Lwt.return { resolver; server = None }
+  let create resolver = Lwt.return { resolver; server = None }
 
   let serve ~address t =
     let open Lwt_result.Infix in
-    Server.bind address
-    >>= fun server ->
+    Server.bind address >>= fun server ->
     t.server <- Some server;
     Server.listen server (fun buf -> Resolver.answer buf t.resolver)
-    >>= fun () ->
-    Lwt_result.return ()
+    >>= fun () -> Lwt_result.return ()
 
   let destroy { resolver; server } =
-    Resolver.destroy resolver
-    >>= fun () ->
+    Resolver.destroy resolver >>= fun () ->
     match server with
     | None -> Lwt.return_unit
-    | Some server -> Server.shutdown server
+    | Some server -> Server.stop server
 end

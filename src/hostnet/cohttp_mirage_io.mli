@@ -14,13 +14,13 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * %%NAME%% %%VERSION%%
  *)
 
 (** Cohttp IO implementation using Mirage channels. *)
 
-module Make (Channel: Mirage_channel.S) : Cohttp.S.IO
-  with type 'a t = 'a Lwt.t
-   and type ic = Channel.t
-   and type oc = Channel.t
-   and type conn = Channel.flow
+module Make (Channel : Mirage_channel.S) :
+  Cohttp.S.IO
+    with type 'a t = 'a Lwt.t
+     and type ic = Channel.t
+     and type oc = Channel.t
+     and type conn = Channel.flow

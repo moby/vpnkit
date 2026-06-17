@@ -1,0 +1,19 @@
+(version 5.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune mirage-flow lwt cstruct logs fmt)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/mirage-channel/releases/download/v5.0.0/mirage-channel-5.0.0.tbz)
+  (checksum
+   sha512=cd4569d7d4d08de3b2565c72eeba2c0e1910664c79f971044d4f94c126aa2aeaac89925fb7f48b321a12517879c21eb998ad3d2551831f838cd64268f50e3877)))

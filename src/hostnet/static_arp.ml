@@ -32,32 +32,29 @@ let src =
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make (Ethif: Ethernet.S) = struct
-
-  module Table = Map.Make(Ipaddr.V4)
+module Make (Ethif : Ethernet.S) = struct
+  module Table = Map.Make (Ipaddr.V4)
 
   type macaddr = Macaddr.t
-  type t = { ethif: Ethif.t; mutable table: macaddr Table.t }
+  type t = { ethif : Ethif.t; mutable table : macaddr Table.t }
   type error = [ `Timeout ]
+
   let pp_error ppf `Timeout = Fmt.string ppf "Timeout"
 
   let to_string t =
     let pp_one (ip, mac) =
       Fmt.str "%s -> %s" (Ipaddr.V4.to_string ip) (Macaddr.to_string mac)
     in
-    Table.bindings t.table
-    |> List.map pp_one
-    |> String.concat "; "
+    Table.bindings t.table |> List.map pp_one |> String.concat "; "
 
   let pp fmt t = Format.pp_print_string fmt @@ to_string t
-
   let get_ips t = List.map fst (Table.bindings t.table)
 
   let add_ip t ip =
     let mac = Ethif.mac t.ethif in
     Log.debug (fun f ->
-        f "ARP: adding %s -> %s"
-          (Ipaddr.V4.to_string ip) (Macaddr.to_string mac));
+        f "ARP: adding %s -> %s" (Ipaddr.V4.to_string ip)
+          (Macaddr.to_string mac));
     Lwt.return_unit
 
   let set_ips t ips = Lwt_list.iter_s (add_ip t) ips
@@ -68,53 +65,55 @@ module Make (Ethif: Ethernet.S) = struct
     Lwt.return_unit
 
   let query t ip =
-    if Table.mem ip t.table
-    then Lwt.return (Ok (Table.find ip t.table))
-    else begin
+    if Table.mem ip t.table then Lwt.return (Ok (Table.find ip t.table))
+    else (
       Log.warn (fun f ->
           f "ARP table has no entry for %s" (Ipaddr.V4.to_string ip));
-      Lwt.return (Error `Timeout)
-    end
+      Lwt.return (Error `Timeout))
 
   let output t pkt =
-    Ethif.write t.ethif ~src:pkt.Arp_packet.source_mac pkt.Arp_packet.target_mac `ARP
-      (fun buf ->
+    Ethif.write t.ethif ~src:pkt.Arp_packet.source_mac pkt.Arp_packet.target_mac
+      `ARP (fun buf ->
         Arp_packet.encode_into pkt buf;
-        Arp_packet.size
-      )
+        Arp_packet.size)
 
-  let input t frame = match Arp_packet.decode frame with
-  | Error err ->
-    Log.err (fun f -> f "error while reading ARP packet: %a" Arp_packet.pp_error err);
-    Lwt.return_unit
-  | Ok ({ Arp_packet.operation = Arp_packet.Reply; _ } as pkt) ->
-    Log.debug (fun f -> f "ARP ignoring reply %a" Arp_packet.pp pkt);
-    Lwt.return_unit
-  | Ok pkt ->
-    if Table.mem pkt.target_ip t.table then begin
-        Log.debug (fun f ->
-            f "ARP responding to: who-has %s?" (Ipaddr.V4.to_string pkt.target_ip));
-        let sha = Table.find pkt.target_ip t.table in
-        output t {
-          Arp_packet.operation = Arp_packet.Reply;
-          source_mac = sha;
-          source_ip = pkt.target_ip;
-          target_ip = pkt.source_ip;
-          target_mac = pkt.source_mac;
-        } >|= function
-        | Ok ()   -> ()
-        | Error e ->
-          Log.err (fun f ->
-              f "error while reading ARP packet: %a" Ethif.pp_error e);
-      end else Lwt.return_unit
+  let input t frame =
+    match Arp_packet.decode frame with
+    | Error err ->
+        Log.err (fun f ->
+            f "error while reading ARP packet: %a" Arp_packet.pp_error err);
+        Lwt.return_unit
+    | Ok ({ Arp_packet.operation = Arp_packet.Reply; _ } as pkt) ->
+        Log.debug (fun f -> f "ARP ignoring reply %a" Arp_packet.pp pkt);
+        Lwt.return_unit
+    | Ok pkt ->
+        if Table.mem pkt.target_ip t.table then (
+          Log.debug (fun f ->
+              f "ARP responding to: who-has %s?"
+                (Ipaddr.V4.to_string pkt.target_ip));
+          let sha = Table.find pkt.target_ip t.table in
+          output t
+            {
+              Arp_packet.operation = Arp_packet.Reply;
+              source_mac = sha;
+              source_ip = pkt.target_ip;
+              target_ip = pkt.source_ip;
+              target_mac = pkt.source_mac;
+            }
+          >|= function
+          | Ok () -> ()
+          | Error e ->
+              Log.err (fun f ->
+                  f "error while reading ARP packet: %a" Ethif.pp_error e))
+        else Lwt.return_unit
 
   type ethif = Ethif.t
 
   let connect ~table ethif =
     let table =
-      List.fold_left (fun acc (ip, mac) ->
-          Table.add ip mac acc
-        ) Table.empty table
+      List.fold_left
+        (fun acc (ip, mac) -> Table.add ip mac acc)
+        Table.empty table
     in
     { table; ethif }
 

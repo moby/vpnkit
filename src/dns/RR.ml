@@ -19,30 +19,25 @@
 
 (* Mnemonicity! *)
 type serial = int32
+
 type cstr = string
 
 (* DNS node: everything we know about a domain name *)
-and dnsnode = {
-  owner: Name.t;
-  mutable rrsets: rrset list;
-}
+and dnsnode = { owner : Name.t; mutable rrsets : rrset list }
 
 (* RRSet: TTL, type, and some number of rdata *)
-and rrset = {
-  ttl: int32;
-  rdata: rdata;
-}
+and rrset = { ttl : int32; rdata : rdata }
 
 and rrsig = {
-  rrsig_type   : Packet.rr_type;
-  rrsig_alg    : Packet.dnssec_alg;
+  rrsig_type : Packet.rr_type;
+  rrsig_alg : Packet.dnssec_alg;
   rrsig_labels : char;
-  rrsig_ttl    : int32;
+  rrsig_ttl : int32;
   rrsig_expiry : int32;
   rrsig_incept : int32;
   rrsig_keytag : int;
-  rrsig_name   : Name.t;
-  rrsig_sig    : string;
+  rrsig_name : Name.t;
+  rrsig_sig : string;
 }
 
 and rdata =
@@ -64,7 +59,7 @@ and rdata =
   | RT of (Cstruct.uint16 * dnsnode) list
   | SOA of (dnsnode * dnsnode * serial * int32 * int32 * int32 * int32) list
   | SRV of (Cstruct.uint16 * Cstruct.uint16 * Cstruct.uint16 * dnsnode) list
-  | TXT of (cstr list) list
+  | TXT of cstr list list
   (* | UNSPEC of cstr list*)
   | Unknown of int * cstr list
   | WKS of (Ipaddr.V4.t * Cstruct.byte * cstr) list

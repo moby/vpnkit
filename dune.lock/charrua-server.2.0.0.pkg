@@ -1,0 +1,19 @@
+(version 2.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune menhir charrua cstruct ipaddr macaddr)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/charrua/releases/download/v2.0.0/charrua-2.0.0.tbz)
+  (checksum
+   sha512=9f24a36f934824581d5af9886bdd22e82a1ba0ce174d752d43de9b527392140c19b65a93b18b3ca07c441f84315fefff7002a71eebf573ce1b747e74de861a9d)))

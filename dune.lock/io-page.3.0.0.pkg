@@ -1,0 +1,19 @@
+(version 3.0.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (conf-pkg-config ocaml dune cstruct)))
+
+(source
+ (fetch
+  (url
+   https://github.com/mirage/io-page/releases/download/v3.0.0/io-page-3.0.0.tbz)
+  (checksum
+   sha512=777e5cf4cb82bfc21d026ea2a44a2c30f388a2daa570ad30a396d498b7e4845c0b887402fc002560e2bf17dd49ee7c9839675a3c587e6104f395997eef3c9667)))

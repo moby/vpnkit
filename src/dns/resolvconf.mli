@@ -17,38 +17,35 @@
  *)
 
 module LookupValue : sig
-  type t =
-  | Bind 
-  | File 
-  | Yp
+  type t = Bind | File | Yp
+
   exception Unknown of string
+
   val of_string : string -> t
   val to_string : t -> string
 end
 
 module OptionsValue : sig
-  type t =
-  | Debug 
-  | Edns0 
-  | Inet6 
-  | Insecure1 
-  | Insecure2 
-  | Ndots of int
+  type t = Debug | Edns0 | Inet6 | Insecure1 | Insecure2 | Ndots of int
+
   exception Unknown of string
+
   val of_string : string -> t
   val to_string : t -> string
 end
 
 module KeywordValue : sig
   type t =
-  | Nameserver of Ipaddr.t * int option
-  | Port of int
-  | Domain of string
-  | Lookup of LookupValue.t list
-  | Search of string list
-  | Sortlist of string list
-  | Options of OptionsValue.t list
+    | Nameserver of Ipaddr.t * int option
+    | Port of int
+    | Domain of string
+    | Lookup of LookupValue.t list
+    | Search of string list
+    | Sortlist of string list
+    | Options of OptionsValue.t list
+
   exception Unknown of string
+
   val of_string : string -> t
   val to_string : t -> string
 end
@@ -56,6 +53,7 @@ end
 val map_line : string -> string option
 
 type t = KeywordValue.t list
+
 val all_servers : KeywordValue.t list -> (Ipaddr.t * int) list
 val choose_server : KeywordValue.t list -> (Ipaddr.t * int) option
 val search_domains : KeywordValue.t list -> string list

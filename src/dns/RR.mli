@@ -21,35 +21,35 @@
     @author Richard Mortier <mort\@cantab.net> (documentation)
 *)
 
-(** DNS serial number -- 32 bits. *)
 type serial = int32
+(** DNS serial number -- 32 bits. *)
 
-(** DNS character string. *)
 type cstr = string
+(** DNS character string. *)
 
-(** A node in the trie. *)
 and dnsnode = {
   owner : Name.t;
-  (** The name for which the node contains memoised attributes. *)
+      (** The name for which the node contains memoised attributes. *)
   mutable rrsets : rrset list;
-(** The set of attributes as  resource records. *)
+      (** The set of attributes as  resource records. *)
 }
+(** A node in the trie. *)
 
+and rrset = { ttl : int32; rdata : rdata }
 (** An RRset, comprising a 32 bit TTL and an {!type: rdata} record. *)
-and rrset = { ttl : int32; rdata : rdata; }
 
-(** The DNSSEC signature of an {! type : rrset } *)
 and rrsig = {
-  rrsig_type   : Packet.rr_type;
-  rrsig_alg    : Packet.dnssec_alg;
+  rrsig_type : Packet.rr_type;
+  rrsig_alg : Packet.dnssec_alg;
   rrsig_labels : char;
-  rrsig_ttl    : int32;
+  rrsig_ttl : int32;
   rrsig_expiry : int32;
   rrsig_incept : int32;
   rrsig_keytag : int;
-  rrsig_name   : Name.t;
-  rrsig_sig    : string;
+  rrsig_name : Name.t;
+  rrsig_sig : string;
 }
+(** The DNSSEC signature of an {! type : rrset } *)
 
 (** A resource record.
 

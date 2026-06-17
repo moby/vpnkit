@@ -13,7 +13,7 @@ module type Notification = sig
 end
 
 module Lwt_notification : Notification = struct
-  type t = int
+  type t = Lwt_unix.notification
   (** Run code in an Lwt event loop *)
 
   let create cb = Lwt_unix.make_notification cb

@@ -1,4 +1,4 @@
 (library
-  (name        dns_lwt)
-  (libraries   dns lwt mirage-profile)
-  (wrapped     false))
+ (name dns_lwt)
+ (libraries dns lwt)
+ (wrapped false))

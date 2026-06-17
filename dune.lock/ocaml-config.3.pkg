@@ -1,0 +1,22 @@
+(version 3)
+
+(build
+ (all_platforms
+  ((action (substitute gen_ocaml_config.ml.in gen_ocaml_config.ml)))))
+
+(depends
+ (all_platforms (ocaml-base-compiler)))
+
+(extra_sources
+ (gen_ocaml_config.ml.in
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/ocaml/66f33f6e08857f3c3cb53fc1759fbad6860c59bd/tools/opam/gen_ocaml_config.ml.in)
+   (checksum
+    sha256=a9ad8d84a08961159653a978db92d10f694510182b206cacb96d5c9f63b5121e)))
+ (ocaml-config.install
+  (fetch
+   (url
+    https://raw.githubusercontent.com/ocaml/ocaml/363fb9f5a2fb87dbd5f8cc579af87dd04e14343b/tools/opam/ocaml-config.install)
+   (checksum
+    sha256=6e4fd93f4cce6bad0ed3c08afd0248dbe7d7817109281de6294e5b5ef5597051))))

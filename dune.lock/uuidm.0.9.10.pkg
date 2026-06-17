@@ -1,0 +1,23 @@
+(version 0.9.10)
+
+(build
+ (all_platforms
+  ((action
+    (run
+     ocaml
+     pkg/pkg.ml
+     build
+     --dev-pkg
+     %{pkg-self:dev}
+     --with-cmdliner
+     %{pkg:cmdliner:installed})))))
+
+(depends
+ (all_platforms
+  (ocaml ocamlfind ocamlbuild topkg cmdliner)))
+
+(source
+ (fetch
+  (url https://erratique.ch/software/uuidm/releases/uuidm-0.9.10.tbz)
+  (checksum
+   sha512=22cbc872a0be910ebd5cda67bb471b5ab93cd1edfa535a86169a9d0f7a5cce85824b9e8a43d16d7587e1968b37a70fac1b75af075700117089a28879297dda07)))

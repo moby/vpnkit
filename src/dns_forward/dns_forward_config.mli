@@ -15,53 +15,51 @@
  *
  *)
 
-module Address: sig
-  type t = {
-    ip: Ipaddr.t;
-    port: int;
-  }
-  val to_string: t -> string
+module Address : sig
+  type t = { ip : Ipaddr.t; port : int }
 
-  val compare: t -> t -> int
-  module Set: Set.S with type elt = t
-  module Map: Map.S with type key = t
+  val to_string : t -> string
+  val compare : t -> t -> int
+
+  module Set : Set.S with type elt = t
+  module Map : Map.S with type key = t
 end
 
-module Domain: sig
+module Domain : sig
   type t = string list
 
-  val to_string: t -> string
-  val compare: t -> t -> int
+  val to_string : t -> string
+  val compare : t -> t -> int
 
-  module Set: Set.S with type elt = t
-  module Map: Map.S with type key = t
+  module Set : Set.S with type elt = t
+  module Map : Map.S with type key = t
 end
 
-module Server: sig
+module Server : sig
   type t = {
-    zones: Domain.Set.t;
-    address: Address.t;
-    timeout_ms: int option;
-    order: int;
+    zones : Domain.Set.t;
+    address : Address.t;
+    timeout_ms : int option;
+    order : int;
   }
   (** A single upstream DNS server *)
 
-  val compare: t -> t -> int
-  module Set: Set.S with type elt = t
-  module Map: Map.S with type key = t
+  val compare : t -> t -> int
+
+  module Set : Set.S with type elt = t
+  module Map : Map.S with type key = t
 end
 
 type t = {
-  servers: Server.Set.t;
-  search: string list;
-  assume_offline_after_drops: int option;
+  servers : Server.Set.t;
+  search : string list;
+  assume_offline_after_drops : int option;
 }
 
-val of_string: string -> (t, [ `Msg of string ]) result
-val to_string: t -> string
+val of_string : string -> (t, [ `Msg of string ]) result
+val to_string : t -> string
+val compare : t -> t -> int
 
-val compare: t -> t -> int
-
-module Unix: sig
-  val of_resolv_conf: string -> (t, [ `Msg of string ]) result
+module Unix : sig
+  val of_resolv_conf : string -> (t, [ `Msg of string ]) result
 end

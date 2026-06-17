@@ -1,0 +1,19 @@
+(version 0.2.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs}))))))
+
+(depends
+ (all_platforms
+  (ocaml dune)))
+
+(source
+ (fetch
+  (url
+   https://github.com/hannesm/randomconv/releases/download/v0.2.0/randomconv-0.2.0.tbz)
+  (checksum
+   sha512=376c36da6b67ed1d817ea13fbbc3490f356f0890f9e009a55d12946c6811611ea9bd31aec733dd961de7209effa23649505f61d1ed3fc18af225ca4ec9131c38)))

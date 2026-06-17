@@ -17,18 +17,15 @@
  *)
 
 type commfn = {
-  txfn    : Cstruct.t -> unit Lwt.t;
-  (** [txfn buf] resolves when [buf] has been transmitted. *)
-
-  rxfn    : (Cstruct.t -> Dns.Packet.t option) -> Dns.Packet.t Lwt.t;
-  (** [rxfn parse] resolves to a packet processed by [parse] after it
+  txfn : Cstruct.t -> unit Lwt.t;
+      (** [txfn buf] resolves when [buf] has been transmitted. *)
+  rxfn : (Cstruct.t -> Dns.Packet.t option) -> Dns.Packet.t Lwt.t;
+      (** [rxfn parse] resolves to a packet processed by [parse] after it
       has been received. *)
-
   timerfn : unit -> unit Lwt.t;
-  (** [timerfn ()] resolves when a request should be timed out. *)
-
+      (** [timerfn ()] resolves when a request should be timed out. *)
   cleanfn : unit -> unit Lwt.t;
-  (** [cleanfn ()] resolves after any resources used by the rest of
+      (** [cleanfn ()] resolves after any resources used by the rest of
       the {!commfn} have been released. *)
 }
 (** A [commfn] value describes the means by which datagram
@@ -38,7 +35,8 @@ type commfn = {
 val resolve_pkt :
   (module Dns.Protocol.CLIENT) ->
   ?alloc:(unit -> Cstruct.t) ->
-  commfn -> Dns.Packet.t ->
+  commfn ->
+  Dns.Packet.t ->
   Dns.Packet.t Lwt.t
 (** [resolve_pkt client ?alloc commfn packet] will attempt resolution
     of the query contained in [packet] via the protocol client
@@ -52,12 +50,13 @@ val resolve_pkt :
     {!Dns.Protocol.Dns_resolve_error} exception which contains a list
     of all of the errors encountered during resolution. *)
 
-val resolve : 
+val resolve :
   (module Dns.Protocol.CLIENT) ->
   ?alloc:(unit -> Cstruct.t) ->
   ?dnssec:bool ->
-  commfn -> Dns.Packet.q_class -> 
-  Dns.Packet.q_type -> 
+  commfn ->
+  Dns.Packet.q_class ->
+  Dns.Packet.q_type ->
   Dns.Name.t ->
   Dns.Packet.t Lwt.t
 (** [resolve client ?alloc ?dnssec commfn q_class q_type name] will
@@ -67,11 +66,15 @@ val resolve :
 val gethostbyname :
   ?alloc:(unit -> Cstruct.t) ->
   ?q_class:Dns.Packet.q_class ->
-  ?q_type:Dns.Packet.q_type -> commfn ->
-  string -> Ipaddr.t list Lwt.t
+  ?q_type:Dns.Packet.q_type ->
+  commfn ->
+  string ->
+  Ipaddr.t list Lwt.t
 
 val gethostbyaddr :
   ?alloc:(unit -> Cstruct.t) ->
   ?q_class:Dns.Packet.q_class ->
-  ?q_type:Dns.Packet.q_type -> commfn ->
-  Ipaddr.V4.t -> string list Lwt.t
+  ?q_type:Dns.Packet.q_type ->
+  commfn ->
+  Ipaddr.V4.t ->
+  string list Lwt.t

@@ -17,13 +17,17 @@
 
 type 'a t = ('a, [ `Msg of string ]) Lwt_result.t
 
-module FromFlowError(Flow: Mirage_flow.S): sig
-  val ( >>= ) : [< `Eof | `Error of Flow.error | `Ok of 'b ] Lwt.t ->
-    ('b -> ('c, [> `Msg of string ] as 'd) result Lwt.t) -> ('c, 'd) result Lwt.t
+module FromFlowError (Flow : Mirage_flow.S) : sig
+  val ( >>= ) :
+    [< `Eof | `Error of Flow.error | `Ok of 'b ] Lwt.t ->
+    ('b -> ('c, ([> `Msg of string ] as 'd)) result Lwt.t) ->
+    ('c, 'd) result Lwt.t
 end
 
-val errorf: ('a, Format.formatter, unit, ('b, [> `Msg of string ]) result Lwt.t) format4 -> 'a
+val errorf :
+  ('a, Format.formatter, unit, ('b, [> `Msg of string ]) result Lwt.t) format4 ->
+  'a
 
-module Infix: sig
+module Infix : sig
   include module type of Lwt_result.Infix
 end

@@ -67,7 +67,6 @@ val error : ('a, unit, string, 'b or_err) format4 -> 'a
 (** [error fmt] is [Lwt.return (Error <fmt>)]. *)
 
 type perm = [ `Normal | `Exec | `Link of string ]
-
 type metadata = { length : int64; perm : perm }
 
 (** File operations. *)
@@ -199,7 +198,6 @@ module File : sig
   (** {1 Errors} *)
 
   val err_no_entry : 'a or_err
-
   val err_read_only : 'a or_err
 end
 
@@ -273,9 +271,7 @@ module rec Dir : sig
   (** {1 Errors} *)
 
   val err_already_exists : 'a or_err
-
   val err_dir_only : 'a or_err
-
   val err_no_entry : 'a or_err
 end
 

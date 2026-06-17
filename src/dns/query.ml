@@ -21,62 +21,92 @@
 
 type answer = {
   rcode : Packet.rcode;
-  aa: bool;
-  answer: Packet.rr list;
-  authority: Packet.rr list;
-  additional: Packet.rr list;
+  aa : bool;
+  answer : Packet.rr list;
+  authority : Packet.rr list;
+  additional : Packet.rr list;
 }
 
 type filter = Name.t -> RR.rrset -> RR.rrset
-
 type flush = Name.t -> Packet.rdata -> bool
 
-let response_of_answer ?(mdns=false) query answer =
+let response_of_answer ?(mdns = false) query answer =
   (*let edns_rec =
     try
     List.find (fun rr -> ) query.additionals
     with Not_found -> []
     in *)
-  let detail = {
-    Packet.qr=Packet.Response; opcode=Packet.Standard; aa=answer.aa;
-    tc=false;
-    rd=(if mdns then false else Packet.(query.detail.rd));  (* rfc6762 s18.6_p1_c1 *)
-    ra=false; rcode=answer.rcode
-  } in
-  Packet.({
-      id=(if mdns then 0 else query.id);
+  let detail =
+    {
+      Packet.qr = Packet.Response;
+      opcode = Packet.Standard;
+      aa = answer.aa;
+      tc = false;
+      rd = (if mdns then false else Packet.(query.detail.rd));
+      (* rfc6762 s18.6_p1_c1 *)
+      ra = false;
+      rcode = answer.rcode;
+    }
+  in
+  Packet.
+    {
+      id = (if mdns then 0 else query.id);
       detail;
       (* mDNS does not echo questions in the response *)
-      questions=(if mdns then [] else query.questions);
-      answers=answer.answer;
-      authorities=answer.authority;
-      additionals=answer.additional;
-    })
+      questions = (if mdns then [] else query.questions);
+      answers = answer.answer;
+      authorities = answer.authority;
+      additionals = answer.additional;
+    }
 
-let answer_of_response ?(preserve_aa=false) ({
-  Packet.detail={ Packet.rcode; aa; _ };
-  answers; authorities; additionals; _
-}) = { rcode; aa = if preserve_aa then aa else false;
-       answer=answers;
-       authority=authorities;
-       additional=additionals;
-     }
+let answer_of_response ?(preserve_aa = false)
+    {
+      Packet.detail = { Packet.rcode; aa; _ };
+      answers;
+      authorities;
+      additionals;
+      _;
+    } =
+  {
+    rcode;
+    aa = (if preserve_aa then aa else false);
+    answer = answers;
+    authority = authorities;
+    additional = additionals;
+  }
 
-let create ?(dnssec=false) ~id q_class q_type q_name =
+let create ?(dnssec = false) ~id q_class q_type q_name =
   let open Packet in
-  let detail = {
-    qr=Query; opcode=Standard;
-    aa=false; tc=false; rd=true; ra=false; rcode=NoError;
-  } in
+  let detail =
+    {
+      qr = Query;
+      opcode = Standard;
+      aa = false;
+      tc = false;
+      rd = true;
+      ra = false;
+      rcode = NoError;
+    }
+  in
   let additionals =
     if dnssec then
-      [ ( {
-        name=Name.empty; cls=RR_IN; flush=false; ttl=0l;
-        rdata=(EDNS0(1500, 0, true, []));} ) ]
-    else
-      []
+      [
+        {
+          name = Name.empty;
+          cls = RR_IN;
+          flush = false;
+          ttl = 0l;
+          rdata = EDNS0 (1500, 0, true, []);
+        };
+      ]
+    else []
   in
-  let question = { q_name; q_type; q_class; q_unicast=Q_Normal } in
-  { id; detail; questions=[question];
-    answers=[]; authorities=[]; additionals;
+  let question = { q_name; q_type; q_class; q_unicast = Q_Normal } in
+  {
+    id;
+    detail;
+    questions = [ question ];
+    answers = [];
+    authorities = [];
+    additionals;
   }

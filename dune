@@ -1,13 +1,23 @@
+; Disable warning 58 (no-cmx-file) project-wide: it fires under flambda when
+; consuming virtual libraries (mirage-mtime, mirage-sleep, ...) which ship a
+; .cmi but no .cmx, and ocaml-ci builds with -warn-error so it becomes fatal.
+; It is a benign cross-module-inlining hint, not a correctness issue.
+
+(env
+ (_
+  (flags
+   (:standard -w -58))))
+
 (rule
  (alias e2e)
- (deps src/hostnet_test/main.exe
-   go/test_inputs/open_dedicated_connection.bin
-   go/test_inputs/close.bin
-   go/test_inputs/open_multiplexed_unix_connection.bin
-   go/test_inputs/window.bin
-   go/test_inputs/data.bin
-   go/test_inputs/open_multiplexed_connection.bin
-   go/test_inputs/shutdown.bin
-   )
- (action (run ./src/hostnet_test/main.exe))
-)
+ (deps
+  src/hostnet_test/main.exe
+  go/test_inputs/open_dedicated_connection.bin
+  go/test_inputs/close.bin
+  go/test_inputs/open_multiplexed_unix_connection.bin
+  go/test_inputs/window.bin
+  go/test_inputs/data.bin
+  go/test_inputs/open_multiplexed_connection.bin
+  go/test_inputs/shutdown.bin)
+ (action
+  (run ./src/hostnet_test/main.exe)))

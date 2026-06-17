@@ -15,21 +15,28 @@
  *
  *)
 
-module Make(Time: Mirage_time.S): sig
-  type t
-  (** A cache of DNS answers *)
+type t
+(** A cache of DNS answers *)
 
-  val make: ?max_bindings:int -> unit -> t
-  (** Create an empty cache. If [?max_bindings] is provided then the cache will
+val make : ?max_bindings:int -> unit -> t
+(** Create an empty cache. If [?max_bindings] is provided then the cache will
       not contain more than the given number of bindings. *)
 
-  val destroy: t -> unit
-  (** Destroy the cache and free associated resources *)
+val destroy : t -> unit
+(** Destroy the cache and free associated resources *)
 
-  val answer: t -> Dns_forward_config.Address.t -> Dns.Packet.question -> Dns.Packet.rr list option
-  (** Look up the answer given by a specific server to a question. Returns
+val answer :
+  t ->
+  Dns_forward_config.Address.t ->
+  Dns.Packet.question ->
+  Dns.Packet.rr list option
+(** Look up the answer given by a specific server to a question. Returns
       None if no answer is cached from that server. *)
 
-  val insert: t -> Dns_forward_config.Address.t -> Dns.Packet.question -> Dns.Packet.rr list -> unit
-  (** Insert the answer to the question into the cache *)
-end
+val insert :
+  t ->
+  Dns_forward_config.Address.t ->
+  Dns.Packet.question ->
+  Dns.Packet.rr list ->
+  unit
+(** Insert the answer to the question into the cache *)

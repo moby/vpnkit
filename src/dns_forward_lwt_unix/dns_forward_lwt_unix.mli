@@ -17,20 +17,18 @@
 
 (** DNS utilities over Lwt_unix *)
 
-module Resolver: sig
-  module Udp: Dns_forward.Resolver.S
+module Resolver : sig
+  module Udp : Dns_forward.Resolver.S
   (** A DNS resolver over UDP *)
 
-  module Tcp: Dns_forward.Resolver.S
+  module Tcp : Dns_forward.Resolver.S
   (** A DNS resolver over TCP *)
 end
 
-module Server: sig
-  module Udp: Dns_forward.Server.S with type resolver = Resolver.Udp.t
+module Server : sig
+  module Udp : Dns_forward.Server.S with type resolver = Resolver.Udp.t
   (** A forwarding DNS proxy over UDP *)
 
-  module Tcp: Dns_forward.Server.S with type resolver = Resolver.Tcp.t
+  module Tcp : Dns_forward.Server.S with type resolver = Resolver.Tcp.t
   (** A forwarding DNS proxy over TCP *)
 end
-
-module Clock: Mirage_clock.MCLOCK

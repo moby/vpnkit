@@ -1,4 +1,4 @@
-module Make(Netif: Mirage_net.S) : sig
+module Make (Netif : Mirage_net.S) : sig
   include Mirage_net.S
 
   (** A simple ethernet multiplexer/demultiplexer
@@ -14,7 +14,7 @@ module Make(Netif: Mirage_net.S) : sig
 
   *)
 
-  val connect: Netif.t -> (t, error) result Lwt.t
+  val connect : Netif.t -> (t, error) result Lwt.t
   (** Connect a multiplexer/demultiplexer and return a [t] which behaves like
       a V1.NETWORK representing the multiplexed end. *)
 
@@ -24,13 +24,13 @@ module Make(Netif: Mirage_net.S) : sig
   module Port : Mirage_net.S
   (** A network which receives all the traffic matching a specific rule *)
 
-  val port: t -> rule -> Port.t
+  val port : t -> rule -> Port.t
   (** Given a rule, create a network which will receive traffic matching the
       rule. *)
 
-  val remove: t -> rule -> unit
+  val remove : t -> rule -> unit
   (** Given a rule, remove the associated port if one exists *)
 
-  val filesystem: t -> Vfs.File.t
+  val filesystem : t -> Vfs.File.t
   (** A virtual filesystem for debugging *)
 end

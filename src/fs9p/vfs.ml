@@ -3,29 +3,21 @@ open Rresult
 open Lwt.Infix
 
 type perm = [ `Normal | `Exec | `Link of string ]
-
 type metadata = { length : int64; perm : perm }
 
 module Error = struct
   type err = { errno : int32 option; descr : string }
-
   type t = Noent | Isdir | Notdir | Read_only_file | Perm | Other of err
 
   let otherk k ?errno fmt =
     Printf.ksprintf (fun descr -> k (Error (Other { descr; errno }))) fmt
 
   let other ?errno fmt = otherk (fun e -> e) ?errno fmt
-
   let no_entry = Error Noent
-
   let is_dir = Error Isdir
-
   let not_dir = Error Notdir
-
   let read_only_file = Error Read_only_file
-
   let perm = Error Perm
-
   let negative_offset o = other "Negative offset %Ld" o
 
   let offset_too_large ~offset l =
@@ -50,26 +42,18 @@ end
 open Error.Infix
 
 let ok x = Lwt.return (Ok x)
-
 let error fmt = Error.otherk Lwt.return fmt
 
 type 'a or_err = ('a, Error.t) result Lwt.t
 
 module File = struct
   let err_no_entry = Lwt.return Error.no_entry
-
   let err_read_only = Lwt.return Error.read_only_file
-
   let err_perm = Lwt.return Error.perm
-
   let err_bad_write_offset off = error "Bad write offset %d" off
-
   let err_stream_seek = error "Attempt to seek in stream"
-
   let err_extend_cmd_file = error "Can't extend command file"
-
   let err_normal_only = error "Can't chmod special file"
-
   let ok x = Lwt.return (Ok x)
 
   let check_offset ~offset len =
@@ -87,7 +71,6 @@ module File = struct
     }
 
     let read t = t.read
-
     let write t = t.write
 
     type 'a session = { mutable v : 'a; c : unit Lwt_condition.t }
@@ -113,7 +96,7 @@ module File = struct
           if current = !last then Lwt_condition.wait session.c >>= next
           else (
             last := current;
-            Lwt.return (Cstruct.of_string current) )
+            Lwt.return (Cstruct.of_string current))
         in
         buffer := next ()
       in
@@ -121,7 +104,7 @@ module File = struct
         !buffer >>= fun avail ->
         if Cstruct.length avail = 0 then (
           refill ();
-          read count )
+          read count)
         else
           let count = min count (Cstruct.length avail) in
           let response = Cstruct.sub avail 0 count in
@@ -139,9 +122,7 @@ module File = struct
     }
 
     let create ~read ~write = { read; write }
-
     let read t = t.read
-
     let write t = t.write
 
     let static data =
@@ -169,7 +150,7 @@ module File = struct
         if offset <> !current_offset then err_stream_seek
         else if !need_flush then (
           need_flush := false;
-          ok empty )
+          ok empty)
         else
           Stream.read stream count >>*= fun result ->
           current_offset :=
@@ -181,7 +162,8 @@ module File = struct
         if offset <> !current_offset then err_stream_seek
         else
           Stream.write stream data >>*= fun () ->
-          current_offset := !current_offset ++ Int64.of_int (Cstruct.length data);
+          current_offset :=
+            !current_offset ++ Int64.of_int (Cstruct.length data);
           ok ()
       in
       ok { read; write }
@@ -190,9 +172,7 @@ module File = struct
   type fd = Fd.t
 
   let create_fd = Fd.create
-
   let read = Fd.read
-
   let write = Fd.write
 
   type t = {
@@ -210,17 +190,10 @@ module File = struct
     { debug; stat; open_; remove; truncate; chmod }
 
   let stat t = t.stat ()
-
-  let size t =
-    stat t >>*= fun info ->
-    Lwt.return (Ok info.length)
-
+  let size t = stat t >>*= fun info -> Lwt.return (Ok info.length)
   let open_ t = t.open_ ()
-
   let remove t = t.remove ()
-
   let truncate t = t.truncate
-
   let chmod t = t.chmod
 
   let read_only_aux =
@@ -240,10 +213,7 @@ module File = struct
 
   let of_stream stream =
     let stat () = ok { length = 0L; perm = `Normal } in
-    let open_ () =
-      stream () >>= fun s ->
-      Fd.of_stream s
-    in
+    let open_ () = stream () >>= fun s -> Fd.of_stream s in
     read_only_aux ~debug:"of_stream" ~stat ~open_
 
   let normal_only = function
@@ -289,19 +259,14 @@ module File = struct
     let stat () =
       let length =
         match length with
-        | None ->
-            fn () >|= fun data ->
-            String.length data
+        | None -> fn () >|= fun data -> String.length data
         | Some f -> f ()
       in
       length >|= fun length ->
       Ok { length = length |> Int64.of_int; perm = `Normal }
     in
     let open_ () =
-      let data =
-        fn () >|= fun result ->
-        ref (Cstruct.of_string result)
-      in
+      let data = fn () >|= fun result -> ref (Cstruct.of_string result) in
       let read count =
         data >>= fun data ->
         let count = min count (Cstruct.length !data) in
@@ -332,10 +297,11 @@ module File = struct
         else empty
       in
       Cstruct.concat
-        [ Cstruct.sub orig 0 (min offset (Cstruct.length orig));
+        [
+          Cstruct.sub orig 0 (min offset (Cstruct.length orig));
           padding;
           data;
-          tail
+          tail;
         ]
 
   let of_kv_aux ~read ~write ~stat ~remove ~chmod =
@@ -351,9 +317,7 @@ module File = struct
       and write ~offset data =
         let offset = Int64.to_int offset in
         if offset < 0 then err_bad_write_offset offset
-        else
-          read () >>*= fun old ->
-          write (overwrite old (data, offset))
+        else read () >>*= fun old -> write (overwrite old (data, offset))
       in
       ok @@ Fd.create ~read ~write
     in
@@ -397,7 +361,6 @@ module File = struct
     (file, fun () -> Cstruct.to_string !data)
 
   let create = create_aux ~debug:"create"
-
   let of_kv = of_kv_aux ~debug:"of_kv"
 
   let stat_of ~read () =
@@ -409,11 +372,8 @@ end
 
 module Dir = struct
   let err_read_only = error "Directory is read-only"
-
   let err_already_exists = error "Already exists"
-
   let err_dir_only = error "Can only contain directories"
-
   let err_no_entry = Lwt.return Error.no_entry
 
   type t = {
@@ -427,7 +387,6 @@ module Dir = struct
   }
 
   and kind = [ `File of File.t | `Dir of t ]
-
   and inode = { mutable basename : string; kind : kind; ino : int64 }
 
   let pp ppf t = Fmt.pf ppf "Vfs.Dir.%s" t.debug
@@ -436,17 +395,11 @@ module Dir = struct
     Fmt.string ppf (match k with `Dir _ -> "dir" | `File _ -> "file")
 
   let pp_inode ppf t = Fmt.pf ppf "%s:%a[%Ld]" t.basename pp_kind t.kind t.ino
-
   let ls t = t.ls ()
-
   let mkfile t ?(perm = `Normal) name = t.mkfile name perm
-
   let lookup t = t.lookup
-
   let mkdir t = t.mkdir
-
   let remove t = t.remove ()
-
   let rename t = t.rename
 
   let create_aux ~debug ~ls ~mkfile ~lookup ~mkdir ~remove ~rename =
@@ -476,9 +429,7 @@ module Dir = struct
   let of_map_ref m =
     let ls () = ok (String.Map.bindings !m |> List.map snd) in
     let lookup name =
-      match String.Map.find name !m with
-      | Some x -> ok x
-      | None -> err_no_entry
+      match String.Map.find name !m with Some x -> ok x | None -> err_no_entry
     in
     let remove () = err_read_only in
     read_only_aux ~debug:"of_map_ref" ~ls ~lookup ~remove
@@ -488,9 +439,7 @@ module Dir = struct
     create_aux ~debug:"dir_only" ~mkfile
 
   let of_list = of_list_aux ~debug:"of_list"
-
   let create = create_aux ~debug:"create"
-
   let read_only = read_only_aux ~debug:"read_only"
 end
 
@@ -512,13 +461,9 @@ module Inode = struct
     { Dir.basename; kind = `File file; ino = mint_ino () }
 
   let dir basename dir = { Dir.basename; kind = `Dir dir; ino = mint_ino () }
-
   let basename t = t.Dir.basename
-
   let set_basename t b = t.Dir.basename <- b
-
   let ino t = t.Dir.ino
-
   let kind t = t.Dir.kind
 end
 
@@ -543,7 +488,7 @@ module Logs = struct
           | Ok l ->
               Logs.Src.set_level s l;
               ok ()
-          | Error (`Msg msg) -> error "%s" msg )
+          | Error (`Msg msg) -> error "%s" msg)
     in
     let chmod _ = Lwt.return Error.perm in
     let remove () = Lwt.return Error.perm in
@@ -551,8 +496,9 @@ module Logs = struct
 
   let src s =
     let items =
-      [ Inode.file "doc" (File.ro_of_string (Logs.Src.doc s ^ "\n"));
-        Inode.file "level" (level s)
+      [
+        Inode.file "doc" (File.ro_of_string (Logs.Src.doc s ^ "\n"));
+        Inode.file "level" (level s);
       ]
     in
     Dir.of_list (fun () -> ok items)

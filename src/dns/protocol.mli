@@ -25,6 +25,8 @@ module type CLIENT = sig
 
   val get_id : unit -> int
 
+  val marshal :
+    ?alloc:(unit -> Cstruct.t) -> Packet.t -> (context * Cstruct.t) list
   (** [marshal query] is a list of context-buffer pairs corresponding to the
       channel contexts and request buffers with which to attempt DNS requests.
       Requests are made in parallel and the first response to successfully
@@ -32,21 +34,20 @@ module type CLIENT = sig
       successful parse or timeout. With this behavior, it is easy to construct
       low-latency but network-environment-aware DNS resolvers.
   *)
-  val marshal : ?alloc:(unit -> Cstruct.t) -> Packet.t -> (context * Cstruct.t) list
 
+  val parse : context -> Cstruct.t -> Packet.t option
   (** [parse ctxt buf] is the potential packet extracted out of [buf]
       with [ctxt]
   *)
-  val parse : context -> Cstruct.t -> Packet.t option
 
+  val timeout : context -> exn
   (** [timeout ctxt] is the exception resulting from a context [ctxt] that has
       timed-out
   *)
-  val timeout : context -> exn
 end
 
-(** The default DNS resolver using the standard DNS protocol *)
 module Client : CLIENT
+(** The default DNS resolver using the standard DNS protocol *)
 
 (** The type of pluggable DNS server modules for request contexts and
     custom metadata dn wire protocols.
@@ -54,25 +55,26 @@ module Client : CLIENT
 module type SERVER = sig
   type context
 
-  (** Projects a context into its associated query *)
   val query_of_context : context -> Packet.t
+  (** Projects a context into its associated query *)
 
+  val parse : Cstruct.t -> context option
   (** DNS wire format parser function.
       @param buf message buffer
       @return parsed packet and context
   *)
-  val parse   : Cstruct.t -> context option
 
+  val marshal :
+    ?alloc:(unit -> Cstruct.t) -> context -> Packet.t -> Cstruct.t option
   (** DNS wire format marshal function.
       @param alloc allocator
       @param _q context
       @param response answer packet
       @return buffer to write
   *)
-  val marshal : ?alloc:(unit -> Cstruct.t) -> context -> Packet.t -> Cstruct.t option
 end
 
-(** The default DNS server using the standard DNS protocol *)
 module Server : SERVER with type context = Packet.t
+(** The default DNS server using the standard DNS protocol *)
 
 val contain_exc : string -> (unit -> 'a) -> 'a option
